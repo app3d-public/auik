@@ -1,0 +1,137 @@
+#ifndef UIKIT_WIDGETS_TAB_H
+#define UIKIT_WIDGETS_TAB_H
+
+#include "../selectable/selectable.hpp"
+#include "../icon/icon.hpp"
+#include <core/std/types@basic.hpp>
+#include <core/std/enum.hpp>
+#include <core/event/event.hpp>
+
+namespace ui
+{
+    class TabItem : public Selectable
+    {
+    public:
+        enum class FlagBits : u8
+        {
+            none = 0x0,
+            closable = 0x1,
+            unsaved = 0x2
+        };
+
+        using Flags = ::Flags<FlagBits>;
+
+        TabItem(const std::string &id, const std::string &label, const std::function<void()> &onRender = nullptr,
+                Flags flags = FlagBits::none, f32 rounding = 0.0f)
+            : Selectable(label, false, rounding, ImGuiSelectableFlags_AllowItemOverlap, {0.0f, 0.0f}, true),
+              _id(id),
+              _onRender(onRender),
+              _tabFlags(flags)
+        {
+        }
+
+        TabItem(const std::string &id, const std::function<void()> &onRender = nullptr, Flags flags = FlagBits::none)
+            : TabItem(id, id, onRender, flags)
+        {
+        }
+
+        bool renderItem();
+
+        std::function<void()> &onRender() { return _onRender; }
+        void onRender(const std::function<void()> &onRender) { _onRender = onRender; }
+
+        ImVec2 calculateItemSize();
+
+        Flags &flags() { return _tabFlags; }
+
+        const Flags flags() const { return _tabFlags; }
+
+        std::string id() const { return _id; }
+
+    private:
+        std::string _id;
+        std::function<void()> _onRender;
+        Flags _tabFlags;
+    };
+
+    class TabBar : public Widget, public events::ListenerRegistry
+    {
+    public:
+        Array<TabItem> items;
+        u8 activeIndex = 0;
+
+        enum class FlagBits : u8
+        {
+            none = 0x0,
+            reorderable = 0x1,
+            scrollable = 0x2,
+        };
+
+        using Flags = ::Flags<FlagBits>;
+
+        struct Style
+        {
+            std::shared_ptr<Icon> comboIcon;
+            ImVec2 size;
+            f32 scrollOffsetLR;
+            f32 scrollOffsetRL;
+        };
+
+        TabBar(const std::string &id, const Array<TabItem> &items, Flags flags = FlagBits::none,
+               const Style &style = {}, const std::function<void(const TabItem &)> &onClose = nullptr)
+            : _id(id), items(items), _flags(flags), _style(style), _onClose(onClose)
+        {
+        }
+
+        virtual void render() override;
+
+        virtual void bindListeners() override;
+
+        void onClose(const std::function<void(const TabItem &)> &onClose) { _onClose = onClose; }
+
+        void size(ImVec2 size) { _style.size = size; }
+
+        ImVec2 size() const { return _style.size; }
+
+        f32 avaliableWidth() const { return _avaliableWidth > 0 ? _avaliableWidth : 0; }
+
+        TabItem &activeTab() { return items[activeIndex]; }
+
+    private:
+        std::string _id;
+        bool _isHovered{false};
+        Flags _flags;
+        std::function<void(const TabItem &)> _onClose;
+        f32 _avaliableWidth{0};
+        Style _style;
+        struct DragData
+        {
+            std::optional<Array<TabItem>::iterator> it{std::nullopt};
+            ImVec2 pos;
+            f32 posOffset{0};
+            f32 offset{0};
+        } _drag;
+
+        bool renderTab(Array<TabItem>::iterator &begin, int index);
+        void renderDragged();
+        void renderCombobox();
+    };
+} // namespace ui
+
+template <>
+struct FlagTraits<ui::TabItem::FlagBits>
+{
+    static constexpr bool isBitmask = true;
+    static constexpr ui::TabItem::Flags allFlags =
+        ui::TabItem::FlagBits::none | ui::TabItem::FlagBits::closable | ui::TabItem::FlagBits::unsaved;
+};
+
+template <>
+struct FlagTraits<ui::TabBar::FlagBits>
+{
+    static constexpr bool isBitmask = true;
+    static constexpr ui::TabBar::Flags allFlags =
+        ui::TabBar::FlagBits::none | ui::TabBar::FlagBits::reorderable | ui::TabBar::FlagBits::scrollable;
+};
+
+#endif
