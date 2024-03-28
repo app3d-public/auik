@@ -1,11 +1,12 @@
 #ifndef UIKIT_WIDGETS_TAB_H
 #define UIKIT_WIDGETS_TAB_H
 
-#include "../selectable/selectable.hpp"
-#include "../icon/icon.hpp"
-#include <core/std/types@basic.hpp>
-#include <core/std/enum.hpp>
 #include <core/event/event.hpp>
+#include <core/mem.hpp>
+#include <core/std/enum.hpp>
+#include <core/std/types@basic.hpp>
+#include "../icon/icon.hpp"
+#include "../selectable/selectable.hpp"
 
 namespace ui
 {
@@ -78,16 +79,14 @@ namespace ui
         };
 
         TabBar(const std::string &id, const Array<TabItem> &items, Flags flags = FlagBits::none,
-               const Style &style = {}, const std::function<void(const TabItem &)> &onClose = nullptr)
-            : _id(id), items(items), _flags(flags), _style(style), _onClose(onClose)
+               const Style &style = {}, bool mainTabbar = false)
+            : _id(id), items(items), _flags(flags), _style(style), _isMainTabbar(mainTabbar)
         {
         }
 
         virtual void render() override;
 
-        virtual void bindListeners() override;
-
-        void onClose(const std::function<void(const TabItem &)> &onClose) { _onClose = onClose; }
+        void bindListeners();
 
         void size(ImVec2 size) { _style.size = size; }
 
@@ -97,11 +96,17 @@ namespace ui
 
         TabItem &activeTab() { return items[activeIndex]; }
 
+        bool empty() const { return items.empty(); }
+
+        void newTab(const TabItem &tab);
+
+        bool removeTab(const TabItem &tab);
+
     private:
         std::string _id;
         bool _isHovered{false};
         Flags _flags;
-        std::function<void(const TabItem &)> _onClose;
+        bool _isMainTabbar;
         f32 _avaliableWidth{0};
         Style _style;
         struct DragData
@@ -116,6 +121,32 @@ namespace ui
         void renderDragged();
         void renderCombobox();
     };
+
+    struct TabRemoveEvent : public events::Event
+    {
+        TabItem tab;
+        bool confirmed;
+        bool createOnEmpty;
+        bool batch;
+
+        TabRemoveEvent(const std::string &eventName, const TabItem &tab, bool confirmed = false, bool createOnEmpty = true, bool batch = false)
+            : Event(eventName), tab(tab), confirmed(confirmed), createOnEmpty(createOnEmpty), batch(batch)
+        {
+        }
+    };
+
+    struct TabChangeEvent : public events::Event
+    {
+        Array<TabItem>::iterator prev;
+        Array<TabItem>::iterator current;
+
+        TabChangeEvent(const std::string &eventName, const Array<TabItem>::iterator &prev,
+                       const Array<TabItem>::iterator &current)
+            : Event(eventName), prev(prev), current(current)
+        {
+        }
+    };
+
 } // namespace ui
 
 template <>

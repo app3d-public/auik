@@ -34,7 +34,7 @@ namespace ui
 
         ~WindowImGuiBinder();
 
-        virtual void bindListeners() override;
+        void bindListeners();
 
         void newFrame();
 

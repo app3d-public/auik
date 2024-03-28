@@ -1,3 +1,4 @@
+#include <core/log.hpp>
 #include <imgui/imgui_internal.h>
 #include <uikit/button/button.hpp>
 #include <uikit/combobox/combobox.hpp>
@@ -6,6 +7,66 @@
 
 namespace ui
 {
+    class TabMemCache : public MemCache
+    {
+    public:
+        TabMemCache(u8 *activeIndex, Array<TabItem> *items) : activeIndex(activeIndex), _items(items) { ++itemsLeft; }
+
+        virtual void free() override
+        {
+            _free();
+            if (--itemsLeft == 0)
+                offset = 0;
+        }
+
+    protected:
+        static size_t offset;
+        static size_t itemsLeft;
+        u8 *activeIndex;
+        Array<TabItem> *_items;
+
+        virtual void _free() = 0;
+    };
+
+    class AddMemCache : public TabMemCache
+    {
+    public:
+        AddMemCache(TabItem tab, u8 *activeIndex, Array<TabItem> *items) : _tab(tab), TabMemCache(activeIndex, items) {}
+
+        virtual void _free() override
+        {
+            _items->push_back(_tab);
+            ++offset;
+            *activeIndex = _items->size() - 1;
+        }
+
+    private:
+        TabItem _tab;
+    };
+
+    class RemoveMemCache : public TabMemCache
+    {
+    public:
+        RemoveMemCache(const Array<TabItem>::iterator &it, u8 *activeIndex, Array<TabItem> *items)
+            : _it(it), TabMemCache(activeIndex, items)
+        {
+        }
+
+        virtual void _free() override
+        {
+            if (*activeIndex == _items->size() - 1 && *activeIndex != 0)
+                --(*activeIndex);
+            _items->erase(_it + offset);
+            --offset;
+        }
+
+    private:
+        Array<TabItem>::iterator _it;
+    };
+
+    size_t TabMemCache::offset = 0;
+    size_t TabMemCache::itemsLeft = 0;
+
     bool TabItem::renderItem()
     {
         _size = calculateItemSize();
@@ -69,12 +130,9 @@ namespace ui
         {
             if (begin->renderItem())
             {
-                if (_onClose)
-                    _onClose(*begin);
-                items.erase(begin);
-                if (activeIndex == items.size())
-                    activeIndex = items.size() - 1;
-                return true;
+                if (_isMainTabbar)
+                    events::mng.emit<TabRemoveEvent>("tabbar:close", *begin, false);
+                return false;
             }
         }
         else
@@ -214,7 +272,6 @@ namespace ui
             int index{0};
             for (auto begin = items.begin(); begin != items.end(); ++index)
             {
-                bool wasDeleted{false};
                 f32 itemWidth = begin->size().x + style.ItemSpacing.x;
 
                 // Adjust available width and determine if rendering should stop
@@ -261,17 +318,18 @@ namespace ui
 
                 // Only render if scrollable or not stopped
                 if (isScrollable || !stopRender)
-                    wasDeleted = renderTab(begin, index);
+                    renderTab(begin, index);
 
                 // Update active index if pressed
                 if (begin->pressed() && !wasDragReset)
                 {
+                    if (activeIndex != index)
+                        events::mng.emit<TabChangeEvent>("tabbar:switched", items.begin() + activeIndex,
+                                                         items.begin() + index);
                     activeIndex = index;
                     window::pushEmptyEvent();
                 }
-
-                if (!wasDeleted)
-                    ++begin;
+                ++begin;
             }
 
             if (_drag.it.has_value())
@@ -286,6 +344,23 @@ namespace ui
             onRender();
     }
 
+    bool TabBar::removeTab(const TabItem &tab)
+    {
+        auto it =
+            std::find_if(items.begin(), items.end(), [&](const TabItem &item) { return item.label() == tab.label(); });
+        if (it != items.end())
+        {
+            DisposalQueue::getSingleton().push(new RemoveMemCache(it, &activeIndex, &items));
+            return true;
+        }
+        return false;
+    }
+
+    void TabBar::newTab(const TabItem &tab)
+    {
+        DisposalQueue::getSingleton().push(new AddMemCache(tab, &activeIndex, &items));
+    }
+
     void TabBar::bindListeners()
     {
         bindEvent<window::ScrollEvent>("window:scroll", [this](const window::ScrollEvent &event) {
@@ -294,5 +369,14 @@ namespace ui
             ImGuiIO &io = ImGui::GetIO();
             io.AddKeyEvent(ImGuiMod_Shift, true);
         });
+        if (_isMainTabbar)
+        {
+            bindEvent<events::Event>("tabbar:changed", [this](events::Event &e) {
+                if (e.data<bool>())
+                    items[activeIndex].flags() |= TabItem::FlagBits::unsaved;
+                else
+                    items[activeIndex].flags() &= ~TabItem::FlagBits::unsaved;
+            });
+        }
     }
 } // namespace ui

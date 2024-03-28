@@ -15,6 +15,8 @@ list(APPEND SOURCE_FILES
     "src/selectable/selectable.cpp"
     "src/menu/menu.cpp"
     "src/tab/tab.cpp"
+    "src/text/text.cpp"
+    "src/modal/modal.cpp"
     "src/window@imgui.cpp"
 )
 
@@ -38,6 +40,12 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     app3d-window
     imgui
 )
+
+if(WIN32)
+    target_link_libraries(${PROJECT_NAME} PRIVATE
+        Winmm
+    )
+endif()
 
 set_target_properties(${PROJECT_NAME}
     PROPERTIES

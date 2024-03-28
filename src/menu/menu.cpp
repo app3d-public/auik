@@ -245,9 +245,9 @@ namespace ui
         float min_w =
             window->DC.MenuColumns.DeclColumns(0.0f, label_size.x, 0.0f, checkmark_w); // Feedback to next frame
         float extra_w = ImMax(0.0f, ImGui::GetContentRegionAvail().x - min_w);
-        ImVec2 text_pos(window->DC.CursorPos.x + offsets->OffsetLabel,
+        ImVec2 text_pos(window->DC.CursorPos.x + offsets->OffsetLabel + _style.padding.x,
                         window->DC.CursorPos.y + window->DC.CurrLineTextBaseOffset);
-        _size = ImVec2(min_w, label_size.y);
+        _size = ImVec2(min_w + +_style.padding.x, label_size.y);
         Selectable::Params params{.label = "",
                                   .rounding = _rounding,
                                   .flags = _flags | ImGuiSelectableFlags_SpanAvailWidth,
@@ -471,8 +471,9 @@ namespace ui
                         ImGui::PopStyleColor();
                         if (item.menu->pressed())
                         {
-                            window::pushEmptyEvent();
+                            item.menu->pressed(false);
                             item.callback();
+                            window::pushEmptyEvent();
                         }
                     }
                 }

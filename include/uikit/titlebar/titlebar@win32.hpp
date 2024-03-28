@@ -1,7 +1,6 @@
 #ifndef UIKIT_WIDGETS_TITLEBAR_WIN32_H
 #define UIKIT_WIDGETS_TITLEBAR_WIN32_H
 
-#include <core/event/event.hpp>
 #include <window/window.hpp>
 #include "../menu/menu.hpp"
 #include "../tab/tab.hpp"
@@ -49,13 +48,14 @@ namespace ui
             ImVec4 tabActiveColor;
             ImVec4 tabBackgroundColor;
             std::shared_ptr<Icon> icons[IconMaxValue];
-        };
+        } style;
+        TabBar tabbar;
 
         Titlebar(window::Window &window, std::unique_ptr<MenuBar> &menubar, const TabBar &tabbar, const Style &style);
 
         virtual void render() override;
 
-        virtual void bindListeners() override;
+        void bindListeners();
 
     private:
         window::Window &_window;
@@ -70,8 +70,6 @@ namespace ui
         } _controls[3];
         ControlArea _activeArea{ControlArea::None};
         float _height;
-        TabBar _tabbar;
-        Style _style;
     };
 } // namespace ui
 #endif

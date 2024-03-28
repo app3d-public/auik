@@ -53,6 +53,7 @@ namespace ui
         bool hover() const { return _hover; }
 
         bool pressed() const { return _pressed; }
+        void pressed(bool pressed) { _pressed = pressed; }
 
         bool showBackground() const { return _showBackground; }
 
