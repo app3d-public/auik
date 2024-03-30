@@ -149,7 +149,7 @@ namespace ui
                 else if (cursorPoint.x < _captionWidth)
                 {
                     _activeArea = ControlArea::Caption;
-                    *e.lResult = HTCAPTION;
+                    e.lResult = HTCAPTION;
                 }
                 else if (cursorPoint.x < _captionWidth + _controlSize.x)
                 {
@@ -157,7 +157,7 @@ namespace ui
                     if (_controls[0].state != ControlState::Active)
                     {
                         _controls[0].state = ControlState::Hover;
-                        *e.lResult = HTMINBUTTON;
+                        e.lResult = HTMINBUTTON;
                     }
                 }
                 else if (cursorPoint.x < _captionWidth + _controlSize.x * 2)
@@ -166,7 +166,7 @@ namespace ui
                     if (_controls[1].state != ControlState::Active)
                     {
                         _controls[1].state = ControlState::Hover;
-                        *e.lResult = HTMAXBUTTON;
+                        e.lResult = HTMAXBUTTON;
                     }
                 }
                 else
@@ -175,7 +175,7 @@ namespace ui
                     if (_controls[2].state != ControlState::Active)
                     {
                         _controls[2].state = ControlState::Hover;
-                        *e.lResult = HTCLOSE;
+                        e.lResult = HTCLOSE;
                     }
                 }
             }
@@ -193,15 +193,15 @@ namespace ui
             {
                 case ControlArea::Min:
                     _controls[0].state = ControlState::Active;
-                    *e.lResult = 0;
+                    e.lResult = 0;
                     break;
                 case ControlArea::Max:
                     _controls[1].state = ControlState::Active;
-                    *e.lResult = 0;
+                    e.lResult = 0;
                     break;
                 case ControlArea::Close:
                     _controls[2].state = ControlState::Active;
-                    *e.lResult = 0;
+                    e.lResult = 0;
                     break;
                 default:
                     break;
