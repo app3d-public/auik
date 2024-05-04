@@ -85,7 +85,6 @@ namespace ui
             pos.y += 20;
             ImGui::PushFont(style.boldFont);
             ImGui::SetCursorPos(pos);
-            float wrapWidth = ImGui::GetContentRegionAvail().x;
             Text ht(message.header, true);
             ht.render();
             ImGui::PopFont();

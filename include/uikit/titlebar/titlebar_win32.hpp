@@ -27,7 +27,7 @@ namespace ui
         };
     } // namespace
 
-    class Titlebar : public MenuBar, public events::ListenerRegistry
+    class APPLIB_API Titlebar : public MenuBar, public events::ListenerRegistry
     {
         enum Icons
         {

@@ -2,10 +2,7 @@
 #define UIKIT_WIDGETS_MODAL_H
 
 #include <core/event/event.hpp>
-#include <core/std/array.hpp>
-#include <core/std/types@basic.hpp>
 #include <functional>
-#include <map>
 #include <string>
 #include <window/popup.hpp>
 #include "../icon/icon.hpp"
@@ -13,7 +10,7 @@
 
 namespace ui
 {
-    class ModalQueue : public Widget, public events::ListenerRegistry
+    class APPLIB_API ModalQueue : public Widget, public events::ListenerRegistry
     {
     public:
         struct Message
@@ -21,7 +18,7 @@ namespace ui
             window::popup::Style level;
             std::string header;
             std::string message;
-            Array<std::pair<window::popup::Buttons, std::function<void()>>> buttons;
+            DArray<std::pair<window::popup::Buttons, std::function<void()>>> buttons;
             bool preventClose = false;
         };
 
@@ -56,14 +53,13 @@ namespace ui
         int preventCloseCount() const { return _preventCloseCount; }
 
     private:
-        std::map<std::string, Array<Message>> _messages;
+        Map<std::string, DArray<Message>> _messages;
         enum class ChangeState
         {
             normal,
             clicked,
             continuing,
         } state{ChangeState::normal};
-        bool _changed{false};
         bool _applyAll{false};
         int _preventCloseCount{0};
 

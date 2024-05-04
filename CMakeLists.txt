@@ -17,16 +17,17 @@ list(APPEND SOURCE_FILES
     "src/tab/tab.cpp"
     "src/text/text.cpp"
     "src/modal/modal.cpp"
-    "src/window@imgui.cpp"
+    "src/window_imgui.cpp"
 )
 
 if(WIN32)
     list(APPEND SOURCE_FILES
-        "src/titlebar/titlebar@win32.cpp"
+        "src/titlebar/titlebar_win32.cpp"
     )
 endif()
 
 add_library(${PROJECT_NAME} SHARED ${SOURCE_FILES})
+set_target_properties(${PROJECT_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/include/")
 
 target_include_directories(${PROJECT_NAME} PRIVATE

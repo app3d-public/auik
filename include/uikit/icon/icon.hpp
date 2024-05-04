@@ -25,11 +25,11 @@ namespace ui
         std::string _symbol;
     };
 
-    class FontIcon : public Icon
+    class APPLIB_API FontIcon : public Icon
     {
     public:
         FontIcon(const std::string &symbol, ImFont *font, const std::string &u8sequence)
-            : Icon(symbol), _font(font), _u8sequence(u8sequence)
+            : Icon(symbol), _u8sequence(u8sequence), _font(font)
         {
         }
 
@@ -66,27 +66,6 @@ namespace ui
         Image _image;
         ImVec2 _size;
     };
-
-    // class IconResolver
-    // {
-    //     struct Impl;
-
-    // public:
-    //     IconResolver();
-    //     ~IconResolver();
-
-    //     void loadSymbols();
-
-    //     std::shared_ptr<Icon> getIcon(const std::string &symbol) const;
-
-    // private:
-    //     emhash5::HashMap<std::string, std::shared_ptr<Icon>> _symbolMap;
-    //     Impl *_impl{nullptr};
-
-    //     void addAppIcons(const std::shared_ptr<graphics::Atlas> &appIcons);
-    // };
-
-    // inline float dpiAwareScale(float value) { return value * window::getDpi() / 0.96f; }
 } // namespace ui
 
 #endif

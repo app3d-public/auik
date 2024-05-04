@@ -2,8 +2,8 @@
 #define UIKIT_WINDOW_IMGUI_H
 
 #include <imgui/imgui.h>
-#include <map>
 #include <window/window.hpp>
+#include <core/api.hpp>
 #include "window/types.hpp"
 #ifdef _WIN32
     #include <windows.h>
@@ -13,7 +13,7 @@ namespace ui
 {
     namespace
     {
-        LRESULT CALLBACK ImGuiWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+        static LRESULT CALLBACK ImGuiWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
         struct ImGuiBackendData
         {
@@ -27,7 +27,7 @@ namespace ui
         };
     } // namespace
 
-    class WindowImGuiBinder : public events::ListenerRegistry
+    class APPLIB_API WindowImGuiBinder : public events::ListenerRegistry
     {
     public:
         explicit WindowImGuiBinder(window::Window &window);
@@ -40,7 +40,7 @@ namespace ui
 
     private:
         ImGuiBackendData *_bd;
-        std::map<io::Key, ImGuiKey> _keyMap{{io::Key::kTab, ImGuiKey_Tab},
+        Map<io::Key, ImGuiKey> _keyMap{{io::Key::kTab, ImGuiKey_Tab},
                                        {io::Key::kLeft, ImGuiKey_LeftArrow},
                                        {io::Key::kRight, ImGuiKey_RightArrow},
                                        {io::Key::kUp, ImGuiKey_UpArrow},

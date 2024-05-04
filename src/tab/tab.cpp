@@ -1,4 +1,5 @@
 #include <core/log.hpp>
+#include <core/mem/mem.hpp>
 #include <imgui/imgui_internal.h>
 #include <uikit/button/button.hpp>
 #include <uikit/combobox/combobox.hpp>
@@ -10,7 +11,7 @@ namespace ui
     class TabMemCache : public MemCache
     {
     public:
-        TabMemCache(u8 *activeIndex, Array<TabItem> *items) : activeIndex(activeIndex), _items(items) { ++itemsLeft; }
+        TabMemCache(u8 *activeIndex, DArray<TabItem> *items) : activeIndex(activeIndex), _items(items) { ++itemsLeft; }
 
         virtual void free() override
         {
@@ -23,7 +24,7 @@ namespace ui
         static size_t offset;
         static size_t itemsLeft;
         u8 *activeIndex;
-        Array<TabItem> *_items;
+        DArray<TabItem> *_items;
 
         virtual void _free() = 0;
     };
@@ -31,7 +32,9 @@ namespace ui
     class AddMemCache : public TabMemCache
     {
     public:
-        AddMemCache(TabItem tab, u8 *activeIndex, Array<TabItem> *items) : _tab(tab), TabMemCache(activeIndex, items) {}
+        AddMemCache(TabItem tab, u8 *activeIndex, DArray<TabItem> *items) : TabMemCache(activeIndex, items), _tab(tab)
+        {
+        }
 
         virtual void _free() override
         {
@@ -47,8 +50,8 @@ namespace ui
     class RemoveMemCache : public TabMemCache
     {
     public:
-        RemoveMemCache(const Array<TabItem>::iterator &it, u8 *activeIndex, Array<TabItem> *items)
-            : _it(it), TabMemCache(activeIndex, items)
+        RemoveMemCache(const DArray<TabItem>::iterator &it, u8 *activeIndex, DArray<TabItem> *items)
+            : TabMemCache(activeIndex, items), _it(it)
         {
         }
 
@@ -61,7 +64,7 @@ namespace ui
         }
 
     private:
-        Array<TabItem>::iterator _it;
+        DArray<TabItem>::iterator _it;
     };
 
     size_t TabMemCache::offset = 0;
@@ -124,7 +127,7 @@ namespace ui
         return outputSize;
     }
 
-    bool TabBar::renderTab(Array<TabItem>::iterator &begin, int index)
+    bool TabBar::renderTab(DArray<TabItem>::iterator &begin, int index)
     {
         if (_drag.it != begin)
         {
@@ -350,7 +353,7 @@ namespace ui
             std::find_if(items.begin(), items.end(), [&](const TabItem &item) { return item.label() == tab.label(); });
         if (it != items.end())
         {
-            DisposalQueue::getSingleton().push(new RemoveMemCache(it, &activeIndex, &items));
+            DisposalQueue::global().push(new RemoveMemCache(it, &activeIndex, &items));
             return true;
         }
         return false;
@@ -358,7 +361,7 @@ namespace ui
 
     void TabBar::newTab(const TabItem &tab)
     {
-        DisposalQueue::getSingleton().push(new AddMemCache(tab, &activeIndex, &items));
+        DisposalQueue::global().push(new AddMemCache(tab, &activeIndex, &items));
     }
 
     void TabBar::bindListeners()

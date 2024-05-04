@@ -3,10 +3,11 @@
 
 #include <string>
 #include "../widget.hpp"
+#include <core/api.hpp>
 
 namespace ui
 {
-    class Selectable : public Widget
+    class APPLIB_API Selectable : public Widget
     {
     public:
         struct Params

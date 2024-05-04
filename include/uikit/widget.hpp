@@ -1,7 +1,7 @@
 #ifndef APP_UI_WIDGETS_H
 #define APP_UI_WIDGETS_H
 
-#include <core/std/types@basic.hpp>
+#include <core/std/basic_types.hpp>
 #include <imgui/imgui.h>
 
 namespace ui

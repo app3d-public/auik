@@ -1,19 +1,18 @@
 #ifndef UIKIT_WIDGETS_MENU_H
 #define UIKIT_WIDGETS_MENU_H
 
-#include <forward_list>
+#include <core/std/forward_list.hpp>
 #include <functional>
 #include <imgui/imgui_internal.h>
 #include <memory>
 #include "../icon/icon.hpp"
 #include "../selectable/selectable.hpp"
 #include "../widget.hpp"
-#include "../icon/icon.hpp"
 
 namespace ui
 {
 
-    class VMenu : public Widget
+    class APPLIB_API VMenu : public Widget
     {
         struct _Item
         {
@@ -23,7 +22,7 @@ namespace ui
             std::function<void(Selectable *menu)> beforeRender{nullptr};
         };
 
-        using _ItemGroup = std::forward_list<_Item>;
+        using _ItemGroup = ForwardList<_Item>;
 
     public:
         struct Style
@@ -43,7 +42,7 @@ namespace ui
             VMenu *submenu{nullptr};
         };
 
-        using ItemGroup = std::forward_list<Item>;
+        using ItemGroup = ForwardList<Item>;
 
         VMenu(std::initializer_list<ItemGroup> itemgroups, const Style &style,
               const std::shared_ptr<Icon> &arrowIcon = nullptr);
@@ -55,12 +54,12 @@ namespace ui
         Style style() const { return _style; }
 
     private:
-        std::forward_list<_ItemGroup> _itemGroups;
+        ForwardList<_ItemGroup> _itemGroups;
 
         const Style &_style;
     };
 
-    class BeginMenu : public Selectable
+    class APPLIB_API BeginMenu : public Selectable
     {
     public:
         BeginMenu(const std::string &label, const std::shared_ptr<Icon> &arrowIcon, const VMenu::Style &style)
@@ -79,15 +78,15 @@ namespace ui
         std::shared_ptr<Icon> _arrowIcon;
     };
 
-    class MenuItem : public Selectable
+    class APPLIB_API MenuItem : public Selectable
     {
     public:
         MenuItem(const std::string &label, const std::string &shortcut, const VMenu::Style &style)
             : Selectable(label, false, style.rounding,
                          ImGuiSelectableFlags_SelectOnRelease | ImGuiSelectableFlags_NoSetKeyOwner |
                              ImGuiSelectableFlags_SetNavIdOnHover),
-              _style(style),
-              _shortcut(shortcut)
+              _shortcut(shortcut),
+              _style(style)
         {
         }
 
@@ -98,7 +97,7 @@ namespace ui
         const VMenu::Style &_style;
     };
 
-    class HMenu : public Selectable
+    class APPLIB_API HMenu : public Selectable
     {
     public:
         struct Style
@@ -113,8 +112,8 @@ namespace ui
                            ImVec2 padding = ImGui::GetStyle().ItemSpacing, float rounding = 0.0f,
                            ImVec4 backgroundColor = ImVec4(0.0f, 0.0f, 0.0f, 0.0f),
                            ImVec4 hoverColor = ImVec4(0.0f, 0.0f, 0.0f, 0.0f))
-                : margin(margin + padding * 0.5f),
-                  padding(padding),
+                : padding(padding),
+                  margin(margin + padding * 0.5f),
                   rounding(rounding),
                   backgroundColor(backgroundColor),
                   hoverColor(hoverColor)
@@ -142,7 +141,7 @@ namespace ui
         void beginMenu();
     };
 
-    class MenuBar : public Widget
+    class APPLIB_API MenuBar : public Widget
     {
     public:
         struct Style
@@ -151,7 +150,7 @@ namespace ui
             VMenu::Style submenu;
         };
 
-        MenuBar(std::forward_list<HMenu> items, Style *style) : _style(style), _items(items) {}
+        MenuBar(const ForwardList<HMenu> &items, Style *style) : _style(style), _items(items) {}
 
         virtual ~MenuBar();
 
@@ -167,7 +166,7 @@ namespace ui
 
     protected:
         Style *_style;
-        std::forward_list<HMenu> _items;
+        ForwardList<HMenu> _items;
     };
 } // namespace ui
 

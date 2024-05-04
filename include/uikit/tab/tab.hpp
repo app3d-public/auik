@@ -2,15 +2,14 @@
 #define UIKIT_WIDGETS_TAB_H
 
 #include <core/event/event.hpp>
-#include <core/mem.hpp>
 #include <core/std/enum.hpp>
-#include <core/std/types@basic.hpp>
+#include <core/std/basic_types.hpp>
 #include "../icon/icon.hpp"
 #include "../selectable/selectable.hpp"
 
 namespace ui
 {
-    class TabItem : public Selectable
+    class APPLIB_API TabItem : public Selectable
     {
     public:
         enum class FlagBits : u8
@@ -55,10 +54,10 @@ namespace ui
         Flags _tabFlags;
     };
 
-    class TabBar : public Widget, public events::ListenerRegistry
+    class APPLIB_API TabBar : public Widget, public events::ListenerRegistry
     {
     public:
-        Array<TabItem> items;
+        DArray<TabItem> items;
         u8 activeIndex = 0;
 
         enum class FlagBits : u8
@@ -78,9 +77,9 @@ namespace ui
             f32 scrollOffsetRL;
         };
 
-        TabBar(const std::string &id, const Array<TabItem> &items, Flags flags = FlagBits::none,
+        TabBar(const std::string &id, const DArray<TabItem> &items, Flags flags = FlagBits::none,
                const Style &style = {}, bool mainTabbar = false)
-            : _id(id), items(items), _flags(flags), _style(style), _isMainTabbar(mainTabbar)
+            : items(items), _id(id), _flags(flags), _isMainTabbar(mainTabbar), _style(style)
         {
         }
 
@@ -111,13 +110,13 @@ namespace ui
         Style _style;
         struct DragData
         {
-            std::optional<Array<TabItem>::iterator> it{std::nullopt};
+            std::optional<DArray<TabItem>::iterator> it{std::nullopt};
             ImVec2 pos;
             f32 posOffset{0};
             f32 offset{0};
         } _drag;
 
-        bool renderTab(Array<TabItem>::iterator &begin, int index);
+        bool renderTab(DArray<TabItem>::iterator &begin, int index);
         void renderDragged();
         void renderCombobox();
     };
@@ -137,11 +136,11 @@ namespace ui
 
     struct TabChangeEvent : public events::Event
     {
-        Array<TabItem>::iterator prev;
-        Array<TabItem>::iterator current;
+        DArray<TabItem>::iterator prev;
+        DArray<TabItem>::iterator current;
 
-        TabChangeEvent(const std::string &eventName, const Array<TabItem>::iterator &prev,
-                       const Array<TabItem>::iterator &current)
+        TabChangeEvent(const std::string &eventName, const DArray<TabItem>::iterator &prev,
+                       const DArray<TabItem>::iterator &current)
             : Event(eventName), prev(prev), current(current)
         {
         }

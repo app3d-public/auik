@@ -2,14 +2,15 @@
 #define UIKIT_WIDGETS_IMAGE_H
 
 #include "../widget.hpp"
+#include <core/api.hpp>
 
 namespace ui
 {
-    class Image : public Widget
+    class APPLIB_API Image : public Widget
     {
     public:
         Image(ImTextureID id, ImVec2 size = {0, 0}, ImVec2 uvMin = {0, 0}, ImVec2 uvMax = {1, 1})
-            : _size(size), _uvMin(uvMin), _uvMax(uvMax), _id(id)
+            : _id(id), _size(size), _uvMin(uvMin), _uvMax(uvMax)
         {
         }
 

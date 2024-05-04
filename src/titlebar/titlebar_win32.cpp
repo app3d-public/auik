@@ -1,17 +1,17 @@
 #include <core/log.hpp>
-#include <uikit/titlebar/titlebar@win32.hpp>
+#include <uikit/titlebar/titlebar_win32.hpp>
 
 namespace ui
 {
     Titlebar::Titlebar(window::Window &window, std::unique_ptr<MenuBar> &menubar, const TabBar &tabbar,
                        const Style &style)
         : MenuBar(std::move(*menubar)),
+          style(style),
+          tabbar(tabbar),
           _window(window),
           _controls{{ControlState::Idle, ControlArea::Min},
                     {ControlState::Idle, ControlArea::Max},
-                    {ControlState::Idle, ControlArea::Close}},
-          tabbar(tabbar),
-          style(style)
+                    {ControlState::Idle, ControlArea::Close}}
     {
         _controlSize.x = GetSystemMetrics(SM_CXSIZE) * window::getDpi();
         _controlSize.y = GetSystemMetrics(SM_CYSIZE) * window::getDpi();

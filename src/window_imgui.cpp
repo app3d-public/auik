@@ -1,8 +1,8 @@
-#include <uikit/window@imgui.hpp>
+#include <uikit/window_imgui.hpp>
 #include <core/log.hpp>
 
 #ifdef _WIN32
-    #include <window/platform@win32.hpp>
+    #include <window/platform_win32.hpp>
 #endif
 
 namespace ui
@@ -129,7 +129,7 @@ namespace ui
     void WindowImGuiBinder::bindListeners()
     {
         logInfo("Binding ImGui listeners");
-        bindEvent<window::FocusEvent>("window:focus", [this](const window::FocusEvent &event) {
+        bindEvent<window::FocusEvent>("window:focus", [](const window::FocusEvent &event) {
             ImGuiIO &io = ImGui::GetIO();
             io.AddFocusEvent(event.focused);
         });
@@ -148,14 +148,14 @@ namespace ui
             io.AddMousePosEvent(event.position.x, event.position.y);
             _bd->LastValidMousePos = ImVec2(event.position.x, event.position.y);
         });
-        bindEvent<window::MouseClickEvent>("window:input:mouse", [this](const window::MouseClickEvent &event) {
+        bindEvent<window::MouseClickEvent>("window:input:mouse", [](const window::MouseClickEvent &event) {
             ImGuiIO &io = ImGui::GetIO();
             updateKeyMods(io, event.mods);
             auto button = event.button;
             if (button != io::MouseKey::unknown)
                 io.AddMouseButtonEvent(+button, event.action == io::KeyPressState::press);
         });
-        bindEvent<window::ScrollEvent>("window:scroll", [this](const window::ScrollEvent &event) {
+        bindEvent<window::ScrollEvent>("window:scroll", [](const window::ScrollEvent &event) {
             ImGuiIO &io = ImGui::GetIO();
             io.AddMouseWheelEvent(event.h, event.v);
         });
@@ -166,7 +166,7 @@ namespace ui
             ImGuiKey imgui_key = it != _keyMap.end() ? it->second : ImGuiKey_None;
             io.AddKeyEvent(imgui_key, event.action != io::KeyPressState::release);
         });
-        bindEvent<window::CharInputEvent>("window:input:char", [this](const window::CharInputEvent &event) {
+        bindEvent<window::CharInputEvent>("window:input:char", [](const window::CharInputEvent &event) {
             ImGuiIO &io = ImGui::GetIO();
             io.AddInputCharacter(event.charCode);
         });
