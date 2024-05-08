@@ -38,7 +38,7 @@ namespace ui
         }
 
         virtual void render() override;
-        static void render(Params &params);
+        static APPLIB_API void render(Params &params);
 
         ImVec2 size() const { return _size; }
         void size(ImVec2 size) { _size = size; }

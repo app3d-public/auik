@@ -4,27 +4,7 @@ project(app3d-uikit
     LANGUAGES CXX C
     DESCRIPTION "App3d UIKIT Lib")
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++ -fexperimental-library")
-add_definitions(-D_LIBCPP_NO_VCRUNTIME)
-
-list(APPEND SOURCE_FILES
-    "src/button/button.cpp"
-    "src/combobox/combobox.cpp"
-    "src/image/image.cpp"
-    "src/icon/icon.cpp"
-    "src/selectable/selectable.cpp"
-    "src/menu/menu.cpp"
-    "src/tab/tab.cpp"
-    "src/text/text.cpp"
-    "src/modal/modal.cpp"
-    "src/window_imgui.cpp"
-)
-
-if(WIN32)
-    list(APPEND SOURCE_FILES
-        "src/titlebar/titlebar_win32.cpp"
-    )
-endif()
+add_files(${PROJECT_NAME} RECURSE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
 add_library(${PROJECT_NAME} SHARED ${SOURCE_FILES})
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
