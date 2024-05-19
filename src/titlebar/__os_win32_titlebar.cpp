@@ -1,20 +1,44 @@
 #include <core/log.hpp>
+#include <dwmapi.h>
 #include <uikit/titlebar/titlebar_win32.hpp>
+#include <window/platform_win32.hpp>
+#include "imgui.h"
 
 namespace ui
 {
+    ImVec2 getControllsSize(HWND hwnd)
+    {
+        ImVec2 controlSize;
+        BOOL isCompositionEnabled = FALSE;
+        HRESULT hr = DwmIsCompositionEnabled(&isCompositionEnabled);
+        if (SUCCEEDED(hr) && isCompositionEnabled)
+        {
+            RECT rect;
+            hr = DwmGetWindowAttribute(hwnd, DWMWA_CAPTION_BUTTON_BOUNDS, &rect, sizeof(rect));
+            if (SUCCEEDED(hr))
+            {
+                controlSize.x = (rect.right - rect.left) / 3.0f * window::getDpi();
+                controlSize.y = (rect.bottom - rect.top) / 3.0f * window::getDpi();
+                return controlSize;
+            }
+        }
+        logWarn("Failed to get DWMWA_CAPTION_BUTTON_BOUNDS");
+        controlSize.x = GetSystemMetrics(SM_CXSIZE) * window::getDpi();
+        controlSize.y = GetSystemMetrics(SM_CYSIZE) * window::getDpi();
+        return controlSize;
+    }
+
     Titlebar::Titlebar(window::Window &window, std::unique_ptr<MenuBar> &menubar, const TabBar &tabbar,
                        const Style &style)
         : MenuBar(std::move(*menubar)),
           style(style),
           tabbar(tabbar),
           _window(window),
+          _controlSize(getControllsSize(window.accessBridge().hwnd())),
           _controls{{ControlState::Idle, ControlArea::Min},
                     {ControlState::Idle, ControlArea::Max},
                     {ControlState::Idle, ControlArea::Close}}
     {
-        _controlSize.x = GetSystemMetrics(SM_CXSIZE) * window::getDpi();
-        _controlSize.y = GetSystemMetrics(SM_CYSIZE) * window::getDpi();
     }
 
     void Titlebar::render()

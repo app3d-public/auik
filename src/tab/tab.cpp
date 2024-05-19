@@ -134,7 +134,7 @@ namespace ui
             if (begin->renderItem())
             {
                 if (_isMainTabbar)
-                    events::mng.emit<TabRemoveEvent>("tabbar:close", *begin, false);
+                    events::mng.dispatch<TabRemoveEvent>("tabbar:close", *begin, false);
                 return false;
             }
         }
@@ -327,7 +327,7 @@ namespace ui
                 if (begin->pressed() && !wasDragReset)
                 {
                     if (activeIndex != index)
-                        events::mng.emit<TabChangeEvent>("tabbar:switched", items.begin() + activeIndex,
+                        events::mng.dispatch<TabChangeEvent>("tabbar:switched", items.begin() + activeIndex,
                                                          items.begin() + index);
                     activeIndex = index;
                     window::pushEmptyEvent();

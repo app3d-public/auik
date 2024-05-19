@@ -2,6 +2,7 @@
 #include <uikit/modal/modal.hpp>
 #include <uikit/text/text.hpp>
 #include <window/window.hpp>
+#include <mmsystem.h>
 
 namespace ui
 {

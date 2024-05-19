@@ -481,10 +481,7 @@ namespace ui
                 ++start;
                 if (start == end)
                     break;
-
-                ImGui::SetCursorPosY(ImGui::GetCursorPosY() + _style.padding.y);
                 ImGui::Separator();
-                ImGui::SetCursorPosY(ImGui::GetCursorPosY() + _style.padding.y);
             }
         }
         ImGui::PopStyleVar();
