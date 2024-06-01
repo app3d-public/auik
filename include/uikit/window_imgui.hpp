@@ -27,14 +27,14 @@ namespace ui
         };
     } // namespace
 
-    class APPLIB_API WindowImGuiBinder : public events::ListenerRegistry
+    class APPLIB_API WindowImGuiBinder
     {
     public:
         explicit WindowImGuiBinder(window::Window &window);
 
         ~WindowImGuiBinder();
 
-        void bindListeners();
+        void bindEvents();
 
         void newFrame();
 

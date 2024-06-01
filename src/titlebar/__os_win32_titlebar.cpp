@@ -156,10 +156,10 @@ namespace ui
         ImGui::PopStyleColor();
     }
 
-    void Titlebar::bindListeners()
+    void Titlebar::bindEvents()
     {
-        tabbar.bindListeners();
-        bindEvent<window::Win32NativeEvent>("window:NCHitTest", [this](window::Win32NativeEvent &e) {
+        tabbar.bindEvents();
+        events::bindEvent<window::Win32NativeEvent>(this, "window:NCHitTest", [this](window::Win32NativeEvent &e) {
             if (e.window != &_window)
                 return;
             POINT cursorPoint = {0};
@@ -210,7 +210,7 @@ namespace ui
                 if (control.area != _activeArea)
                     control.state = ControlState::Idle;
         });
-        bindEvent<window::Win32NativeEvent>("window:NCLMouseDown", [this](window::Win32NativeEvent &e) {
+        events::bindEvent<window::Win32NativeEvent>(this, "window:NCLMouseDown", [this](window::Win32NativeEvent &e) {
             if (e.window != &_window || _activeArea == ControlArea::None)
                 return;
             switch (_activeArea)
@@ -231,7 +231,7 @@ namespace ui
                     break;
             };
         });
-        bindEvent<window::MouseClickEvent>("window:input:mouse", [this](const window::MouseClickEvent &e) {
+        events::bindEvent<window::MouseClickEvent>(this, "window:input:mouse", [this](const window::MouseClickEvent &e) {
             if (e.window != &_window || _activeArea == ControlArea::None)
                 return;
             switch (_activeArea)

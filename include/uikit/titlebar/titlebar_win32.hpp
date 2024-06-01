@@ -27,7 +27,7 @@ namespace ui
         };
     } // namespace
 
-    class APPLIB_API Titlebar : public MenuBar, public events::ListenerRegistry
+    class APPLIB_API Titlebar : public MenuBar
     {
         enum Icons
         {
@@ -53,9 +53,11 @@ namespace ui
 
         Titlebar(window::Window &window, std::unique_ptr<MenuBar> &menubar, const TabBar &tabbar, const Style &style);
 
+        ~Titlebar() { events::unbindListeners(this); }
+
         virtual void render() override;
 
-        void bindListeners();
+        void bindEvents();
 
     private:
         window::Window &_window;

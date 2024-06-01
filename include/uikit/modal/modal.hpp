@@ -10,7 +10,7 @@
 
 namespace ui
 {
-    class APPLIB_API ModalQueue : public Widget, public events::ListenerRegistry
+    class APPLIB_API ModalQueue : public Widget
     {
     public:
         struct Message
@@ -37,6 +37,8 @@ namespace ui
             style::CheckBox checkbox;
         } style;
 
+        ~ModalQueue() { events::unbindListeners(this); }
+
         virtual void render() override;
 
         void push(const Message &message);
@@ -46,7 +48,7 @@ namespace ui
             _btnLocaleCallback = callback;
         }
 
-        void bindListeners();
+        void bindEvents();
 
         bool empty() const { return _messages.empty(); }
 

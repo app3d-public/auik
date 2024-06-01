@@ -85,7 +85,7 @@ namespace ui
         ImGui::PushID(labelPtr);
         const ImGuiMenuColumns *offsets = &window->DC.MenuColumns;
         popup_pos = ImVec2(pos.x - 1.0f - IM_TRUNC(style.ItemSpacing.x * 0.5f),
-                           pos.y - style.FramePadding.y + window->MenuBarHeight());
+                           pos.y - style.FramePadding.y + window->MenuBarHeight);
         window->DC.CursorPos.x += IM_TRUNC(style.ItemSpacing.x * 0.5f);
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(style.ItemSpacing.x * 2.0f, style.ItemSpacing.y));
         float w = label_size.x;

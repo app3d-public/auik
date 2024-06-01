@@ -126,14 +126,14 @@ namespace ui
         io.AddKeyEvent(ImGuiMod_Super, mods & io::KeyModeBits::super);
     }
 
-    void WindowImGuiBinder::bindListeners()
+    void WindowImGuiBinder::bindEvents()
     {
         logInfo("Binding ImGui listeners");
-        bindEvent<window::FocusEvent>("window:focus", [](const window::FocusEvent &event) {
+        events::bindEvent<window::FocusEvent>(this, "window:focus", [](const window::FocusEvent &event) {
             ImGuiIO &io = ImGui::GetIO();
             io.AddFocusEvent(event.focused);
         });
-        bindEvent<window::CursorEnterEvent>("window:cursor:enter", [this](const window::CursorEnterEvent &event) {
+        events::bindEvent<window::CursorEnterEvent>(this, "window:cursor:enter", [this](const window::CursorEnterEvent &event) {
             ImGuiIO &io = ImGui::GetIO();
             if (event.entered)
                 io.AddMousePosEvent(_bd->LastValidMousePos.x, _bd->LastValidMousePos.y);
@@ -143,30 +143,30 @@ namespace ui
                 io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);
             }
         });
-        bindEvent<window::PosEvent>("window:cursor:move:abs", [this](const window::PosEvent &event) {
+        events::bindEvent<window::PosEvent>(this, "window:cursor:move:abs", [this](const window::PosEvent &event) {
             ImGuiIO &io = ImGui::GetIO();
             io.AddMousePosEvent(event.position.x, event.position.y);
             _bd->LastValidMousePos = ImVec2(event.position.x, event.position.y);
         });
-        bindEvent<window::MouseClickEvent>("window:input:mouse", [](const window::MouseClickEvent &event) {
+        events::bindEvent<window::MouseClickEvent>(this, "window:input:mouse", [](const window::MouseClickEvent &event) {
             ImGuiIO &io = ImGui::GetIO();
             updateKeyMods(io, event.mods);
             auto button = event.button;
             if (button != io::MouseKey::unknown)
                 io.AddMouseButtonEvent(+button, event.action == io::KeyPressState::press);
         });
-        bindEvent<window::ScrollEvent>("window:scroll", [](const window::ScrollEvent &event) {
+        events::bindEvent<window::ScrollEvent>(this, "window:scroll", [](const window::ScrollEvent &event) {
             ImGuiIO &io = ImGui::GetIO();
             io.AddMouseWheelEvent(event.h, event.v);
         });
-        bindEvent<window::KeyInputEvent>("window:input:key", [this](const window::KeyInputEvent &event) {
+        events::bindEvent<window::KeyInputEvent>(this, "window:input:key", [this](const window::KeyInputEvent &event) {
             ImGuiIO &io = ImGui::GetIO();
             updateKeyMods(io, event.mods);
             auto it = _keyMap.find(event.key);
             ImGuiKey imgui_key = it != _keyMap.end() ? it->second : ImGuiKey_None;
             io.AddKeyEvent(imgui_key, event.action != io::KeyPressState::release);
         });
-        bindEvent<window::CharInputEvent>("window:input:char", [](const window::CharInputEvent &event) {
+        events::bindEvent<window::CharInputEvent>(this, "window:input:char", [](const window::CharInputEvent &event) {
             ImGuiIO &io = ImGui::GetIO();
             io.AddInputCharacter(event.charCode);
         });

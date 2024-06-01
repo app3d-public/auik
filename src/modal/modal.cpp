@@ -184,9 +184,9 @@ namespace ui
         }
     }
 
-    void ModalQueue::bindListeners()
+    void ModalQueue::bindEvents()
     {
-        bindEvent<events::Event>("notification:msgbox",
-                                 [this](const events::Event &e) { push(e.data<ModalQueue::Message>()); });
+        using namespace events;
+        bindEvent<Event>(this, "notification:msgbox", [this](const Event &e) { push(e.data<ModalQueue::Message>()); });
     }
 } // namespace ui

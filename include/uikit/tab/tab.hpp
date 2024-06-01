@@ -2,10 +2,11 @@
 #define UIKIT_WIDGETS_TAB_H
 
 #include <core/event/event.hpp>
-#include <core/std/enum.hpp>
 #include <core/std/basic_types.hpp>
+#include <core/std/enum.hpp>
 #include "../icon/icon.hpp"
 #include "../selectable/selectable.hpp"
+
 
 namespace ui
 {
@@ -54,7 +55,7 @@ namespace ui
         Flags _tabFlags;
     };
 
-    class APPLIB_API TabBar : public Widget, public events::ListenerRegistry
+    class APPLIB_API TabBar : public Widget
     {
     public:
         DArray<TabItem> items;
@@ -83,9 +84,11 @@ namespace ui
         {
         }
 
+        ~TabBar() { events::unbindListeners(this); }
+
         virtual void render() override;
 
-        void bindListeners();
+        void bindEvents();
 
         void size(ImVec2 size) { _style.size = size; }
 
@@ -128,7 +131,8 @@ namespace ui
         bool createOnEmpty;
         bool batch;
 
-        TabRemoveEvent(const std::string &eventName, const TabItem &tab, bool confirmed = false, bool createOnEmpty = true, bool batch = false)
+        TabRemoveEvent(const std::string &eventName, const TabItem &tab, bool confirmed = false,
+                       bool createOnEmpty = true, bool batch = false)
             : Event(eventName), tab(tab), confirmed(confirmed), createOnEmpty(createOnEmpty), batch(batch)
         {
         }

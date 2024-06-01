@@ -328,7 +328,7 @@ namespace ui
                 {
                     if (activeIndex != index)
                         events::mng.dispatch<TabChangeEvent>("tabbar:switched", items.begin() + activeIndex,
-                                                         items.begin() + index);
+                                                             items.begin() + index);
                     activeIndex = index;
                     window::pushEmptyEvent();
                 }
@@ -364,9 +364,9 @@ namespace ui
         DisposalQueue::global().push(new AddMemCache(tab, &activeIndex, &items));
     }
 
-    void TabBar::bindListeners()
+    void TabBar::bindEvents()
     {
-        bindEvent<window::ScrollEvent>("window:scroll", [this](const window::ScrollEvent &event) {
+        events::bindEvent<window::ScrollEvent>(this, "window:scroll", [this](const window::ScrollEvent &event) {
             if (!_isHovered || !(_flags & FlagBits::scrollable))
                 return;
             ImGuiIO &io = ImGui::GetIO();
@@ -374,7 +374,7 @@ namespace ui
         });
         if (_isMainTabbar)
         {
-            bindEvent<events::Event>("tabbar:changed", [this](events::Event &e) {
+            events::bindEvent<events::Event>(this, "tabbar:changed", [this](events::Event &e) {
                 if (e.data<bool>())
                     items[activeIndex].flags() |= TabItem::FlagBits::unsaved;
                 else
