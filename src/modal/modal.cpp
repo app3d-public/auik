@@ -2,15 +2,17 @@
 #include <uikit/modal/modal.hpp>
 #include <uikit/text/text.hpp>
 #include <window/window.hpp>
-#include <mmsystem.h>
+#ifdef _WIN32
+    // Include windows.h first
+    #include <mmsystem.h>
+#endif
 
 namespace ui
 {
     std::string getBtnName(window::popup::Buttons button,
                            const std::function<std::string(window::popup::Buttons)> &callback)
     {
-        if (callback)
-            return callback(button);
+        if (callback) return callback(button);
         switch (button)
         {
             case window::popup::Buttons::OK:
@@ -29,14 +31,12 @@ namespace ui
     void ModalQueue::push(const Message &message)
     {
         _messages[message.header].push_back(message);
-        if (message.preventClose)
-            ++_preventCloseCount;
+        if (message.preventClose) ++_preventCloseCount;
     }
 
     void ModalQueue::render()
     {
-        if (_messages.empty())
-            return;
+        if (_messages.empty()) return;
 
         const auto &it = _messages.begin();
         auto &message = it->second.front();
@@ -101,37 +101,33 @@ namespace ui
             // Checkbox
             if (it->second.size() > 1)
             {
-                ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, {style.checkbox.spacing, 0});
+                ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, {style::checkbox.spacing, 0});
                 ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
-                                    {style.checkbox.sizePadding, style.checkbox.sizePadding});
-                ImGui::SetCursorPos(pos + ImVec2(0, style.button.padding.y * 0.5f));
-                ImGui::Checkbox("Apply all", &_applyAll);
+                                    {style::checkbox.sizePadding, style::checkbox.sizePadding});
+                ImGui::SetCursorPos(pos + ImVec2(0, style::button.padding.y * 0.5f));
+                _switch.render();
                 ImGui::PopStyleVar(2);
             }
 
             // Buttons
             ImGui::SetCursorPosY(pos.y);
-            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, style.button.padding);
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, style::button.padding);
             ImGui::PushStyleColor(ImGuiCol_Button, {0, 0, 0, 0});
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, style.button.colorActive);
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, style.button.colorHovered);
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, style::button.colorActive);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, style::button.colorHovered);
             f32 offsetX{0};
             for (int i = message.buttons.size() - 1; i >= 0; --i)
             {
                 bool isLast = i == message.buttons.size() - 1;
-                if (isLast)
-                    ImGui::PushStyleColor(ImGuiCol_Button, style.button.color);
+                if (isLast) ImGui::PushStyleColor(ImGuiCol_Button, style::button.color);
                 std::string name = getBtnName(message.buttons[i].first, _btnLocaleCallback);
-                f32 btnWidth = ImGui::CalcTextSize(name.c_str()).x + style.button.padding.x * 2 + 5;
-                f32 cursorX = style.width - btnWidth - offsetX - style.button.padding.x;
+                f32 btnWidth = ImGui::CalcTextSize(name.c_str()).x + style::button.padding.x * 2 + 5;
+                f32 cursorX = style.width - btnWidth - offsetX - style::button.padding.x;
                 offsetX += btnWidth;
                 ImGui::SetCursorPosX(cursorX);
-                if (ImGui::Button(name.c_str()))
-                    action = i;
-                if (isLast)
-                    ImGui::PopStyleColor();
-                if (i > 0)
-                    ImGui::SameLine();
+                if (ImGui::Button(name.c_str())) action = i;
+                if (isLast) ImGui::PopStyleColor();
+                if (i > 0) ImGui::SameLine();
             }
             ImGui::PopStyleVar();
             ImGui::PopStyleColor(3);
@@ -140,36 +136,29 @@ namespace ui
                 auto &pair = message.buttons[action];
                 if (pair.first == window::popup::Buttons::Cancel || pair.first == window::popup::Buttons::OK)
                 {
-                    if (pair.second)
-                        pair.second();
-                    if (message.preventClose)
-                        _preventCloseCount -= _messages[it->first].size();
+                    if (pair.second) pair.second();
+                    if (message.preventClose) _preventCloseCount -= _messages[it->first].size();
                     _messages.erase(it->first);
                 }
                 else
                 {
                     auto &arr = it->second;
-                    if (_applyAll)
+                    if (_switch.toogled())
                     {
                         for (auto &msg : arr)
-                            if (auto callback = msg.buttons[action].second)
-                                callback();
-                        if (message.preventClose)
-                            _preventCloseCount -= arr.size();
+                            if (auto callback = msg.buttons[action].second) callback();
+                        if (message.preventClose) _preventCloseCount -= arr.size();
                         _messages.erase(it->first);
                     }
                     else
                     {
-                        if (pair.second)
-                            pair.second();
-                        if (message.preventClose)
-                            --_preventCloseCount;
+                        if (pair.second) pair.second();
+                        if (message.preventClose) --_preventCloseCount;
                         arr.erase(arr.begin());
-                        if (arr.empty())
-                            _messages.erase(it->first);
+                        if (arr.empty()) _messages.erase(it->first);
                     }
                 }
-                _applyAll = false;
+                _switch.toogled(false);
                 wasChanged = true;
             }
 

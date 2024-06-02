@@ -7,14 +7,10 @@ namespace ui
     {
         ImGuiContext &g = *GImGui;
         ImGuiButtonFlags buttonFlags = 0;
-        if (flags & ImGuiSelectableFlags_NoHoldingActiveID)
-            buttonFlags |= ImGuiButtonFlags_NoHoldingActiveId;
-        if (flags & ImGuiSelectableFlags_NoSetKeyOwner)
-            buttonFlags |= ImGuiButtonFlags_NoSetKeyOwner;
-        if (flags & ImGuiSelectableFlags_SelectOnClick)
-            buttonFlags |= ImGuiButtonFlags_PressedOnClick;
-        if (flags & ImGuiSelectableFlags_SelectOnRelease)
-            buttonFlags |= ImGuiButtonFlags_PressedOnRelease;
+        if (flags & ImGuiSelectableFlags_NoHoldingActiveID) buttonFlags |= ImGuiButtonFlags_NoHoldingActiveId;
+        if (flags & ImGuiSelectableFlags_NoSetKeyOwner) buttonFlags |= ImGuiButtonFlags_NoSetKeyOwner;
+        if (flags & ImGuiSelectableFlags_SelectOnClick) buttonFlags |= ImGuiButtonFlags_PressedOnClick;
+        if (flags & ImGuiSelectableFlags_SelectOnRelease) buttonFlags |= ImGuiButtonFlags_PressedOnRelease;
         if (flags & ImGuiSelectableFlags_AllowDoubleClick)
             buttonFlags |= ImGuiButtonFlags_PressedOnClickRelease | ImGuiButtonFlags_PressedOnDoubleClick;
         if ((flags & ImGuiSelectableFlags_AllowOverlap) || (g.LastItemData.InFlags & ImGuiItemFlags_AllowOverlap))
@@ -41,8 +37,7 @@ namespace ui
     void Selectable::render(Selectable::Params &params)
     {
         ImGuiWindow *window = ImGui::GetCurrentWindow();
-        if (window->SkipItems)
-            return;
+        if (window->SkipItems) return;
 
         ImGuiContext &g = *GImGui;
         const ImGuiStyle &style = g.Style;
@@ -52,8 +47,7 @@ namespace ui
         ImVec2 label_size = ImGui::CalcTextSize(params.label, nullptr, true);
         ImVec2 size(params.size.x != 0.0f ? params.size.x : label_size.x,
                     params.size.y != 0.0f ? params.size.y : label_size.y);
-        if (params.size.x == 0.0f)
-            size.x += style.ItemSpacing.x * 2.0f;
+        if (params.size.x == 0.0f) size.x += style.ItemSpacing.x * 2.0f;
         ImVec2 pos = window->DC.CursorPos;
         pos.y += window->DC.CurrLineTextBaseOffset;
         ImGui::ItemSize(size, 0.0f);
@@ -104,12 +98,10 @@ namespace ui
             window->ClipRect.Min.x = backup_clip_rect_min_x;
             window->ClipRect.Max.x = backup_clip_rect_max_x;
         }
-        if (!item_add)
-            return;
+        if (!item_add) return;
 
         const bool disabled_global = (g.CurrentItemFlags & ImGuiItemFlags_Disabled) != 0;
-        if (disabled_item && !disabled_global)
-            ImGui::BeginDisabled();
+        if (disabled_item && !disabled_global) ImGui::BeginDisabled();
 
         // FIXME: We can standardize the behavior of those two, we could also keep the fast path of override
         // ClipRect + full push on render only, which would be advantageous since most selectable are not selected.
@@ -139,8 +131,7 @@ namespace ui
         //   The multi-select API aim to fix those issues, e.g. may be replaced with a BeginSelection() API.
         if ((params.flags & ImGuiSelectableFlags_SelectOnNav) && g.NavJustMovedToId != 0 &&
             g.NavJustMovedToFocusScopeId == g.CurrentFocusScopeId)
-            if (g.NavJustMovedToId == id)
-                params.selected = pressed = true;
+            if (g.NavJustMovedToId == id) params.selected = pressed = true;
 
         if (pressed || (hovered && (params.flags & ImGuiSelectableFlags_SetNavIdOnHover)))
         {
@@ -151,12 +142,10 @@ namespace ui
                 g.NavDisableHighlight = true;
             }
         }
-        if (pressed)
-            ImGui::MarkItemEdited(id);
+        if (pressed) ImGui::MarkItemEdited(id);
 
         // In this branch, Selectable() cannot toggle the selection so this will never trigger.
-        if (params.selected != was_selected)
-            g.LastItemData.StatusFlags |= ImGuiItemStatusFlags_ToggledSelection;
+        if (params.selected != was_selected) g.LastItemData.StatusFlags |= ImGuiItemStatusFlags_ToggledSelection;
 
         // Render
         if (hovered || params.selected || params.showBackground)
@@ -186,11 +175,8 @@ namespace ui
             !(params.flags & ImGuiSelectableFlags_DontClosePopups) &&
             !(g.LastItemData.InFlags & ImGuiItemFlags_SelectableDontClosePopup))
             ImGui::CloseCurrentPopup();
-        if (disabled_item && !disabled_global)
-            ImGui::EndDisabled();
-        if (params.pressed)
-            *params.pressed = pressed;
-        if (params.hover)
-            *params.hover = hovered;
+        if (disabled_item && !disabled_global) ImGui::EndDisabled();
+        if (params.pressed) *params.pressed = pressed;
+        if (params.hover) *params.hover = hovered;
     }
 } // namespace ui

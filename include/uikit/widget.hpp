@@ -1,6 +1,7 @@
 #ifndef APP_UI_WIDGETS_H
 #define APP_UI_WIDGETS_H
 
+#include <core/api.hpp>
 #include <core/std/basic_types.hpp>
 #include <imgui/imgui.h>
 
@@ -94,30 +95,30 @@ namespace ui
 
     namespace style
     {
-        struct General
+        extern APPLIB_API struct General
         {
             f32 windowBorderSize;
             f32 popupBorderSize;
             f32 windowRounding;
             f32 frameRounding;
-        };
+        } general;
 
-        struct Button
+        extern APPLIB_API struct Button
         {
             ImVec4 color;
             ImVec4 colorActive;
             ImVec4 colorHovered;
             ImVec2 padding;
-        };
+        } button;
 
-        struct CheckBox
+        extern APPLIB_API struct CheckBox
         {
             f32 spacing;
             f32 sizePadding;
             ImVec4 mark;
-        };
+        } checkbox;
 
-        struct Colors
+        extern APPLIB_API struct Colors
         {
             ImVec4 windowBg;
             ImVec4 frameBg;
@@ -125,8 +126,11 @@ namespace ui
             ImVec4 frameActive;
             ImVec4 header;
             ImVec4 headerHovered;
+            ImVec4 headerActive;
             ImVec4 border;
-        };
+        } colors;
+
+        APPLIB_API void setupNativeStyle();
     } // namespace style
 }; // namespace ui
 

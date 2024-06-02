@@ -4,13 +4,30 @@
 #include <core/event/event.hpp>
 #include <functional>
 #include <string>
+#include <uikit/button/switch.hpp>
 #include <window/popup.hpp>
 #include "../icon/icon.hpp"
 #include "../widget.hpp"
 
 namespace ui
 {
-    class APPLIB_API ModalQueue : public Widget
+    namespace style
+    {
+        struct ModalQueue
+        {
+            ImFont *boldFont;
+            ImVec4 backgroundColor;
+            ImVec4 flipColor;
+            ImVec2 padding;
+            f32 width;
+            f32 borderSize;
+            ImVec4 borderColor;
+            std::shared_ptr<Icon> warningIcon;
+            std::shared_ptr<Icon> errorIcon;
+        };
+    } // namespace style
+
+    class APPLIB_API ModalQueue final : public Widget
     {
     public:
         struct Message
@@ -22,20 +39,7 @@ namespace ui
             bool preventClose = false;
         };
 
-        struct Style
-        {
-            ImFont *boldFont;
-            ImVec4 backgroundColor;
-            ImVec4 flipColor;
-            ImVec2 padding;
-            f32 width;
-            f32 borderSize;
-            ImVec4 borderColor;
-            std::shared_ptr<Icon> warningIcon;
-            std::shared_ptr<Icon> errorIcon;
-            style::Button button;
-            style::CheckBox checkbox;
-        } style;
+        style::ModalQueue style;
 
         ~ModalQueue() { events::unbindListeners(this); }
 
@@ -62,7 +66,7 @@ namespace ui
             clicked,
             continuing,
         } state{ChangeState::normal};
-        bool _applyAll{false};
+        Switch _switch{"Apply All"};
         int _preventCloseCount{0};
 
         std::function<std::string(window::popup::Buttons)> _btnLocaleCallback{nullptr};

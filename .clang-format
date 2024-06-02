@@ -5,6 +5,9 @@ AccessModifierOffset: -4
 NamespaceIndentation: All
 ContinuationIndentWidth: 4
 AlignConsecutiveMacros: true
+AllowShortIfStatementsOnASingleLine: true
+AllowShortLoopsOnASingleLine: true
+AllowShortBlocksOnASingleLine: true
 AlignEscapedNewlines: Left
 BreakBeforeBraces: Custom
 BraceWrapping:

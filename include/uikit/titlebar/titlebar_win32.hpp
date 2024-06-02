@@ -27,7 +27,7 @@ namespace ui
         };
     } // namespace
 
-    class APPLIB_API Titlebar : public MenuBar
+    class APPLIB_API Titlebar final : public MenuBar
     {
         enum Icons
         {

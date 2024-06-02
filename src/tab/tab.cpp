@@ -124,6 +124,7 @@ namespace ui
             else
                 outputSize.x += width;
         }
+        outputSize.x += style.ItemSpacing.x;
         return outputSize;
     }
 

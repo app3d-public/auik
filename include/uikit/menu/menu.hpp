@@ -12,7 +12,7 @@
 namespace ui
 {
 
-    class APPLIB_API VMenu : public Widget
+    class APPLIB_API VMenu final : public Widget
     {
         struct _Item
         {
@@ -59,7 +59,7 @@ namespace ui
         const Style &_style;
     };
 
-    class APPLIB_API BeginMenu : public Selectable
+    class APPLIB_API BeginMenu final : public Selectable
     {
     public:
         BeginMenu(const std::string &label, const std::shared_ptr<Icon> &arrowIcon, const VMenu::Style &style)
@@ -78,7 +78,7 @@ namespace ui
         std::shared_ptr<Icon> _arrowIcon;
     };
 
-    class APPLIB_API MenuItem : public Selectable
+    class APPLIB_API MenuItem final : public Selectable
     {
     public:
         MenuItem(const std::string &label, const std::string &shortcut, const VMenu::Style &style)
@@ -97,7 +97,7 @@ namespace ui
         const VMenu::Style &_style;
     };
 
-    class APPLIB_API HMenu : public Selectable
+    class APPLIB_API HMenu final : public Selectable
     {
     public:
         struct Style
