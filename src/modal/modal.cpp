@@ -1,10 +1,9 @@
-#include <imgui/imgui_internal.h>
 #include <uikit/modal/modal.hpp>
 #include <uikit/text/text.hpp>
 #include <window/window.hpp>
 #ifdef _WIN32
-    // Include windows.h first
-    #include <mmsystem.h>
+    // Include playsoundapi.h first
+    #include <playsoundapi.h>
 #endif
 
 namespace ui

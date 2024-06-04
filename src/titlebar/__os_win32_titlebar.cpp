@@ -2,7 +2,6 @@
 #include <dwmapi.h>
 #include <uikit/titlebar/titlebar_win32.hpp>
 #include <window/platform_win32.hpp>
-#include "imgui.h"
 
 namespace ui
 {

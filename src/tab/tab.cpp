@@ -1,4 +1,3 @@
-#include <core/log.hpp>
 #include <core/mem/mem.hpp>
 #include <imgui/imgui_internal.h>
 #include <uikit/button/button.hpp>
@@ -16,8 +15,7 @@ namespace ui
         virtual void free() override
         {
             _free();
-            if (--itemsLeft == 0)
-                offset = 0;
+            if (--itemsLeft == 0) offset = 0;
         }
 
     protected:
@@ -57,8 +55,7 @@ namespace ui
 
         virtual void _free() override
         {
-            if (*activeIndex == _items->size() - 1 && *activeIndex != 0)
-                --(*activeIndex);
+            if (*activeIndex == _items->size() - 1 && *activeIndex != 0) --(*activeIndex);
             _items->erase(_it + offset);
             --offset;
         }
@@ -91,8 +88,7 @@ namespace ui
             {
                 f32 closeSize = ImMax(2.0f, GImGui->FontSize * 0.5f + 1.0f) + style.ItemSpacing.x;
                 nextPos = screenPos + ImVec2{_size.x - closeSize, style.ItemSpacing.y};
-                if (closeButton(close_button_id, nextPos))
-                    wantDelete = true;
+                if (closeButton(close_button_id, nextPos)) wantDelete = true;
             }
             if (_tabFlags & TabItem::FlagBits::unsaved)
             {
@@ -134,8 +130,7 @@ namespace ui
         {
             if (begin->renderItem())
             {
-                if (_isMainTabbar)
-                    events::mng.dispatch<TabRemoveEvent>("tabbar:close", *begin, false);
+                if (_isMainTabbar) events::mng.dispatch<TabRemoveEvent>("tabbar:close", *begin, false);
                 return false;
             }
         }
@@ -143,7 +138,7 @@ namespace ui
         {
             ImGui::Dummy(begin->size());
             ImVec2 nextPos = _drag.pos;
-            auto &style = ImGui::GetStyle();
+            const auto &style = ImGui::GetStyle();
             nextPos.x += begin->size().x + style.ItemSpacing.x + style.ItemInnerSpacing.x;
             ImGui::SetCursorPos(nextPos);
             if (_drag.offset < 0)
@@ -242,10 +237,8 @@ namespace ui
         std::function<void()> onRender;
         auto &style = ImGui::GetStyle();
         ImVec2 size = _style.size;
-        if (_style.size.x == 0)
-            _style.size.x = ImGui::GetContentRegionAvail().x;
-        if (_style.size.y == 0 && !items.empty())
-            size.y = items.begin()->size().y + style.WindowPadding.y * 2.0f;
+        if (_style.size.x == 0) _style.size.x = ImGui::GetContentRegionAvail().x;
+        if (_style.size.y == 0 && !items.empty()) size.y = items.begin()->size().y + style.WindowPadding.y * 2.0f;
         if (ImGui::BeginChild(_id.c_str(), size, true))
         {
             if (_flags & FlagBits::scrollable)
@@ -255,20 +248,19 @@ namespace ui
                 else
                 {
                     auto &io = ImGui::GetIO();
-                    if (_isHovered && io.KeyMods & ImGuiModFlags_Shift)
-                        io.AddKeyEvent(ImGuiMod_Shift, false);
+                    if (_isHovered && io.KeyMods & ImGuiModFlags_Shift) io.AddKeyEvent(ImGuiMod_Shift, false);
                 }
             }
-            auto &style = ImGui::GetStyle();
-            float availableWidth = ImGui::GetContentRegionAvail().x;
+            const auto &style = ImGui::GetStyle();
+            f32 availableWidth = ImGui::GetContentRegionAvail().x;
             bool isScrollable = _flags & FlagBits::scrollable;
             bool isReorderable = _flags & FlagBits::reorderable;
 
             // Pre-calculate available width if not scrollable
             if (!isScrollable)
             {
-                float arrowWidth = _style.comboIcon->width() + style.ItemSpacing.x * 2.0f +
-                                   style.FramePadding.x * 2.0f + style.ItemInnerSpacing.x * 2.0f;
+                f32 arrowWidth = _style.comboIcon->width() + style.ItemSpacing.x * 2.0f + style.FramePadding.x * 2.0f +
+                                 style.ItemInnerSpacing.x * 2.0f;
                 availableWidth -= arrowWidth;
             }
 
@@ -289,8 +281,7 @@ namespace ui
 
                 // Handle selection and rendering logic
                 begin->selected(index == activeIndex);
-                if (index == activeIndex)
-                    onRender = begin->onRender();
+                if (index == activeIndex) onRender = begin->onRender();
 
                 // Handle reorderable logic
                 bool wasDragReset{false};
@@ -321,8 +312,7 @@ namespace ui
                 }
 
                 // Only render if scrollable or not stopped
-                if (isScrollable || !stopRender)
-                    renderTab(begin, index);
+                if (isScrollable || !stopRender) renderTab(begin, index);
 
                 // Update active index if pressed
                 if (begin->pressed() && !wasDragReset)
@@ -336,16 +326,13 @@ namespace ui
                 ++begin;
             }
 
-            if (_drag.it.has_value())
-                renderDragged();
-            if (!(_flags & FlagBits::scrollable) && stopRender)
-                renderCombobox();
+            if (_drag.it.has_value()) renderDragged();
+            if (!(_flags & FlagBits::scrollable) && stopRender) renderCombobox();
 
             _avaliableWidth = ImGui::GetContentRegionAvail().x;
         }
         ImGui::EndChild();
-        if (onRender)
-            onRender();
+        if (onRender) onRender();
     }
 
     bool TabBar::removeTab(const TabItem &tab)
@@ -368,8 +355,7 @@ namespace ui
     void TabBar::bindEvents()
     {
         events::bindEvent<window::ScrollEvent>(this, "window:scroll", [this](const window::ScrollEvent &event) {
-            if (!_isHovered || !(_flags & FlagBits::scrollable))
-                return;
+            if (!_isHovered || !(_flags & FlagBits::scrollable)) return;
             ImGuiIO &io = ImGui::GetIO();
             io.AddKeyEvent(ImGuiMod_Shift, true);
         });

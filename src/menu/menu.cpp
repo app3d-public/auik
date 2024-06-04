@@ -5,8 +5,7 @@ static bool IsRootOfOpenMenuSet()
 {
     ImGuiContext &g = *GImGui;
     ImGuiWindow *window = g.CurrentWindow;
-    if ((g.OpenPopupStack.Size <= g.BeginPopupStack.Size) || (window->Flags & ImGuiWindowFlags_ChildMenu))
-        return false;
+    if ((g.OpenPopupStack.Size <= g.BeginPopupStack.Size) || (window->Flags & ImGuiWindowFlags_ChildMenu)) return false;
 
     // Initially we used 'upper_popup->OpenParentId == window->IDStack.back()' to differentiate multiple menu sets
     // from each others (e.g. inside menu bar vs loose menu items) based on parent ID. This would however prevent
@@ -22,8 +21,7 @@ static bool IsRootOfOpenMenuSet()
     // problem, because if such menus are close in proximity in window content then it won't feel weird and if they
     // are far apart it likely won't be a problem anyone runs into.
     const ImGuiPopupData *upper_popup = &g.OpenPopupStack[g.BeginPopupStack.Size];
-    if (window->DC.NavLayerCurrent != upper_popup->ParentNavLayer)
-        return false;
+    if (window->DC.NavLayerCurrent != upper_popup->ParentNavLayer) return false;
     return upper_popup->Window && (upper_popup->Window->Flags & ImGuiWindowFlags_ChildMenu) &&
            ImGui::IsWindowChildOf(upper_popup->Window, window, true);
 }
@@ -33,8 +31,7 @@ namespace ui
     void HMenu::beginMenu()
     {
         ImGuiWindow *window = ImGui::GetCurrentWindow();
-        if (window->SkipItems)
-            return;
+        if (window->SkipItems) return;
 
         ImGuiContext &g = *GImGui;
         const ImGuiStyle &style = g.Style;
@@ -49,8 +46,7 @@ namespace ui
         ImGuiWindowFlags window_flags = ImGuiWindowFlags_ChildMenu | ImGuiWindowFlags_AlwaysAutoResize |
                                         ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar |
                                         ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoNavFocus;
-        if (window->Flags & ImGuiWindowFlags_ChildMenu)
-            window_flags |= ImGuiWindowFlags_ChildWindow;
+        if (window->Flags & ImGuiWindowFlags_ChildMenu) window_flags |= ImGuiWindowFlags_ChildWindow;
 
         // If a menu with same the ID was already submitted, we will append to it, matching the behavior of Begin().
         // We are relying on a O(N) search - so O(N log N) over the frame - which seems like the most efficient for the
@@ -75,8 +71,7 @@ namespace ui
         // without always being a Child window) This is only done for items for the menu set and not the full parent
         // window.
         const bool menuset_is_open = IsRootOfOpenMenuSet();
-        if (menuset_is_open)
-            ImGui::PushItemFlag(ImGuiItemFlags_NoWindowHoverableCheck, true);
+        if (menuset_is_open) ImGui::PushItemFlag(ImGuiItemFlags_NoWindowHoverableCheck, true);
 
         // The reference position stored in popup_pos will be used by Begin() to find a suitable position for the child
         // menu, However the final position is going to be different! It is chosen by FindBestWindowPosForPopup(). e.g.
@@ -106,8 +101,7 @@ namespace ui
         window->DC.CursorPos.x += IM_TRUNC(style.ItemSpacing.x * (-1.0f + 0.5f));
 
         _hover = (g.HoveredId == id) && !g.NavDisableMouseHover;
-        if (menuset_is_open)
-            ImGui::PopItemFlag();
+        if (menuset_is_open) ImGui::PopItemFlag();
 
         bool want_open = false;
         bool want_close = false;
@@ -156,8 +150,7 @@ namespace ui
                 // (This fixes using IsItemClicked() and IsItemHovered(), but IsItemHovered() also relies on its support
                 // for ImGuiItemFlags_NoWindowHoverableCheck)
                 g.LastItemData = last_item_in_parent;
-                if (g.HoveredWindow == window)
-                    g.LastItemData.StatusFlags |= ImGuiItemStatusFlags_HoveredWindow;
+                if (g.HoveredWindow == window) g.LastItemData.StatusFlags |= ImGuiItemStatusFlags_HoveredWindow;
             }
         }
         else
@@ -181,8 +174,7 @@ namespace ui
             for (auto &item : group)
             {
                 delete item.menu;
-                if (item.submenu)
-                    delete item.submenu;
+                if (item.submenu) delete item.submenu;
             }
         }
     }
@@ -190,8 +182,7 @@ namespace ui
     void BeginMenu::render()
     {
         ImGuiWindow *window = ImGui::GetCurrentWindow();
-        if (window->SkipItems)
-            return;
+        if (window->SkipItems) return;
 
         ImGuiContext &g = *GImGui;
         const ImGuiStyle &style = g.Style;
@@ -206,8 +197,7 @@ namespace ui
         ImGuiWindowFlags window_flags = ImGuiWindowFlags_ChildMenu | ImGuiWindowFlags_AlwaysAutoResize |
                                         ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar |
                                         ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoNavFocus;
-        if (window->Flags & ImGuiWindowFlags_ChildMenu)
-            window_flags |= ImGuiWindowFlags_ChildWindow;
+        if (window->Flags & ImGuiWindowFlags_ChildMenu) window_flags |= ImGuiWindowFlags_ChildWindow;
 
         // If a menu with same the ID was already submitted, we will append to it, matching the behavior of Begin().
         // We are relying on a O(N) search - so O(N log N) over the frame - which seems like the most efficient for the
@@ -231,8 +221,7 @@ namespace ui
         // without always being a Child window) This is only done for items for the menu set and not the full parent
         // window.
         const bool menuset_is_open = IsRootOfOpenMenuSet();
-        if (menuset_is_open)
-            ImGui::PushItemFlag(ImGuiItemFlags_NoWindowHoverableCheck, true);
+        if (menuset_is_open) ImGui::PushItemFlag(ImGuiItemFlags_NoWindowHoverableCheck, true);
 
         // The reference position stored in popup_pos will be used by Begin() to find a suitable position for the child
         // menu, However the final position is going to be different! It is chosen by FindBestWindowPosForPopup(). e.g.
@@ -264,8 +253,7 @@ namespace ui
         _arrowIcon->render(arrowPos);
 
         _hover = (g.HoveredId == id) && !g.NavDisableMouseHover;
-        if (menuset_is_open)
-            ImGui::PopItemFlag();
+        if (menuset_is_open) ImGui::PopItemFlag();
 
         bool want_open = false;
         bool want_close = false;
@@ -346,8 +334,7 @@ namespace ui
                 // (This fixes using IsItemClicked() and IsItemHovered(), but IsItemHovered() also relies on its support
                 // for ImGuiItemFlags_NoWindowHoverableCheck)
                 g.LastItemData = last_item_in_parent;
-                if (g.HoveredWindow == window)
-                    g.LastItemData.StatusFlags |= ImGuiItemStatusFlags_HoveredWindow;
+                if (g.HoveredWindow == window) g.LastItemData.StatusFlags |= ImGuiItemStatusFlags_HoveredWindow;
             }
         }
         else
@@ -357,8 +344,7 @@ namespace ui
     void MenuItem::render()
     {
         ImGuiWindow *window = ImGui::GetCurrentWindow();
-        if (window->SkipItems)
-            return;
+        if (window->SkipItems) return;
 
         ImGuiContext &g = *GImGui;
         ImGuiStyle &style = g.Style;
@@ -367,8 +353,7 @@ namespace ui
         ImVec2 label_size = ImGui::CalcTextSize(labelPtr, nullptr, true);
 
         const bool menuset_is_open = IsRootOfOpenMenuSet();
-        if (menuset_is_open)
-            ImGui::PushItemFlag(ImGuiItemFlags_NoWindowHoverableCheck, true);
+        if (menuset_is_open) ImGui::PushItemFlag(ImGuiItemFlags_NoWindowHoverableCheck, true);
 
         // We've been using the equivalent of ImGuiSelectableFlags_SetNavIdOnHover on all Selectable() since early Nav
         // system days (commit 43ee5d73), but I am unsure whether this should be kept at all. For now moved it to be an
@@ -413,8 +398,7 @@ namespace ui
         }
 
         ImGui::PopID();
-        if (menuset_is_open)
-            ImGui::PopItemFlag();
+        if (menuset_is_open) ImGui::PopItemFlag();
     }
 
     VMenu::VMenu(std::initializer_list<ItemGroup> itemgroups, const Style &style,
@@ -461,12 +445,11 @@ namespace ui
                     }
                     else
                     {
-                        if (item.beforeRender)
-                            item.beforeRender(item.menu);
+                        if (item.beforeRender) item.beforeRender(item.menu);
                         ImGui::PushStyleColor(
                             ImGuiCol_Text,
-                            style.Colors[item.menu->flags() & ImGuiSelectableFlags_Disabled ? ImGuiCol_TextDisabled
-                                                                                            : ImGuiCol_Text]);
+                            style.Colors[(item.menu->flags() & ImGuiSelectableFlags_Disabled) ? ImGuiCol_TextDisabled
+                                                                                              : ImGuiCol_Text]);
                         item.menu->render();
                         ImGui::PopStyleColor();
                         if (item.menu->pressed())
@@ -479,8 +462,7 @@ namespace ui
                 }
 
                 ++start;
-                if (start == end)
-                    break;
+                if (start == end) break;
                 ImGui::Separator();
             }
         }
@@ -500,8 +482,7 @@ namespace ui
 
         if (ImGui::BeginMainMenuBar())
         {
-            for (auto &item : _items)
-                item.render();
+            for (auto &item : _items) item.render();
             ImGui::EndMainMenuBar();
         }
         ImGui::PopStyleColor(6);
@@ -510,10 +491,8 @@ namespace ui
 
     MenuBar::~MenuBar()
     {
-        for (auto &item : _items)
-            item.destroy();
-        if (_style)
-            delete _style;
+        for (auto &item : _items) item.destroy();
+        if (_style) delete _style;
     }
 
 } // namespace ui
