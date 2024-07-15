@@ -91,8 +91,9 @@ namespace ui
         }
 
         const bool disabled_item = (params.flags & ImGuiSelectableFlags_Disabled) != 0;
-        const bool item_add =
-            ImGui::ItemAdd(bb, id, NULL, disabled_item ? ImGuiItemFlags_Disabled : ImGuiItemFlags_None);
+        const bool item_add = ImGui::ItemAdd(
+            bb, id, NULL, disabled_item ? (ImGuiItemFlags_)ImGuiItemFlags_Disabled : ImGuiItemFlags_None);
+
         if (span_all_columns)
         {
             window->ClipRect.Min.x = backup_clip_rect_min_x;
@@ -172,8 +173,8 @@ namespace ui
 
         // Automatically close popups
         if (pressed && (window->Flags & ImGuiWindowFlags_Popup) &&
-            !(params.flags & ImGuiSelectableFlags_DontClosePopups) &&
-            !(g.LastItemData.InFlags & ImGuiItemFlags_SelectableDontClosePopup))
+            !(params.flags & ImGuiSelectableFlags_NoAutoClosePopups) &&
+            (g.LastItemData.InFlags & ImGuiItemFlags_AutoClosePopups))
             ImGui::CloseCurrentPopup();
         if (disabled_item && !disabled_global) ImGui::EndDisabled();
         if (params.pressed) *params.pressed = pressed;

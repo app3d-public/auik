@@ -4,6 +4,7 @@
 #include <uikit/combobox/combobox.hpp>
 #include <uikit/tab/tab.hpp>
 #include <window/window.hpp>
+#include "imgui.h"
 
 namespace ui
 {
@@ -248,7 +249,7 @@ namespace ui
                 else
                 {
                     auto &io = ImGui::GetIO();
-                    if (_isHovered && io.KeyMods & ImGuiModFlags_Shift) io.AddKeyEvent(ImGuiMod_Shift, false);
+                    if (_isHovered && io.KeyMods & ImGuiMod_Shift) io.AddKeyEvent(ImGuiMod_Shift, false);
                 }
             }
             const auto &style = ImGui::GetStyle();
