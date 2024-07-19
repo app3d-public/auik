@@ -26,7 +26,7 @@ static bool IsRootOfOpenMenuSet()
            ImGui::IsWindowChildOf(upper_popup->Window, window, true);
 }
 
-namespace ui
+namespace uikit
 {
     void HMenu::beginMenu()
     {
@@ -495,4 +495,4 @@ namespace ui
         if (_style) delete _style;
     }
 
-} // namespace ui
+} // namespace uikit

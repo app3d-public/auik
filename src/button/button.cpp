@@ -2,7 +2,7 @@
 #include <uikit/button/button.hpp>
 #include <imgui/imgui_internal.h>
 
-namespace ui
+namespace uikit
 {
     bool closeButton(ImGuiID id, const ImVec2 &pos)
     {

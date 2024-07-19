@@ -9,7 +9,7 @@
 #include "../icon/icon.hpp"
 #include "../widget.hpp"
 
-namespace ui
+namespace uikit
 {
     namespace style
     {

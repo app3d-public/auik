@@ -6,7 +6,7 @@
     #include <playsoundapi.h>
 #endif
 
-namespace ui
+namespace uikit
 {
     std::string getBtnName(window::popup::Buttons button,
                            const std::function<std::string(window::popup::Buttons)> &callback)
@@ -177,4 +177,4 @@ namespace ui
         using namespace events;
         bindEvent<Event>(this, "notification:msgbox", [this](const Event &e) { push(e.data<ModalQueue::Message>()); });
     }
-} // namespace ui
+} // namespace uikit

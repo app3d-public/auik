@@ -5,7 +5,7 @@
 #include <string>
 #include "../image/image.hpp"
 
-namespace ui
+namespace uikit
 {
     class Icon
     {

@@ -1,7 +1,7 @@
 #include <uikit/image/image.hpp>
 #include <imgui/imgui_internal.h>
 
-namespace ui
+namespace uikit
 {
     void Image::render()
     {

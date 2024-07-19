@@ -1,7 +1,7 @@
 #include <imgui/imgui_internal.h>
 #include <uikit/text/text.hpp>
 
-namespace ui
+namespace uikit
 {
     void Text::render()
     {
@@ -118,4 +118,4 @@ namespace ui
         // Render (we don't hide text after ## in this end-user function)
         ImGui::RenderTextWrapped(bb.Min, start, end, wrap_width);
     }
-} // namespace ui
+} // namespace uikit

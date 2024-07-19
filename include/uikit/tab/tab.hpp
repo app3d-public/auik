@@ -7,8 +7,7 @@
 #include "../icon/icon.hpp"
 #include "../selectable/selectable.hpp"
 
-
-namespace ui
+namespace uikit
 {
     class APPLIB_API TabItem : public Selectable
     {
@@ -150,22 +149,22 @@ namespace ui
         }
     };
 
-} // namespace ui
+} // namespace uikit
 
 template <>
-struct FlagTraits<ui::TabItem::FlagBits>
+struct FlagTraits<uikit::TabItem::FlagBits>
 {
     static constexpr bool isBitmask = true;
-    static constexpr ui::TabItem::Flags allFlags =
-        ui::TabItem::FlagBits::none | ui::TabItem::FlagBits::closable | ui::TabItem::FlagBits::unsaved;
+    static constexpr uikit::TabItem::Flags allFlags =
+        uikit::TabItem::FlagBits::none | uikit::TabItem::FlagBits::closable | uikit::TabItem::FlagBits::unsaved;
 };
 
 template <>
-struct FlagTraits<ui::TabBar::FlagBits>
+struct FlagTraits<uikit::TabBar::FlagBits>
 {
     static constexpr bool isBitmask = true;
-    static constexpr ui::TabBar::Flags allFlags =
-        ui::TabBar::FlagBits::none | ui::TabBar::FlagBits::reorderable | ui::TabBar::FlagBits::scrollable;
+    static constexpr uikit::TabBar::Flags allFlags =
+        uikit::TabBar::FlagBits::none | uikit::TabBar::FlagBits::reorderable | uikit::TabBar::FlagBits::scrollable;
 };
 
 #endif

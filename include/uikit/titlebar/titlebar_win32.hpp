@@ -5,7 +5,7 @@
 #include "../menu/menu.hpp"
 #include "../tab/tab.hpp"
 
-namespace ui
+namespace uikit
 {
     namespace
     {

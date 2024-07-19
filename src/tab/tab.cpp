@@ -6,7 +6,7 @@
 #include <window/window.hpp>
 #include "imgui.h"
 
-namespace ui
+namespace uikit
 {
     class TabMemCache : public MemCache
     {
@@ -370,4 +370,4 @@ namespace ui
             });
         }
     }
-} // namespace ui
+} // namespace uikit

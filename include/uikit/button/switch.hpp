@@ -3,7 +3,7 @@
 #include <core/api.hpp>
 #include "../widget.hpp"
 
-namespace ui
+namespace uikit
 {
     namespace style
     {

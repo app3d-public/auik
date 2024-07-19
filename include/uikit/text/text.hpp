@@ -3,7 +3,7 @@
 
 #include "../widget.hpp"
 
-namespace ui
+namespace uikit
 {
     class Text : public Widget
     {

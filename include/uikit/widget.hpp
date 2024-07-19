@@ -5,7 +5,7 @@
 #include <core/std/basic_types.hpp>
 #include <imgui/imgui.h>
 
-namespace ui
+namespace uikit
 {
     class Widget
     {
@@ -14,84 +14,6 @@ namespace ui
 
         virtual void render() = 0;
     };
-
-    static inline ImVec2 operator*(const ImVec2 &lhs, const float rhs) { return ImVec2(lhs.x * rhs, lhs.y * rhs); }
-    static inline ImVec2 operator/(const ImVec2 &lhs, const float rhs) { return ImVec2(lhs.x / rhs, lhs.y / rhs); }
-    static inline ImVec2 operator+(const ImVec2 &lhs, const ImVec2 &rhs)
-    {
-        return ImVec2(lhs.x + rhs.x, lhs.y + rhs.y);
-    }
-    static inline ImVec2 operator-(const ImVec2 &lhs, const ImVec2 &rhs)
-    {
-        return ImVec2(lhs.x - rhs.x, lhs.y - rhs.y);
-    }
-    static inline ImVec2 operator*(const ImVec2 &lhs, const ImVec2 &rhs)
-    {
-        return ImVec2(lhs.x * rhs.x, lhs.y * rhs.y);
-    }
-    static inline ImVec2 operator/(const ImVec2 &lhs, const ImVec2 &rhs)
-    {
-        return ImVec2(lhs.x / rhs.x, lhs.y / rhs.y);
-    }
-    static inline ImVec2 operator-(const ImVec2 &lhs) { return ImVec2(-lhs.x, -lhs.y); }
-    static inline ImVec2 &operator*=(ImVec2 &lhs, const float rhs)
-    {
-        lhs.x *= rhs;
-        lhs.y *= rhs;
-        return lhs;
-    }
-    static inline ImVec2 &operator/=(ImVec2 &lhs, const float rhs)
-    {
-        lhs.x /= rhs;
-        lhs.y /= rhs;
-        return lhs;
-    }
-    static inline ImVec2 &operator+=(ImVec2 &lhs, const ImVec2 &rhs)
-    {
-        lhs.x += rhs.x;
-        lhs.y += rhs.y;
-        return lhs;
-    }
-    static inline ImVec2 &operator-=(ImVec2 &lhs, const ImVec2 &rhs)
-    {
-        lhs.x -= rhs.x;
-        lhs.y -= rhs.y;
-        return lhs;
-    }
-    static inline ImVec2 &operator*=(ImVec2 &lhs, const ImVec2 &rhs)
-    {
-        lhs.x *= rhs.x;
-        lhs.y *= rhs.y;
-        return lhs;
-    }
-    static inline ImVec2 &operator/=(ImVec2 &lhs, const ImVec2 &rhs)
-    {
-        lhs.x /= rhs.x;
-        lhs.y /= rhs.y;
-        return lhs;
-    }
-    static inline bool operator==(const ImVec2 &lhs, const ImVec2 &rhs) { return lhs.x == rhs.x && lhs.y == rhs.y; }
-    static inline bool operator!=(const ImVec2 &lhs, const ImVec2 &rhs) { return lhs.x != rhs.x || lhs.y != rhs.y; }
-    static inline ImVec4 operator+(const ImVec4 &lhs, const ImVec4 &rhs)
-    {
-        return ImVec4(lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z, lhs.w + rhs.w);
-    }
-    static inline ImVec4 operator-(const ImVec4 &lhs, const ImVec4 &rhs)
-    {
-        return ImVec4(lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z, lhs.w - rhs.w);
-    }
-    static inline ImVec4 operator*(const ImVec4 &lhs, const ImVec4 &rhs)
-    {
-        return ImVec4(lhs.x * rhs.x, lhs.y * rhs.y, lhs.z * rhs.z, lhs.w * rhs.w);
-    }
-    static inline bool operator==(const ImVec4 &lhs, const ImVec4 &rhs)
-    {
-        return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.w == rhs.w;
-    }
-    static inline bool operator!=(const ImVec4 &lhs, const ImVec4 &rhs)
-    {
-        return lhs.x != rhs.x || lhs.y != rhs.y || lhs.z != rhs.z || lhs.w != rhs.w;
-    }
 
     namespace style
     {
@@ -132,6 +54,72 @@ namespace ui
 
         APPLIB_API void setupNativeStyle();
     } // namespace style
-}; // namespace ui
+}; // namespace uikit
+
+static inline ImVec2 operator*(const ImVec2 &lhs, const float rhs) { return ImVec2(lhs.x * rhs, lhs.y * rhs); }
+static inline ImVec2 operator/(const ImVec2 &lhs, const float rhs) { return ImVec2(lhs.x / rhs, lhs.y / rhs); }
+static inline ImVec2 operator+(const ImVec2 &lhs, const ImVec2 &rhs) { return ImVec2(lhs.x + rhs.x, lhs.y + rhs.y); }
+static inline ImVec2 operator-(const ImVec2 &lhs, const ImVec2 &rhs) { return ImVec2(lhs.x - rhs.x, lhs.y - rhs.y); }
+static inline ImVec2 operator*(const ImVec2 &lhs, const ImVec2 &rhs) { return ImVec2(lhs.x * rhs.x, lhs.y * rhs.y); }
+static inline ImVec2 operator/(const ImVec2 &lhs, const ImVec2 &rhs) { return ImVec2(lhs.x / rhs.x, lhs.y / rhs.y); }
+static inline ImVec2 operator-(const ImVec2 &lhs) { return ImVec2(-lhs.x, -lhs.y); }
+static inline ImVec2 &operator*=(ImVec2 &lhs, const float rhs)
+{
+    lhs.x *= rhs;
+    lhs.y *= rhs;
+    return lhs;
+}
+static inline ImVec2 &operator/=(ImVec2 &lhs, const float rhs)
+{
+    lhs.x /= rhs;
+    lhs.y /= rhs;
+    return lhs;
+}
+static inline ImVec2 &operator+=(ImVec2 &lhs, const ImVec2 &rhs)
+{
+    lhs.x += rhs.x;
+    lhs.y += rhs.y;
+    return lhs;
+}
+static inline ImVec2 &operator-=(ImVec2 &lhs, const ImVec2 &rhs)
+{
+    lhs.x -= rhs.x;
+    lhs.y -= rhs.y;
+    return lhs;
+}
+static inline ImVec2 &operator*=(ImVec2 &lhs, const ImVec2 &rhs)
+{
+    lhs.x *= rhs.x;
+    lhs.y *= rhs.y;
+    return lhs;
+}
+static inline ImVec2 &operator/=(ImVec2 &lhs, const ImVec2 &rhs)
+{
+    lhs.x /= rhs.x;
+    lhs.y /= rhs.y;
+    return lhs;
+}
+static inline bool operator==(const ImVec2 &lhs, const ImVec2 &rhs) { return lhs.x == rhs.x && lhs.y == rhs.y; }
+static inline bool operator!=(const ImVec2 &lhs, const ImVec2 &rhs) { return lhs.x != rhs.x || lhs.y != rhs.y; }
+static inline ImVec4 operator+(const ImVec4 &lhs, const ImVec4 &rhs)
+{
+    return ImVec4(lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z, lhs.w + rhs.w);
+}
+static inline ImVec4 operator-(const ImVec4 &lhs, const ImVec4 &rhs)
+{
+    return ImVec4(lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z, lhs.w - rhs.w);
+}
+static inline ImVec4 operator*(const ImVec4 &lhs, const ImVec4 &rhs)
+{
+    return ImVec4(lhs.x * rhs.x, lhs.y * rhs.y, lhs.z * rhs.z, lhs.w * rhs.w);
+}
+static inline bool operator==(const ImVec4 &lhs, const ImVec4 &rhs)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.w == rhs.w;
+}
+static inline bool operator!=(const ImVec4 &lhs, const ImVec4 &rhs)
+{
+    return lhs.x != rhs.x || lhs.y != rhs.y || lhs.z != rhs.z || lhs.w != rhs.w;
+}
 
 #endif

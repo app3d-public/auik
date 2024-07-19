@@ -2,7 +2,7 @@
 #include <uikit/icon/icon.hpp>
 #include <imgui/imgui_internal.h>
 
-namespace ui
+namespace uikit
 {
     bool beginCombo(const char *label, const char *preview_value, ImGuiComboFlags flags,
                     const std::shared_ptr<Icon> chevronDownIcon)

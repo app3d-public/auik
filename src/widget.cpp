@@ -1,6 +1,6 @@
 #include <uikit/widget.hpp>
 
-namespace ui
+namespace uikit
 {
     namespace style
     {

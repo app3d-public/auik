@@ -4,7 +4,7 @@
 #include "../widget.hpp"
 #include <core/api.hpp>
 
-namespace ui
+namespace uikit
 {
     class APPLIB_API Image : public Widget
     {

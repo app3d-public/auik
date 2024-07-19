@@ -1,7 +1,7 @@
 #include <imgui_internal.h>
 #include <uikit/selectable/selectable.hpp>
 
-namespace ui
+namespace uikit
 {
     ImGuiButtonFlags Selectable::loadFlags(ImGuiSelectableFlags flags)
     {
@@ -180,4 +180,4 @@ namespace ui
         if (params.pressed) *params.pressed = pressed;
         if (params.hover) *params.hover = hovered;
     }
-} // namespace ui
+} // namespace uikit

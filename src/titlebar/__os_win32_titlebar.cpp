@@ -3,7 +3,7 @@
 #include <uikit/titlebar/titlebar_win32.hpp>
 #include <window/platform_win32.hpp>
 
-namespace ui
+namespace uikit
 {
     ImVec2 getControllsSize(HWND hwnd)
     {
@@ -236,7 +236,7 @@ namespace ui
             switch (_activeArea)
             {
                 case ControlArea::Min:
-                    if (e.action == io::KeyPressState::press)
+                    if (e.action == window::io::KeyPressState::press)
                         _controls[0].state = ControlState::Active;
                     else
                     {
@@ -245,7 +245,7 @@ namespace ui
                     }
                     break;
                 case ControlArea::Max:
-                    if (e.action == io::KeyPressState::press)
+                    if (e.action == window::io::KeyPressState::press)
                         _controls[1].state = ControlState::Active;
                     else
                     {
@@ -254,7 +254,7 @@ namespace ui
                     }
                     break;
                 case ControlArea::Close:
-                    if (e.action == io::KeyPressState::press)
+                    if (e.action == window::io::KeyPressState::press)
                         _controls[2].state = ControlState::Active;
                     else
                     {
@@ -266,4 +266,4 @@ namespace ui
             }
         });
     }
-} // namespace ui
+} // namespace uikit

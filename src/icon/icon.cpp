@@ -1,7 +1,7 @@
 #include <imgui/imgui_internal.h>
 #include <uikit/icon/icon.hpp>
 
-namespace ui
+namespace uikit
 {
     void FontIcon::render(ImVec2 pos)
     {

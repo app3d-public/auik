@@ -9,9 +9,8 @@
 #include "../selectable/selectable.hpp"
 #include "../widget.hpp"
 
-namespace ui
+namespace uikit
 {
-
     class APPLIB_API VMenu final : public Widget
     {
         struct _Item

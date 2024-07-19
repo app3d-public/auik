@@ -3,7 +3,7 @@
 
 #include <imgui/imgui.h>
 
-namespace ui
+namespace uikit
 {
     // Button to close a window
     bool closeButton(ImGuiID id, const ImVec2 &pos);

@@ -1,11 +1,11 @@
-#include <uikit/window_imgui.hpp>
 #include <core/log.hpp>
+#include <uikit/window_imgui.hpp>
 
 #ifdef _WIN32
     #include <window/platform_win32.hpp>
 #endif
 
-namespace ui
+namespace uikit
 {
     static void ImGuiSetClipboardText(void *user_data, const char *text)
     {
@@ -74,13 +74,11 @@ namespace ui
         // Setup display size (every frame to accommodate for window resizing)
         Point2D dimensions = _bd->Window->dimensions();
         io.DisplaySize = ImVec2((f32)dimensions.x, (f32)dimensions.y);
-        if (dimensions.x > 0 && dimensions.y > 0)
-            io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
+        if (dimensions.x > 0 && dimensions.y > 0) io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
 
         // Setup time step
         f64 current_time = window::getTime();
-        if (current_time <= _bd->Time)
-            current_time = _bd->Time + 0.00001;
+        if (current_time <= _bd->Time) current_time = _bd->Time + 0.00001;
         io.DeltaTime = _bd->Time > 0.0 ? (f64)(current_time - _bd->Time) : (f64)(1.0 / 60.0);
         _bd->Time = current_time;
 
@@ -101,8 +99,7 @@ namespace ui
     void WindowImGuiBinder::updateMouseCursor()
     {
         ImGuiIO &io = ImGui::GetIO();
-        if ((io.ConfigFlags & ImGuiConfigFlags_NoMouseCursorChange))
-            return;
+        if ((io.ConfigFlags & ImGuiConfigFlags_NoMouseCursorChange)) return;
 
         ImGuiMouseCursor imgui_cursor = ImGui::GetMouseCursor();
         {
@@ -118,12 +115,12 @@ namespace ui
         }
     }
 
-    void updateKeyMods(ImGuiIO &io, const io::KeyMode &mods)
+    void updateKeyMods(ImGuiIO &io, const window::io::KeyMode &mods)
     {
-        io.AddKeyEvent(ImGuiMod_Ctrl, mods & io::KeyModeBits::control);
-        io.AddKeyEvent(ImGuiMod_Shift, mods & io::KeyModeBits::shift);
-        io.AddKeyEvent(ImGuiMod_Alt, mods & io::KeyModeBits::alt);
-        io.AddKeyEvent(ImGuiMod_Super, mods & io::KeyModeBits::super);
+        io.AddKeyEvent(ImGuiMod_Ctrl, mods & window::io::KeyModeBits::control);
+        io.AddKeyEvent(ImGuiMod_Shift, mods & window::io::KeyModeBits::shift);
+        io.AddKeyEvent(ImGuiMod_Alt, mods & window::io::KeyModeBits::alt);
+        io.AddKeyEvent(ImGuiMod_Super, mods & window::io::KeyModeBits::super);
     }
 
     void WindowImGuiBinder::bindEvents()
@@ -133,28 +130,30 @@ namespace ui
             ImGuiIO &io = ImGui::GetIO();
             io.AddFocusEvent(event.focused);
         });
-        events::bindEvent<window::CursorEnterEvent>(this, "window:cursor:enter", [this](const window::CursorEnterEvent &event) {
-            ImGuiIO &io = ImGui::GetIO();
-            if (event.entered)
-                io.AddMousePosEvent(_bd->LastValidMousePos.x, _bd->LastValidMousePos.y);
-            else
-            {
-                _bd->LastValidMousePos = io.MousePos;
-                io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);
-            }
-        });
+        events::bindEvent<window::CursorEnterEvent>(
+            this, "window:cursor:enter", [this](const window::CursorEnterEvent &event) {
+                ImGuiIO &io = ImGui::GetIO();
+                if (event.entered)
+                    io.AddMousePosEvent(_bd->LastValidMousePos.x, _bd->LastValidMousePos.y);
+                else
+                {
+                    _bd->LastValidMousePos = io.MousePos;
+                    io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);
+                }
+            });
         events::bindEvent<window::PosEvent>(this, "window:cursor:move:abs", [this](const window::PosEvent &event) {
             ImGuiIO &io = ImGui::GetIO();
             io.AddMousePosEvent(event.position.x, event.position.y);
             _bd->LastValidMousePos = ImVec2(event.position.x, event.position.y);
         });
-        events::bindEvent<window::MouseClickEvent>(this, "window:input:mouse", [](const window::MouseClickEvent &event) {
-            ImGuiIO &io = ImGui::GetIO();
-            updateKeyMods(io, event.mods);
-            auto button = event.button;
-            if (button != io::MouseKey::unknown)
-                io.AddMouseButtonEvent(+button, event.action == io::KeyPressState::press);
-        });
+        events::bindEvent<window::MouseClickEvent>(
+            this, "window:input:mouse", [](const window::MouseClickEvent &event) {
+                ImGuiIO &io = ImGui::GetIO();
+                updateKeyMods(io, event.mods);
+                auto button = event.button;
+                if (button != window::io::MouseKey::unknown)
+                    io.AddMouseButtonEvent(+button, event.action == window::io::KeyPressState::press);
+            });
         events::bindEvent<window::ScrollEvent>(this, "window:scroll", [](const window::ScrollEvent &event) {
             ImGuiIO &io = ImGui::GetIO();
             io.AddMouseWheelEvent(event.h, event.v);
@@ -164,7 +163,7 @@ namespace ui
             updateKeyMods(io, event.mods);
             auto it = _keyMap.find(event.key);
             ImGuiKey imgui_key = it != _keyMap.end() ? it->second : ImGuiKey_None;
-            io.AddKeyEvent(imgui_key, event.action != io::KeyPressState::release);
+            io.AddKeyEvent(imgui_key, event.action != window::io::KeyPressState::release);
         });
         events::bindEvent<window::CharInputEvent>(this, "window:input:char", [](const window::CharInputEvent &event) {
             ImGuiIO &io = ImGui::GetIO();
@@ -182,10 +181,8 @@ namespace ui
         static ImGuiMouseSource GetMouseSourceFromMessageExtraInfo()
         {
             LPARAM extra_info = ::GetMessageExtraInfo();
-            if ((extra_info & 0xFFFFFF80) == 0xFF515700)
-                return ImGuiMouseSource_Pen;
-            if ((extra_info & 0xFFFFFF80) == 0xFF515780)
-                return ImGuiMouseSource_TouchScreen;
+            if ((extra_info & 0xFFFFFF80) == 0xFF515700) return ImGuiMouseSource_Pen;
+            if ((extra_info & 0xFFFFFF80) == 0xFF515780) return ImGuiMouseSource_TouchScreen;
             return ImGuiMouseSource_Mouse;
         }
 
@@ -234,4 +231,4 @@ namespace ui
         IM_DELETE(_bd);
         ImGui::DestroyContext();
     }
-} // namespace ui
+} // namespace uikit

@@ -1,7 +1,7 @@
 #include <imgui/imgui_internal.h>
 #include <uikit/button/switch.hpp>
 
-namespace ui
+namespace uikit
 {
     style::Switch style::switchStyle;
 
