@@ -82,7 +82,7 @@ namespace uikit
         if (_tabFlags & TabItem::FlagBits::closable || _tabFlags & TabItem::FlagBits::unsaved)
         {
             bool wantDelete = false;
-            ImGuiID id = window->GetID(_label.c_str());
+            ImGuiID id = window->GetID(_name.c_str());
             const ImGuiID close_button_id = ImGui::GetIDWithSeed("#CLOSE", NULL, id);
             ImVec2 nextPos{0, 0};
             if (_tabFlags & TabItem::FlagBits::closable)
@@ -109,7 +109,7 @@ namespace uikit
     ImVec2 TabItem::calculateItemSize()
     {
         auto &style = ImGui::GetStyle();
-        auto labelSize = ImGui::CalcTextSize(_label.c_str());
+        auto labelSize = ImGui::CalcTextSize(_name.c_str());
         ImVec2 outputSize = labelSize + style.ItemSpacing * 2.0f;
         if (_tabFlags & FlagBits::unsaved || _tabFlags & FlagBits::closable)
         {
@@ -216,7 +216,7 @@ namespace uikit
             for (auto &item : items)
             {
                 bool pressed;
-                std::string label = item.label();
+                std::string label = item.name();
                 Selectable::Params params{
                     .label = label.c_str(), .selected = index == activeIndex, .pressed = &pressed};
                 Selectable::render(params);
@@ -240,7 +240,7 @@ namespace uikit
         ImVec2 size = _style.size;
         if (_style.size.x == 0) _style.size.x = ImGui::GetContentRegionAvail().x;
         if (_style.size.y == 0 && !items.empty()) size.y = items.begin()->size().y + style.WindowPadding.y * 2.0f;
-        if (ImGui::BeginChild(_id.c_str(), size, true))
+        if (ImGui::BeginChild(_name.c_str(), size, true))
         {
             if (_flags & FlagBits::scrollable)
             {
@@ -339,7 +339,7 @@ namespace uikit
     bool TabBar::removeTab(const TabItem &tab)
     {
         auto it =
-            std::find_if(items.begin(), items.end(), [&](const TabItem &item) { return item.label() == tab.label(); });
+            std::find_if(items.begin(), items.end(), [&](const TabItem &item) { return item.name() == tab.name(); });
         if (it != items.end())
         {
             DisposalQueue::global().push(new RemoveMemCache(it, &activeIndex, &items));

@@ -1,9 +1,9 @@
 #ifndef UIKIT_WIDGETS_SELECTABLE_H
 #define UIKIT_WIDGETS_SELECTABLE_H
 
+#include <core/api.hpp>
 #include <string>
 #include "../widget.hpp"
-#include <core/api.hpp>
 
 namespace uikit
 {
@@ -25,10 +25,10 @@ namespace uikit
 
         Selectable(const std::string &label = "", bool selected = false, float rounding = 0.0f,
                    ImGuiSelectableFlags flags = 0, const ImVec2 &size = ImVec2(0, 0), bool showBackground = false)
-            : _size(size),
+            : Widget(label),
+              _size(size),
               _rounding(rounding),
               _selected(selected),
-              _label(label),
               _hover(false),
               _pressed(false),
               _flags(flags),
@@ -49,8 +49,6 @@ namespace uikit
         bool selected() const { return _selected; }
         void selected(bool selected) { _selected = selected; }
 
-        std::string label() const { return _label; }
-
         bool hover() const { return _hover; }
 
         bool pressed() const { return _pressed; }
@@ -66,7 +64,6 @@ namespace uikit
         ImVec2 _size;
         float _rounding;
         bool _selected;
-        std::string _label;
         bool _hover;
         bool _pressed;
         ImGuiSelectableFlags _flags;
@@ -75,6 +72,6 @@ namespace uikit
 
         ImGuiButtonFlags loadFlags(ImGuiSelectableFlags flags);
     };
-} // namespace ui
+} // namespace uikit
 
 #endif // APP_UI_WIDGETS_SELECTABLE_H

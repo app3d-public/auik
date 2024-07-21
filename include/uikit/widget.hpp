@@ -10,9 +10,18 @@ namespace uikit
     class Widget
     {
     public:
+        bool enabled;
+
+        Widget(const std::string &name, bool enabled = true) : enabled(enabled), _name(name) {}
+
         virtual ~Widget() = default;
 
         virtual void render() = 0;
+
+        std::string name() const { return _name; }
+
+    protected:
+        std::string _name;
     };
 
     namespace style

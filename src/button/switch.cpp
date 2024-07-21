@@ -10,7 +10,7 @@ namespace uikit
         ImGuiWindow *window = ImGui::GetCurrentWindow();
         if (window->SkipItems) return;
 
-        ImGuiID id = window->GetID(_label.c_str());
+        ImGuiID id = window->GetID(_name.c_str());
         ImVec2 p = ImGui::GetCursorScreenPos();
         ImGuiContext &g = *GImGui;
         ImRect bb(p, p + ImVec2(width, height));
@@ -35,9 +35,9 @@ namespace uikit
             _toggled ? bb.Max - ImVec2(circle_radius, circle_radius) : bb.Min + ImVec2(circle_radius, circle_radius);
         draw_list->AddCircleFilled(circle_center, circle_radius, style::switchStyle.switchColor);
 
-        const ImVec2 label_size = ImGui::CalcTextSize(_label.c_str(), NULL, true);
+        const ImVec2 label_size = ImGui::CalcTextSize(_name.c_str(), NULL, true);
         ImVec2 label_pos = ImVec2(bb.Max.x + g.Style.ItemSpacing.x + g.Style.ItemInnerSpacing.x, bb.Min.y);
-        if (label_size.x > 0.0f) ImGui::RenderText(label_pos, _label.c_str());
+        if (label_size.x > 0.0f) ImGui::RenderText(label_pos, _name.c_str());
     }
 
-} // namespace ui
+} // namespace uikit

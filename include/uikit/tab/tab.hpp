@@ -79,7 +79,7 @@ namespace uikit
 
         TabBar(const std::string &id, const DArray<TabItem> &items, Flags flags = FlagBits::none,
                const Style &style = {}, bool mainTabbar = false)
-            : items(items), _id(id), _flags(flags), _isMainTabbar(mainTabbar), _style(style)
+            : Widget(id), items(items), _flags(flags), _isMainTabbar(mainTabbar), _style(style)
         {
         }
 
@@ -104,7 +104,6 @@ namespace uikit
         bool removeTab(const TabItem &tab);
 
     private:
-        std::string _id;
         bool _isHovered{false};
         Flags _flags;
         bool _isMainTabbar;

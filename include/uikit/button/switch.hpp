@@ -22,13 +22,11 @@ namespace uikit
         static constexpr f32 height = 20.0f;
 
         Switch(const std::string &label, bool toogled = false)
-            : _label(label), _pressed(false), _hovered(false), _toggled(toogled)
+            : Widget(label), _pressed(false), _hovered(false), _toggled(toogled)
         {
         }
 
         virtual void render() override;
-
-        std::string label() const { return _label; }
 
         bool pressed() const { return _pressed; }
 
@@ -38,9 +36,8 @@ namespace uikit
         void toogled(bool toggled) { _toggled = toggled; }
 
     private:
-        std::string _label;
         bool _pressed;
         bool _hovered;
         bool _toggled;
     };
-} // namespace ui
+} // namespace uikit

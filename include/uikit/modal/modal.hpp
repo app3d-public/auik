@@ -41,6 +41,8 @@ namespace uikit
 
         style::ModalQueue style;
 
+        ModalQueue() : Widget("modalqueue") {}
+
         ~ModalQueue() { events::unbindListeners(this); }
 
         virtual void render() override;
@@ -71,6 +73,6 @@ namespace uikit
 
         std::function<std::string(window::popup::Buttons)> _btnLocaleCallback{nullptr};
     };
-} // namespace ui
+} // namespace uikit
 
 #endif

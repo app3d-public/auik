@@ -27,9 +27,8 @@ namespace uikit
         return controlSize;
     }
 
-    Titlebar::Titlebar(window::Window &window, std::unique_ptr<MenuBar> &menubar, const TabBar &tabbar,
-                       const Style &style)
-        : MenuBar(std::move(*menubar)),
+    Titlebar::Titlebar(window::Window &window, MenuBar *menubar, const TabBar &tabbar, const Style &style)
+        : MenuBar(std::move(*menubar), "titlebar"),
           style(style),
           tabbar(tabbar),
           _window(window),
@@ -55,8 +54,7 @@ namespace uikit
 
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.submenuPadding);
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, MenuBar::_style->menubar.padding);
-            for (auto &item : _items)
-                item.render();
+            for (auto &item : _items) item.render();
             ImGui::PopStyleVar(2);
 
             if (ImGui::IsItemActive())
@@ -159,8 +157,7 @@ namespace uikit
     {
         tabbar.bindEvents();
         events::bindEvent<window::Win32NativeEvent>(this, "window:NCHitTest", [this](window::Win32NativeEvent &e) {
-            if (e.window != &_window)
-                return;
+            if (e.window != &_window) return;
             POINT cursorPoint = {0};
             cursorPoint.x = LOWORD(e.lParam);
             cursorPoint.y = HIWORD(e.lParam);
@@ -206,12 +203,10 @@ namespace uikit
                 _activeArea = ControlArea::None;
 
             for (auto &control : _controls)
-                if (control.area != _activeArea)
-                    control.state = ControlState::Idle;
+                if (control.area != _activeArea) control.state = ControlState::Idle;
         });
         events::bindEvent<window::Win32NativeEvent>(this, "window:NCLMouseDown", [this](window::Win32NativeEvent &e) {
-            if (e.window != &_window || _activeArea == ControlArea::None)
-                return;
+            if (e.window != &_window || _activeArea == ControlArea::None) return;
             switch (_activeArea)
             {
                 case ControlArea::Min:
@@ -230,40 +225,41 @@ namespace uikit
                     break;
             };
         });
-        events::bindEvent<window::MouseClickEvent>(this, "window:input:mouse", [this](const window::MouseClickEvent &e) {
-            if (e.window != &_window || _activeArea == ControlArea::None)
-                return;
-            switch (_activeArea)
-            {
-                case ControlArea::Min:
-                    if (e.action == window::io::KeyPressState::press)
-                        _controls[0].state = ControlState::Active;
-                    else
-                    {
-                        _controls[0].state = ControlState::Hover;
-                        _window.minimize();
-                    }
-                    break;
-                case ControlArea::Max:
-                    if (e.action == window::io::KeyPressState::press)
-                        _controls[1].state = ControlState::Active;
-                    else
-                    {
-                        _controls[1].state = ControlState::Hover;
-                        _window.maximize();
-                    }
-                    break;
-                case ControlArea::Close:
-                    if (e.action == window::io::KeyPressState::press)
-                        _controls[2].state = ControlState::Active;
-                    else
-                    {
-                        _controls[2].state = ControlState::Hover;
-                        _window.readyToClose(true);
-                    }
-                default:
-                    break;
-            }
-        });
+        events::bindEvent<window::MouseClickEvent>(this, "window:input:mouse",
+                                                   [this](const window::MouseClickEvent &e) {
+                                                       if (e.window != &_window || _activeArea == ControlArea::None)
+                                                           return;
+                                                       switch (_activeArea)
+                                                       {
+                                                           case ControlArea::Min:
+                                                               if (e.action == window::io::KeyPressState::press)
+                                                                   _controls[0].state = ControlState::Active;
+                                                               else
+                                                               {
+                                                                   _controls[0].state = ControlState::Hover;
+                                                                   _window.minimize();
+                                                               }
+                                                               break;
+                                                           case ControlArea::Max:
+                                                               if (e.action == window::io::KeyPressState::press)
+                                                                   _controls[1].state = ControlState::Active;
+                                                               else
+                                                               {
+                                                                   _controls[1].state = ControlState::Hover;
+                                                                   _window.maximize();
+                                                               }
+                                                               break;
+                                                           case ControlArea::Close:
+                                                               if (e.action == window::io::KeyPressState::press)
+                                                                   _controls[2].state = ControlState::Active;
+                                                               else
+                                                               {
+                                                                   _controls[2].state = ControlState::Hover;
+                                                                   _window.readyToClose(true);
+                                                               }
+                                                           default:
+                                                               break;
+                                                       }
+                                                   });
     }
 } // namespace uikit

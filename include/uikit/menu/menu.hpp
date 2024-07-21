@@ -149,11 +149,11 @@ namespace uikit
             VMenu::Style submenu;
         };
 
-        MenuBar(const ForwardList<HMenu> &items, Style *style) : _style(style), _items(items) {}
+        MenuBar(const ForwardList<HMenu> &items, Style *style) : Widget("menubar"), _style(style), _items(items) {}
 
         virtual ~MenuBar();
 
-        MenuBar(MenuBar &&other) noexcept : _style(other._style), _items(std::move(other._items))
+        MenuBar(MenuBar &&other) noexcept : Widget("menubar"), _style(other._style), _items(std::move(other._items))
         {
             other._items.clear();
             other._style = nullptr;
@@ -166,7 +166,14 @@ namespace uikit
     protected:
         Style *_style;
         ForwardList<HMenu> _items;
+
+        MenuBar(MenuBar &&other, const std::string &id) noexcept
+            : Widget(id), _style(other._style), _items(std::move(other._items))
+        {
+            other._items.clear();
+            other._style = nullptr;
+        }
     };
-} // namespace ui
+} // namespace uikit
 
 #endif

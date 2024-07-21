@@ -51,7 +51,7 @@ namespace uikit
         } style;
         TabBar tabbar;
 
-        Titlebar(window::Window &window, std::unique_ptr<MenuBar> &menubar, const TabBar &tabbar, const Style &style);
+        Titlebar(window::Window &window, MenuBar *menubar, const TabBar &tabbar, const Style &style);
 
         ~Titlebar() { events::unbindListeners(this); }
 
@@ -73,5 +73,5 @@ namespace uikit
         ControlArea _activeArea{ControlArea::None};
         float _height;
     };
-} // namespace ui
+} // namespace uikit
 #endif

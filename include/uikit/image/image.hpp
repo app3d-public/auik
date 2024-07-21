@@ -1,8 +1,8 @@
 #ifndef UIKIT_WIDGETS_IMAGE_H
 #define UIKIT_WIDGETS_IMAGE_H
 
-#include "../widget.hpp"
 #include <core/api.hpp>
+#include "../widget.hpp"
 
 namespace uikit
 {
@@ -10,7 +10,7 @@ namespace uikit
     {
     public:
         Image(ImTextureID id, ImVec2 size = {0, 0}, ImVec2 uvMin = {0, 0}, ImVec2 uvMax = {1, 1})
-            : _id(id), _size(size), _uvMin(uvMin), _uvMax(uvMax)
+            : Widget("image"), _id(id), _size(size), _uvMin(uvMin), _uvMax(uvMax)
         {
         }
 
@@ -32,6 +32,6 @@ namespace uikit
         ImVec2 _uvMin;
         ImVec2 _uvMax;
     };
-} // namespace ui
+} // namespace uikit
 
 #endif

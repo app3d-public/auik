@@ -5,14 +5,12 @@
 
 namespace uikit
 {
-    class Text : public Widget
+    class APPLIB_API Text : public Widget
     {
     public:
-        Text(const std::string &text, bool wrapped = false) : _text(text), _wrapped(wrapped), _text_size{0, 0} {}
+        Text(const std::string &text, bool wrapped = false) : Widget(text), _wrapped(wrapped), _text_size{0, 0} {}
 
         virtual void render() override;
-
-        std::string text() const { return _text; }
 
         bool wrapped() const { return _wrapped; }
 
@@ -21,7 +19,6 @@ namespace uikit
         f32 height() const { return _text_size.y; }
 
     private:
-        std::string _text;
         bool _wrapped;
         ImVec2 _text_size;
 
