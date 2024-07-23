@@ -10,6 +10,12 @@ namespace uikit
     public:
         Text(const std::string &text, bool wrapped = false) : Widget(text), _wrapped(wrapped), _text_size{0, 0} {}
 
+        Text &operator=(const std::string &text)
+        {
+            _name = text;
+            return *this;
+        }
+
         virtual void render() override;
 
         bool wrapped() const { return _wrapped; }
@@ -26,6 +32,6 @@ namespace uikit
 
         void renderText(const ImVec2 text_pos);
     };
-} // namespace ui
+} // namespace uikit
 
 #endif
