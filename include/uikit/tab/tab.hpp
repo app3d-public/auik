@@ -1,6 +1,7 @@
 #ifndef UIKIT_WIDGETS_TAB_H
 #define UIKIT_WIDGETS_TAB_H
 
+#include <core/disposal_queue.hpp>
 #include <core/event/event.hpp>
 #include <core/std/basic_types.hpp>
 #include <core/std/enum.hpp>
@@ -77,9 +78,14 @@ namespace uikit
             f32 scrollOffsetRL;
         };
 
-        TabBar(const std::string &id, const DArray<TabItem> &items, Flags flags = FlagBits::none,
-               const Style &style = {}, bool mainTabbar = false)
-            : Widget(id), items(items), _flags(flags), _isMainTabbar(mainTabbar), _style(style)
+        TabBar(const std::string &id, DisposalQueue &disposalQueue, const DArray<TabItem> &items,
+               Flags flags = FlagBits::none, const Style &style = {}, bool mainTabbar = false)
+            : Widget(id),
+              items(items),
+              _disposalQueue(disposalQueue),
+              _flags(flags),
+              _isMainTabbar(mainTabbar),
+              _style(style)
         {
         }
 
@@ -104,6 +110,7 @@ namespace uikit
         bool removeTab(const TabItem &tab);
 
     private:
+        DisposalQueue &_disposalQueue;
         bool _isHovered{false};
         Flags _flags;
         bool _isMainTabbar;

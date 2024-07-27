@@ -1,4 +1,4 @@
-#include <core/mem/mem.hpp>
+#include <core/disposal_queue.hpp>
 #include <imgui/imgui_internal.h>
 #include <uikit/button/button.hpp>
 #include <uikit/combobox/combobox.hpp>
@@ -12,6 +12,8 @@ namespace uikit
     {
     public:
         TabMemCache(u8 *activeIndex, DArray<TabItem> *items) : activeIndex(activeIndex), _items(items) { ++itemsLeft; }
+
+        virtual ~TabMemCache() = default;
 
         virtual void free() override
         {
@@ -342,16 +344,13 @@ namespace uikit
             std::find_if(items.begin(), items.end(), [&](const TabItem &item) { return item.name() == tab.name(); });
         if (it != items.end())
         {
-            DisposalQueue::global().push(new RemoveMemCache(it, &activeIndex, &items));
+            _disposalQueue.push(new RemoveMemCache(it, &activeIndex, &items));
             return true;
         }
         return false;
     }
 
-    void TabBar::newTab(const TabItem &tab)
-    {
-        DisposalQueue::global().push(new AddMemCache(tab, &activeIndex, &items));
-    }
+    void TabBar::newTab(const TabItem &tab) { _disposalQueue.push(new AddMemCache(tab, &activeIndex, &items)); }
 
     void TabBar::bindEvents()
     {
