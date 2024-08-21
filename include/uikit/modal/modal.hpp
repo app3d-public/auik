@@ -1,7 +1,7 @@
 #ifndef UIKIT_WIDGETS_MODAL_H
 #define UIKIT_WIDGETS_MODAL_H
 
-#include <core/event/event.hpp>
+#include <core/event.hpp>
 #include <functional>
 #include <string>
 #include <uikit/button/switch.hpp>

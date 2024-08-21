@@ -2,7 +2,7 @@
 #define UIKIT_WIDGETS_TAB_H
 
 #include <core/disposal_queue.hpp>
-#include <core/event/event.hpp>
+#include <core/event.hpp>
 #include <core/std/basic_types.hpp>
 #include <core/std/enum.hpp>
 #include "../icon/icon.hpp"
