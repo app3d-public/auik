@@ -30,7 +30,7 @@ namespace uikit
     class APPLIB_API WindowImGuiBinder
     {
     public:
-        explicit WindowImGuiBinder(window::Window &window);
+        explicit WindowImGuiBinder(window::Window &window, events::Manager *e);
 
         ~WindowImGuiBinder();
 
@@ -39,6 +39,7 @@ namespace uikit
         void newFrame();
 
     private:
+        events::Manager *e;
         ImGuiBackendData *_bd;
         Map<window::io::Key, ImGuiKey> _keyMap{{window::io::Key::kTab, ImGuiKey_Tab},
                                                {window::io::Key::kLeft, ImGuiKey_LeftArrow},

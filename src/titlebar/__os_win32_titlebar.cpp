@@ -27,11 +27,13 @@ namespace uikit
         return controlSize;
     }
 
-    Titlebar::Titlebar(window::Window &window, MenuBar *menubar, const TabBar &tabbar, const Style &style)
+    Titlebar::Titlebar(window::Window &window, events::Manager *e, MenuBar *menubar, const TabBar &tabbar,
+                       const Style &style)
         : MenuBar(std::move(*menubar), "titlebar"),
           style(style),
           tabbar(tabbar),
           _window(window),
+          e(e),
           _controlSize(getControllsSize(window.accessBridge().hwnd())),
           _controls{{ControlState::Idle, ControlArea::Min},
                     {ControlState::Idle, ControlArea::Max},
@@ -156,7 +158,7 @@ namespace uikit
     void Titlebar::bindEvents()
     {
         tabbar.bindEvents();
-        events::bindEvent<window::Win32NativeEvent>(this, "window:NCHitTest", [this](window::Win32NativeEvent &e) {
+        e->bindEvent<window::Win32NativeEvent>(this, "window:NCHitTest", [this](window::Win32NativeEvent &e) {
             if (e.window != &_window) return;
             POINT cursorPoint = {0};
             cursorPoint.x = LOWORD(e.lParam);
@@ -205,7 +207,7 @@ namespace uikit
             for (auto &control : _controls)
                 if (control.area != _activeArea) control.state = ControlState::Idle;
         });
-        events::bindEvent<window::Win32NativeEvent>(this, "window:NCLMouseDown", [this](window::Win32NativeEvent &e) {
+        e->bindEvent<window::Win32NativeEvent>(this, "window:NCLMouseDown", [this](window::Win32NativeEvent &e) {
             if (e.window != &_window || _activeArea == ControlArea::None) return;
             switch (_activeArea)
             {
@@ -225,7 +227,7 @@ namespace uikit
                     break;
             };
         });
-        events::bindEvent<window::MouseClickEvent>(this, "window:input:mouse",
+        e->bindEvent<window::MouseClickEvent>(this, "window:input:mouse",
                                                    [this](const window::MouseClickEvent &e) {
                                                        if (e.window != &_window || _activeArea == ControlArea::None)
                                                            return;

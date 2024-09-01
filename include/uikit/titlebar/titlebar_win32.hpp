@@ -51,9 +51,10 @@ namespace uikit
         } style;
         TabBar tabbar;
 
-        Titlebar(window::Window &window, MenuBar *menubar, const TabBar &tabbar, const Style &style);
+        Titlebar(window::Window &window, events::Manager *e, MenuBar *menubar, const TabBar &tabbar,
+                 const Style &style);
 
-        ~Titlebar() { events::unbindListeners(this); }
+        ~Titlebar() { e->unbindListeners(this); }
 
         virtual void render() override;
 
@@ -61,17 +62,18 @@ namespace uikit
 
     private:
         window::Window &_window;
+        events::Manager *e;
         Point2D _dragOffset;
         ImVec2 _controlSize;
-        float _captionWidth;
-        float _clientWidth;
+        f32 _captionWidth;
+        f32 _clientWidth;
         struct ControlButton
         {
             ControlState state;
             ControlArea area;
         } _controls[3];
         ControlArea _activeArea{ControlArea::None};
-        float _height;
+        f32 _height;
     };
 } // namespace uikit
 #endif

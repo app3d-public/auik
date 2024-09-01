@@ -133,7 +133,7 @@ namespace uikit
         {
             if (begin->renderItem())
             {
-                if (_isMainTabbar) events::mng.dispatch<TabRemoveEvent>("tabbar:close", *begin, false);
+                if (_isMainTabbar) e->dispatch<TabRemoveEvent>("tabbar:close", *begin, false);
                 return false;
             }
         }
@@ -321,8 +321,8 @@ namespace uikit
                 if (begin->pressed() && !wasDragReset)
                 {
                     if (activeIndex != index)
-                        events::mng.dispatch<TabChangeEvent>("tabbar:switched", items.begin() + activeIndex,
-                                                             items.begin() + index);
+                        e->dispatch<TabChangeEvent>("tabbar:switched", items.begin() + activeIndex,
+                                                    items.begin() + index);
                     activeIndex = index;
                     window::pushEmptyEvent();
                 }
@@ -354,14 +354,14 @@ namespace uikit
 
     void TabBar::bindEvents()
     {
-        events::bindEvent<window::ScrollEvent>(this, "window:scroll", [this](const window::ScrollEvent &event) {
+        e->bindEvent<window::ScrollEvent>(this, "window:scroll", [this](const window::ScrollEvent &event) {
             if (!_isHovered || !(_flags & FlagBits::scrollable)) return;
             ImGuiIO &io = ImGui::GetIO();
             io.AddKeyEvent(ImGuiMod_Shift, true);
         });
         if (_isMainTabbar)
         {
-            events::bindEvent<events::Event>(this, "tabbar:changed", [this](events::Event &e) {
+            e->bindEvent<events::Event>(this, "tabbar:changed", [this](events::Event &e) {
                 if (e.data<bool>())
                     items[activeIndex].flags() |= TabItem::FlagBits::unsaved;
                 else

@@ -78,10 +78,11 @@ namespace uikit
             f32 scrollOffsetRL;
         };
 
-        TabBar(const std::string &id, DisposalQueue &disposalQueue, const DArray<TabItem> &items,
+        TabBar(const std::string &id, events::Manager *e, DisposalQueue &disposalQueue, const DArray<TabItem> &items,
                Flags flags = FlagBits::none, const Style &style = {}, bool mainTabbar = false)
             : Widget(id),
               items(items),
+              e(e),
               _disposalQueue(disposalQueue),
               _flags(flags),
               _isMainTabbar(mainTabbar),
@@ -89,7 +90,7 @@ namespace uikit
         {
         }
 
-        ~TabBar() { events::unbindListeners(this); }
+        ~TabBar() { e->unbindListeners(this); }
 
         virtual void render() override;
 
@@ -110,6 +111,7 @@ namespace uikit
         bool removeTab(const TabItem &tab);
 
     private:
+        events::Manager *e;
         DisposalQueue &_disposalQueue;
         bool _isHovered{false};
         Flags _flags;
