@@ -22,10 +22,12 @@ namespace uikit
 
         using Flags = ::Flags<FlagBits>;
 
+        std::string id;
+
         TabItem(const std::string &id, const std::string &label, const std::function<void()> &onRender = nullptr,
                 Flags flags = FlagBits::none, f32 rounding = 0.0f)
             : Selectable(label, false, rounding, ImGuiSelectableFlags_AllowItemOverlap, {0.0f, 0.0f}, true),
-              _id(id),
+              id(id),
               _onRender(onRender),
               _tabFlags(flags)
         {
@@ -47,10 +49,7 @@ namespace uikit
 
         const Flags flags() const { return _tabFlags; }
 
-        std::string id() const { return _id; }
-
     private:
-        std::string _id;
         std::function<void()> _onRender;
         Flags _tabFlags;
     };
@@ -131,28 +130,41 @@ namespace uikit
         void renderCombobox();
     };
 
-    struct TabRemoveEvent : public events::Event
+    struct TabRemoveEvent : public events::IEvent
     {
         TabItem tab;
         bool confirmed;
         bool createOnEmpty;
         bool batch;
 
-        TabRemoveEvent(const std::string &eventName, const TabItem &tab, bool confirmed = false,
+        TabRemoveEvent(const std::string &name, const TabItem &tab, bool confirmed = false,
                        bool createOnEmpty = true, bool batch = false)
-            : Event(eventName), tab(tab), confirmed(confirmed), createOnEmpty(createOnEmpty), batch(batch)
+            : IEvent(name), tab(tab), confirmed(confirmed), createOnEmpty(createOnEmpty), batch(batch)
         {
         }
     };
 
-    struct TabChangeEvent : public events::Event
+    struct TabChangeEvent : public events::IEvent
     {
         DArray<TabItem>::iterator prev;
         DArray<TabItem>::iterator current;
 
-        TabChangeEvent(const std::string &eventName, const DArray<TabItem>::iterator &prev,
+        TabChangeEvent(const std::string &name, const DArray<TabItem>::iterator &prev,
                        const DArray<TabItem>::iterator &current)
-            : Event(eventName), prev(prev), current(current)
+            : IEvent(name), prev(prev), current(current)
+        {
+        }
+    };
+
+    struct TabInfoEvent : public events::IEvent
+    {
+        std::string fullname;
+        std::string cn;
+        TabItem::Flags flags;
+
+        TabInfoEvent(const std::string &name, const std::string &fullname = "", const std::string &cn = "",
+                     TabItem::Flags flags = TabItem::FlagBits::none)
+            : IEvent(name), fullname(fullname), cn(cn), flags(flags)
         {
         }
     };

@@ -33,9 +33,9 @@ namespace uikit
         // we are likely the biggest and only item on the line.
         // - We use memchr(), pay attention that well optimized versions of those str/mem functions are much faster than
         // a casually written loop.
-        const char *line = _name.c_str();
+        const char *line = name.c_str();
         const float line_height = ImGui::GetTextLineHeight();
-        auto text_end = line + _name.size();
+        auto text_end = line + name.size();
         ImGuiWindow *window = ImGui::GetCurrentWindow();
         ImGuiContext &g = *GImGui;
 
@@ -106,8 +106,8 @@ namespace uikit
         const float wrap_pos_x = window->DC.TextWrapPos;
         const bool wrap_enabled = (wrap_pos_x >= 0.0f);
         const float wrap_width = wrap_enabled ? ImGui::CalcWrapWidthForPos(window->DC.CursorPos, wrap_pos_x) : 0.0f;
-        auto start = _name.c_str();
-        auto end = start + _name.size();
+        auto start = name.c_str();
+        auto end = start + name.size();
         _text_size = ImGui::CalcTextSize(start, end, false, wrap_width);
 
         ImRect bb(text_pos, text_pos + _text_size);

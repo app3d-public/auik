@@ -35,7 +35,7 @@ namespace uikit
 
         ImGuiContext &g = *GImGui;
         const ImGuiStyle &style = g.Style;
-        auto labelPtr = _name.c_str();
+        auto labelPtr = name.c_str();
         const ImGuiID id = window->GetID(labelPtr);
         _selected = ImGui::IsPopupOpen(id, ImGuiPopupFlags_None);
 
@@ -186,7 +186,7 @@ namespace uikit
 
         ImGuiContext &g = *GImGui;
         const ImGuiStyle &style = g.Style;
-        auto labelPtr = _name.c_str();
+        auto labelPtr = name.c_str();
         const ImGuiID id = window->GetID(labelPtr);
         _selected = ImGui::IsPopupOpen(id, ImGuiPopupFlags_None);
 
@@ -349,7 +349,7 @@ namespace uikit
         ImGuiContext &g = *GImGui;
         ImGuiStyle &style = g.Style;
         ImVec2 pos = window->DC.CursorPos;
-        auto labelPtr = _name.c_str();
+        auto labelPtr = name.c_str();
         ImVec2 label_size = ImGui::CalcTextSize(labelPtr, nullptr, true);
 
         const bool menuset_is_open = IsRootOfOpenMenuSet();

@@ -12,7 +12,7 @@ namespace uikit
 
         Text &operator=(const std::string &text)
         {
-            _name = text;
+            name = text;
             return *this;
         }
 

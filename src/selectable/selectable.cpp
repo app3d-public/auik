@@ -21,7 +21,7 @@ namespace uikit
 
     void Selectable::render()
     {
-        Params params{.label = _name.c_str(),
+        Params params{.label = name.c_str(),
                       .rounding = _rounding,
                       .flags = _flags,
                       .buttonFlags = _buttonFlags,

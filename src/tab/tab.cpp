@@ -84,7 +84,7 @@ namespace uikit
         if (_tabFlags & TabItem::FlagBits::closable || _tabFlags & TabItem::FlagBits::unsaved)
         {
             bool wantDelete = false;
-            ImGuiID id = window->GetID(_name.c_str());
+            ImGuiID id = window->GetID(name.c_str());
             const ImGuiID close_button_id = ImGui::GetIDWithSeed("#CLOSE", NULL, id);
             ImVec2 nextPos{0, 0};
             if (_tabFlags & TabItem::FlagBits::closable)
@@ -111,7 +111,7 @@ namespace uikit
     ImVec2 TabItem::calculateItemSize()
     {
         auto &style = ImGui::GetStyle();
-        auto labelSize = ImGui::CalcTextSize(_name.c_str());
+        auto labelSize = ImGui::CalcTextSize(name.c_str());
         ImVec2 outputSize = labelSize + style.ItemSpacing * 2.0f;
         if (_tabFlags & FlagBits::unsaved || _tabFlags & FlagBits::closable)
         {
@@ -218,7 +218,7 @@ namespace uikit
             for (auto &item : items)
             {
                 bool pressed;
-                std::string label = item.name();
+                std::string label = item.name;
                 Selectable::Params params{
                     .label = label.c_str(), .selected = index == activeIndex, .pressed = &pressed};
                 Selectable::render(params);
@@ -242,7 +242,7 @@ namespace uikit
         ImVec2 size = _style.size;
         if (_style.size.x == 0) _style.size.x = ImGui::GetContentRegionAvail().x;
         if (_style.size.y == 0 && !items.empty()) size.y = items.begin()->size().y + style.WindowPadding.y * 2.0f;
-        if (ImGui::BeginChild(_name.c_str(), size, true))
+        if (ImGui::BeginChild(name.c_str(), size, true))
         {
             if (_flags & FlagBits::scrollable)
             {
@@ -340,8 +340,7 @@ namespace uikit
 
     bool TabBar::removeTab(const TabItem &tab)
     {
-        auto it =
-            std::find_if(items.begin(), items.end(), [&](const TabItem &item) { return item.name() == tab.name(); });
+        auto it = std::find_if(items.begin(), items.end(), [&](const TabItem &item) { return item.name == tab.name; });
         if (it != items.end())
         {
             _disposalQueue.push(new RemoveMemCache(it, &activeIndex, &items));
@@ -354,18 +353,23 @@ namespace uikit
 
     void TabBar::bindEvents()
     {
-        e->bindEvent<window::ScrollEvent>(this, "window:scroll", [this](const window::ScrollEvent &event) {
+        e->bindEvent(this, "window:scroll", [this](const window::ScrollEvent &event) {
             if (!_isHovered || !(_flags & FlagBits::scrollable)) return;
             ImGuiIO &io = ImGui::GetIO();
             io.AddKeyEvent(ImGuiMod_Shift, true);
         });
         if (_isMainTabbar)
         {
-            e->bindEvent<events::Event>(this, "tabbar:changed", [this](events::Event &e) {
-                if (e.data<bool>())
+            e->bindEvent(this, "tabbar:changed", [this](const TabInfoEvent &e) {
+                if (e.flags & TabItem::FlagBits::unsaved)
                     items[activeIndex].flags() |= TabItem::FlagBits::unsaved;
                 else
                     items[activeIndex].flags() &= ~TabItem::FlagBits::unsaved;
+                if (!e.fullname.empty())
+                {
+                    items[activeIndex].name = e.cn;
+                    items[activeIndex].id = e.fullname;
+                }
             });
         }
     }

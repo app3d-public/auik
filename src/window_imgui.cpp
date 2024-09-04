@@ -18,7 +18,7 @@ namespace uikit
         return window::platform::env.clipboardData.c_str();
     }
 
-    WindowImGuiBinder::WindowImGuiBinder(window::Window &window, events::Manager *e): e(e)
+    WindowImGuiBinder::WindowImGuiBinder(window::Window &window, events::Manager *e) : e(e)
     {
         ImGui::CreateContext();
         ImGuiIO &io = ImGui::GetIO();
@@ -126,46 +126,44 @@ namespace uikit
     void WindowImGuiBinder::bindEvents()
     {
         logInfo("Binding ImGui listeners");
-        e->bindEvent<window::FocusEvent>(this, "window:focus", [](const window::FocusEvent &event) {
+        e->bindEvent(this, "window:focus", [](const window::FocusEvent &event) {
             ImGuiIO &io = ImGui::GetIO();
             io.AddFocusEvent(event.focused);
         });
-        e->bindEvent<window::CursorEnterEvent>(
-            this, "window:cursor:enter", [this](const window::CursorEnterEvent &event) {
-                ImGuiIO &io = ImGui::GetIO();
-                if (event.entered)
-                    io.AddMousePosEvent(_bd->LastValidMousePos.x, _bd->LastValidMousePos.y);
-                else
-                {
-                    _bd->LastValidMousePos = io.MousePos;
-                    io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);
-                }
-            });
-        e->bindEvent<window::PosEvent>(this, "window:cursor:move:abs", [this](const window::PosEvent &event) {
+        e->bindEvent(this, "window:cursor:enter", [this](const window::CursorEnterEvent &event) {
+            ImGuiIO &io = ImGui::GetIO();
+            if (event.entered)
+                io.AddMousePosEvent(_bd->LastValidMousePos.x, _bd->LastValidMousePos.y);
+            else
+            {
+                _bd->LastValidMousePos = io.MousePos;
+                io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);
+            }
+        });
+        e->bindEvent(this, "window:cursor:move:abs", [this](const window::PosEvent &event) {
             ImGuiIO &io = ImGui::GetIO();
             io.AddMousePosEvent(event.position.x, event.position.y);
             _bd->LastValidMousePos = ImVec2(event.position.x, event.position.y);
         });
-        e->bindEvent<window::MouseClickEvent>(
-            this, "window:input:mouse", [](const window::MouseClickEvent &event) {
-                ImGuiIO &io = ImGui::GetIO();
-                updateKeyMods(io, event.mods);
-                auto button = event.button;
-                if (button != window::io::MouseKey::unknown)
-                    io.AddMouseButtonEvent(+button, event.action == window::io::KeyPressState::press);
-            });
-        e->bindEvent<window::ScrollEvent>(this, "window:scroll", [](const window::ScrollEvent &event) {
+        e->bindEvent(this, "window:input:mouse", [](const window::MouseClickEvent &event) {
+            ImGuiIO &io = ImGui::GetIO();
+            updateKeyMods(io, event.mods);
+            auto button = event.button;
+            if (button != window::io::MouseKey::unknown)
+                io.AddMouseButtonEvent(+button, event.action == window::io::KeyPressState::press);
+        });
+        e->bindEvent(this, "window:scroll", [](const window::ScrollEvent &event) {
             ImGuiIO &io = ImGui::GetIO();
             io.AddMouseWheelEvent(event.h, event.v);
         });
-        e->bindEvent<window::KeyInputEvent>(this, "window:input:key", [this](const window::KeyInputEvent &event) {
+        e->bindEvent(this, "window:input:key", [this](const window::KeyInputEvent &event) {
             ImGuiIO &io = ImGui::GetIO();
             updateKeyMods(io, event.mods);
             auto it = _keyMap.find(event.key);
             ImGuiKey imgui_key = it != _keyMap.end() ? it->second : ImGuiKey_None;
             io.AddKeyEvent(imgui_key, event.action != window::io::KeyPressState::release);
         });
-        e->bindEvent<window::CharInputEvent>(this, "window:input:char", [](const window::CharInputEvent &event) {
+        e->bindEvent(this, "window:input:char", [](const window::CharInputEvent &event) {
             ImGuiIO &io = ImGui::GetIO();
             io.AddInputCharacter(event.charCode);
         });
