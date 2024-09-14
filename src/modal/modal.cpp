@@ -1,3 +1,5 @@
+#include <uikit/button/button.hpp>
+#include <uikit/button/checkbox.hpp>
 #include <uikit/modal/modal.hpp>
 #include <uikit/text/text.hpp>
 #include <window/window.hpp>
@@ -8,20 +10,18 @@
 
 namespace uikit
 {
-    std::string getBtnName(window::popup::Buttons button,
-                           const std::function<std::string(window::popup::Buttons)> &callback)
+    std::string getBtnName(window::popup::Buttons button)
     {
-        if (callback) return callback(button);
         switch (button)
         {
             case window::popup::Buttons::OK:
-                return "OK";
+                return _("Btn:OK");
             case window::popup::Buttons::Yes:
-                return "Yes";
+                return _("Btn:Yes");
             case window::popup::Buttons::No:
-                return "No";
+                return _("Btn:No");
             case window::popup::Buttons::Cancel:
-                return "Cancel";
+                return _("Btn:Cancel");
             default:
                 return "Unknown";
         };
@@ -98,38 +98,20 @@ namespace uikit
             pos.y += mt.height() + 40;
 
             // Checkbox
+            auto &bStyle = *style::g_StyleButton;
             if (it->second.size() > 1)
             {
-                ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, {style::checkbox.spacing, 0});
-                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
-                                    {style::checkbox.sizePadding, style::checkbox.sizePadding});
-                ImGui::SetCursorPos(pos + ImVec2(0, style::button.padding.y * 0.5f));
+                ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, {style::g_StyleCheckBox->spacing, 0});
+                ImGui::SetCursorPos(pos + ImVec2(0, bStyle.padding.y * 0.5f));
                 _switch.render();
-                ImGui::PopStyleVar(2);
+                ImGui::PopStyleVar();
             }
 
             // Buttons
-            ImGui::SetCursorPosY(pos.y);
-            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, style::button.padding);
-            ImGui::PushStyleColor(ImGuiCol_Button, {0, 0, 0, 0});
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, style::button.colorActive);
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, style::button.colorHovered);
-            f32 offsetX{0};
-            for (int i = message.buttons.size() - 1; i >= 0; --i)
-            {
-                bool isLast = i == message.buttons.size() - 1;
-                if (isLast) ImGui::PushStyleColor(ImGuiCol_Button, style::button.color);
-                std::string name = getBtnName(message.buttons[i].first, _btnLocaleCallback);
-                f32 btnWidth = ImGui::CalcTextSize(name.c_str()).x + style::button.padding.x * 2 + 5;
-                f32 cursorX = style.width - btnWidth - offsetX - style::button.padding.x;
-                offsetX += btnWidth;
-                ImGui::SetCursorPosX(cursorX);
-                if (ImGui::Button(name.c_str())) action = i;
-                if (isLast) ImGui::PopStyleColor();
-                if (i > 0) ImGui::SameLine();
-            }
-            ImGui::PopStyleVar();
-            ImGui::PopStyleColor(3);
+            astl::vector<std::string> buttons(message.buttons.size());
+            for (int i = 0; i < message.buttons.size(); ++i) buttons[i] = getBtnName(message.buttons[i].first);
+            rightControls(buttons, &action, pos.y);
+
             if (action != -1)
             {
                 auto &pair = message.buttons[action];

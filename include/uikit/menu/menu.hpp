@@ -4,13 +4,26 @@
 #include <core/std/forward_list.hpp>
 #include <functional>
 #include <imgui/imgui_internal.h>
-#include <memory>
-#include "../icon/icon.hpp"
 #include "../selectable/selectable.hpp"
+#include "../style.hpp" // IWYU pragma: keep
 #include "../widget.hpp"
 
 namespace uikit
 {
+    namespace style
+    {
+        extern APPLIB_API struct VMenu
+        {
+            f32 rounding;
+            ImVec2 padding;
+            ImVec4 backgroundColor;
+            ImVec4 separatorColor;
+            Icon *arrowRight = nullptr;
+        } *g_StyleVMenu;
+
+        inline void registerStyle(VMenu *style) { g_StyleVMenu = style; }
+    } // namespace style
+
     class APPLIB_API VMenu final : public Widget
     {
         struct _Item
@@ -21,17 +34,9 @@ namespace uikit
             std::function<void(Selectable *menu)> beforeRender{nullptr};
         };
 
-        using _ItemGroup = ForwardList<_Item>;
+        using _ItemGroup = astl::forward_list<_Item>;
 
     public:
-        struct Style
-        {
-            float rounding;
-            ImVec2 padding;
-            ImVec4 backgroundColor;
-            ImVec4 separatorColor;
-        };
-
         struct Item
         {
             std::string label;
@@ -41,46 +46,41 @@ namespace uikit
             VMenu *submenu{nullptr};
         };
 
-        using ItemGroup = ForwardList<Item>;
+        using ItemGroup = astl::forward_list<Item>;
 
-        VMenu(std::initializer_list<ItemGroup> itemgroups, const Style &style,
-              const std::shared_ptr<Icon> &arrowIcon = nullptr);
+        VMenu(std::initializer_list<ItemGroup> itemgroups, const style::VMenu &style);
 
         virtual void render() override;
 
         void destroyItems();
 
-        Style style() const { return _style; }
-
     private:
-        ForwardList<_ItemGroup> _itemGroups;
+        astl::forward_list<_ItemGroup> _itemGroups;
 
-        const Style &_style;
+        const style::VMenu &_style;
     };
 
     class APPLIB_API BeginMenu final : public Selectable
     {
     public:
-        BeginMenu(const std::string &label, const std::shared_ptr<Icon> &arrowIcon, const VMenu::Style &style)
+        BeginMenu(const std::string &label, const style::VMenu &style)
             : Selectable(label, false, style.rounding,
                          ImGuiSelectableFlags_NoHoldingActiveID | ImGuiSelectableFlags_NoSetKeyOwner |
                              ImGuiSelectableFlags_SelectOnClick | ImGuiSelectableFlags_DontClosePopups),
-              _style(style),
-              _arrowIcon(arrowIcon)
+              _style(style)
         {
         }
 
         virtual void render() override;
 
     private:
-        const VMenu::Style &_style;
-        std::shared_ptr<Icon> _arrowIcon;
+        const style::VMenu &_style;
     };
 
     class APPLIB_API MenuItem final : public Selectable
     {
     public:
-        MenuItem(const std::string &label, const std::string &shortcut, const VMenu::Style &style)
+        MenuItem(const std::string &label, const std::string &shortcut, const style::VMenu &style)
             : Selectable(label, false, style.rounding,
                          ImGuiSelectableFlags_SelectOnRelease | ImGuiSelectableFlags_NoSetKeyOwner |
                              ImGuiSelectableFlags_SetNavIdOnHover),
@@ -93,7 +93,7 @@ namespace uikit
 
     private:
         std::string _shortcut;
-        const VMenu::Style &_style;
+        const style::VMenu &_style;
     };
 
     class APPLIB_API HMenu final : public Selectable
@@ -146,10 +146,12 @@ namespace uikit
         struct Style
         {
             HMenu::Style menubar;
-            VMenu::Style submenu;
+            style::VMenu submenu;
         };
 
-        MenuBar(const ForwardList<HMenu> &items, Style *style) : Widget("menubar"), _style(style), _items(items) {}
+        MenuBar(const astl::forward_list<HMenu> &items, Style *style) : Widget("menubar"), _style(style), _items(items)
+        {
+        }
 
         virtual ~MenuBar();
 
@@ -165,7 +167,7 @@ namespace uikit
 
     protected:
         Style *_style;
-        ForwardList<HMenu> _items;
+        astl::forward_list<HMenu> _items;
 
         MenuBar(MenuBar &&other, const std::string &id) noexcept
             : Widget(id), _style(other._style), _items(std::move(other._items))

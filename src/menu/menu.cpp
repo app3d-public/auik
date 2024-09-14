@@ -230,10 +230,9 @@ namespace uikit
         ImGui::PushID(labelPtr);
         const ImGuiMenuColumns *offsets = &window->DC.MenuColumns;
         popup_pos = ImVec2(pos.x, pos.y - style.WindowPadding.y);
-        float checkmark_w = IM_TRUNC(g.FontSize * 1.20f);
-        float min_w =
-            window->DC.MenuColumns.DeclColumns(0.0f, label_size.x, 0.0f, checkmark_w); // Feedback to next frame
-        float extra_w = ImMax(0.0f, ImGui::GetContentRegionAvail().x - min_w);
+        f32 checkmark_w = IM_TRUNC(g.FontSize * 1.20f);
+        f32 min_w = window->DC.MenuColumns.DeclColumns(0.0f, label_size.x, 0.0f, checkmark_w); // Feedback to next frame
+        f32 extra_w = ImMax(0.0f, ImGui::GetContentRegionAvail().x - min_w);
         ImVec2 text_pos(window->DC.CursorPos.x + offsets->OffsetLabel + _style.padding.x,
                         window->DC.CursorPos.y + window->DC.CurrLineTextBaseOffset);
         _size = ImVec2(min_w + +_style.padding.x, label_size.y);
@@ -248,9 +247,9 @@ namespace uikit
         Selectable::render(params);
         ImVec2 arrowPos =
             pos + ImVec2(offsets->OffsetMark + extra_w + g.FontSize * 0.30f + style.ItemInnerSpacing.x * 0.5f,
-                         label_size.y / 2.0f - _arrowIcon->height() / 2.0f);
+                         label_size.y / 2.0f - _style.arrowRight->height() / 2.0f);
         ImGui::RenderText(text_pos, labelPtr);
-        _arrowIcon->render(arrowPos);
+        _style.arrowRight->render(arrowPos);
 
         _hover = (g.HoveredId == id) && !g.NavDisableMouseHover;
         if (menuset_is_open) ImGui::PopItemFlag();
@@ -269,13 +268,13 @@ namespace uikit
                                                                                                 : nullptr;
         if (g.HoveredWindow == window && child_menu_window != nullptr)
         {
-            const float ref_unit = g.FontSize; // FIXME-DPI
-            const float child_dir = (window->Pos.x < child_menu_window->Pos.x) ? 1.0f : -1.0f;
+            const f32 ref_unit = g.FontSize; // FIXME-DPI
+            const f32 child_dir = (window->Pos.x < child_menu_window->Pos.x) ? 1.0f : -1.0f;
             const ImRect next_window_rect = child_menu_window->Rect();
             ImVec2 ta = (g.IO.MousePos - g.IO.MouseDelta);
             ImVec2 tb = (child_dir > 0.0f) ? next_window_rect.GetTL() : next_window_rect.GetTR();
             ImVec2 tc = (child_dir > 0.0f) ? next_window_rect.GetBL() : next_window_rect.GetBR();
-            const float pad_farmost_h = ImClamp(ImFabs(ta.x - tb.x) * 0.30f, ref_unit * 0.5f, ref_unit * 2.5f);
+            const f32 pad_farmost_h = ImClamp(ImFabs(ta.x - tb.x) * 0.30f, ref_unit * 0.5f, ref_unit * 2.5f);
             ta.x += child_dir * -0.5f;
             tb.x += child_dir * ref_unit;
             tc.x += child_dir * ref_unit;
@@ -363,11 +362,11 @@ namespace uikit
         const ImGuiMenuColumns *offsets = &window->DC.MenuColumns;
 
         auto shortcutPtr = _shortcut.c_str();
-        float shortcut_w = (shortcutPtr && shortcutPtr[0]) ? ImGui::CalcTextSize(shortcutPtr, nullptr).x : 0.0f;
-        float checkmark_w = IM_TRUNC(g.FontSize * 1.20f);
-        float min_w = window->DC.MenuColumns.DeclColumns(0.0f, label_size.x, shortcut_w,
-                                                         checkmark_w); // Feedback for next frame
-        float stretch_w = ImMax(0.0f, ImGui::GetContentRegionAvail().x - min_w);
+        f32 shortcut_w = (shortcutPtr && shortcutPtr[0]) ? ImGui::CalcTextSize(shortcutPtr, nullptr).x : 0.0f;
+        f32 checkmark_w = IM_TRUNC(g.FontSize * 1.20f);
+        f32 min_w = window->DC.MenuColumns.DeclColumns(0.0f, label_size.x, shortcut_w,
+                                                       checkmark_w); // Feedback for next frame
+        f32 stretch_w = ImMax(0.0f, ImGui::GetContentRegionAvail().x - min_w);
         _size = ImVec2(min_w + _style.padding.x, label_size.y);
         Selectable::Params params{.label = "",
                                   .rounding = _style.rounding,
@@ -401,9 +400,7 @@ namespace uikit
         if (menuset_is_open) ImGui::PopItemFlag();
     }
 
-    VMenu::VMenu(std::initializer_list<ItemGroup> itemgroups, const Style &style,
-                 const std::shared_ptr<Icon> &arrowIcon)
-        : Widget("vmenu"), _style(style)
+    VMenu::VMenu(std::initializer_list<ItemGroup> itemgroups, const style::VMenu &style) : Widget("vmenu"), _style(style)
     {
         for (auto &group : itemgroups)
         {
@@ -411,7 +408,7 @@ namespace uikit
             for (auto &item : group)
             {
                 if (item.submenu)
-                    g.emplace_front(new BeginMenu(item.label, arrowIcon, _style), item.submenu);
+                    g.emplace_front(new BeginMenu(item.label, _style), item.submenu);
                 else
                     g.emplace_front(new MenuItem(item.label, item.shortcut, _style), nullptr, item.callback,
                                     item.beforeRender);

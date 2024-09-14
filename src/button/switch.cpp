@@ -3,7 +3,10 @@
 
 namespace uikit
 {
-    style::Switch style::switchStyle;
+    namespace style
+    {
+        Switch *g_StyleSwitch = nullptr;
+    } // namespace style
 
     void Switch::render()
     {
@@ -13,7 +16,13 @@ namespace uikit
         ImGuiID id = window->GetID(name.c_str());
         ImVec2 p = ImGui::GetCursorScreenPos();
         ImGuiContext &g = *GImGui;
-        ImRect bb(p, p + ImVec2(width, height));
+
+        f32 frame_height = ImGui::GetFrameHeight();
+        f32 circle_radius = height / 2;
+        f32 circle_diameter = height;
+        f32 height_diff = (frame_height > circle_diameter) ? (frame_height - circle_diameter) / 2.0f : 0.0f;
+        ImRect bb(p + ImVec2(0, height_diff), p + ImVec2(width, circle_diameter + height_diff));
+
         bool held;
         ImGuiButtonFlags buttonFlags = 0;
         buttonFlags |= ImGuiButtonFlags_NoSetKeyOwner;
@@ -26,18 +35,23 @@ namespace uikit
             ImGui::MarkItemEdited(id);
         }
 
-        ImU32 col = ImGui::GetColorU32(_toggled ? style::switchStyle.bgColorActive : style::switchStyle.bgColor);
+        ImU32 col = ImGui::GetColorU32(_toggled ? style::g_StyleSwitch->colorActive : style::g_StyleSwitch->bg);
         ImDrawList *draw_list = ImGui::GetWindowDrawList();
-        draw_list->AddRectFilled(bb.Min, bb.Max, col, height);
+        draw_list->AddRectFilled(bb.Min, bb.Max, col, circle_radius);
 
-        f32 circle_radius = height / 2;
         ImVec2 circle_center =
             _toggled ? bb.Max - ImVec2(circle_radius, circle_radius) : bb.Min + ImVec2(circle_radius, circle_radius);
-        draw_list->AddCircleFilled(circle_center, circle_radius, style::switchStyle.switchColor);
+        draw_list->AddCircleFilled(circle_center, circle_radius, style::g_StyleSwitch->color);
+        ImGui::ItemSize(bb);
 
         const ImVec2 label_size = ImGui::CalcTextSize(name.c_str(), NULL, true);
-        ImVec2 label_pos = ImVec2(bb.Max.x + g.Style.ItemSpacing.x + g.Style.ItemInnerSpacing.x, bb.Min.y);
-        if (label_size.x > 0.0f) ImGui::RenderText(label_pos, name.c_str());
+        if (label_size.x > 0.0f)
+        {
+            f32 text_vertical_offset = (bb.GetHeight() - label_size.y) / 2.0f;
+            ImVec2 label_pos{bb.Max.x + g.Style.ItemSpacing.x + g.Style.ItemInnerSpacing.x,
+                             bb.Min.y + text_vertical_offset};
+            ImGui::RenderText(label_pos, name.c_str());
+        }
     }
 
 } // namespace uikit

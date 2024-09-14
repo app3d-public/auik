@@ -2,6 +2,7 @@
 #define UIKIT_WIDGETS_MODAL_H
 
 #include <core/event.hpp>
+#include <core/locales.hpp>
 #include <functional>
 #include <string>
 #include <uikit/button/switch.hpp>
@@ -22,8 +23,8 @@ namespace uikit
             f32 width;
             f32 borderSize;
             ImVec4 borderColor;
-            std::shared_ptr<Icon> warningIcon;
-            std::shared_ptr<Icon> errorIcon;
+            Icon *warningIcon = nullptr;
+            Icon *errorIcon = nullptr;
         };
     } // namespace style
 
@@ -35,7 +36,7 @@ namespace uikit
             window::popup::Style level;
             std::string header;
             std::string message;
-            DArray<std::pair<window::popup::Buttons, std::function<void()>>> buttons;
+            astl::vector<std::pair<window::popup::Buttons, std::function<void()>>> buttons;
             bool preventClose = false;
         };
 
@@ -49,11 +50,6 @@ namespace uikit
 
         void push(const Message &message);
 
-        void bindLocaleCallback(const std::function<std::string(window::popup::Buttons)> &callback)
-        {
-            _btnLocaleCallback = callback;
-        }
-
         void bindEvents();
 
         bool empty() const { return _messages.empty(); }
@@ -62,17 +58,15 @@ namespace uikit
 
     private:
         events::Manager *e;
-        Map<std::string, DArray<Message>> _messages;
+        astl::map<std::string, astl::vector<Message>> _messages;
         enum class ChangeState
         {
             normal,
             clicked,
             continuing,
         } state{ChangeState::normal};
-        Switch _switch{"Apply All"};
+        Switch _switch{_("UI:Switch:All")};
         int _preventCloseCount{0};
-
-        std::function<std::string(window::popup::Buttons)> _btnLocaleCallback{nullptr};
     };
 } // namespace uikit
 

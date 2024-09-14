@@ -1,25 +1,17 @@
 #pragma once
 
 #include <core/api.hpp>
+#include <core/std/basic_types.hpp>
+#include "../style.hpp" // IWYU pragma: keep
 #include "../widget.hpp"
 
 namespace uikit
 {
-    namespace style
-    {
-        extern APPLIB_API struct Switch
-        {
-            ImVec4 bgColor;
-            ImColor switchColor;
-            ImVec4 bgColorActive;
-        } switchStyle;
-    } // namespace style
-
     class APPLIB_API Switch final : public Widget
     {
     public:
-        static constexpr f32 width = 40.0f;
-        static constexpr f32 height = 20.0f;
+        static constexpr f32 width = 35.0f;
+        static constexpr f32 height = 18.0f;
 
         Switch(const std::string &label, bool toogled = false)
             : Widget(label), _pressed(false), _hovered(false), _toggled(toogled)
@@ -40,4 +32,20 @@ namespace uikit
         bool _hovered;
         bool _toggled;
     };
+
+    namespace style
+    {
+        extern APPLIB_API struct Switch
+        {
+            ImVec4 bg;
+            ImColor color;
+            ImVec4 colorActive;
+        } *g_StyleSwitch;
+
+        template <>
+        inline void registerStyle(Switch *style)
+        {
+            g_StyleSwitch = style;
+        }
+    } // namespace style
 } // namespace uikit

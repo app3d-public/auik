@@ -5,7 +5,6 @@
 #include <core/event.hpp>
 #include <core/std/basic_types.hpp>
 #include <core/std/enum.hpp>
-#include "../icon/icon.hpp"
 #include "../selectable/selectable.hpp"
 
 namespace uikit
@@ -57,7 +56,7 @@ namespace uikit
     class APPLIB_API TabBar : public Widget
     {
     public:
-        DArray<TabItem> items;
+        astl::vector<TabItem> items;
         u8 activeIndex = 0;
 
         enum class FlagBits : u8
@@ -71,14 +70,14 @@ namespace uikit
 
         struct Style
         {
-            std::shared_ptr<Icon> comboIcon;
             ImVec2 size;
             f32 scrollOffsetLR;
             f32 scrollOffsetRL;
         };
 
-        TabBar(const std::string &id, events::Manager *e, DisposalQueue &disposalQueue, const DArray<TabItem> &items,
-               Flags flags = FlagBits::none, const Style &style = {}, bool mainTabbar = false)
+        TabBar(const std::string &id, events::Manager *e, DisposalQueue &disposalQueue,
+               const astl::vector<TabItem> &items, Flags flags = FlagBits::none, const Style &style = {},
+               bool mainTabbar = false)
             : Widget(id),
               items(items),
               e(e),
@@ -119,13 +118,13 @@ namespace uikit
         Style _style;
         struct DragData
         {
-            std::optional<DArray<TabItem>::iterator> it{std::nullopt};
+            std::optional<astl::vector<TabItem>::iterator> it{std::nullopt};
             ImVec2 pos;
             f32 posOffset{0};
             f32 offset{0};
         } _drag;
 
-        bool renderTab(DArray<TabItem>::iterator &begin, int index);
+        bool renderTab(astl::vector<TabItem>::iterator &begin, int index);
         void renderDragged();
         void renderCombobox();
     };
@@ -137,8 +136,8 @@ namespace uikit
         bool createOnEmpty;
         bool batch;
 
-        TabRemoveEvent(const std::string &name, const TabItem &tab, bool confirmed = false,
-                       bool createOnEmpty = true, bool batch = false)
+        TabRemoveEvent(const std::string &name, const TabItem &tab, bool confirmed = false, bool createOnEmpty = true,
+                       bool batch = false)
             : IEvent(name), tab(tab), confirmed(confirmed), createOnEmpty(createOnEmpty), batch(batch)
         {
         }
@@ -146,11 +145,11 @@ namespace uikit
 
     struct TabChangeEvent : public events::IEvent
     {
-        DArray<TabItem>::iterator prev;
-        DArray<TabItem>::iterator current;
+        astl::vector<TabItem>::iterator prev;
+        astl::vector<TabItem>::iterator current;
 
-        TabChangeEvent(const std::string &name, const DArray<TabItem>::iterator &prev,
-                       const DArray<TabItem>::iterator &current)
+        TabChangeEvent(const std::string &name, const astl::vector<TabItem>::iterator &prev,
+                       const astl::vector<TabItem>::iterator &current)
             : IEvent(name), prev(prev), current(current)
         {
         }

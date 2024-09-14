@@ -1,6 +1,8 @@
 #ifndef UIKIT_WIDGETS_TEXT_H
 #define UIKIT_WIDGETS_TEXT_H
 
+#include <core/api.hpp>
+#include <core/std/basic_types.hpp>
 #include "../widget.hpp"
 
 namespace uikit
@@ -32,6 +34,13 @@ namespace uikit
 
         void renderText(const ImVec2 text_pos);
     };
+
+    inline f32 getMaxTextWidth(std::string items[], size_t size)
+    {
+        f32 max = 0;
+        for (size_t i = 0; i < size; ++i) max = std::max(max, ImGui::CalcTextSize(items[i].c_str()).x);
+        return max;
+    }
 } // namespace uikit
 
 #endif

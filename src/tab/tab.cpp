@@ -1,7 +1,7 @@
 #include <core/disposal_queue.hpp>
 #include <imgui/imgui_internal.h>
 #include <uikit/button/button.hpp>
-#include <uikit/combobox/combobox.hpp>
+#include <uikit/button/combobox.hpp>
 #include <uikit/tab/tab.hpp>
 #include <window/window.hpp>
 #include "imgui.h"
@@ -11,7 +11,10 @@ namespace uikit
     class TabMemCache : public MemCache
     {
     public:
-        TabMemCache(u8 *activeIndex, DArray<TabItem> *items) : activeIndex(activeIndex), _items(items) { ++itemsLeft; }
+        TabMemCache(u8 *activeIndex, astl::vector<TabItem> *items) : activeIndex(activeIndex), _items(items)
+        {
+            ++itemsLeft;
+        }
 
         virtual ~TabMemCache() = default;
 
@@ -25,7 +28,7 @@ namespace uikit
         static size_t offset;
         static size_t itemsLeft;
         u8 *activeIndex;
-        DArray<TabItem> *_items;
+        astl::vector<TabItem> *_items;
 
         virtual void _free() = 0;
     };
@@ -33,7 +36,8 @@ namespace uikit
     class AddMemCache : public TabMemCache
     {
     public:
-        AddMemCache(TabItem tab, u8 *activeIndex, DArray<TabItem> *items) : TabMemCache(activeIndex, items), _tab(tab)
+        AddMemCache(TabItem tab, u8 *activeIndex, astl::vector<TabItem> *items)
+            : TabMemCache(activeIndex, items), _tab(tab)
         {
         }
 
@@ -51,7 +55,7 @@ namespace uikit
     class RemoveMemCache : public TabMemCache
     {
     public:
-        RemoveMemCache(const DArray<TabItem>::iterator &it, u8 *activeIndex, DArray<TabItem> *items)
+        RemoveMemCache(const astl::vector<TabItem>::iterator &it, u8 *activeIndex, astl::vector<TabItem> *items)
             : TabMemCache(activeIndex, items), _it(it)
         {
         }
@@ -64,7 +68,7 @@ namespace uikit
         }
 
     private:
-        DArray<TabItem>::iterator _it;
+        astl::vector<TabItem>::iterator _it;
     };
 
     size_t TabMemCache::offset = 0;
@@ -127,7 +131,7 @@ namespace uikit
         return outputSize;
     }
 
-    bool TabBar::renderTab(DArray<TabItem>::iterator &begin, int index)
+    bool TabBar::renderTab(astl::vector<TabItem>::iterator &begin, int index)
     {
         if (_drag.it != begin)
         {
@@ -212,7 +216,7 @@ namespace uikit
     {
         size_t index = 0;
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-        if (beginCombo("##v", nullptr, ImGuiComboFlags_NoPreview | ImGuiComboFlags_HeightLargest, _style.comboIcon))
+        if (beginCombo("##v", nullptr, ImGuiComboFlags_NoPreview | ImGuiComboFlags_HeightLargest))
         {
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 6));
             for (auto &item : items)
@@ -262,8 +266,8 @@ namespace uikit
             // Pre-calculate available width if not scrollable
             if (!isScrollable)
             {
-                f32 arrowWidth = _style.comboIcon->width() + style.ItemSpacing.x * 2.0f + style.FramePadding.x * 2.0f +
-                                 style.ItemInnerSpacing.x * 2.0f;
+                f32 arrowWidth = style::g_StyleComboBox->arrowIcon->width() + style.ItemSpacing.x * 2.0f +
+                                 style.FramePadding.x * 2.0f + style.ItemInnerSpacing.x * 2.0f;
                 availableWidth -= arrowWidth;
             }
 

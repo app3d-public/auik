@@ -1,9 +1,24 @@
-#include <uikit/widget.hpp>
-#include <uikit/button/button.hpp>
 #include <imgui/imgui_internal.h>
+#include <uikit/button/button.hpp>
+#include <uikit/widget.hpp>
 
 namespace uikit
 {
+    namespace style
+    {
+        Button *g_StyleButton = nullptr;
+
+        template <>
+        void registerStyle<Button>(Button *style)
+        {
+            g_StyleButton = style;
+            auto &colors = ImGui::GetStyle().Colors;
+            colors[ImGuiCol_Button] = style->color;
+            colors[ImGuiCol_ButtonActive] = style->colorActive;
+            colors[ImGuiCol_ButtonHovered] = style->colorHovered;
+        }
+    } // namespace style
+
     bool closeButton(ImGuiID id, const ImVec2 &pos)
     {
         ImGuiContext &g = *GImGui;
@@ -15,8 +30,7 @@ namespace uikit
         const ImRect bb(pos, pos + ImVec2(g.FontSize, g.FontSize));
         ImRect bb_interact = bb;
         const float area_to_visible_ratio = window->OuterRectClipped.GetArea() / bb.GetArea();
-        if (area_to_visible_ratio < 1.5f)
-            bb_interact.Expand(ImTrunc(bb_interact.GetSize() * -0.25f));
+        if (area_to_visible_ratio < 1.5f) bb_interact.Expand(ImTrunc(bb_interact.GetSize() * -0.25f));
 
         // Tweak 2: We intentionally allow interaction when clipped so that a mechanical Alt,Right,Activate sequence can
         // always close a window. (this isn't the common behavior of buttons, but it doesn't affect the user because
@@ -25,15 +39,13 @@ namespace uikit
 
         bool hovered, held;
         bool pressed = ImGui::ButtonBehavior(bb_interact, id, &hovered, &held);
-        if (is_clipped)
-            return pressed;
+        if (is_clipped) return pressed;
 
         // Render
         // FIXME: Clarify this mess
         ImU32 col = ImGui::GetColorU32(held ? ImGuiCol_ButtonActive : ImGuiCol_ButtonHovered);
         ImVec2 center = bb.GetCenter();
-        if (hovered)
-            window->DrawList->AddCircleFilled(center, ImMax(2.0f, g.FontSize * 0.5f + 1.0f), col);
+        if (hovered) window->DrawList->AddCircleFilled(center, ImMax(2.0f, g.FontSize * 0.5f + 1.0f), col);
 
         const float scale = 0.75f;
         float cross_extent = g.FontSize * scale * 0.5f * 0.7071f - 1.0f;
@@ -46,4 +58,42 @@ namespace uikit
 
         return pressed;
     }
-} // namespace ui
+
+    void rightControls(const astl::vector<std::string> &buttons, int *selected, f32 y_offset)
+    {
+        ImGui::SetCursorPosY(y_offset == 0.0f ? ImGui::GetCursorPosY() + 10.0f : y_offset);
+        auto &bStyle = *uikit::style::g_StyleButton;
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, bStyle.padding);
+        ImGui::PushStyleColor(ImGuiCol_Button, {0, 0, 0, 0});
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, bStyle.colorActive);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, bStyle.colorHovered);
+
+        f32 offsetX{0};
+        auto width = ImGui::GetWindowWidth();
+        auto &style = ImGui::GetStyle();
+
+        f32 totalWidth = 0.0f;
+        for (int i = 0; i < buttons.size(); ++i)
+        {
+            f32 btnWidth = ImGui::CalcTextSize(buttons[i].c_str()).x + bStyle.padding.x * 2;
+            if (i < buttons.size() - 1) btnWidth += style.ItemSpacing.x;
+            totalWidth += btnWidth;
+        }
+
+        f32 startX = width - totalWidth - style.WindowPadding.x;
+        ImGui::SetCursorPosX(startX);
+
+        for (int i = 0; i < buttons.size(); ++i)
+        {
+            bool isLast = i == buttons.size() - 1;
+            if (isLast) ImGui::PushStyleColor(ImGuiCol_Button, bStyle.color);
+            if (ImGui::Button(buttons[i].c_str()) && selected) *selected = i;
+            if (isLast) ImGui::PopStyleColor();
+            if (i < buttons.size() - 1) ImGui::SameLine();
+        }
+
+        ImGui::SetCursorPosY(ImGui::GetCursorPosY());
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(3);
+    }
+} // namespace uikit

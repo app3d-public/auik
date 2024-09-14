@@ -72,7 +72,7 @@ namespace uikit
         IM_ASSERT(_bd != nullptr);
 
         // Setup display size (every frame to accommodate for window resizing)
-        Point2D dimensions = _bd->Window->dimensions();
+        astl::point2D dimensions = _bd->Window->dimensions();
         io.DisplaySize = ImVec2((f32)dimensions.x, (f32)dimensions.y);
         if (dimensions.x > 0 && dimensions.y > 0) io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
 

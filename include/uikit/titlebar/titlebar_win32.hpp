@@ -47,7 +47,7 @@ namespace uikit
             ImVec2 submenuPadding;
             ImVec4 tabActiveColor;
             ImVec4 tabBackgroundColor;
-            std::shared_ptr<Icon> icons[IconMaxValue];
+            Icon *icons[IconMaxValue];
         } style;
         TabBar tabbar;
 
@@ -63,7 +63,7 @@ namespace uikit
     private:
         window::Window &_window;
         events::Manager *e;
-        Point2D _dragOffset;
+        astl::point2D _dragOffset;
         ImVec2 _controlSize;
         f32 _captionWidth;
         f32 _clientWidth;
