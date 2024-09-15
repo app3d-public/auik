@@ -162,7 +162,7 @@ namespace uikit
         beginMenu();
         if (_selected)
         {
-            _submenu.render();
+            submenu.render();
             ImGui::EndMenu();
         }
     }
@@ -400,17 +400,18 @@ namespace uikit
         if (menuset_is_open) ImGui::PopItemFlag();
     }
 
-    VMenu::VMenu(std::initializer_list<ItemGroup> itemgroups, const style::VMenu &style) : Widget("vmenu"), _style(style)
+    template <typename Container>
+    void VMenu::init(const Container &itemgroups)
     {
-        for (auto &group : itemgroups)
+        for (const auto &group : itemgroups)
         {
             _ItemGroup g;
-            for (auto &item : group)
+            for (const auto &item : group)
             {
                 if (item.submenu)
-                    g.emplace_front(new BeginMenu(item.label, _style), item.submenu);
+                    g.emplace_front(new BeginMenu(item.label, *style), item.submenu);
                 else
-                    g.emplace_front(new MenuItem(item.label, item.shortcut, _style), nullptr, item.callback,
+                    g.emplace_front(new MenuItem(item.label, item.shortcut, *style), nullptr, item.callback,
                                     item.beforeRender);
             }
             g.reverse();
@@ -419,9 +420,20 @@ namespace uikit
         _itemGroups.reverse();
     }
 
+    VMenu::VMenu(std::initializer_list<ItemGroup> itemgroups, style::VMenu *style)
+        : Widget("vmenu"), style(style)
+    {
+        init(itemgroups);
+    }
+
+    VMenu::VMenu(const astl::vector<ItemGroup> &itemgroups, style::VMenu *style) : Widget("vmenu"), style(style)
+    {
+        init(itemgroups);
+    }
+
     void VMenu::render()
     {
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, _style.padding);
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style->padding);
         auto &style = ImGui::GetStyle();
         auto start = _itemGroups.begin();
         auto end = _itemGroups.end();

@@ -1,7 +1,8 @@
 #ifndef UIKIT_WIDGETS_MENU_H
 #define UIKIT_WIDGETS_MENU_H
 
-#include <core/std/forward_list.hpp>
+#include <core/std/list.hpp>
+#include <core/std/vector.hpp>
 #include <functional>
 #include <imgui/imgui_internal.h>
 #include "../selectable/selectable.hpp"
@@ -34,7 +35,7 @@ namespace uikit
             std::function<void(Selectable *menu)> beforeRender{nullptr};
         };
 
-        using _ItemGroup = astl::forward_list<_Item>;
+        using _ItemGroup = astl::list<_Item>;
 
     public:
         struct Item
@@ -45,19 +46,40 @@ namespace uikit
             std::string shortcut;
             VMenu *submenu{nullptr};
         };
+        style::VMenu *style;
 
-        using ItemGroup = astl::forward_list<Item>;
+        using ItemGroup = astl::list<Item>;
 
-        VMenu(std::initializer_list<ItemGroup> itemgroups, const style::VMenu &style);
+        VMenu(std::initializer_list<ItemGroup> itemgroups, style::VMenu *style);
+
+        VMenu(const astl::vector<ItemGroup> &itemgroups, style::VMenu *style);
+
+        VMenu(style::VMenu *style = nullptr) : Widget("vmenu"), style(style) {}
 
         virtual void render() override;
 
         void destroyItems();
 
-    private:
-        astl::forward_list<_ItemGroup> _itemGroups;
+        template <typename Container>
+        APPLIB_API void init(const Container &itemgroups);
 
-        const style::VMenu &_style;
+        bool empty() const { return _itemGroups.empty(); }
+
+        void clear()
+        {
+            for (auto &g : _itemGroups)
+            {
+                for (auto &item : g)
+                {
+                    delete item.menu;
+                    delete item.submenu;
+                }
+            }
+            _itemGroups.clear();
+        }
+
+    private:
+        astl::list<_ItemGroup> _itemGroups;
     };
 
     class APPLIB_API BeginMenu final : public Selectable
@@ -119,24 +141,21 @@ namespace uikit
             {
             }
         };
+        VMenu submenu;
 
-        HMenu(const std::string &label, const VMenu &submenu, const Style &style)
+        HMenu(const std::string &label, const Style &style, const VMenu &submenu = {})
             : Selectable(label, false, style.rounding,
                          ImGuiSelectableFlags_NoHoldingActiveID | ImGuiSelectableFlags_NoSetKeyOwner |
                              ImGuiSelectableFlags_SelectOnClick | ImGuiSelectableFlags_DontClosePopups),
-              _submenu(submenu)
+              submenu(submenu)
         {
         }
 
-        void destroy() { _submenu.destroyItems(); }
-
-        VMenu &submenu() { return _submenu; }
+        void destroy() { submenu.destroyItems(); }
 
         virtual void render() override;
 
     private:
-        VMenu _submenu;
-
         void beginMenu();
     };
 
@@ -149,9 +168,7 @@ namespace uikit
             style::VMenu submenu;
         };
 
-        MenuBar(const astl::forward_list<HMenu> &items, Style *style) : Widget("menubar"), _style(style), _items(items)
-        {
-        }
+        MenuBar(const astl::list<HMenu> &items, Style *style) : Widget("menubar"), _style(style), _items(items) {}
 
         virtual ~MenuBar();
 
@@ -167,7 +184,7 @@ namespace uikit
 
     protected:
         Style *_style;
-        astl::forward_list<HMenu> _items;
+        astl::list<HMenu> _items;
 
         MenuBar(MenuBar &&other, const std::string &id) noexcept
             : Widget(id), _style(other._style), _items(std::move(other._items))
