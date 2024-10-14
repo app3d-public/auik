@@ -62,6 +62,7 @@ namespace uikit
 
         virtual void _free() override
         {
+            if (*activeIndex == _items->size() - 1 && *activeIndex != 0) --(*activeIndex);
             _items->erase(_it + offset);
             --offset;
         }
@@ -346,7 +347,6 @@ namespace uikit
         auto it = std::find_if(items.begin(), items.end(), [&](const TabItem &item) { return item.name == tab.name; });
         if (it != items.end())
         {
-            if (activeIndex == items.size() - 1 && activeIndex != 0) --activeIndex;
             _disposalQueue.push(new RemoveMemCache(it, &activeIndex, &items));
             return true;
         }
