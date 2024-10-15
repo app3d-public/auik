@@ -21,19 +21,14 @@ namespace uikit
 
         using Flags = ::Flags<FlagBits>;
 
-        std::string id;
+        u64 id;
 
-        TabItem(const std::string &id, const std::string &label, const std::function<void()> &onRender = nullptr,
+        TabItem(u64 id, const std::string &label, const std::function<void()> &onRender = nullptr,
                 Flags flags = FlagBits::none, f32 rounding = 0.0f)
             : Selectable(label, false, rounding, ImGuiSelectableFlags_AllowItemOverlap, {0.0f, 0.0f}, true),
               id(id),
               _onRender(onRender),
               _tabFlags(flags)
-        {
-        }
-
-        TabItem(const std::string &id, const std::function<void()> &onRender = nullptr, Flags flags = FlagBits::none)
-            : TabItem(id, id, onRender, flags)
         {
         }
 
@@ -157,13 +152,12 @@ namespace uikit
 
     struct TabInfoEvent : public events::IEvent
     {
-        std::string fullname;
-        std::string cn;
+        std::string displayName;
         TabItem::Flags flags;
 
-        TabInfoEvent(const std::string &name, const std::string &fullname = "", const std::string &cn = "",
+        TabInfoEvent(const std::string &name, const std::string &displayName = "",
                      TabItem::Flags flags = TabItem::FlagBits::none)
-            : IEvent(name), fullname(fullname), cn(cn), flags(flags)
+            : IEvent(name), displayName(displayName), flags(flags)
         {
         }
     };

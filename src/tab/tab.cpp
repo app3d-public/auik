@@ -369,11 +369,7 @@ namespace uikit
                     items[activeIndex].flags() |= TabItem::FlagBits::unsaved;
                 else
                     items[activeIndex].flags() &= ~TabItem::FlagBits::unsaved;
-                if (!e.fullname.empty())
-                {
-                    items[activeIndex].name = e.cn;
-                    items[activeIndex].id = e.fullname;
-                }
+                items[activeIndex].name = e.displayName;
             });
         }
     }
