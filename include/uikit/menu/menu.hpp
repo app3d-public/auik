@@ -50,9 +50,10 @@ namespace uikit
 
         using ItemGroup = astl::list<Item>;
 
-        VMenu(std::initializer_list<ItemGroup> itemgroups, style::VMenu *style);
-
-        VMenu(const astl::vector<ItemGroup> &itemgroups, style::VMenu *style);
+        VMenu(const astl::vector<ItemGroup> &itemgroups, style::VMenu *style) : Widget("vmenu"), style(style)
+        {
+            init(itemgroups);
+        }
 
         VMenu(style::VMenu *style = nullptr) : Widget("vmenu"), style(style) {}
 
@@ -71,8 +72,8 @@ namespace uikit
             {
                 for (auto &item : g)
                 {
-                    delete item.menu;
-                    delete item.submenu;
+                    astl::release(item.menu);
+                    astl::release(item.submenu);
                 }
             }
             _itemGroups.clear();

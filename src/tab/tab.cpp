@@ -347,13 +347,20 @@ namespace uikit
         auto it = std::find_if(items.begin(), items.end(), [&](const TabItem &item) { return item.name == tab.name; });
         if (it != items.end())
         {
-            _disposalQueue.push(new RemoveMemCache(it, &activeIndex, &items));
+            _disposalQueue.push(astl::alloc<RemoveMemCache>(it, &activeIndex, &items));
             return true;
         }
         return false;
     }
 
-    void TabBar::newTab(const TabItem &tab) { _disposalQueue.push(new AddMemCache(tab, &activeIndex, &items)); }
+    void TabBar::newTab(const TabItem &tab)
+    {
+        auto it = std::find_if(items.begin(), items.end(), [&](const TabItem &item) { return item.id == tab.id; });
+        if (it != items.end())
+            activeIndex = it - items.begin();
+        else
+            _disposalQueue.push(astl::alloc<AddMemCache>(tab, &activeIndex, &items));
+    }
 
     void TabBar::bindEvents()
     {
@@ -369,7 +376,7 @@ namespace uikit
                     items[activeIndex].flags() |= TabItem::FlagBits::unsaved;
                 else
                     items[activeIndex].flags() &= ~TabItem::FlagBits::unsaved;
-                items[activeIndex].name = e.displayName;
+                if (!e.displayName.empty()) items[activeIndex].name = e.displayName;
             });
         }
     }

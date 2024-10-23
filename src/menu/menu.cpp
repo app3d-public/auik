@@ -173,8 +173,8 @@ namespace uikit
         {
             for (auto &item : group)
             {
-                delete item.menu;
-                if (item.submenu) delete item.submenu;
+                astl::release(item.menu);
+                astl::release(item.submenu);
             }
         }
     }
@@ -409,26 +409,15 @@ namespace uikit
             for (const auto &item : group)
             {
                 if (item.submenu)
-                    g.emplace_front(new BeginMenu(item.label, *style), item.submenu);
+                    g.emplace_front(astl::alloc<BeginMenu>(item.label, *style), item.submenu);
                 else
-                    g.emplace_front(new MenuItem(item.label, item.shortcut, *style), nullptr, item.callback,
+                    g.emplace_front(astl::alloc<MenuItem>(item.label, item.shortcut, *style), nullptr, item.callback,
                                     item.beforeRender);
             }
             g.reverse();
             _itemGroups.emplace_front(g);
         }
         _itemGroups.reverse();
-    }
-
-    VMenu::VMenu(std::initializer_list<ItemGroup> itemgroups, style::VMenu *style)
-        : Widget("vmenu"), style(style)
-    {
-        init(itemgroups);
-    }
-
-    VMenu::VMenu(const astl::vector<ItemGroup> &itemgroups, style::VMenu *style) : Widget("vmenu"), style(style)
-    {
-        init(itemgroups);
     }
 
     void VMenu::render()
@@ -501,7 +490,7 @@ namespace uikit
     MenuBar::~MenuBar()
     {
         for (auto &item : _items) item.destroy();
-        if (_style) delete _style;
+        astl::release(_style);
     }
 
 } // namespace uikit
