@@ -31,7 +31,7 @@ namespace uikit
         ImGui::ItemSize(total_bb, style.FramePadding.y);
 
         const bool is_visible = ImGui::ItemAdd(total_bb, id);
-        const bool is_multi_select = (g.LastItemData.InFlags & ImGuiItemFlags_IsMultiSelect) != 0;
+        const bool is_multi_select = (g.LastItemData.ItemFlags & ImGuiItemFlags_IsMultiSelect) != 0;
 
         bool hovered, held;
         bool pressed = ImGui::ButtonBehavior(total_bb, id, &hovered, &held);

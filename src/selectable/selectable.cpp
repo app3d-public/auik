@@ -13,9 +13,8 @@ namespace uikit
         if (flags & ImGuiSelectableFlags_SelectOnRelease) buttonFlags |= ImGuiButtonFlags_PressedOnRelease;
         if (flags & ImGuiSelectableFlags_AllowDoubleClick)
             buttonFlags |= ImGuiButtonFlags_PressedOnClickRelease | ImGuiButtonFlags_PressedOnDoubleClick;
-        if ((flags & ImGuiSelectableFlags_AllowOverlap) || (g.LastItemData.InFlags & ImGuiItemFlags_AllowOverlap))
+        if ((flags & ImGuiSelectableFlags_AllowOverlap) || (g.LastItemData.ItemFlags & ImGuiItemFlags_AllowOverlap))
             buttonFlags |= ImGuiButtonFlags_AllowOverlap;
-
         return buttonFlags;
     }
 
@@ -134,13 +133,15 @@ namespace uikit
             g.NavJustMovedToFocusScopeId == g.CurrentFocusScopeId)
             if (g.NavJustMovedToId == id) params.selected = pressed = true;
 
+        // Update NavId when clicking or when Hovering (this doesn't happen on most widgets), so navigation can be
+        // resumed with keyboard/gamepad
         if (pressed || (hovered && (params.flags & ImGuiSelectableFlags_SetNavIdOnHover)))
         {
-            if (!g.NavDisableMouseHover && g.NavWindow == window && g.NavLayer == window->DC.NavLayerCurrent)
+            if (!g.NavHighlightItemUnderNav && g.NavWindow == window && g.NavLayer == window->DC.NavLayerCurrent)
             {
                 ImGui::SetNavID(id, window->DC.NavLayerCurrent, g.CurrentFocusScopeId,
                                 ImGui::WindowRectAbsToRel(window, bb)); // (bb == NavRect)
-                g.NavDisableHighlight = true;
+                if (g.IO.ConfigNavCursorVisibleAuto) g.NavCursorVisible = false;
             }
         }
         if (pressed) ImGui::MarkItemEdited(id);
@@ -174,7 +175,7 @@ namespace uikit
         // Automatically close popups
         if (pressed && (window->Flags & ImGuiWindowFlags_Popup) &&
             !(params.flags & ImGuiSelectableFlags_NoAutoClosePopups) &&
-            (g.LastItemData.InFlags & ImGuiItemFlags_AutoClosePopups))
+            (g.LastItemData.ItemFlags & ImGuiItemFlags_AutoClosePopups))
             ImGui::CloseCurrentPopup();
         if (disabled_item && !disabled_global) ImGui::EndDisabled();
         if (params.pressed) *params.pressed = pressed;

@@ -100,7 +100,7 @@ namespace uikit
         ImGui::PopStyleVar();
         window->DC.CursorPos.x += IM_TRUNC(style.ItemSpacing.x * (-1.0f + 0.5f));
 
-        _hover = (g.HoveredId == id) && !g.NavDisableMouseHover;
+        _hover = (g.HoveredId == id) && enabled && !g.NavHighlightItemUnderNav;
         if (menuset_is_open) ImGui::PopItemFlag();
 
         bool want_open = false;
@@ -251,7 +251,7 @@ namespace uikit
         ImGui::RenderText(text_pos, labelPtr);
         _style.arrowRight->render(arrowPos);
 
-        _hover = (g.HoveredId == id) && !g.NavDisableMouseHover;
+        _hover = (g.HoveredId == id) && enabled && !g.NavHighlightItemUnderNav;
         if (menuset_is_open) ImGui::PopItemFlag();
 
         bool want_open = false;
@@ -288,8 +288,8 @@ namespace uikit
         // moving over void. Perhaps we should extend the triangle check to a larger polygon. (Remember to test this
         // on BeginPopup("A")->BeginMenu("B") sequence which behaves slightly differently as B isn't a Child of A
         // and hovering isn't shared.)
-        if (_selected && !_hover && g.HoveredWindow == window && !moving_toward_child_menu && !g.NavDisableMouseHover &&
-            g.ActiveId == 0)
+        if (_selected && !_hover && g.HoveredWindow == window && !moving_toward_child_menu &&
+            !g.NavHighlightItemUnderNav && g.ActiveId == 0)
             want_close = true;
 
         // Open
