@@ -1,6 +1,6 @@
 #pragma once
 
-#include <core/std/basic_types.hpp>
+#include <astl/basic_types.hpp>
 #include <imgui/imgui.h>
 #include <uikit/icon/icon.hpp>
 
@@ -15,11 +15,12 @@ namespace uikit
             f32 windowRounding;
             f32 frameRounding;
             ImVec2 itemSpacing;
-        } *g_StyleGeneral;
+        } g_General;
 
         extern APPLIB_API struct Colors
         {
             ImVec4 windowBg;
+            ImVec4 popupBg;
             ImVec4 frameBg;
             ImVec4 frameHovered;
             ImVec4 frameActive;
@@ -27,15 +28,15 @@ namespace uikit
             ImVec4 headerHovered;
             ImVec4 headerActive;
             ImVec4 border;
-        } *g_StyleColors;
+        } g_Colors;
 
         template <typename T>
-        APPLIB_API void registerStyle(T *style);
+        APPLIB_API void bindStyle();
 
         template <>
-        APPLIB_API void registerStyle<General>(General *style);
+        APPLIB_API void bindStyle<General>();
 
         template <>
-        APPLIB_API void registerStyle<Colors>(Colors *style);
+        APPLIB_API void bindStyle<Colors>();
     } // namespace style
 } // namespace uikit

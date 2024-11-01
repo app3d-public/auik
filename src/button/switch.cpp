@@ -5,7 +5,7 @@ namespace uikit
 {
     namespace style
     {
-        Switch *g_StyleSwitch = nullptr;
+        Switch g_Switch;
     } // namespace style
 
     void Switch::render()
@@ -35,13 +35,13 @@ namespace uikit
             ImGui::MarkItemEdited(id);
         }
 
-        ImU32 col = ImGui::GetColorU32(_toggled ? style::g_StyleSwitch->colorActive : style::g_StyleSwitch->bg);
+        ImU32 col = ImGui::GetColorU32(_toggled ? style::g_Switch.colorActive : style::g_Switch.bg);
         ImDrawList *draw_list = ImGui::GetWindowDrawList();
         draw_list->AddRectFilled(bb.Min, bb.Max, col, circle_radius);
 
         ImVec2 circle_center =
             _toggled ? bb.Max - ImVec2(circle_radius, circle_radius) : bb.Min + ImVec2(circle_radius, circle_radius);
-        draw_list->AddCircleFilled(circle_center, circle_radius, style::g_StyleSwitch->color);
+        draw_list->AddCircleFilled(circle_center, circle_radius, style::g_Switch.color);
         ImGui::ItemSize(bb);
 
         const ImVec2 label_size = ImGui::CalcTextSize(name.c_str(), NULL, true);

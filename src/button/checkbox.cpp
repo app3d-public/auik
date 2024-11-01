@@ -6,7 +6,7 @@ namespace uikit
 {
     namespace style
     {
-        CheckBox *g_StyleCheckBox = nullptr;
+        CheckBox g_CheckBox;
     } // namespace style
 
     APPLIB_API bool checkbox(const char *label, bool &value)
@@ -19,7 +19,7 @@ namespace uikit
         const ImGuiID id = window->GetID(label);
         const ImVec2 label_size = ImGui::CalcTextSize(label, NULL, true);
 
-        const f32 square_sz = style::g_StyleCheckBox->size;
+        const f32 square_sz = style::g_CheckBox.size;
         const f32 frame_height = ImGui::GetFrameHeight();
         const f32 vertical_offset = (frame_height - square_sz) * 0.5f;
 
@@ -48,14 +48,14 @@ namespace uikit
             if (hovered)
                 color = ImGui::GetColorU32(held ? ImGuiCol_FrameBgActive : ImGuiCol_FrameBgHovered);
             else if (value)
-                color = ImGui::ColorConvertFloat4ToU32(style::g_StyleCheckBox->bg);
+                color = ImGui::ColorConvertFloat4ToU32(style::g_CheckBox.bg);
             else
                 color = ImGui::GetColorU32(ImGuiCol_FrameBg);
             ImGui::RenderFrame(check_bb.Min, check_bb.Max, color, true, style.FrameRounding);
 
             if (value)
             {
-                ImU32 check_col = ImGui::ColorConvertFloat4ToU32(style::g_StyleCheckBox->mark);
+                ImU32 check_col = ImGui::ColorConvertFloat4ToU32(style::g_CheckBox.mark);
                 const f32 pad = ImMax(1.0f, IM_TRUNC(square_sz / 6.0f));
                 ImGui::RenderCheckMark(window->DrawList, check_bb.Min + ImVec2(pad, pad), check_col,
                                        square_sz - pad * 2.0f);

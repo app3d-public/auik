@@ -4,19 +4,20 @@ namespace uikit
 {
     namespace style
     {
-        General *g_StyleGeneral = nullptr;
-        Colors *g_StyleColors = nullptr;
+        General g_General;
+        Colors g_Colors;
 
         template <>
-        void registerStyle<General>(General *style)
+        void bindStyle<General>()
         {
-            g_StyleGeneral = style;
             ImGuiStyle &imguiStyle = ImGui::GetStyle();
-            imguiStyle.WindowBorderSize = g_StyleGeneral->windowBorderSize;
-            imguiStyle.PopupBorderSize = g_StyleGeneral->popupBorderSize;
-            imguiStyle.WindowRounding = g_StyleGeneral->windowRounding;
-            imguiStyle.FrameRounding = g_StyleGeneral->frameRounding;
-            imguiStyle.ItemSpacing = g_StyleGeneral->itemSpacing;
+            imguiStyle.WindowBorderSize = g_General.windowBorderSize;
+            imguiStyle.ChildBorderSize = g_General.popupBorderSize;
+            imguiStyle.PopupBorderSize = g_General.popupBorderSize;
+            imguiStyle.WindowRounding = g_General.windowRounding;
+            imguiStyle.PopupRounding = g_General.windowRounding;
+            imguiStyle.FrameRounding = g_General.frameRounding;
+            imguiStyle.ItemSpacing = g_General.itemSpacing;
             imguiStyle.TabBarBorderSize = 0;
             imguiStyle.TabBorderSize = 0;
             imguiStyle.TabRounding = 0;
@@ -24,19 +25,19 @@ namespace uikit
         }
 
         template <>
-        void registerStyle<Colors>(Colors *style)
+        void bindStyle<Colors>()
         {
-            g_StyleColors = style;
             auto &colors = ImGui::GetStyle().Colors;
-            colors[ImGuiCol_WindowBg] = style->windowBg;
-            colors[ImGuiCol_FrameBg] = style->frameBg;
-            colors[ImGuiCol_TitleBgActive] = style->frameActive;
-            colors[ImGuiCol_FrameBgHovered] = style->frameHovered;
-            colors[ImGuiCol_FrameBgActive] = style->frameActive;
-            colors[ImGuiCol_Header] = style->header;
-            colors[ImGuiCol_HeaderHovered] = style->headerHovered;
-            colors[ImGuiCol_HeaderActive] = style->headerActive;
-            colors[ImGuiCol_Border] = style->border;
+            colors[ImGuiCol_WindowBg] = g_Colors.windowBg;
+            colors[ImGuiCol_PopupBg] = g_Colors.popupBg;
+            colors[ImGuiCol_FrameBg] = g_Colors.frameBg;
+            colors[ImGuiCol_TitleBgActive] = g_Colors.frameActive;
+            colors[ImGuiCol_FrameBgHovered] = g_Colors.frameHovered;
+            colors[ImGuiCol_FrameBgActive] = g_Colors.frameActive;
+            colors[ImGuiCol_Header] = g_Colors.header;
+            colors[ImGuiCol_HeaderHovered] = g_Colors.headerHovered;
+            colors[ImGuiCol_HeaderActive] = g_Colors.headerActive;
+            colors[ImGuiCol_Border] = g_Colors.border;
             colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
         }
     } // namespace style

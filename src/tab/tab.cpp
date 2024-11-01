@@ -266,7 +266,7 @@ namespace uikit
             // Pre-calculate available width if not scrollable
             if (!isScrollable)
             {
-                f32 arrowWidth = style::g_StyleComboBox->arrowIcon->width() + style.ItemSpacing.x * 2.0f +
+                f32 arrowWidth = style::g_ComboBox.arrowIcon->width() + style.ItemSpacing.x * 2.0f +
                                  style.FramePadding.x * 2.0f + style.ItemInnerSpacing.x * 2.0f;
                 availableWidth -= arrowWidth;
             }

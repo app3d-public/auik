@@ -98,11 +98,10 @@ namespace uikit
             pos.y += mt.height() + 40;
 
             // Checkbox
-            auto &bStyle = *style::g_StyleButton;
             if (it->second.size() > 1)
             {
-                ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, {style::g_StyleCheckBox->spacing, 0});
-                ImGui::SetCursorPos(pos + ImVec2(0, bStyle.padding.y * 0.5f));
+                ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, {style::g_CheckBox.spacing, 0});
+                ImGui::SetCursorPos(pos + ImVec2(0, style::g_Button.padding.y * 0.5f));
                 _switch.render();
                 ImGui::PopStyleVar();
             }

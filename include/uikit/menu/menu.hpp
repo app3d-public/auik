@@ -1,13 +1,13 @@
 #ifndef UIKIT_WIDGETS_MENU_H
 #define UIKIT_WIDGETS_MENU_H
 
-#include <core/std/list.hpp>
-#include <core/std/vector.hpp>
+#include <astl/enum.hpp>
+#include <astl/list.hpp>
+#include <astl/vector.hpp>
 #include <functional>
 #include <imgui/imgui_internal.h>
 #include "../selectable/selectable.hpp"
 #include "../style.hpp" // IWYU pragma: keep
-#include "../widget.hpp"
 
 namespace uikit
 {
@@ -17,183 +17,104 @@ namespace uikit
         {
             f32 rounding;
             ImVec2 padding;
-            ImVec4 backgroundColor;
-            ImVec4 separatorColor;
+            ImVec2 margin;
+            ImVec4 disabledHoverColor;
+            ImVec4 hoverColor;
             Icon *arrowRight = nullptr;
-        } *g_StyleVMenu;
+        } g_VMenu;
 
-        inline void registerStyle(VMenu *style) { g_StyleVMenu = style; }
+        extern APPLIB_API struct HMenu
+        {
+            ImVec4 backgroundColor;
+            ImVec4 hoverColor;
+            ImVec2 padding;
+            f32 rounding;
+        } g_HMenu;
     } // namespace style
 
-    class APPLIB_API VMenu final : public Widget
+    class APPLIB_API HMenu final : public Selectable
     {
-        struct _Item
-        {
-            Selectable *menu;
-            VMenu *submenu{nullptr};
-            std::function<void()> callback{nullptr};
-            std::function<void(Selectable *menu)> beforeRender{nullptr};
-        };
-
-        using _ItemGroup = astl::list<_Item>;
-
     public:
-        struct Item
+        HMenu(const std::string &name)
+            : Selectable(name, false, style::g_HMenu.rounding,
+                         ImGuiSelectableFlags_NoHoldingActiveID | ImGuiSelectableFlags_NoSetKeyOwner |
+                             ImGuiSelectableFlags_SelectOnClick | ImGuiSelectableFlags_DontClosePopups)
         {
-            std::string label;
-            std::function<void()> callback;
-            std::function<void(Selectable *menu)> beforeRender{nullptr};
-            std::string shortcut;
-            VMenu *submenu{nullptr};
-        };
-        style::VMenu *style;
-
-        using ItemGroup = astl::list<Item>;
-
-        VMenu(const astl::vector<ItemGroup> &itemgroups, style::VMenu *style) : Widget("vmenu"), style(style)
-        {
-            init(itemgroups);
         }
-
-        VMenu(style::VMenu *style = nullptr) : Widget("vmenu"), style(style) {}
 
         virtual void render() override;
-
-        void destroyItems();
-
-        template <typename Container>
-        APPLIB_API void init(const Container &itemgroups);
-
-        bool empty() const { return _itemGroups.empty(); }
-
-        void clear()
-        {
-            for (auto &g : _itemGroups)
-            {
-                for (auto &item : g)
-                {
-                    astl::release(item.menu);
-                    astl::release(item.submenu);
-                }
-            }
-            _itemGroups.clear();
-        }
-
-    private:
-        astl::list<_ItemGroup> _itemGroups;
     };
 
-    class APPLIB_API BeginMenu final : public Selectable
+    class APPLIB_API VMenu final : public Selectable
     {
     public:
-        BeginMenu(const std::string &label, const style::VMenu &style)
-            : Selectable(label, false, style.rounding,
-                         ImGuiSelectableFlags_NoHoldingActiveID | ImGuiSelectableFlags_NoSetKeyOwner |
-                             ImGuiSelectableFlags_SelectOnClick | ImGuiSelectableFlags_DontClosePopups),
-              _style(style)
-        {
-        }
+        VMenu(const std::string &name) : Selectable(name, false, style::g_VMenu.rounding) {}
 
         virtual void render() override;
-
-    private:
-        const style::VMenu &_style;
     };
 
     class APPLIB_API MenuItem final : public Selectable
     {
     public:
-        MenuItem(const std::string &label, const std::string &shortcut, const style::VMenu &style)
-            : Selectable(label, false, style.rounding,
-                         ImGuiSelectableFlags_SelectOnRelease | ImGuiSelectableFlags_NoSetKeyOwner |
-                             ImGuiSelectableFlags_SetNavIdOnHover),
-              _shortcut(shortcut),
-              _style(style)
+        std::function<void()> callback;
+        std::string shortcut;
+
+        MenuItem(const std::string &name, const std::function<void()> &callback = nullptr,
+                 const std::string &shortcut = "")
+            : Selectable(name, false, style::g_VMenu.rounding), callback(callback), shortcut(shortcut)
         {
         }
 
         virtual void render() override;
-
-    private:
-        std::string _shortcut;
-        const style::VMenu &_style;
     };
 
-    class APPLIB_API HMenu final : public Selectable
+    struct MenuNode
     {
-    public:
-        struct Style
+        enum class FlagBits
         {
-            ImVec2 padding;
-            ImVec2 margin;
-            float rounding;
-            ImVec4 backgroundColor;
-            ImVec4 hoverColor;
-
-            explicit Style(ImVec2 margin = ImGui::GetStyle().FramePadding,
-                           ImVec2 padding = ImGui::GetStyle().ItemSpacing, float rounding = 0.0f,
-                           ImVec4 backgroundColor = ImVec4(0.0f, 0.0f, 0.0f, 0.0f),
-                           ImVec4 hoverColor = ImVec4(0.0f, 0.0f, 0.0f, 0.0f))
-                : padding(padding),
-                  margin(margin + padding * 0.5f),
-                  rounding(rounding),
-                  backgroundColor(backgroundColor),
-                  hoverColor(hoverColor)
-            {
-            }
+            data = 0x0,
+            group = 0x1,
+            category = 0x2
         };
-        VMenu submenu;
+        using Flags = ::Flags<FlagBits>;
 
-        HMenu(const std::string &label, const Style &style, const VMenu &submenu = {})
-            : Selectable(label, false, style.rounding,
-                         ImGuiSelectableFlags_NoHoldingActiveID | ImGuiSelectableFlags_NoSetKeyOwner |
-                             ImGuiSelectableFlags_SelectOnClick | ImGuiSelectableFlags_DontClosePopups),
-              submenu(submenu)
-        {
-        }
-
-        void destroy() { submenu.destroyItems(); }
-
-        virtual void render() override;
-
-    private:
-        void beginMenu();
+        Flags flags;
+        astl::unique_ptr<Selectable> widget;
+        astl::vector<MenuNode> nodes;
     };
 
-    class APPLIB_API MenuBar : public Widget
+    class MenuBar : public Widget
     {
     public:
-        struct Style
+        astl::vector<MenuNode> nodes;
+
+        MenuBar() : Widget("menubar") {}
+        virtual ~MenuBar() = default;
+
+        virtual void render() override
         {
-            HMenu::Style menubar;
-            style::VMenu submenu;
-        };
-
-        MenuBar(const astl::list<HMenu> &items, Style *style) : Widget("menubar"), _style(style), _items(items) {}
-
-        virtual ~MenuBar();
-
-        MenuBar(MenuBar &&other) noexcept : Widget("menubar"), _style(other._style), _items(std::move(other._items))
-        {
-            other._items.clear();
-            other._style = nullptr;
+            auto &style = style::g_HMenu;
+            ImGui::PushStyleColor(ImGuiCol_MenuBarBg, style.backgroundColor);
+            ImGui::PushStyleColor(ImGuiCol_Header, style.hoverColor);
+            ImGui::PushStyleColor(ImGuiCol_HeaderHovered, style.hoverColor);
+            ImGui::PushStyleColor(ImGuiCol_HeaderActive, style.backgroundColor);
+            renderMenuNodes(nodes);
+            ImGui::PopStyleColor(4);
         }
-
-        Style *style() { return _style; }
-
-        virtual void render() override;
 
     protected:
-        Style *_style;
-        astl::list<HMenu> _items;
+        MenuBar(MenuBar &&other, const std::string &id) noexcept : Widget(id), nodes(std::move(other.nodes)) {}
 
-        MenuBar(MenuBar &&other, const std::string &id) noexcept
-            : Widget(id), _style(other._style), _items(std::move(other._items))
-        {
-            other._items.clear();
-            other._style = nullptr;
-        }
+        static APPLIB_API void renderMenuNodes(const astl::vector<MenuNode> &nodes);
     };
 } // namespace uikit
+
+template <>
+struct FlagTraits<uikit::MenuNode::FlagBits>
+{
+    static constexpr bool isBitmask = true;
+    static constexpr uikit::MenuNode::Flags allFlags =
+        uikit::MenuNode::FlagBits::data | uikit::MenuNode::FlagBits::group | uikit::MenuNode::FlagBits::category;
+};
 
 #endif

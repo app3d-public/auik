@@ -17,7 +17,7 @@ namespace uikit
             if (SUCCEEDED(hr))
             {
                 controlSize.x = (rect.right - rect.left) / 3.0f * window::getDpi();
-                controlSize.y = (rect.bottom - rect.top) / 3.0f * window::getDpi();
+                controlSize.y = (rect.bottom - rect.top) * window::getDpi();
                 return controlSize;
             }
         }
@@ -41,23 +41,54 @@ namespace uikit
     {
     }
 
+    bool BeginMainMenuBar(float v = ImGui::GetFrameHeight())
+    {
+        ImGuiContext &g = *GImGui;
+        ImGuiViewportP *viewport = (ImGuiViewportP *)(void *)ImGui::GetMainViewport();
+
+        // For the main menu bar, which cannot be moved, we honor g.Style.DisplaySafeAreaPadding to ensure text can be
+        // visible on a TV set.
+        // FIXME: This could be generalized as an opt-in way to clamp window->DC.CursorStartPos to avoid SafeArea?
+        // FIXME: Consider removing support for safe area down the line... it's messy. Nowadays consoles have support
+        // for TV calibration in OS settings.
+        g.NextWindowData.MenuBarOffsetMinVal = ImVec2(
+            g.Style.DisplaySafeAreaPadding.x, ImMax(g.Style.DisplaySafeAreaPadding.y - g.Style.FramePadding.y, 0.0f));
+        ImGuiWindowFlags window_flags =
+            ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_MenuBar;
+        float height = v;
+        bool is_open = ImGui::BeginViewportSideBar("##MainMenuBar", viewport, ImGuiDir_Up, height, window_flags);
+        g.NextWindowData.MenuBarOffsetMinVal = ImVec2(0.0f, 0.0f);
+
+        if (is_open)
+            ImGui::BeginMenuBar();
+        else
+            ImGui::End();
+        return is_open;
+    }
+
     void Titlebar::render()
     {
+        ImGuiContext &g = *GImGui;
+        f32 target_height = _controlSize.y;
+        f32 padding_y = IM_ROUND((target_height - g.FontSize) / 2.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10.0f, padding_y));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style::g_HMenu.padding);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, MenuBar::_style->menubar.margin);
-        ImGui::PushStyleColor(ImGuiCol_MenuBarBg, MenuBar::_style->menubar.backgroundColor);
-
+        ImGui::PushStyleColor(ImGuiCol_MenuBarBg, style::g_HMenu.backgroundColor);
+        ImGui::PushStyleColor(ImGuiCol_Header, style::g_HMenu.hoverColor);
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, style::g_HMenu.hoverColor);
+        ImGui::PushStyleColor(ImGuiCol_HeaderActive, style::g_HMenu.backgroundColor);
         if (ImGui::BeginMainMenuBar())
         {
-            _height = ImGui::GetWindowHeight();
             const ImVec2 appPos =
-                ImGui::GetCursorScreenPos() + ImVec2(0, (_height - style.icons[IconApp]->height()) * 0.5f);
+                ImGui::GetCursorScreenPos() + ImVec2(0, (_controlSize.y - style.icons[IconApp]->height()) * 0.5f);
             style.icons[IconApp]->render(appPos);
 
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.submenuPadding);
-            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, MenuBar::_style->menubar.padding);
-            for (auto &item : _items) item.render();
-            ImGui::PopStyleVar(2);
+            // Menu
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style::g_VMenu.margin);
+            renderMenuNodes(nodes);
+            ImGui::PopStyleVar();
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 5);
 
             if (ImGui::IsItemActive())
             {
@@ -66,7 +97,7 @@ namespace uikit
                     astl::point2D cursorPos = _window.cursorPosition();
                     astl::point2D windowPos = _window.windowPos();
                     astl::point2D newPos{windowPos.x + cursorPos.x - _dragOffset.x,
-                                   windowPos.y + cursorPos.y - _dragOffset.y};
+                                         windowPos.y + cursorPos.y - _dragOffset.y};
                     _window.windowPos(newPos);
                 }
                 else
@@ -79,18 +110,16 @@ namespace uikit
             {
                 ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
                 ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 0.0f);
-                ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
-                                    {MenuBar::_style->menubar.padding.x, MenuBar::_style->menubar.padding.y * 0.5f});
                 ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, {0, 0});
                 ImGui::PushStyleColor(ImGuiCol_PopupBg, style.tabBackgroundColor);
                 ImGui::PushStyleColor(ImGuiCol_ChildBg, style.tabBackgroundColor);
                 ImGui::PushStyleColor(ImGuiCol_Header, style.tabActiveColor);
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, style.hoverColor);
                 ImGui::PushStyleColor(ImGuiCol_HeaderActive, style.tabActiveColor);
-                ImVec2 tabbarSize{ImGui::GetContentRegionAvail().x - _controlSize.x * 3, _height};
+                ImVec2 tabbarSize{ImGui::GetContentRegionAvail().x - _controlSize.x * 3, _controlSize.y + 10};
                 tabbar.size(tabbarSize);
                 tabbar.render();
-                ImGui::PopStyleVar(4);
+                ImGui::PopStyleVar(3);
                 ImGui::PopStyleColor(5);
 
                 _clientWidth = ImGui::GetCursorPosX() - tabbar.avaliableWidth();
@@ -98,61 +127,65 @@ namespace uikit
             _captionWidth = ImGui::GetWindowWidth() - _controlSize.x * 3;
             ImGui::SetCursorPos({_captionWidth, 0});
 
-            // Win Controls
-            // Min
-            ImVec2 pos{_captionWidth - 1, 0};
-            ImVec2 size = ImVec2(_controlSize.x + 1, _height);
-            ImGui::GetWindowDrawList()->AddRectFilled(
-                pos, ImVec2(pos.x + size.x, pos.y + size.y),
-                ImGui::ColorConvertFloat4ToU32(_controls[0].state == ControlState::Hover ? style.hoverColor
-                                                                                         : style.tabBackgroundColor));
-            pos.x += size.x;
-            ImVec2 buttonPos = ImGui::GetCursorScreenPos();
-            ImVec2 buttonSize = ImVec2(_controlSize.x, _height);
-            ImVec2 centerPos = ImVec2(buttonPos.x + buttonSize.x / 2, buttonPos.y + buttonSize.y / 2);
-            float iconWidth = style.icons[IconMin]->width();
-            float iconHeight = style.icons[IconMin]->height();
-            ImVec2 iconRenderPos = ImVec2(centerPos.x - iconWidth / 2, centerPos.y - iconHeight / 2);
-            style.icons[IconMin]->render(iconRenderPos);
-            ImGui::SameLine();
-
-            // Max
-            ImGui::GetWindowDrawList()->AddRectFilled(
-                pos, ImVec2(pos.x + size.x, pos.y + size.y),
-                ImGui::ColorConvertFloat4ToU32(_controls[1].state == ControlState::Hover ? style.hoverColor
-                                                                                         : style.tabBackgroundColor));
-            pos.x += size.x;
-            centerPos.x += _controlSize.x;
-            if (_window.maximized())
-            {
-                iconWidth = style.icons[IconRestore]->width();
-                iconHeight = style.icons[IconRestore]->height();
-                iconRenderPos = ImVec2(centerPos.x - iconWidth / 2, centerPos.y - iconHeight / 2);
-                style.icons[IconRestore]->render(iconRenderPos);
-            }
-            else
-            {
-                iconWidth = style.icons[IconMax]->width();
-                iconHeight = style.icons[IconMax]->height();
-                iconRenderPos = ImVec2(centerPos.x - iconWidth / 2, centerPos.y - iconHeight / 2);
-                style.icons[IconMax]->render(iconRenderPos);
-            }
-
-            // Close
-            ImGui::GetWindowDrawList()->AddRectFilled(
-                pos, ImVec2(pos.x + size.x, pos.y + size.y),
-                ImGui::ColorConvertFloat4ToU32(_controls[2].state == ControlState::Hover ? style.closeColor
-                                                                                         : style.tabBackgroundColor));
-            centerPos.x += _controlSize.x;
-            iconWidth = style.icons[IconClose]->width();
-            iconHeight = style.icons[IconClose]->height();
-            iconRenderPos = ImVec2(centerPos.x - iconWidth / 2, centerPos.y - iconHeight / 2);
-            style.icons[IconClose]->render(iconRenderPos);
+            renderControls();
 
             ImGui::EndMainMenuBar();
-            ImGui::PopStyleVar(2);
         }
-        ImGui::PopStyleColor();
+
+        ImGui::PopStyleColor(4);
+        ImGui::PopStyleVar(3);
+    }
+
+    void Titlebar::renderControls()
+    {
+        // Min
+        ImVec2 pos{_captionWidth - 1, 0};
+        ImVec2 size = ImVec2(_controlSize.x + 1, _controlSize.y + 1);
+        ImGui::GetWindowDrawList()->AddRectFilled(
+            pos, ImVec2(pos.x + size.x, pos.y + size.y),
+            ImGui::ColorConvertFloat4ToU32(_controls[0].state == ControlState::Hover ? style.hoverColor
+                                                                                     : style.tabBackgroundColor));
+        pos.x += size.x;
+        ImVec2 buttonPos = ImGui::GetCursorScreenPos();
+        ImVec2 centerPos = ImVec2(buttonPos.x + _controlSize.x / 2, buttonPos.y + _controlSize.y / 2);
+        f32 iconWidth = style.icons[IconMin]->width();
+        f32 iconHeight = style.icons[IconMin]->height();
+        ImVec2 iconRenderPos = ImVec2(centerPos.x - iconWidth / 2, centerPos.y - iconHeight / 2);
+        style.icons[IconMin]->render(iconRenderPos);
+        ImGui::SameLine();
+
+        // Max
+        ImGui::GetWindowDrawList()->AddRectFilled(
+            pos, ImVec2(pos.x + size.x, pos.y + size.y),
+            ImGui::ColorConvertFloat4ToU32(_controls[1].state == ControlState::Hover ? style.hoverColor
+                                                                                     : style.tabBackgroundColor));
+        pos.x += size.x;
+        centerPos.x += _controlSize.x;
+        if (_window.maximized())
+        {
+            iconWidth = style.icons[IconRestore]->width();
+            iconHeight = style.icons[IconRestore]->height();
+            iconRenderPos = ImVec2(centerPos.x - iconWidth / 2, centerPos.y - iconHeight / 2);
+            style.icons[IconRestore]->render(iconRenderPos);
+        }
+        else
+        {
+            iconWidth = style.icons[IconMax]->width();
+            iconHeight = style.icons[IconMax]->height();
+            iconRenderPos = ImVec2(centerPos.x - iconWidth / 2, centerPos.y - iconHeight / 2);
+            style.icons[IconMax]->render(iconRenderPos);
+        }
+
+        // Close
+        ImGui::GetWindowDrawList()->AddRectFilled(
+            pos, ImVec2(pos.x + size.x, pos.y + size.y),
+            ImGui::ColorConvertFloat4ToU32(_controls[2].state == ControlState::Hover ? style.closeColor
+                                                                                     : style.tabBackgroundColor));
+        centerPos.x += _controlSize.x;
+        iconWidth = style.icons[IconClose]->width();
+        iconHeight = style.icons[IconClose]->height();
+        iconRenderPos = ImVec2(centerPos.x - iconWidth / 2, centerPos.y - iconHeight / 2);
+        style.icons[IconClose]->render(iconRenderPos);
     }
 
     void Titlebar::bindEvents()
@@ -164,7 +197,7 @@ namespace uikit
             cursorPoint.x = LOWORD(e.lParam);
             cursorPoint.y = HIWORD(e.lParam);
             ScreenToClient(e.hwnd, &cursorPoint);
-            if (cursorPoint.y < _height)
+            if (cursorPoint.y < _controlSize.y)
             {
                 if (cursorPoint.x < _clientWidth)
                     _activeArea = ControlArea::Client;

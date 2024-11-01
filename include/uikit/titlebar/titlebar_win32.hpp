@@ -73,7 +73,8 @@ namespace uikit
             ControlArea area;
         } _controls[3];
         ControlArea _activeArea{ControlArea::None};
-        f32 _height;
+
+        void renderControls();
     };
 } // namespace uikit
 #endif

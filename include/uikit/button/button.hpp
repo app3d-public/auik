@@ -2,7 +2,7 @@
 #define UIKIT_WIDGETS_BUTTON_H
 
 #include <core/api.hpp>
-#include <core/std/vector.hpp>
+#include <astl/vector.hpp>
 #include <imgui/imgui.h>
 #include "../style.hpp" // IWYU pragma: keep
 
@@ -16,10 +16,10 @@ namespace uikit
             ImVec4 colorActive;
             ImVec4 colorHovered;
             ImVec2 padding;
-        } *g_StyleButton;
+        } g_Button;
 
         template <>
-        APPLIB_API void registerStyle<Button>(Button *style);
+        APPLIB_API void bindStyle<Button>();
     } // namespace style
 
     // Button to close a window

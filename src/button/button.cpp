@@ -6,16 +6,15 @@ namespace uikit
 {
     namespace style
     {
-        Button *g_StyleButton = nullptr;
+        Button g_Button;
 
         template <>
-        void registerStyle<Button>(Button *style)
+        void bindStyle<Button>()
         {
-            g_StyleButton = style;
             auto &colors = ImGui::GetStyle().Colors;
-            colors[ImGuiCol_Button] = style->color;
-            colors[ImGuiCol_ButtonActive] = style->colorActive;
-            colors[ImGuiCol_ButtonHovered] = style->colorHovered;
+            colors[ImGuiCol_Button] = g_Button.color;
+            colors[ImGuiCol_ButtonActive] = g_Button.colorActive;
+            colors[ImGuiCol_ButtonHovered] = g_Button.colorHovered;
         }
     } // namespace style
 
@@ -62,7 +61,7 @@ namespace uikit
     void rightControls(const astl::vector<std::string> &buttons, int *selected, f32 y_offset)
     {
         ImGui::SetCursorPosY(y_offset == 0.0f ? ImGui::GetCursorPosY() + 10.0f : y_offset);
-        auto &bStyle = *uikit::style::g_StyleButton;
+        auto &bStyle = uikit::style::g_Button;
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, bStyle.padding);
         ImGui::PushStyleColor(ImGuiCol_Button, {0, 0, 0, 0});
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, bStyle.colorActive);

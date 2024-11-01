@@ -1,7 +1,7 @@
 #pragma once
 
+#include <astl/basic_types.hpp>
 #include <core/api.hpp>
-#include <core/std/basic_types.hpp>
 #include "../style.hpp" // IWYU pragma: keep
 #include "../widget.hpp"
 
@@ -40,12 +40,6 @@ namespace uikit
             ImVec4 bg;
             ImColor color;
             ImVec4 colorActive;
-        } *g_StyleSwitch;
-
-        template <>
-        inline void registerStyle(Switch *style)
-        {
-            g_StyleSwitch = style;
-        }
+        } g_Switch;
     } // namespace style
 } // namespace uikit

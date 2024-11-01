@@ -13,13 +13,7 @@ namespace uikit
         {
             Icon *arrowIcon = nullptr;
             ImVec2 itemSpacing;
-        } *g_StyleComboBox;
-
-        template <>
-        inline void registerStyle(ComboBox *style)
-        {
-            g_StyleComboBox = style;
-        }
+        } g_ComboBox;
     } // namespace style
 
     APPLIB_API bool beginCombo(const char *label, const char *preview_value, ImGuiComboFlags flags = 0);
