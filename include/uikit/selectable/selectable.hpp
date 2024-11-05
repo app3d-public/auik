@@ -7,70 +7,36 @@
 
 namespace uikit
 {
-    class APPLIB_API Selectable : public Widget
+    struct SelectableParams
+    {
+        float rounding = 0.0f;
+        ImGuiSelectableFlags sFlags = ImGuiSelectableFlags_None; //< Selectable flags
+        ImGuiButtonFlags bFlags = ImGuiButtonFlags_None;         //< Button flags
+        ImDrawFlags dFlags = ImDrawFlags_None;                   //< Draw flags
+        ImVec2 size = ImVec2(0, 0);
+        bool selected = false;
+        bool hover = false;
+        bool pressed = false;
+        bool showBackground = false;
+    };
+
+    class APPLIB_API Selectable : public Widget, public SelectableParams
     {
     public:
-        struct Params
-        {
-            const char *label = "";
-            float rounding = 0.0f;
-            ImGuiSelectableFlags flags = ImGuiSelectableFlags_None;
-            ImGuiButtonFlags buttonFlags = ImGuiButtonFlags_None;
-            ImVec2 size = ImVec2(0, 0);
-            bool selected = false;
-            bool *hover = nullptr;
-            bool *pressed = nullptr;
-            bool showBackground = false;
-        };
-
         Selectable(const std::string &label = "", bool selected = false, float rounding = 0.0f,
-                   ImGuiSelectableFlags flags = 0, const ImVec2 &size = ImVec2(0, 0), bool showBackground = false)
+                   ImGuiSelectableFlags sFlags = 0, const ImVec2 &size = ImVec2(0, 0), bool showBackground = false)
             : Widget(label),
-              _size(size),
-              _rounding(rounding),
-              _selected(selected),
-              _hover(false),
-              _pressed(false),
-              _flags(flags),
-              _buttonFlags(loadFlags(flags)),
-              _showBackground(showBackground)
+              SelectableParams(rounding, sFlags, loadButtonFlags(sFlags), ImDrawFlags_None, size, selected, false,
+                               false, false)
         {
         }
 
-        virtual void render() override;
-        static APPLIB_API void render(Params &params);
+        virtual void render() override { render(name.c_str(), *this); }
 
-        ImVec2 size() const { return _size; }
-        void size(ImVec2 size) { _size = size; }
-
-        float rounding() const { return _rounding; }
-        void rounding(float rounding) { _rounding = rounding; }
-
-        bool selected() const { return _selected; }
-        void selected(bool selected) { _selected = selected; }
-
-        bool hover() const { return _hover; }
-
-        bool pressed() const { return _pressed; }
-        void pressed(bool pressed) { _pressed = pressed; }
-
-        bool showBackground() const { return _showBackground; }
-
-        void showBackground(bool showBackground) { _showBackground = showBackground; }
-
-        ImGuiSelectableFlags &flags() { return _flags; }
+        static APPLIB_API void render(const char *label, SelectableParams &params);
 
     protected:
-        ImVec2 _size;
-        float _rounding;
-        bool _selected;
-        bool _hover;
-        bool _pressed;
-        ImGuiSelectableFlags _flags;
-        ImGuiButtonFlags _buttonFlags;
-        bool _showBackground;
-
-        ImGuiButtonFlags loadFlags(ImGuiSelectableFlags flags);
+        static APPLIB_API ImGuiButtonFlags loadButtonFlags(ImGuiSelectableFlags flags);
     };
 } // namespace uikit
 

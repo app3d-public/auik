@@ -64,7 +64,7 @@ namespace uikit
                                                                                     : ImDrawFlags_RoundCornersLeft);
         if (!(flags & ImGuiComboFlags_NoArrowButton))
         {
-            ImU32 bg_col = ImGui::GetColorU32((hovered) ? ImGuiCol_ButtonHovered : ImGuiCol_FrameBg);
+            ImU32 bg_col = ImGui::GetColorU32((hovered) ? ImGuiCol_HeaderHovered : ImGuiCol_FrameBg);
             ImU32 text_col = ImGui::GetColorU32(ImGuiCol_Text);
             window->DrawList->AddRectFilled(ImVec2(value_x2, bb.Min.y), bb.Max, bg_col, style.FrameRounding,
                                             (w <= arrow_size) ? ImDrawFlags_RoundCornersAll

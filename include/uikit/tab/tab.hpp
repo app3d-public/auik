@@ -25,7 +25,7 @@ namespace uikit
 
         TabItem(u64 id, const std::string &label, const std::function<void()> &onRender = nullptr,
                 Flags flags = FlagBits::none, f32 rounding = 0.0f)
-            : Selectable(label, false, rounding, ImGuiSelectableFlags_AllowItemOverlap, {0.0f, 0.0f}, true),
+            : Selectable({label, false, rounding, ImGuiSelectableFlags_AllowItemOverlap, {0.0f, 0.0f}, true}),
               id(id),
               _onRender(onRender),
               _tabFlags(flags)

@@ -48,7 +48,10 @@ namespace uikit
     class APPLIB_API VMenu final : public Selectable
     {
     public:
-        VMenu(const std::string &name) : Selectable(name, false, style::g_VMenu.rounding) {}
+        VMenu(const std::string &name)
+            : Selectable(name, false, style::g_VMenu.rounding, ImGuiSelectableFlags_SpanAvailWidth)
+        {
+        }
 
         virtual void render() override;
     };

@@ -27,9 +27,9 @@ namespace uikit
 
         ImGuiContext &g = *GImGui;
         const ImGuiStyle &style = g.Style;
-        auto labelPtr = name.c_str();
-        const ImGuiID id = window->GetID(labelPtr);
-        _selected = ImGui::IsPopupOpen(id, ImGuiPopupFlags_None);
+        auto label_c = name.c_str();
+        const ImGuiID id = window->GetID(label_c);
+        selected = ImGui::IsPopupOpen(id, ImGuiPopupFlags_None);
 
         // Sub-menus are ChildWindow so that mouse can be hovering across them (otherwise top-most popup menu would
         // steal focus and not allow hovering on parent menu) The first menu in a hierarchy isn't so hovering doesn't
@@ -46,9 +46,9 @@ namespace uikit
         // switch to use e.g. ImGuiStorage mapping key to last frame used.
         if (g.MenusIdSubmittedThisFrame.contains(id))
         {
-            if (_selected)
-                _selected = ImGui::BeginPopupEx(id, window_flags); // menu_is_open can be 'false' when the popup is
-                                                                   // completely clipped (e.g. zero size display)
+            if (selected)
+                selected = ImGui::BeginPopupEx(id, window_flags); // menu_is_open can be 'false' when the popup is
+                                                                  // completely clipped (e.g. zero size display)
             else
                 g.NextWindowData.ClearFlags(); // we behave like Begin() and need to consume those values
             return;
@@ -57,7 +57,7 @@ namespace uikit
         // Tag menu as used. Next time BeginMenu() with same ID is called it will append to existing menu
         g.MenusIdSubmittedThisFrame.push_back(id);
 
-        ImVec2 label_size = ImGui::CalcTextSize(labelPtr, NULL, true);
+        ImVec2 label_size = ImGui::CalcTextSize(label_c, NULL, true);
 
         // Odd hack to allow hovering across menus of a same menu-set (otherwise we wouldn't be able to hover parent
         // without always being a Child window) This is only done for items for the menu set and not the full parent
@@ -69,7 +69,7 @@ namespace uikit
         // menu, However the final position is going to be different! It is chosen by FindBestWindowPosForPopup(). e.g.
         // Menus tend to overlap each other horizontally to amplify relative Z-ordering.
         ImVec2 popup_pos, pos = window->DC.CursorPos;
-        ImGui::PushID(labelPtr);
+        ImGui::PushID(label_c);
         const ImGuiMenuColumns *offsets = &window->DC.MenuColumns;
         popup_pos = ImVec2(pos.x - 1.0f - IM_TRUNC(style.ItemSpacing.x * 0.5f),
                            pos.y - style.FramePadding.y + window->MenuBarHeight);
@@ -78,33 +78,26 @@ namespace uikit
         f32 w = label_size.x;
         ImVec2 text_pos(window->DC.CursorPos.x + offsets->OffsetLabel,
                         window->DC.CursorPos.y + window->DC.CurrLineTextBaseOffset);
-        _size = ImVec2(w, label_size.y);
-        Selectable::Params params{.label = "",
-                                  .rounding = _rounding,
-                                  .flags = _flags,
-                                  .buttonFlags = _buttonFlags,
-                                  .size = _size,
-                                  .selected = _selected,
-                                  .hover = &_hover,
-                                  .pressed = &_pressed};
-        Selectable::render(params);
-        ImGui::RenderText(text_pos, labelPtr);
+        size = ImVec2(w, label_size.y);
+        Selectable::render("", *this);
+
+        ImGui::RenderText(text_pos, label_c);
         ImGui::PopStyleVar();
         window->DC.CursorPos.x += IM_TRUNC(style.ItemSpacing.x * (-1.0f + 0.5f));
 
-        _hover = (g.HoveredId == id) && enabled && !g.NavHighlightItemUnderNav;
+        hover = (g.HoveredId == id) && enabled && !g.NavHighlightItemUnderNav;
         if (menuset_is_open) ImGui::PopItemFlag();
 
         bool want_open = false;
         bool want_close = false;
 
         // Menu bar
-        if (_selected && _pressed && menuset_is_open) // Click an open menu again to close it
+        if (selected && pressed && menuset_is_open) // Click an open menu again to close it
         {
             want_close = true;
-            want_open = _selected = false;
+            want_open = selected = false;
         }
-        else if (_pressed || (_hover && menuset_is_open && !_selected))
+        else if (pressed || (hover && menuset_is_open && !selected))
             want_open = true;
         else if (g.NavId == id && g.NavMoveDir == ImGuiDir_Down) // Nav-Down to open
         {
@@ -117,15 +110,15 @@ namespace uikit
 
         ImGui::PopID();
 
-        if (want_open && !_selected && g.OpenPopupStack.Size > g.BeginPopupStack.Size)
-            ImGui::OpenPopup(labelPtr);
+        if (want_open && !selected && g.OpenPopupStack.Size > g.BeginPopupStack.Size)
+            ImGui::OpenPopup(label_c);
         else if (want_open)
         {
-            _selected = true;
-            ImGui::OpenPopup(labelPtr);
+            selected = true;
+            ImGui::OpenPopup(label_c);
         }
 
-        if (_selected)
+        if (selected)
         {
             ImGuiLastItemData last_item_in_parent = g.LastItemData;
             ImGui::SetNextWindowPos(popup_pos, ImGuiCond_Always); // Note: misleading: the value will serve as reference
@@ -133,10 +126,10 @@ namespace uikit
             ImGui::PushStyleVar(
                 ImGuiStyleVar_ChildRounding,
                 style.PopupRounding); // First level will use _PopupRounding, subsequent will use _ChildRounding
-            _selected = ImGui::BeginPopupEx(id, window_flags); // menu_is_open can be 'false' when the popup is
-                                                               // completely clipped (e.g. zero size display)
+            selected = ImGui::BeginPopupEx(id, window_flags); // menu_is_open can be 'false' when the popup is
+                                                              // completely clipped (e.g. zero size display)
             ImGui::PopStyleVar();
-            if (_selected)
+            if (selected)
             {
                 // Restore LastItemData so IsItemXXXX functions can work after BeginMenu()/EndMenu()
                 // (This fixes using IsItemClicked() and IsItemHovered(), but IsItemHovered() also relies on its support
@@ -156,9 +149,9 @@ namespace uikit
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, style::g_VMenu.hoverColor);
         ImGuiContext &g = *GImGui;
         const ImGuiStyle &style = g.Style;
-        auto labelPtr = name.c_str();
-        const ImGuiID id = window->GetID(labelPtr);
-        _selected = ImGui::IsPopupOpen(id, ImGuiPopupFlags_None);
+        auto label_c = name.c_str();
+        const ImGuiID id = window->GetID(label_c);
+        selected = ImGui::IsPopupOpen(id, ImGuiPopupFlags_None);
 
         // Sub-menus are ChildWindow so that mouse can be hovering across them (otherwise top-most popup menu would
         // steal focus and not allow hovering on parent menu) The first menu in a hierarchy isn't so hovering doesn't
@@ -175,9 +168,9 @@ namespace uikit
         // switch to use e.g. ImGuiStorage mapping key to last frame used.
         if (g.MenusIdSubmittedThisFrame.contains(id))
         {
-            if (_selected)
-                _selected = ImGui::BeginPopupEx(id, window_flags); // menu_is_open can be 'false' when the popup is
-                                                                   // completely clipped (e.g. zero size display)
+            if (selected)
+                selected = ImGui::BeginPopupEx(id, window_flags); // menu_is_open can be 'false' when the popup is
+                                                                  // completely clipped (e.g. zero size display)
             else
                 g.NextWindowData.ClearFlags(); // we behave like Begin() and need to consume those values
         }
@@ -185,7 +178,7 @@ namespace uikit
         // Tag menu as used. Next time BeginMenu() with same ID is called it will append to existing menu
         g.MenusIdSubmittedThisFrame.push_back(id);
 
-        ImVec2 label_size = ImGui::CalcTextSize(labelPtr, nullptr, true);
+        ImVec2 label_size = ImGui::CalcTextSize(label_c, nullptr, true);
 
         // Odd hack to allow hovering across menus of a same menu-set (otherwise we wouldn't be able to hover parent
         // without always being a Child window) This is only done for items for the menu set and not the full parent
@@ -197,7 +190,7 @@ namespace uikit
         // menu, However the final position is going to be different! It is chosen by FindBestWindowPosForPopup(). e.g.
         // Menus tend to overlap each other horizontally to amplify relative Z-ordering.
         ImVec2 popup_pos, pos = window->DC.CursorPos;
-        ImGui::PushID(labelPtr);
+        ImGui::PushID(label_c);
         const ImGuiMenuColumns *offsets = &window->DC.MenuColumns;
         popup_pos = ImVec2(pos.x, pos.y - style.WindowPadding.y);
         f32 checkmark_w = IM_TRUNC(g.FontSize * 1.20f);
@@ -205,23 +198,16 @@ namespace uikit
         f32 extra_w = ImMax(0.0f, ImGui::GetContentRegionAvail().x - min_w);
         ImVec2 text_pos(window->DC.CursorPos.x + offsets->OffsetLabel + style::g_VMenu.padding.x,
                         window->DC.CursorPos.y + window->DC.CurrLineTextBaseOffset);
-        _size = ImVec2(min_w + style::g_VMenu.padding.x, label_size.y);
-        Selectable::Params params{.label = "",
-                                  .rounding = _rounding,
-                                  .flags = _flags | ImGuiSelectableFlags_SpanAvailWidth,
-                                  .buttonFlags = _buttonFlags,
-                                  .size = _size,
-                                  .selected = _selected,
-                                  .hover = &_hover,
-                                  .pressed = &_pressed};
-        Selectable::render(params);
+        size = ImVec2(min_w + style::g_VMenu.padding.x, label_size.y);
+        Selectable::render("", *this);
+
         ImVec2 arrowPos =
             pos + ImVec2(offsets->OffsetMark + extra_w + g.FontSize * 0.30f + style.ItemInnerSpacing.x * 0.5f,
                          label_size.y / 2.0f - style::g_VMenu.arrowRight->height() / 2.0f);
-        ImGui::RenderText(text_pos, labelPtr);
+        ImGui::RenderText(text_pos, label_c);
         style::g_VMenu.arrowRight->render(arrowPos);
 
-        _hover = (g.HoveredId == id) && enabled && !g.NavHighlightItemUnderNav;
+        hover = (g.HoveredId == id) && enabled && !g.NavHighlightItemUnderNav;
         if (menuset_is_open) ImGui::PopItemFlag();
 
         bool want_open = false;
@@ -258,17 +244,17 @@ namespace uikit
         // moving over void. Perhaps we should extend the triangle check to a larger polygon. (Remember to test this
         // on BeginPopup("A")->BeginMenu("B") sequence which behaves slightly differently as B isn't a Child of A
         // and hovering isn't shared.)
-        if (_selected && !_hover && g.HoveredWindow == window && !moving_toward_child_menu &&
+        if (selected && !hover && g.HoveredWindow == window && !moving_toward_child_menu &&
             !g.NavHighlightItemUnderNav && g.ActiveId == 0)
             want_close = true;
 
         // Open
         // (note: at this point 'hovered' actually includes the NavDisableMouseHover == false test)
-        if (!_selected && _pressed) // Click/activate to open
+        if (!selected && pressed) // Click/activate to open
             want_open = true;
-        else if (!_selected && _hover && !moving_toward_child_menu) // Hover to open
+        else if (!selected && hover && !moving_toward_child_menu) // Hover to open
             want_open = true;
-        else if (!_selected && _hover && g.HoveredIdTimer >= 0.30f &&
+        else if (!selected && hover && g.HoveredIdTimer >= 0.30f &&
                  g.MouseStationaryTimer >= 0.30f) // Hover to open (timer fallback)
             want_open = true;
         if (g.NavId == id && g.NavMoveDir == ImGuiDir_Right) // Nav-Right to open
@@ -281,23 +267,23 @@ namespace uikit
             ImGui::ClosePopupToLevel(g.BeginPopupStack.Size, true);
         ImGui::PopID();
 
-        if (want_open && !_selected && g.OpenPopupStack.Size > g.BeginPopupStack.Size)
-            ImGui::OpenPopup(labelPtr);
+        if (want_open && !selected && g.OpenPopupStack.Size > g.BeginPopupStack.Size)
+            ImGui::OpenPopup(label_c);
         else if (want_open)
         {
-            _selected = true;
-            ImGui::OpenPopup(labelPtr);
+            selected = true;
+            ImGui::OpenPopup(label_c);
         }
 
-        if (_selected)
+        if (selected)
         {
             ImGuiLastItemData last_item_in_parent = g.LastItemData;
             ImGui::SetNextWindowPos(popup_pos, ImGuiCond_Always); // Note: misleading: the value will serve as reference
                                                                   // for FindBestWindowPosForPopup(), not actual pos.
             ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, style.PopupRounding);
-            _selected = ImGui::BeginPopupEx(id, window_flags);
+            selected = ImGui::BeginPopupEx(id, window_flags);
             ImGui::PopStyleVar();
-            if (_selected)
+            if (selected)
             {
                 // Restore LastItemData so IsItemXXXX functions can work after BeginMenu()/EndMenu()
                 // (This fixes using IsItemClicked() and IsItemHovered(), but IsItemHovered() also relies on its support
@@ -321,8 +307,8 @@ namespace uikit
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style::g_VMenu.padding);
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, style::g_VMenu.hoverColor);
         ImVec2 pos = window->DC.CursorPos;
-        auto labelPtr = name.c_str();
-        ImVec2 label_size = ImGui::CalcTextSize(labelPtr, nullptr, true);
+        auto label_c = name.c_str();
+        ImVec2 label_size = ImGui::CalcTextSize(label_c, nullptr, true);
 
         const bool menuset_is_open = IsRootOfOpenMenuSet();
         if (menuset_is_open) ImGui::PushItemFlag(ImGuiItemFlags_NoWindowHoverableCheck, true);
@@ -330,7 +316,7 @@ namespace uikit
         // We've been using the equivalent of ImGuiSelectableFlags_SetNavIdOnHover on all Selectable() since early Nav
         // system days (commit 43ee5d73), but I am unsure whether this should be kept at all. For now moved it to be an
         // opt-in feature used by menus only.
-        ImGui::PushID(labelPtr);
+        ImGui::PushID(label_c);
 
         const ImGuiMenuColumns *offsets = &window->DC.MenuColumns;
 
@@ -339,36 +325,28 @@ namespace uikit
         f32 checkmark_w = IM_TRUNC(g.FontSize * 1.20f);
         f32 min_w = window->DC.MenuColumns.DeclColumns(0.0f, label_size.x, shortcut_w, checkmark_w);
         f32 stretch_w = ImMax(0.0f, ImGui::GetContentRegionAvail().x - min_w);
-        _size = ImVec2(min_w + style::g_VMenu.padding.x, label_size.y);
-        Selectable::Params params{.label = "",
-                                  .rounding = style::g_VMenu.rounding,
-                                  .flags = _flags | ImGuiSelectableFlags_SpanAvailWidth,
-                                  .buttonFlags = _buttonFlags,
-                                  .size = _size,
-                                  .selected = false,
-                                  .hover = &_hover,
-                                  .pressed = &_pressed};
-        Selectable::render(params);
+        size = ImVec2(min_w + style::g_VMenu.padding.x, label_size.y);
+        Selectable::render("", *this);
 
         if (g.LastItemData.StatusFlags & ImGuiItemStatusFlags_Visible)
         {
             const ImVec4 text_color =
-                style.Colors[_flags & ImGuiSelectableFlags_Disabled ? ImGuiCol_TextDisabled : ImGuiCol_Text];
+                style.Colors[sFlags & ImGuiSelectableFlags_Disabled ? ImGuiCol_TextDisabled : ImGuiCol_Text];
             ImGui::PushStyleColor(ImGuiCol_Text, text_color);
-            ImGui::RenderText(pos + ImVec2(offsets->OffsetLabel + style::g_VMenu.padding.x, 0.0f), labelPtr);
+            ImGui::RenderText(pos + ImVec2(offsets->OffsetLabel + style::g_VMenu.padding.x, 0.0f), label_c);
             ImGui::PopStyleColor();
             if (shortcut_w > 0.0f)
             {
                 ImVec2 shortcut_pos = ImVec2(
                     window->Pos.x + window->Size.x - shortcut_w - style.ItemSpacing.x - style.WindowPadding.x, pos.y);
-                if (_hover)
+                if (hover)
                     ImGui::PushStyleColor(ImGuiCol_Text, style::g_VMenu.disabledHoverColor);
                 else
                     ImGui::PushStyleColor(ImGuiCol_Text, style.Colors[ImGuiCol_TextDisabled]);
                 ImGui::RenderText(shortcut_pos, shortcutPtr);
                 ImGui::PopStyleColor();
             }
-            if (_selected)
+            if (selected)
                 ImGui::RenderCheckMark(
                     window->DrawList,
                     pos + ImVec2(offsets->OffsetMark + stretch_w + g.FontSize * 0.40f, g.FontSize * 0.134f * 0.5f),
@@ -377,10 +355,10 @@ namespace uikit
 
         ImGui::PopID();
         if (menuset_is_open) ImGui::PopItemFlag();
-        if (_pressed)
+        if (pressed)
         {
-            callback();
-            _pressed = false;
+            if (callback) callback();
+            pressed = false;
             window::pushEmptyEvent();
         }
 
@@ -408,7 +386,7 @@ namespace uikit
                 else
                 {
                     node.widget->render();
-                    if (node.widget->selected())
+                    if (node.widget->selected)
                     {
                         renderMenuNodes(node.nodes);
                         ImGui::EndMenu();

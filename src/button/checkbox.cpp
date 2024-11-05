@@ -1,5 +1,6 @@
 #include <imgui/imgui_internal.h>
 #include <uikit/button/checkbox.hpp>
+#include <uikit/utils.hpp>
 #include <uikit/widget.hpp>
 
 namespace uikit
@@ -51,7 +52,7 @@ namespace uikit
                 color = ImGui::ColorConvertFloat4ToU32(style::g_CheckBox.bg);
             else
                 color = ImGui::GetColorU32(ImGuiCol_FrameBg);
-            ImGui::RenderFrame(check_bb.Min, check_bb.Max, color, true, style.FrameRounding);
+            renderFrame(check_bb.Min, check_bb.Max, color, true, style.FrameRounding);
 
             if (value)
             {

@@ -1,9 +1,10 @@
 #include <imgui_internal.h>
 #include <uikit/selectable/selectable.hpp>
+#include <uikit/utils.hpp>
 
 namespace uikit
 {
-    ImGuiButtonFlags Selectable::loadFlags(ImGuiSelectableFlags flags)
+    ImGuiButtonFlags Selectable::loadButtonFlags(ImGuiSelectableFlags flags)
     {
         ImGuiContext &g = *GImGui;
         ImGuiButtonFlags buttonFlags = 0;
@@ -18,22 +19,7 @@ namespace uikit
         return buttonFlags;
     }
 
-    void Selectable::render()
-    {
-        Params params{.label = name.c_str(),
-                      .rounding = _rounding,
-                      .flags = _flags,
-                      .buttonFlags = _buttonFlags,
-                      .size = _size,
-                      .selected = _selected,
-                      .hover = &_hover,
-                      .pressed = &_pressed,
-                      .showBackground = _showBackground};
-
-        render(params);
-    }
-
-    void Selectable::render(Selectable::Params &params)
+    void Selectable::render(const char *label, SelectableParams &params)
     {
         ImGuiWindow *window = ImGui::GetCurrentWindow();
         if (window->SkipItems) return;
@@ -42,8 +28,8 @@ namespace uikit
         const ImGuiStyle &style = g.Style;
 
         // Submit label or explicit size to ItemSize(), whereas ItemAdd() will submit a larger/spanning rectangle.
-        ImGuiID id = window->GetID(params.label);
-        ImVec2 label_size = ImGui::CalcTextSize(params.label, nullptr, true);
+        ImGuiID id = window->GetID(label);
+        ImVec2 label_size = ImGui::CalcTextSize(label, nullptr, true);
         ImVec2 size(params.size.x != 0.0f ? params.size.x : label_size.x,
                     params.size.y != 0.0f ? params.size.y : label_size.y);
         if (params.size.x == 0.0f) size.x += style.ItemSpacing.x * 2.0f;
@@ -54,10 +40,10 @@ namespace uikit
         // Fill horizontal space
         // We don't support (size < 0.0f) in Selectable() because the ItemSpacing extension would make explicitly
         // right-aligned sizes not visibly match other widgets.
-        const bool span_all_columns = (params.flags & ImGuiSelectableFlags_SpanAllColumns) != 0;
+        const bool span_all_columns = (params.sFlags & ImGuiSelectableFlags_SpanAllColumns) != 0;
         const float min_x = span_all_columns ? window->ParentWorkRect.Min.x : pos.x;
         const float max_x = span_all_columns ? window->ParentWorkRect.Max.x : window->WorkRect.Max.x;
-        if (params.size.x == 0.0f || (params.flags & ImGuiSelectableFlags_SpanAvailWidth))
+        if (params.size.x == 0.0f || (params.sFlags & ImGuiSelectableFlags_SpanAvailWidth))
             size.x = ImMax(label_size.x, max_x - min_x);
 
         // Text stays at the submission position, but bounding box may be extended on both sides
@@ -67,7 +53,7 @@ namespace uikit
         // Selectables are meant to be tightly packed together with no click-gap, so we extend their box to cover
         // spacing between selectable.
         ImRect bb(min_x, pos.y, text_max.x, text_max.y);
-        if ((params.flags & ImGuiSelectableFlags_NoPadWithHalfSpacing) == 0)
+        if ((params.sFlags & ImGuiSelectableFlags_NoPadWithHalfSpacing) == 0)
         {
             const float spacing_x = span_all_columns ? 0.0f : style.ItemSpacing.x;
             const float spacing_y = style.ItemSpacing.y;
@@ -89,7 +75,7 @@ namespace uikit
             window->ClipRect.Max.x = window->ParentWorkRect.Max.x;
         }
 
-        const bool disabled_item = (params.flags & ImGuiSelectableFlags_Disabled) != 0;
+        const bool disabled_item = (params.sFlags & ImGuiSelectableFlags_Disabled) != 0;
         const bool item_add = ImGui::ItemAdd(
             bb, id, NULL, disabled_item ? (ImGuiItemFlags_)ImGuiItemFlags_Disabled : ImGuiItemFlags_None);
 
@@ -118,7 +104,7 @@ namespace uikit
         const bool was_selected = params.selected;
         bool held;
         bool pressed, hovered;
-        pressed = ImGui::ButtonBehavior(bb, id, &hovered, &held, params.buttonFlags);
+        pressed = ImGui::ButtonBehavior(bb, id, &hovered, &held, params.bFlags);
 
         // Auto-select when moved into
         // - This will be more fully fleshed in the range-select branch
@@ -129,13 +115,13 @@ namespace uikit
         //   BeginSelection() calling PushFocusScope())
         //   - (2) usage will fail with clipped items
         //   The multi-select API aim to fix those issues, e.g. may be replaced with a BeginSelection() API.
-        if ((params.flags & ImGuiSelectableFlags_SelectOnNav) && g.NavJustMovedToId != 0 &&
+        if ((params.sFlags & ImGuiSelectableFlags_SelectOnNav) && g.NavJustMovedToId != 0 &&
             g.NavJustMovedToFocusScopeId == g.CurrentFocusScopeId)
             if (g.NavJustMovedToId == id) params.selected = pressed = true;
 
         // Update NavId when clicking or when Hovering (this doesn't happen on most widgets), so navigation can be
         // resumed with keyboard/gamepad
-        if (pressed || (hovered && (params.flags & ImGuiSelectableFlags_SetNavIdOnHover)))
+        if (pressed || (hovered && (params.sFlags & ImGuiSelectableFlags_SetNavIdOnHover)))
         {
             if (!g.NavHighlightItemUnderNav && g.NavWindow == window && g.NavLayer == window->DC.NavLayerCurrent)
             {
@@ -157,7 +143,7 @@ namespace uikit
                                                  : params.selected ? ImGuiCol_Header
                                                                    : ImGuiCol_PopupBg);
 
-            ImGui::RenderFrame(bb.Min, bb.Max, col, false, params.rounding);
+            renderFrame(bb.Min, bb.Max, col, false, params.rounding, params.dFlags);
         }
         if (g.NavId == id)
             ImGui::RenderNavHighlight(bb, id, ImGuiNavHighlightFlags_Compact | ImGuiNavHighlightFlags_NoRounding);
@@ -169,16 +155,15 @@ namespace uikit
                 ImGui::PopColumnsBackground();
         }
 
-        ImGui::RenderTextClipped(text_min, text_max, params.label, nullptr, &label_size, style.SelectableTextAlign,
-                                 &bb);
+        ImGui::RenderTextClipped(text_min, text_max, label, nullptr, &label_size, style.SelectableTextAlign, &bb);
 
         // Automatically close popups
         if (pressed && (window->Flags & ImGuiWindowFlags_Popup) &&
-            !(params.flags & ImGuiSelectableFlags_NoAutoClosePopups) &&
+            !(params.sFlags & ImGuiSelectableFlags_NoAutoClosePopups) &&
             (g.LastItemData.ItemFlags & ImGuiItemFlags_AutoClosePopups))
             ImGui::CloseCurrentPopup();
         if (disabled_item && !disabled_global) ImGui::EndDisabled();
-        if (params.pressed) *params.pressed = pressed;
-        if (params.hover) *params.hover = hovered;
+        params.pressed = pressed;
+        params.hover = hovered;
     }
 } // namespace uikit
