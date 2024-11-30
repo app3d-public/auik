@@ -42,7 +42,7 @@ namespace uikit
 
         // Render
         // FIXME: Clarify this mess
-        ImU32 col = ImGui::GetColorU32(held ? ImGuiCol_ButtonActive : ImGuiCol_ButtonHovered);
+        ImU32 col = ImGui::GetColorU32(held ? ImGuiCol_HeaderActive : ImGuiCol_HeaderHovered);
         ImVec2 center = bb.GetCenter();
         if (hovered) window->DrawList->AddCircleFilled(center, ImMax(2.0f, g.FontSize * 0.5f + 1.0f), col);
 
