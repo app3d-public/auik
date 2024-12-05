@@ -11,9 +11,13 @@ namespace uikit
         class StretchChangeEvent : public events::IEvent
         {
         public:
+            ImVec2 pos;
             ImVec2 size;
 
-            StretchChangeEvent(const std::string &name = "", ImVec2 size = ImVec2(0, 0)) : IEvent(name), size(size) {}
+            StretchChangeEvent(const std::string &name = "", ImVec2 pos = ImVec2(0, 0), ImVec2 size = ImVec2(0, 0))
+                : IEvent(name), pos(pos), size(size)
+            {
+            }
         };
 
         class ChangeEvent : public events::IEvent

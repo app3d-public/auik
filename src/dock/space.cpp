@@ -40,7 +40,7 @@ namespace uikit
                 hover_bb.Max = draw_bb.Max + ImVec2(helper_style.cap_offset, 0);
                 hovered = hover_bb.Contains(mouse_pos) && hovered;
                 updateDragState(hovered, 0, -1);
-                if (hovered)
+                if (hovered && _frame.flags & FrameStateFlagBits::dropped)
                 {
                     auto *draw_list = ImGui::GetForegroundDrawList();
                     draw_list->AddRectFilled(draw_bb.Min, draw_bb.Max, style.helper.hover_color);
@@ -60,7 +60,7 @@ namespace uikit
                 if (index == sections.size() - 1)
                 {
                     updateDragState(hovered, index + 1, -1);
-                    if (hovered)
+                    if (hovered && _frame.flags & FrameStateFlagBits::dropped)
                     {
                         auto *draw_list = ImGui::GetForegroundDrawList();
                         draw_list->AddRectFilled(draw_bb.Min, draw_bb.Max, style.helper.hover_color);
@@ -495,7 +495,8 @@ namespace uikit
             {
                 ImVec2 oldSize{stretch_size, _window_size.y};
                 ImVec2 newSize{sections[_stretch_id].size, window_size.y};
-                if (newSize != oldSize) _e->dispatch<StretchChangeEvent>("ds:stretch_changed", newSize);
+                if (newSize != oldSize && (newSize.x > 0.0f && newSize.y > 0.0f))
+                    _e->dispatch<StretchChangeEvent>("ds:stretch_changed", ImVec2(left_pos.x, topOffset), newSize);
             }
             _window_size = window_size;
             popupMenu.tryOpen(_frame.padding);
