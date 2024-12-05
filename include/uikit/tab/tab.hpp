@@ -71,15 +71,8 @@ namespace uikit
         };
 
         TabBar(const std::string &id, events::Manager *e, DisposalQueue &disposalQueue,
-               const astl::vector<TabItem> &items, Flags flags = FlagBits::none, const Style &style = {},
-               bool mainTabbar = false)
-            : Widget(id),
-              items(items),
-              e(e),
-              _disposalQueue(disposalQueue),
-              _flags(flags),
-              _isMainTabbar(mainTabbar),
-              _style(style)
+               const astl::vector<TabItem> &items, Flags flags = FlagBits::none, const Style &style = {})
+            : Widget(id), items(items), e(e), _disposalQueue(disposalQueue), _flags(flags), _height(0.0f), _style(style)
         {
         }
 
@@ -93,6 +86,8 @@ namespace uikit
 
         ImVec2 size() const { return _style.size; }
 
+        f32 height() const { return _height; }
+
         f32 avaliableWidth() const { return _avaliableWidth > 0 ? _avaliableWidth : 0; }
 
         TabItem &activeTab() { return items[activeIndex]; }
@@ -103,13 +98,15 @@ namespace uikit
 
         bool removeTab(const TabItem &tab);
 
+        bool isHovered() const { return _isHovered; }
+
     private:
         events::Manager *e;
         DisposalQueue &_disposalQueue;
         bool _isHovered{false};
         Flags _flags;
-        bool _isMainTabbar;
         f32 _avaliableWidth{0};
+        f32 _height;
         Style _style;
         struct DragData
         {
@@ -126,38 +123,41 @@ namespace uikit
 
     struct TabRemoveEvent : public events::IEvent
     {
+        TabBar *tabbar;
         TabItem tab;
         bool confirmed;
         bool createOnEmpty;
         bool batch;
 
-        TabRemoveEvent(const std::string &name, const TabItem &tab, bool confirmed = false, bool createOnEmpty = true,
-                       bool batch = false)
-            : IEvent(name), tab(tab), confirmed(confirmed), createOnEmpty(createOnEmpty), batch(batch)
+        TabRemoveEvent(const std::string &name, TabBar *tabbar, const TabItem &tab, bool confirmed = false,
+                       bool createOnEmpty = true, bool batch = false)
+            : IEvent(name), tabbar(tabbar), tab(tab), confirmed(confirmed), createOnEmpty(createOnEmpty), batch(batch)
         {
         }
     };
 
     struct TabChangeEvent : public events::IEvent
     {
+        TabBar *tabbar;
         astl::vector<TabItem>::iterator prev;
         astl::vector<TabItem>::iterator current;
 
-        TabChangeEvent(const std::string &name, const astl::vector<TabItem>::iterator &prev,
+        TabChangeEvent(const std::string &name, TabBar *tabbar, const astl::vector<TabItem>::iterator &prev,
                        const astl::vector<TabItem>::iterator &current)
-            : IEvent(name), prev(prev), current(current)
+            : IEvent(name), tabbar(tabbar), prev(prev), current(current)
         {
         }
     };
 
     struct TabInfoEvent : public events::IEvent
     {
+        TabBar *tabbar;
         std::string displayName;
         TabItem::Flags flags;
 
-        TabInfoEvent(const std::string &name, const std::string &displayName = "",
+        TabInfoEvent(const std::string &name, TabBar *tabbar, const std::string &displayName = "",
                      TabItem::Flags flags = TabItem::FlagBits::none)
-            : IEvent(name), displayName(displayName), flags(flags)
+            : IEvent(name), tabbar(tabbar), displayName(displayName), flags(flags)
         {
         }
     };

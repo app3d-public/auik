@@ -137,7 +137,7 @@ namespace uikit
         {
             if (begin->renderItem())
             {
-                if (_isMainTabbar) e->dispatch<TabRemoveEvent>("tabbar:close", *begin, false);
+                e->dispatch<TabRemoveEvent>("tabbar:close", this, *begin, false);
                 return false;
             }
         }
@@ -246,15 +246,12 @@ namespace uikit
         if (_style.size.y == 0 && !items.empty()) size.y = items.begin()->size.y + style.WindowPadding.y * 2.0f;
         if (ImGui::BeginChild(name.c_str(), size, true))
         {
-            if (_flags & FlagBits::scrollable)
+            if (ImGui::IsWindowHovered())
+                _isHovered = true;
+            else if (_flags & FlagBits::scrollable)
             {
-                if (ImGui::IsWindowHovered())
-                    _isHovered = true;
-                else
-                {
-                    auto &io = ImGui::GetIO();
-                    if (_isHovered && io.KeyMods & ImGuiMod_Shift) io.AddKeyEvent(ImGuiMod_Shift, false);
-                }
+                auto &io = ImGui::GetIO();
+                if (_isHovered && io.KeyMods & ImGuiMod_Shift) io.AddKeyEvent(ImGuiMod_Shift, false);
             }
             const auto &style = ImGui::GetStyle();
             f32 availableWidth = ImGui::GetContentRegionAvail().x;
@@ -323,7 +320,7 @@ namespace uikit
                 if (begin->pressed && !wasDragReset)
                 {
                     if (activeIndex != index)
-                        e->dispatch<TabChangeEvent>("tabbar:switched", items.begin() + activeIndex,
+                        e->dispatch<TabChangeEvent>("tabbar:switched", this, items.begin() + activeIndex,
                                                     items.begin() + index);
                     activeIndex = index;
                     window::pushEmptyEvent();
@@ -335,6 +332,7 @@ namespace uikit
             if (!(_flags & FlagBits::scrollable) && stopRender) renderCombobox();
 
             _avaliableWidth = ImGui::GetContentRegionAvail().x;
+            _height = ImGui::GetWindowHeight();
         }
         ImGui::EndChild();
         if (onRender) onRender();
@@ -362,20 +360,19 @@ namespace uikit
 
     void TabBar::bindEvents()
     {
-        e->bindEvent(this, "window:scroll", [this](const window::ScrollEvent &event) {
-            if (!_isHovered || !(_flags & FlagBits::scrollable)) return;
-            ImGuiIO &io = ImGui::GetIO();
-            io.AddKeyEvent(ImGuiMod_Shift, true);
-        });
-        if (_isMainTabbar)
-        {
-            e->bindEvent(this, "tabbar:changed", [this](const TabInfoEvent &e) {
-                if (e.flags & TabItem::FlagBits::unsaved)
-                    items[activeIndex].flags() |= TabItem::FlagBits::unsaved;
-                else
-                    items[activeIndex].flags() &= ~TabItem::FlagBits::unsaved;
-                if (!e.displayName.empty()) items[activeIndex].name = e.displayName;
+        if (_flags & FlagBits::scrollable)
+            e->bindEvent(this, "window:scroll", [this](const window::ScrollEvent &event) {
+                if (!_isHovered) return;
+                ImGuiIO &io = ImGui::GetIO();
+                io.AddKeyEvent(ImGuiMod_Shift, true);
             });
-        }
+        e->bindEvent(this, "tabbar:changed", [this](const TabInfoEvent &e) {
+            if (e.tabbar != this) return;
+            if (e.flags & TabItem::FlagBits::unsaved)
+                items[activeIndex].flags() |= TabItem::FlagBits::unsaved;
+            else
+                items[activeIndex].flags() &= ~TabItem::FlagBits::unsaved;
+            if (!e.displayName.empty()) items[activeIndex].name = e.displayName;
+        });
     }
 } // namespace uikit

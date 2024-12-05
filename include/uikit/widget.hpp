@@ -3,6 +3,7 @@
 
 #include <string>
 #include <imgui/imgui.h>
+#include <core/api.hpp>
 
 namespace uikit
 {
@@ -85,5 +86,7 @@ static inline bool operator!=(const ImVec4 &lhs, const ImVec4 &rhs)
 {
     return lhs.x != rhs.x || lhs.y != rhs.y || lhs.z != rhs.z || lhs.w != rhs.w;
 }
+
+APPLIB_API extern ImGuiMouseCursor g_LastCursor;
 
 #endif

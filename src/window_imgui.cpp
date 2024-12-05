@@ -1,9 +1,13 @@
 #include <core/log.hpp>
+#include <uikit/widget.hpp>
 #include <uikit/window_imgui.hpp>
+
 
 #ifdef _WIN32
     #include <window/platform_win32.hpp>
 #endif
+
+ImGuiMouseCursor g_LastCursor = 0;
 
 namespace uikit
 {
@@ -102,6 +106,7 @@ namespace uikit
         if ((io.ConfigFlags & ImGuiConfigFlags_NoMouseCursorChange)) return;
 
         ImGuiMouseCursor imgui_cursor = ImGui::GetMouseCursor();
+        g_LastCursor = imgui_cursor;
         {
             window::Window *window = _bd->Window;
             if (imgui_cursor == ImGuiMouseCursor_None || io.MouseDrawCursor)

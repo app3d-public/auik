@@ -22,6 +22,8 @@ namespace uikit
             imguiStyle.TabBorderSize = 0;
             imguiStyle.TabRounding = 0;
             imguiStyle.SelectableTextAlign.y = 0.5f;
+            imguiStyle.GrabRounding = 0.0f;  // Убирает закругление (необязательно)
+imguiStyle.GrabMinSize = 0.0f;   // Скрывает Resize Grip
         }
 
         template <>
