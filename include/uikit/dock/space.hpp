@@ -146,7 +146,7 @@ namespace uikit
                     }
                     _frame.mouse_pos = mouse_pos;
                 }
-                else if (ImGui::IsMouseReleased(ImGuiMouseButton_Left) && subject.isResizing)
+                else if (subject.isResizing && (ImGui::IsMouseReleased(ImGuiMouseButton_Left) || mouse_pos.x < 0))
                 {
                     _frame.flags &= ~FrameStateFlagBits::resizing;
                     subject.isResizing = false;

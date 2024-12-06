@@ -91,6 +91,7 @@ namespace uikit
                                 active_section.size =
                                     ImClamp(active_section.size + delta_x, active_section.min_size, FLT_MAX);
                             _frame.mouse_pos = mouse_pos;
+                            window::pushEmptyEvent();
                         }
                     }
                     else if (active_section.flags & SectionFlagBits::showHelper ||
