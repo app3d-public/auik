@@ -20,7 +20,12 @@ namespace uikit
             {
                 if (_flags & FlagBits::resetOnClick && index != _activeID)
                 {
-                    if (_activeID >= 0) _items[_activeID].selected = false;
+                    if (_activeID >= 0)
+                    {
+                        _items[_activeID].selected = false;
+                        _items[_activeID].disabled = true;
+                        _items[index].disabled = false;
+                    }
                     _activeID = index;
                 }
                 if (_flags & FlagBits::toogle)
@@ -40,7 +45,7 @@ namespace uikit
 
         ImGui::SetCursorScreenPos(iconPos);
 
-        if (_items[index].disabledIcon && index != _activeID)
+        if (_items[index].disabled && _items[index].disabledIcon)
             _items[index].disabledIcon->render(iconPos);
         else
             _items[index].icon->render(iconPos);

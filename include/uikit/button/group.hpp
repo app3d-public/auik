@@ -33,6 +33,7 @@ namespace uikit
             bool selected;
             std::function<void()> callback;
             uikit::Icon *disabledIcon = nullptr;
+            bool disabled = false;
         };
 
         enum class FlagBits
@@ -59,7 +60,18 @@ namespace uikit
 
         size_t items_count() const { return _items.size(); }
 
-        // void renderHorizontal(); // todo: for most recent commands
+        void renderHorizontal()
+        {
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
+            ImVec2 pos = ImGui::GetCursorScreenPos();
+            for (size_t i = 0; i < _items.size(); ++i)
+            {
+                ImVec2 rectSize;
+                renderItem(i, pos, rectSize);
+                pos.x += rectSize.x;
+            }
+            ImGui::PopStyleVar();
+        }
 
         void renderVertical()
         {
@@ -75,6 +87,8 @@ namespace uikit
         }
 
         void renderAsGroup();
+
+        Item& operator[](size_t index) { return _items[index]; }
 
     private:
         astl::vector<Item> _items;
