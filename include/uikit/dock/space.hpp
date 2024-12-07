@@ -6,6 +6,32 @@
 
 namespace uikit
 {
+    namespace style
+    {
+        extern APPLIB_API struct Dock
+        {
+            struct Helper
+            {
+                f32 width;
+                f32 cap_offset;
+                ImU32 color;
+                ImU32 hover_color;
+            } helper;
+            f32 topOffset = 0;
+            f32 bottomOffset = 0;
+            f32 stretch_min_size;
+            f32 height_resize_limit;
+            ImU32 node_overlay_color;
+            struct Tabbar
+            {
+                f32 item_spacing;
+                f32 min_size;
+                ImU32 background;
+                uikit::Icon *navIcon = nullptr;
+            } tabbar;
+        } g_Dock;
+    } // namespace style
+
     namespace dock
     {
         class StretchChangeEvent : public events::IEvent
@@ -66,26 +92,6 @@ namespace uikit
         class APPLIB_API Space : public Widget
         {
         public:
-            struct Style
-            {
-                struct Helper
-                {
-                    f32 width;
-                    f32 cap_offset;
-                    ImU32 color;
-                    ImU32 hover_color;
-                } helper;
-                f32 stretch_min_size;
-                f32 height_resize_limit;
-                ImU32 node_overlay_color;
-                struct Tabbar
-                {
-                    f32 item_spacing;
-                    f32 min_size;
-                    ImU32 background;
-                    uikit::Icon *navIcon = nullptr;
-                } tabbar;
-            } style;
             astl::vector<Section> sections;
             PopupMenu popupMenu;
 

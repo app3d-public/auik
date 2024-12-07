@@ -6,6 +6,11 @@
 
 namespace uikit
 {
+    namespace style
+    {
+        Dock g_Dock{};
+    }
+
     namespace dock
     {
         void Space::updateDragState(bool hovered, int si, int ni, bool is_content)
@@ -28,7 +33,7 @@ namespace uikit
             auto window = ImGui::GetCurrentWindow();
             ImVec2 child_size = window->ContentRegionRect.GetSize();
             ImVec2 mouse_pos = ImGui::GetMousePos();
-            auto &helper_style = style.helper;
+            auto &helper_style = style::g_Dock.helper;
             bool hovered = !(_frame.flags & FrameStateFlagBits::op_locked);
             if (index == -1)
             {
@@ -43,7 +48,7 @@ namespace uikit
                 if (hovered && _frame.flags & FrameStateFlagBits::dropped)
                 {
                     auto *draw_list = ImGui::GetForegroundDrawList();
-                    draw_list->AddRectFilled(draw_bb.Min, draw_bb.Max, style.helper.hover_color);
+                    draw_list->AddRectFilled(draw_bb.Min, draw_bb.Max, style::g_Dock.helper.hover_color);
                     _frame.flags |= FrameStateFlagBits::op_locked;
                 }
             }
@@ -63,7 +68,7 @@ namespace uikit
                     if (hovered && _frame.flags & FrameStateFlagBits::dropped)
                     {
                         auto *draw_list = ImGui::GetForegroundDrawList();
-                        draw_list->AddRectFilled(draw_bb.Min, draw_bb.Max, style.helper.hover_color);
+                        draw_list->AddRectFilled(draw_bb.Min, draw_bb.Max, style::g_Dock.helper.hover_color);
                         _frame.flags |= FrameStateFlagBits::op_locked;
                     }
                 }
@@ -87,7 +92,7 @@ namespace uikit
                             f32 delta_x = mouse_pos.x - _frame.mouse_pos.x;
                             if (index >= _stretch_id) delta_x = -delta_x;
                             f32 stretch_size = _stretch_id == INT_MAX ? FLT_MAX : sections[_stretch_id].size;
-                            if (!(delta_x > 0 && stretch_size < style.stretch_min_size))
+                            if (!(delta_x > 0 && stretch_size < style::g_Dock.stretch_min_size))
                                 active_section.size =
                                     ImClamp(active_section.size + delta_x, active_section.min_size, FLT_MAX);
                             _frame.mouse_pos = mouse_pos;
@@ -136,23 +141,23 @@ namespace uikit
                 nav.btn.name = astl::format("##%s:btn", node.id.c_str());
             }
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {_frame.item_spacing.x, style.tabbar.item_spacing});
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {_frame.item_spacing.x, style::g_Dock.tabbar.item_spacing});
             ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, {0, 0});
             auto &colors = ImGui::GetStyle().Colors;
             ImGui::PushStyleColor(ImGuiCol_Header, colors[ImGuiCol_ChildBg]);
-            ImGui::PushStyleColor(ImGuiCol_ChildBg, style.tabbar.background);
-            pos.y += style.helper.width;
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, style::g_Dock.tabbar.background);
+            pos.y += style::g_Dock.helper.width;
             ImGui::SetCursorPos(pos);
 
-            size.y = ImGui::GetFrameHeight() + style.tabbar.item_spacing * 2.0f;
+            size.y = ImGui::GetFrameHeight() + style::g_Dock.tabbar.item_spacing * 2.0f;
 
             ImVec2 start_pos = ImGui::GetCursorScreenPos();
             ImVec2 icon_pos = start_pos;
-            f32 nav_size = style.tabbar.navIcon->width() + _frame.padding.x * 2.0f;
+            f32 nav_size = style::g_Dock.tabbar.navIcon->width() + _frame.padding.x * 2.0f;
 
-            icon_pos.x += ImGui::GetWindowWidth() - style.tabbar.navIcon->width() - _frame.padding.x;
-            icon_pos.y += (size.y - style.tabbar.navIcon->height()) / 2.0f - style.helper.width;
-            f32 icon_rect_width = style.tabbar.navIcon->width() + _frame.padding.x * 2.0f;
+            icon_pos.x += ImGui::GetWindowWidth() - style::g_Dock.tabbar.navIcon->width() - _frame.padding.x;
+            icon_pos.y += (size.y - style::g_Dock.tabbar.navIcon->height()) / 2.0f - style::g_Dock.helper.width;
+            f32 icon_rect_width = style::g_Dock.tabbar.navIcon->width() + _frame.padding.x * 2.0f;
 
             nav.tabbar.size({ImGui::GetContentRegionAvail().x - icon_rect_width, 0});
             nav.tabbar.render();
@@ -165,17 +170,17 @@ namespace uikit
             bg_bb.Min = {start_pos.x + window_width - nav_size, start_pos.y};
             bg_bb.Max = {start_pos.x + window_width, start_pos.y + nav.tabbar.height()};
             auto *draw_list = ImGui::GetCurrentWindow()->DrawList;
-            draw_list->AddRectFilled(bg_bb.Min, bg_bb.Max, style.tabbar.background);
+            draw_list->AddRectFilled(bg_bb.Min, bg_bb.Max, style::g_Dock.tabbar.background);
 
             // btn
-            ImGui::PushStyleColor(ImGuiCol_Header, style.tabbar.background);
+            ImGui::PushStyleColor(ImGuiCol_Header, style::g_Dock.tabbar.background);
             nav.btn.size = {nav_size, nav.tabbar.height()};
             ImGui::SetCursorScreenPos(bg_bb.Min);
             nav.btn.render();
             if (nav.btn.pressed) popupMenu.markOpenned(bg_bb, si, ni);
 
             // icon
-            style.tabbar.navIcon->render(icon_pos);
+            style::g_Dock.tabbar.navIcon->render(icon_pos);
             ImGui::PopStyleColor(3);
             ImGui::PopStyleVar(4);
         }
@@ -212,7 +217,7 @@ namespace uikit
             {
                 drawTabbar(si, ni, pos, tabbar_size);
                 window_id = node.tabNav->window_id;
-                min_width = style.tabbar.min_size;
+                min_width = style::g_Dock.tabbar.min_size;
             }
             ImGui::SetCursorPos({init_pos.x, init_pos.y + tabbar_size.y});
             ImGui::BeginChild(node.id.c_str(), node_size, ImGuiChildFlags_AlwaysUseWindowPadding);
@@ -240,7 +245,7 @@ namespace uikit
         {
             auto *window = ImGui::GetCurrentWindow();
             auto *draw_list = window->DrawList;
-            auto &helper_style = style.helper;
+            auto &helper_style = style::g_Dock.helper;
             auto &section = sections[si];
             for (int i = 0; i < section.nodes.size(); ++i)
             {
@@ -277,7 +282,8 @@ namespace uikit
                             auto new_size = node.size - delta_y;
                             auto target_new_size = target_node.size + delta_y;
 
-                            if (new_size >= style.height_resize_limit && target_new_size >= style.height_resize_limit)
+                            if (new_size >= style::g_Dock.height_resize_limit &&
+                                target_new_size >= style::g_Dock.height_resize_limit)
                             {
                                 node.size = new_size;
                                 target_node.size = target_new_size;
@@ -287,7 +293,7 @@ namespace uikit
                     }
                 }
                 else
-                    draw_list->AddRectFilled(nodes_bb[i].Min, nodes_bb[i].Max, style.helper.color);
+                    draw_list->AddRectFilled(nodes_bb[i].Min, nodes_bb[i].Max, style::g_Dock.helper.color);
             }
         }
 
@@ -345,7 +351,7 @@ namespace uikit
                 else
                     bb.Max.y = bb.Min.y + nodes_offsets[i];
                 auto *draw_list = ImGui::GetForegroundDrawList();
-                draw_list->AddRectFilled(bb.Min, bb.Max, style.node_overlay_color);
+                draw_list->AddRectFilled(bb.Min, bb.Max, style::g_Dock.node_overlay_color);
             }
         }
 
@@ -371,7 +377,7 @@ namespace uikit
                 section.size = size.x;
                 auto node_pos = ImGui::GetCursorScreenPos();
                 node_content_bb[0].Min = node_pos;
-                node_content_bb[0].Max = ImVec2(node_pos.x + size.x, node_pos.y + style.helper.width);
+                node_content_bb[0].Max = ImVec2(node_pos.x + size.x, node_pos.y + style::g_Dock.helper.width);
                 drawNode(index, 0);
                 drawHelpersH(index, node_content_bb);
             }
@@ -390,7 +396,7 @@ namespace uikit
                     node_content_bb[i].Min = node_pos;
                     node_content_bb[i].Max = ImVec2(node_pos.x + section.size, node_pos.y + node.size);
                     node_lines_bb[i].Min = node_pos;
-                    node_lines_bb[i].Max = ImVec2(node_pos.x + section.size, node_pos.y + style.helper.width);
+                    node_lines_bb[i].Max = ImVec2(node_pos.x + section.size, node_pos.y + style::g_Dock.helper.width);
                     drawNode(index, i, &node_offsets[i]);
                 }
                 drawHelpersH(index, node_lines_bb);
@@ -427,9 +433,7 @@ namespace uikit
             ImGui::PushStyleColor(ImGuiCol_ChildBg, bg);
             ImGui::PushStyleColor(ImGuiCol_WindowBg, 0);
             ImGuiViewport *viewport = ImGui::GetMainViewport();
-            f32 topOffset = g.NextWindowData.PosVal.y;
-            f32 bottomOffset = 0;
-            ImVec2 window_size{viewport->Size.x, viewport->Size.y - topOffset - bottomOffset};
+            ImVec2 window_size{viewport->Size.x, viewport->Size.y - style::g_Dock.topOffset - style::g_Dock.bottomOffset};
             ImGui::SetNextWindowSize(window_size);
 
             ImGuiWindowFlags windowFlags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse |
@@ -497,7 +501,8 @@ namespace uikit
                 ImVec2 oldSize{stretch_size, _window_size.y};
                 ImVec2 newSize{sections[_stretch_id].size, window_size.y};
                 if (newSize != oldSize && (newSize.x > 0.0f && newSize.y > 0.0f))
-                    _e->dispatch<StretchChangeEvent>("ds:stretch_changed", ImVec2(left_pos.x, topOffset), newSize);
+                    _e->dispatch<StretchChangeEvent>("ds:stretch_changed", ImVec2(left_pos.x, style::g_Dock.topOffset),
+                                                     newSize);
             }
             _window_size = window_size;
             popupMenu.tryOpen(_frame.padding);
