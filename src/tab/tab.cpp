@@ -4,7 +4,6 @@
 #include <uikit/button/combobox.hpp>
 #include <uikit/tab/tab.hpp>
 #include <window/window.hpp>
-#include "imgui.h"
 
 namespace uikit
 {
@@ -259,10 +258,11 @@ namespace uikit
             bool isReorderable = _flags & FlagBits::reorderable;
 
             // Pre-calculate available width if not scrollable
+            f32 arrowWidth = 0.0f;
             if (!isScrollable)
             {
-                f32 arrowWidth = style::g_ComboBox.arrowIcon->width() + style.ItemSpacing.x * 2.0f +
-                                 style.FramePadding.x * 2.0f + style.ItemInnerSpacing.x * 2.0f;
+                arrowWidth = style::g_ComboBox.arrowIcon->width() + style.ItemSpacing.x * 2.0f +
+                             style.FramePadding.x * 2.0f + style.ItemInnerSpacing.x * 2.0f;
                 availableWidth -= arrowWidth;
             }
 
@@ -275,10 +275,8 @@ namespace uikit
                 // Adjust available width and determine if rendering should stop
                 if (!isScrollable)
                 {
-                    if (availableWidth >= itemWidth)
-                        availableWidth -= itemWidth;
-                    else
-                        stopRender = true;
+                    availableWidth -= itemWidth;
+                    if (availableWidth < 0) stopRender = true;
                 }
 
                 // Handle selection and rendering logic
@@ -331,7 +329,7 @@ namespace uikit
             if (_drag.it.has_value()) renderDragged();
             if (!(_flags & FlagBits::scrollable) && stopRender) renderCombobox();
 
-            _avaliableWidth = ImGui::GetContentRegionAvail().x;
+            _avaliableWidth = ImGui::GetContentRegionAvail().x - arrowWidth;
             _height = ImGui::GetWindowHeight();
         }
         ImGui::EndChild();

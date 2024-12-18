@@ -29,6 +29,7 @@ namespace uikit
             ImVec4 hoverColor;
             ImVec2 padding;
             f32 rounding;
+            Icon* checkmark = nullptr;
         } g_HMenu;
     } // namespace style
 
@@ -91,7 +92,7 @@ namespace uikit
     public:
         astl::vector<MenuNode> nodes;
 
-        MenuBar() : Widget("menubar") {}
+        MenuBar(const std::string &name) : Widget(name) {}
         virtual ~MenuBar() = default;
 
         virtual void render() override
@@ -105,10 +106,10 @@ namespace uikit
             ImGui::PopStyleColor(4);
         }
 
+        static APPLIB_API void renderMenuNodes(const astl::vector<MenuNode> &nodes);
+
     protected:
         MenuBar(MenuBar &&other, const std::string &id) noexcept : Widget(id), nodes(std::move(other.nodes)) {}
-
-        static APPLIB_API void renderMenuNodes(const astl::vector<MenuNode> &nodes);
     };
 } // namespace uikit
 

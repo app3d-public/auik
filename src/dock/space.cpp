@@ -1,3 +1,4 @@
+#include <astl/hash.hpp>
 #include <astl/string.hpp>
 #include <core/locales.hpp>
 #include <core/task.hpp>
@@ -28,85 +29,6 @@ namespace uikit
             }
         }
 
-        void Space::drawHelperV(int index, const ImVec2 &pos)
-        {
-            auto window = ImGui::GetCurrentWindow();
-            ImVec2 child_size = window->ContentRegionRect.GetSize();
-            ImVec2 mouse_pos = ImGui::GetMousePos();
-            auto &helper_style = style::g_Dock.helper;
-            bool hovered = !(_frame.flags & FrameStateFlagBits::op_locked);
-            if (index == -1)
-            {
-                ImRect draw_bb;
-                draw_bb.Min = ImVec2(pos.x, pos.y);
-                draw_bb.Max = ImVec2(pos.x + helper_style.width, pos.y + child_size.y);
-                ImRect hover_bb;
-                hover_bb.Min = draw_bb.Min;
-                hover_bb.Max = draw_bb.Max + ImVec2(helper_style.cap_offset, 0);
-                hovered = hover_bb.Contains(mouse_pos) && hovered;
-                updateDragState(hovered, 0, -1);
-                if (hovered && _frame.flags & FrameStateFlagBits::dropped)
-                {
-                    auto *draw_list = ImGui::GetForegroundDrawList();
-                    draw_list->AddRectFilled(draw_bb.Min, draw_bb.Max, style::g_Dock.helper.hover_color);
-                    _frame.flags |= FrameStateFlagBits::op_locked;
-                }
-            }
-            else
-            {
-                ImRect draw_bb;
-                draw_bb.Min = {pos.x + child_size.x - helper_style.width, pos.y};
-                draw_bb.Max = {pos.x + child_size.x, pos.y + child_size.y};
-                ImRect hover_bb;
-                hover_bb.Min = {draw_bb.Min.x - helper_style.cap_offset, draw_bb.Min.y};
-                hover_bb.Max = {draw_bb.Max.x + helper_style.cap_offset, draw_bb.Max.y};
-
-                hovered = hover_bb.Contains(mouse_pos) && !sections[index].isScrollbarHovered && hovered;
-                if (index == sections.size() - 1)
-                {
-                    updateDragState(hovered, index + 1, -1);
-                    if (hovered && _frame.flags & FrameStateFlagBits::dropped)
-                    {
-                        auto *draw_list = ImGui::GetForegroundDrawList();
-                        draw_list->AddRectFilled(draw_bb.Min, draw_bb.Max, style::g_Dock.helper.hover_color);
-                        _frame.flags |= FrameStateFlagBits::op_locked;
-                    }
-                }
-                else
-                {
-                    int active_index = index >= _stretch_id && index != sections.size() - 1 ? index + 1 : index;
-                    Section &active_section = sections[active_index];
-                    updateHoverState(active_section, hovered, mouse_pos);
-
-                    auto *draw_list = window->DrawList;
-                    if (hovered || active_section.isResizing)
-                    {
-                        updateDragState(hovered, index + 1, -1);
-                        if (_hovered || _frame.flags & FrameStateFlagBits::resizing)
-                            ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
-
-                        draw_list->AddRectFilled(draw_bb.Min, draw_bb.Max, helper_style.hover_color);
-                        _frame.flags |= FrameStateFlagBits::op_locked;
-                        if (active_section.isResizing)
-                        {
-                            f32 delta_x = mouse_pos.x - _frame.mouse_pos.x;
-                            if (index >= _stretch_id) delta_x = -delta_x;
-                            f32 stretch_size = _stretch_id == INT_MAX ? FLT_MAX : sections[_stretch_id].size;
-                            if (!(delta_x > 0 && stretch_size < style::g_Dock.stretch_min_size))
-                                active_section.size =
-                                    ImClamp(active_section.size + delta_x, active_section.min_size, FLT_MAX);
-                            _frame.mouse_pos = mouse_pos;
-                            window::pushEmptyEvent();
-                        }
-                    }
-                    else if (active_section.flags & SectionFlagBits::showHelper ||
-                             (index < _stretch_id - 1) ||                           // If left more than 1
-                             (index == _stretch_id + 1 || index > _stretch_id + 1)) // If right more than 1
-                        draw_list->AddRectFilled(draw_bb.Min, draw_bb.Max, helper_style.color);
-                }
-            }
-        }
-
         void Space::allocNodeTabbar(Node &node)
         {
             astl::vector<TabItem> items;
@@ -130,7 +52,7 @@ namespace uikit
             });
         }
 
-        void Space::drawTabbar(int si, int ni, ImVec2 &pos, ImVec2 &size)
+        void Space::drawTabbar(int si, int ni, ImVec2 &size)
         {
             auto &node = sections[si].nodes[ni];
             if (!node.tabNav) allocNodeTabbar(node);
@@ -146,41 +68,39 @@ namespace uikit
             auto &colors = ImGui::GetStyle().Colors;
             ImGui::PushStyleColor(ImGuiCol_Header, colors[ImGuiCol_ChildBg]);
             ImGui::PushStyleColor(ImGuiCol_ChildBg, style::g_Dock.tabbar.background);
-            pos.y += style::g_Dock.helper.width;
-            ImGui::SetCursorPos(pos);
 
-            size.y = ImGui::GetFrameHeight() + style::g_Dock.tabbar.item_spacing * 2.0f;
+            size.y = ImGui::GetFrameHeight() + style::g_Dock.tabbar.item_spacing;
 
             ImVec2 start_pos = ImGui::GetCursorScreenPos();
-            ImVec2 icon_pos = start_pos;
-            f32 nav_size = style::g_Dock.tabbar.navIcon->width() + _frame.padding.x * 2.0f;
-
-            icon_pos.x += ImGui::GetWindowWidth() - style::g_Dock.tabbar.navIcon->width() - _frame.padding.x;
-            icon_pos.y += (size.y - style::g_Dock.tabbar.navIcon->height()) / 2.0f - style::g_Dock.helper.width;
             f32 icon_rect_width = style::g_Dock.tabbar.navIcon->width() + _frame.padding.x * 2.0f;
 
-            nav.tabbar.size({ImGui::GetContentRegionAvail().x - icon_rect_width, 0});
             nav.tabbar.render();
-            size.x = ImGui::GetWindowWidth() - nav.tabbar.avaliableWidth() + icon_rect_width;
+            if (sections[si].size == 0.0f)
+                nav.tabbar.size({ImGui::GetWindowWidth() - nav.tabbar.avaliableWidth(), size.y});
+            size.x = ImMax(nav.tabbar.size().x + icon_rect_width, sections[si].size);
 
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
             // bg
-            f32 window_width = ImGui::GetWindowWidth();
             ImRect bg_bb;
-            bg_bb.Min = {start_pos.x + window_width - nav_size, start_pos.y};
-            bg_bb.Max = {start_pos.x + window_width, start_pos.y + nav.tabbar.height()};
+            bg_bb.Min = {start_pos.x + nav.tabbar.size().x, start_pos.y};
+            bg_bb.Max = start_pos + size;
             auto *draw_list = ImGui::GetCurrentWindow()->DrawList;
             draw_list->AddRectFilled(bg_bb.Min, bg_bb.Max, style::g_Dock.tabbar.background);
 
             // btn
             ImGui::PushStyleColor(ImGuiCol_Header, style::g_Dock.tabbar.background);
-            nav.btn.size = {nav_size, nav.tabbar.height()};
-            ImGui::SetCursorScreenPos(bg_bb.Min);
+            nav.btn.size = {icon_rect_width, size.y};
+            ImVec2 btn_pos = {bg_bb.Max.x - icon_rect_width, start_pos.y};
+            ImGui::SetCursorScreenPos(btn_pos);
             nav.btn.render();
             if (nav.btn.pressed) popupMenu.markOpenned(bg_bb, si, ni);
 
             // icon
+            ImVec2 icon_pos = btn_pos;
+            icon_pos.x += (icon_rect_width - style::g_Dock.tabbar.navIcon->width()) / 2.0f;
+            icon_pos.y += (size.y - style::g_Dock.tabbar.navIcon->height()) / 2.0f;
             style::g_Dock.tabbar.navIcon->render(icon_pos);
+
             ImGui::PopStyleColor(3);
             ImGui::PopStyleVar(4);
         }
@@ -198,32 +118,45 @@ namespace uikit
             return false;
         }
 
-        ImVec2 Space::drawNode(int si, int ni, f32 *offset)
+        ImVec2 Space::drawNode(int si, int ni)
         {
             auto &section = sections[si];
             auto &node = section.nodes[ni];
+
             if (node.id.empty())
             {
-                node.id = astl::format("dock:s-%d-%d", si, ni);
+                node.id = astl::format("%s:%d", section.id.c_str(), ni);
                 node.dockFlags = node.windows.front()->dockFlags;
             }
             ImVec2 node_size{section.size, node.size};
+            auto init_pos = ImGui::GetCursorPos();
+            if (node.dockFlags & WindowDockFlags_Stretch)
+            {
+                f32 avaliable_ss_height = ImGui::GetWindowHeight() - section.fixed_size;
+                f32 full_ss;
+                if (ni == section.nodes.size() - 1 ||
+                    (ni == section.nodes.size() - 2 && !(section.nodes[ni + 1].dockFlags & WindowDockFlags_Stretch)))
+                    full_ss = avaliable_ss_height - init_pos.y;
+                else
+                    full_ss = avaliable_ss_height * node.size;
+                node_size.y = (int)(full_ss - node.extra_offset);
+            }
             ImVec2 tabbar_size{0, 0};
-            auto pos = ImGui::GetCursorPos();
-            auto init_pos = pos;
             size_t window_id = 0;
             f32 min_width = 0;
             if (node.dockFlags & WindowDockFlags_TabMenu)
             {
-                drawTabbar(si, ni, pos, tabbar_size);
+                drawTabbar(si, ni, tabbar_size);
                 window_id = node.tabNav->window_id;
                 min_width = style::g_Dock.tabbar.min_size;
             }
             ImGui::SetCursorPos({init_pos.x, init_pos.y + tabbar_size.y});
-            ImGui::BeginChild(node.id.c_str(), node_size, ImGuiChildFlags_AlwaysUseWindowPadding);
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, _frame.item_spacing);
+            auto *window = node.windows[window_id];
+            window->updateStyleStack();
+            ImGui::BeginChild(node.id.c_str(), node_size, ImGuiChildFlags_AlwaysUseWindowPadding, window->imguiFlags);
             ImGui::BeginGroup();
-            node.windows[window_id]->render();
+            window->render();
             ImGui::EndGroup();
             ImVec2 node_rect;
             if (section.size == 0)
@@ -232,69 +165,78 @@ namespace uikit
                 node_rect.x = ImMax(ImMax(node_rect.x, tabbar_size.x), min_width);
             }
             else
-                node_rect = {section.size, node.size};
+                node_rect = node_size;
             ImGui::PopStyleVar();
-            if (!section.isScrollbarHovered) section.isScrollbarHovered = isScrollbarHovered();
-
+            if (!(section.flags & SectionFlagBits::scrollbar_hovered))
+            {
+                bool scrollbar_hovered = isScrollbarHovered();
+                if (scrollbar_hovered) section.flags |= SectionFlagBits::scrollbar_hovered;
+            }
+            if (_frame.flags & FrameStateFlagBits::resizing)
+                _frame.hover_section = nullptr;
+            else if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows))
+                _frame.hover_section = &sections[si];
             ImGui::EndChild();
-            if (offset) *offset = tabbar_size.y;
+            node.extra_offset = tabbar_size.y;
             return node_rect;
         }
 
-        void Space::drawHelpersH(int si, ImRect *nodes_bb)
+        void Space::resizeBoxHorizontal(Section &section, int node_index, const ImVec2 &pos)
         {
+            auto &node = section.nodes[node_index];
             auto *window = ImGui::GetCurrentWindow();
             auto *draw_list = window->DrawList;
-            auto &helper_style = style::g_Dock.helper;
-            auto &section = sections[si];
-            for (int i = 0; i < section.nodes.size(); ++i)
+            ImRect draw_bb, hover_bb;
+            draw_bb.Min = {pos.x, pos.y - style::g_Dock.helper.size.y};
+            draw_bb.Max = {pos.x + section.size, pos.y};
+            hover_bb.Min = {pos.x, pos.y - style::g_Dock.helper.cap_offset};
+            hover_bb.Max = {draw_bb.Max.x, draw_bb.Max.y + style::g_Dock.helper.cap_offset};
+            ImVec2 mouse_pos = ImGui::GetMousePos();
+            bool hovered = hover_bb.Contains(mouse_pos);
+            bool allowResize = node_index != 0 && node.dockFlags & WindowDockFlags_Stretch;
+
+            if (allowResize) updateHoverState(node, hovered, mouse_pos);
+            if (hovered || node.isResizing)
             {
-                auto &draw_bb = nodes_bb[i];
-                ImRect hover_line_bb;
-                hover_line_bb.Min = {draw_bb.Min.x, draw_bb.Min.y - helper_style.cap_offset};
-                hover_line_bb.Max = {draw_bb.Max.x, draw_bb.Max.y + helper_style.cap_offset};
-                ImVec2 mouse_pos = ImGui::GetMousePos();
-                bool hovered_line = hover_line_bb.Contains(mouse_pos);
-                auto &node = section.nodes[i];
-                bool allow_resize = i != 0 && node.dockFlags & WindowDockFlags_Stretch;
-                if (allow_resize) updateHoverState(node, hovered_line, mouse_pos);
-                if (hovered_line || node.isResizing)
+                if (allowResize && (_hovered || node.isResizing)) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+                draw_list->AddRectFilled(draw_bb.Min, draw_bb.Max, style::g_Dock.helper.hover_color);
+                _frame.flags |= FrameStateFlagBits::op_locked;
+                if (node.isResizing)
                 {
-                    if (allow_resize && _hovered) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
-                    draw_list->AddRectFilled(draw_bb.Min, draw_bb.Max, helper_style.hover_color);
-                    _frame.flags |= FrameStateFlagBits::op_locked;
-                    if (node.isResizing)
+                    f32 delta_y = mouse_pos.y - _frame.mouse_pos.y;
+                    int target_node_id = -1;
+                    for (int j = node_index - 1; j >= 0; --j)
                     {
-                        f32 delta_y = mouse_pos.y - _frame.mouse_pos.y;
-                        int target_node_id = -1;
-                        for (int j = i - 1; j >= 0; --j)
+                        if (section.nodes[j].dockFlags & WindowDockFlags_Stretch)
                         {
-                            if (section.nodes[j].dockFlags & WindowDockFlags_Stretch)
-                            {
-                                target_node_id = j;
-                                break;
-                            }
+                            target_node_id = j;
+                            break;
                         }
-
-                        if (target_node_id != -1)
-                        {
-                            auto &target_node = section.nodes[target_node_id];
-                            auto new_size = node.size - delta_y;
-                            auto target_new_size = target_node.size + delta_y;
-
-                            if (new_size >= style::g_Dock.height_resize_limit &&
-                                target_new_size >= style::g_Dock.height_resize_limit)
-                            {
-                                node.size = new_size;
-                                target_node.size = target_new_size;
-                            }
-                        }
-                        _frame.mouse_pos = mouse_pos;
                     }
+
+                    if (target_node_id != -1)
+                    {
+                        auto &target_node = section.nodes[target_node_id];
+                        f32 avaliable_ss_height = ImGui::GetWindowHeight() - section.fixed_size;
+                        f32 delta_ratio = delta_y / avaliable_ss_height;
+
+                        f32 max_delta_node = node.size - (style::g_Dock.height_resize_limit / avaliable_ss_height);
+                        f32 max_delta_target =
+                            (style::g_Dock.height_resize_limit / avaliable_ss_height) - target_node.size;
+
+                        f32 clamped_delta_ratio = std::clamp(delta_ratio, max_delta_target, max_delta_node);
+                        if (clamped_delta_ratio != 0.0f)
+                        {
+                            node.next_offset = -clamped_delta_ratio;
+                            target_node.next_offset = clamped_delta_ratio;
+                        }
+                    }
+
+                    _frame.mouse_pos = mouse_pos;
                 }
-                else
-                    draw_list->AddRectFilled(nodes_bb[i].Min, nodes_bb[i].Max, style::g_Dock.helper.color);
             }
+            else
+                draw_list->AddRectFilled(draw_bb.Min, draw_bb.Max, style::g_Dock.helper.color);
         }
 
         f32 Space::prerenderSectionNodes(int index)
@@ -304,117 +246,99 @@ namespace uikit
             section.fixed_sections = 0;
             f32 height = ImGui::GetContentRegionAvail().y;
             f32 content_max = 0.0f;
-            f32 top_offsets[section.nodes.size()];
             for (int i = 0; i < section.nodes.size(); ++i)
             {
-                ImGui::SetCursorPosY(0);
+                ImGui::SetCursorPos({0, 0});
                 auto &node = section.nodes[i];
-                ImVec2 node_rect = drawNode(index, i, &top_offsets[i]);
+                ImVec2 node_rect = drawNode(index, i);
                 content_max = ImMax(content_max, node_rect.x);
-                if (!(section.nodes[i].dockFlags & WindowDockFlags_Stretch))
+                if (!(node.dockFlags & WindowDockFlags_Stretch))
                 {
                     node.size = node_rect.y + _frame.padding.y * 2.0f;
                     section.fixed_size += node.size;
                     ++section.fixed_sections;
                 }
             }
-            // Init start stretch sizes
-            f32 ss_size = (height - section.fixed_size) / (section.nodes.size() - section.fixed_sections);
-            for (int i = 0; i < section.nodes.size(); ++i)
-            {
-                auto &node = section.nodes[i];
-                if (node.dockFlags & WindowDockFlags_Stretch) node.size = ss_size - top_offsets[i];
-            }
             return content_max;
         }
 
-        void Space::drawNodeDragOverlay(int si, ImRect *nodes_bb, f32 *nodes_offsets)
+        void Space::nodeDragOverlay(int si, int ni, const ImVec2 &pos, const ImVec2 &node_rect)
         {
             auto &section = sections[si];
-            for (int i = 0; i < section.nodes.size(); ++i)
-            {
-                auto &node = section.nodes[i];
-                ImVec2 mouse_pos = ImGui::GetMousePos();
-                bool hovered = nodes_bb[i].Contains(mouse_pos) && g_LastCursor == 0;
-                ImGuiContext &g = *GImGui;
-                f32 diff = mouse_pos.y - nodes_bb[i].Min.y;
-                bool is_content = diff > nodes_offsets[i];
-                updateDragState(hovered, si, i, is_content);
-                if (!hovered || !(_frame.flags & FrameStateFlagBits::dropped)) continue;
-                _frame.flags |= FrameStateFlagBits::op_locked;
-                ImRect bb = nodes_bb[i];
-                if (is_content)
-                {
-                    bb.Min.y += nodes_offsets[i];
-                    bb.Max.y += nodes_offsets[i];
-                }
-                else
-                    bb.Max.y = bb.Min.y + nodes_offsets[i];
-                auto *draw_list = ImGui::GetForegroundDrawList();
-                draw_list->AddRectFilled(bb.Min, bb.Max, style::g_Dock.node_overlay_color);
-            }
+            auto &node = section.nodes[ni];
+            ImVec2 mouse_pos = ImGui::GetMousePos();
+            ImRect node_bb;
+            node_bb.Min = pos;
+            node_bb.Max = {pos.x + section.size, pos.y + node_rect.y + node.extra_offset};
+            bool hovered = node_bb.Contains(mouse_pos) && g_LastCursor == 0;
+            ImGuiContext &g = *GImGui;
+            f32 diff = mouse_pos.y - pos.y;
+            bool is_content = diff > node.extra_offset;
+            updateDragState(hovered, si, ni, is_content);
+            if (!hovered || !(_frame.flags & FrameStateFlagBits::dropped) ||
+                !(node.dockFlags & WindowDockFlags_Stretch))
+                return;
+            _frame.flags |= FrameStateFlagBits::op_locked;
+            ImRect draw_bb = node_bb;
+            if (is_content)
+                draw_bb.Min.y += node.extra_offset - style::g_Dock.helper.size.y;
+            else
+                draw_bb.Max.y -= node_rect.y;
+            auto *draw_list = ImGui::GetForegroundDrawList();
+            draw_list->AddRectFilled(draw_bb.Min, draw_bb.Max, style::g_Dock.node_overlay_color);
         }
 
         void Space::drawSection(int index, ImVec2 size, ImVec2 &pos)
         {
             auto &section = sections[index];
-            section.isScrollbarHovered = false;
-            if (section.size != 0.0f)
-                ImGui::SetCursorScreenPos(pos);
-            else
-                ImGui::SetCursorPosY(0);
-            if (section.id.empty()) section.id = astl::format("dock:s-%d", index);
-            ImGui::BeginChild(section.id.c_str(), size, 0, ImGuiWindowFlags_NoScrollbar);
+            section.flags &= ~SectionFlagBits::scrollbar_hovered;
+            if (section.id.empty()) section.id = astl::format("dock:%llx", astl::IDGen()());
+
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
-            bool drawOverlay = false;
-            ImRect node_lines_bb[section.nodes.size()];
-            ImRect node_content_bb[section.nodes.size()];
-            f32 node_offsets[section.nodes.size()];
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, _frame.padding);
 
-            if (section.flags & SectionFlagBits::stretch)
+            if (section.size == 0.0f)
             {
-                section.size = size.x;
-                auto node_pos = ImGui::GetCursorScreenPos();
-                node_content_bb[0].Min = node_pos;
-                node_content_bb[0].Max = ImVec2(node_pos.x + size.x, node_pos.y + style::g_Dock.helper.width);
-                drawNode(index, 0);
-                drawHelpersH(index, node_content_bb);
-            }
-            else if (section.size == 0.0f)
-            {
-                section.size = ImMax(prerenderSectionNodes(index) + _frame.padding.x * 2.0f, 50.0f);
-                section.min_size = section.size;
+                ImGui::SetCursorScreenPos(pos);
+                auto pre_size = ImMax(prerenderSectionNodes(index) + _frame.padding.x * 2.0f, 50.0f);
+                if (section.isStretch)
+                {
+                    section.size = size.x;
+                    section.min_size = 150;
+                }
+                else
+                {
+                    section.size = pre_size;
+                    section.min_size = pre_size;
+                }
             }
             else
             {
-                drawOverlay = true;
+                if (section.isStretch) section.size = size.x;
+                pos.y += style::g_Dock.helper.size.y;
                 for (int i = 0; i < section.nodes.size(); ++i)
                 {
                     auto &node = section.nodes[i];
-                    auto node_pos = ImGui::GetCursorScreenPos();
-                    node_content_bb[i].Min = node_pos;
-                    node_content_bb[i].Max = ImVec2(node_pos.x + section.size, node_pos.y + node.size);
-                    node_lines_bb[i].Min = node_pos;
-                    node_lines_bb[i].Max = ImVec2(node_pos.x + section.size, node_pos.y + style::g_Dock.helper.width);
-                    drawNode(index, i, &node_offsets[i]);
+                    resizeBoxHorizontal(section, i, pos);
+                    ImGui::SetCursorScreenPos(pos);
+                    auto &style = ImGui::GetStyle();
+                    ImVec4 node_bg = style.Colors[ImGuiCol_ChildBg];
+                    if (node.isTransparent) node_bg.w = 0.0f;
+                    ImGui::PushStyleColor(ImGuiCol_ChildBg, node_bg);
+                    auto node_rect = drawNode(index, i);
+                    ImGui::PopStyleColor();
+                    if (!section.isStretch && !(section.flags & SectionFlagBits::op_locked))
+                        nodeDragOverlay(index, i, pos, node_rect);
+                    pos.y += node_rect.y + node.extra_offset;
                 }
-                drawHelpersH(index, node_lines_bb);
+                // Update sizes for a next frame
+                for (auto &node : section.nodes)
+                {
+                    node.size += node.next_offset;
+                    node.next_offset = 0.0f;
+                }
             }
-            ImGui::PopStyleVar();
-
-            drawHelperV(index, pos);
-            if (index == 0) drawHelperV(-1, pos);
-
-            if (drawOverlay && !(_frame.flags & FrameStateFlagBits::op_locked))
-                drawNodeDragOverlay(index, node_content_bb, node_offsets);
-
-            if (_frame.flags & FrameStateFlagBits::resizing)
-                _frame.hover_section = -1;
-            else if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows))
-                _frame.hover_section = index;
-            ImGui::PopStyleVar();
-            ImGui::EndChild();
+            ImGui::PopStyleVar(2);
         }
 
         void Space::render()
@@ -433,8 +357,10 @@ namespace uikit
             ImGui::PushStyleColor(ImGuiCol_ChildBg, bg);
             ImGui::PushStyleColor(ImGuiCol_WindowBg, 0);
             ImGuiViewport *viewport = ImGui::GetMainViewport();
-            ImVec2 window_size{viewport->Size.x, viewport->Size.y - style::g_Dock.topOffset - style::g_Dock.bottomOffset};
+            ImVec2 window_size{viewport->Size.x,
+                               viewport->Size.y - style::g_Dock.top_offset - style::g_Dock.bottom_offset};
             ImGui::SetNextWindowSize(window_size);
+            ImGui::SetNextWindowPos({0, style::g_Dock.top_offset});
 
             ImGuiWindowFlags windowFlags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse |
                                            ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
@@ -450,7 +376,7 @@ namespace uikit
             {
                 auto &section = sections[i];
                 ImVec2 child_size = ImVec2(0, window_size.y);
-                if (section.flags & SectionFlagBits::stretch)
+                if (section.isStretch)
                 {
                     _stretch_id = i;
                     break;
@@ -460,8 +386,11 @@ namespace uikit
                 else
                     child_size.x = section.size;
                 drawSection(i, child_size, pos);
-                pos.x += child_size.x;
+                pos.x += child_size.x + style::g_Dock.helper.size.x;
+                pos.y = init_pos.y;
             }
+            if (pos.x > init_pos.x) pos.x -= style::g_Dock.helper.size.x;
+
             if (_stretch_id == INT_MAX) _stretch_id = sections.size();
 
             // Right section
@@ -486,25 +415,94 @@ namespace uikit
                     update_layout = true;
                 }
                 drawSection(i, child_size, pos);
+                pos.y = init_pos.y;
             }
 
             // Center
-            ImU32 stretch_color = 0;
             auto stretch_size = sections[_stretch_id].size;
-            if (!(sections[_stretch_id].flags & SectionFlagBits::transparent)) stretch_color = bg;
-            ImGui::PushStyleColor(ImGuiCol_ChildBg, stretch_color);
             drawSection(_stretch_id, ImVec2(pos.x - left_pos.x, 0), left_pos);
-            ImGui::PopStyleColor();
-
             if (stretch_size != 0.0f && !update_layout)
             {
                 ImVec2 oldSize{stretch_size, _window_size.y};
                 ImVec2 newSize{sections[_stretch_id].size, window_size.y};
                 if (newSize != oldSize && (newSize.x > 0.0f && newSize.y > 0.0f))
-                    _e->dispatch<StretchChangeEvent>("ds:stretch_changed", ImVec2(left_pos.x, style::g_Dock.topOffset),
+                    _e->dispatch<StretchChangeEvent>("ds:stretch_changed", ImVec2(left_pos.x, style::g_Dock.top_offset),
                                                      newSize);
             }
             _window_size = window_size;
+            drawOverlayLayer(init_pos);
+
+            ImGui::End();
+            ImGui::PopStyleVar(2);
+            ImGui::PopStyleColor(2);
+            if (update_layout) window::pushEmptyEvent();
+            if (!ImGui::IsMouseDragging(ImGuiMouseButton_Left)) _frame.flags &= ~FrameStateFlagBits::dropped;
+        }
+
+        void Space::resizeBoxVertical(int section_index, const ImRect &draw_bb)
+        {
+            ImRect hover_bb = draw_bb;
+            hover_bb.Min.x -= style::g_Dock.helper.cap_offset;
+            hover_bb.Max.x += style::g_Dock.helper.cap_offset;
+            ImVec2 mouse_pos = ImGui::GetMousePos();
+            bool hovered = hover_bb.Contains(mouse_pos);
+            auto &section = sections[section_index];
+            int active_index = section_index >= _stretch_id && section_index != sections.size() - 1 ? section_index + 1
+                                                                                                    : section_index;
+            Section &active_section = sections[active_index];
+            if (hovered)
+                section.flags |= SectionFlagBits::op_locked;
+            else
+                section.flags &= ~SectionFlagBits::op_locked;
+            updateHoverState(active_section, hovered, mouse_pos);
+            auto *draw_list = ImGui::GetCurrentWindow()->DrawList;
+            if (hovered || active_section.isResizing)
+            {
+                active_section.flags |= SectionFlagBits::op_locked;
+                updateDragState(hovered, section_index + 1, -1);
+                if (_hovered || _frame.flags & FrameStateFlagBits::resizing)
+                    ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+                draw_list->AddRectFilled(draw_bb.Min, draw_bb.Max, style::g_Dock.helper.hover_color);
+                _frame.flags |= FrameStateFlagBits::op_locked;
+                if (active_section.isResizing)
+                {
+                    f32 delta_x = mouse_pos.x - _frame.mouse_pos.x;
+                    if (section_index >= _stretch_id) delta_x = -delta_x;
+                    f32 stretch_size = _stretch_id == INT_MAX ? FLT_MAX : sections[_stretch_id].size;
+                    if (!(delta_x > 0 && stretch_size < style::g_Dock.stretch_min_size))
+                        active_section.size = ImClamp(active_section.size + delta_x, active_section.min_size, FLT_MAX);
+                    _frame.mouse_pos = mouse_pos;
+                    window::pushEmptyEvent();
+                }
+            }
+            else
+            {
+                active_section.flags &= ~SectionFlagBits::op_locked;
+                if ((section_index < _stretch_id - 1) ||                                   // If left more than 1
+                    (section_index == _stretch_id + 1 || section_index > _stretch_id + 1)) // If right more than 1
+                    draw_list->AddRectFilled(draw_bb.Min, draw_bb.Max, style::g_Dock.helper.color);
+            }
+        }
+
+        void Space::resizeBoxVerticalBounds(Section &section, int si, const ImRect &draw_bb, const ImRect &hover_bb)
+        {
+            ImVec2 mouse_pos = ImGui::GetMousePos();
+            bool hovered = hover_bb.Contains(mouse_pos);
+            if (hovered)
+                section.flags |= SectionFlagBits::op_locked;
+            else
+                section.flags &= ~SectionFlagBits::op_locked;
+            updateDragState(hovered, si, -1);
+            if (hovered && _frame.flags & FrameStateFlagBits::dropped)
+            {
+                auto *draw_list = ImGui::GetForegroundDrawList();
+                draw_list->AddRectFilled(draw_bb.Min, draw_bb.Max, style::g_Dock.helper.hover_color);
+                _frame.flags |= FrameStateFlagBits::op_locked;
+            }
+        }
+
+        void Space::drawOverlayLayer(const ImVec2 &init_pos)
+        {
             popupMenu.tryOpen(_frame.padding);
 
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, _frame.padding);
@@ -512,11 +510,55 @@ namespace uikit
             popupMenu.render();
             ImGui::PopStyleVar(2);
 
-            ImGui::End();
-            ImGui::PopStyleVar(2);
-            ImGui::PopStyleColor(2);
-            if (update_layout) window::pushEmptyEvent();
-            if (!ImGui::IsMouseDragging(ImGuiMouseButton_Left)) _frame.flags &= ~FrameStateFlagBits::dropped;
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, 0);
+            ImGui::SetCursorPos({0, 0});
+            ImGui::BeginChild("dock:overlay", ImVec2(0, 0), 0,
+                              ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoScrollbar |
+                                  ImGuiWindowFlags_NoScrollWithMouse);
+
+            ImVec2 overlay_pos = init_pos;
+            int i = 0;
+            for (; i < _stretch_id; ++i)
+            {
+                overlay_pos.x += sections[i].size;
+                ImRect bb;
+                bb.Min = {overlay_pos.x, overlay_pos.y};
+                bb.Max = {overlay_pos.x + style::g_Dock.helper.size.x, _window_size.y + init_pos.y};
+                overlay_pos.x += style::g_Dock.helper.size.x;
+                resizeBoxVertical(i, bb);
+            }
+            if (i > 0) overlay_pos.x -= style::g_Dock.helper.size.y;
+            for (; i < sections.size() - 1; ++i)
+            {
+                overlay_pos.x += sections[i].size;
+                ImRect bb;
+                bb.Min = {overlay_pos.x - style::g_Dock.helper.size.x, overlay_pos.y};
+                bb.Max = {overlay_pos.x, _window_size.y + init_pos.y};
+                resizeBoxVertical(i, bb);
+            }
+            // Front
+            {
+                ImVec2 draw_bb_max = {init_pos.x + style::g_Dock.helper.size.x, init_pos.y + _window_size.y};
+                ImRect hover_bb;
+                hover_bb.Min = init_pos;
+                hover_bb.Max = {draw_bb_max.x + style::g_Dock.helper.cap_offset, draw_bb_max.y};
+                resizeBoxVerticalBounds(sections.front(), 0, {init_pos, draw_bb_max}, hover_bb);
+            }
+            // End
+            {
+                auto &last = sections.back();
+                overlay_pos.x += last.size;
+                ImRect draw_bb;
+                draw_bb.Min = {overlay_pos.x - style::g_Dock.helper.size.x, overlay_pos.y};
+                draw_bb.Max = {overlay_pos.x, overlay_pos.y + ImGui::GetWindowHeight()};
+                ImRect hover_bb;
+                hover_bb.Min = {draw_bb.Min.x - style::g_Dock.helper.cap_offset, draw_bb.Min.y};
+                hover_bb.Max = draw_bb.Max;
+                resizeBoxVerticalBounds(last, sections.size(), draw_bb, hover_bb);
+            }
+
+            ImGui::EndChild();
+            ImGui::PopStyleColor();
         }
 
         void Space::closeWindow(int si, int ni, int tab_id, const std::function<void(uikit::Window *window)> &callback)
@@ -533,7 +575,13 @@ namespace uikit
                 if (node.windows.empty())
                 {
                     node.destroy(_e);
+                    auto removed_size = section.nodes[ni].size;
                     section.nodes.erase(section.nodes.begin() + ni);
+                    if (!section.nodes.empty())
+                    {
+                        auto &adusted_node = ni == 0 ? section.nodes.front() : section.nodes[ni - 1];
+                        adusted_node.size += removed_size;
+                    }
                 }
                 else
                 {
@@ -600,6 +648,46 @@ namespace uikit
                 _size = ImGui::GetWindowSize();
                 ImGui::EndPopup();
             }
+        }
+
+        bool tryInsertNode(Section &section, Node &node, size_t index, f32 height)
+        {
+            f32 avaliable_size = height - section.fixed_size;
+
+            // Check if enough space
+            if (avaliable_size <= 0.0f) return false;
+            f32 limit_size = uikit::style::g_Dock.height_resize_limit;
+            size_t stretch_count = section.nodes.size() - section.fixed_sections;
+            if ((stretch_count + 1) * limit_size > avaliable_size) return false;
+
+            auto &old_node = section.nodes[index];
+            old_node.size *= 0.5f;
+            node.size = old_node.size;
+            section.nodes.insert(section.nodes.begin() + index + 1, std::move(node));
+
+            // Redistribute space
+            f32 first_abs = old_node.size * avaliable_size;
+            f32 second_abs = section.nodes[index + 1].size * avaliable_size;
+            if (first_abs < limit_size || second_abs < limit_size)
+            {
+                size_t new_stretch_count = section.nodes.size() - section.fixed_sections;
+                f32 total_min = new_stretch_count * limit_size;
+
+                f32 leftover = avaliable_size - total_min;
+                f32 add_each = leftover / (f32)new_stretch_count;
+
+                for (auto &n : section.nodes)
+                {
+                    if (n.dockFlags & uikit::WindowDockFlags_Stretch)
+                    {
+                        f32 node_px = limit_size + add_each;
+                        n.size = node_px / avaliable_size;
+                    }
+                }
+            }
+
+            section.reset();
+            return true;
         }
     } // namespace dock
 } // namespace uikit

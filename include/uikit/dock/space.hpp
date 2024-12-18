@@ -12,13 +12,13 @@ namespace uikit
         {
             struct Helper
             {
-                f32 width;
+                ImVec2 size;
                 f32 cap_offset;
                 ImU32 color;
                 ImU32 hover_color;
             } helper;
-            f32 topOffset = 0;
-            f32 bottomOffset = 0;
+            f32 top_offset = 0;
+            f32 bottom_offset = 0;
             f32 stretch_min_size;
             f32 height_resize_limit;
             ImU32 node_overlay_color;
@@ -109,9 +109,7 @@ namespace uikit
 
             virtual void render() override;
 
-            int stretchID() const { return _stretch_id; }
-
-            int hoverSection() const { return _hovered ? _frame.hover_section : -1; }
+            Section *hoverSection() const { return _hovered ? _frame.hover_section : nullptr; }
 
             bool hovered() const { return _hovered; }
 
@@ -121,6 +119,8 @@ namespace uikit
             }
 
             void closeWindow(int si, int ni, int tab_id, const std::function<void(uikit::Window *window)> &callback);
+
+            ImVec2 windowSize() const { return _window_size; }
 
         private:
             FrameState _frame;
@@ -135,10 +135,12 @@ namespace uikit
             void drawSection(int index, ImVec2 size, ImVec2 &pos);
             f32 prerenderSectionNodes(int index);
 
-            void drawHelperV(int index, const ImVec2 &pos);
-            void drawHelpersH(int si, ImRect *nodes_bb);
-            ImVec2 drawNode(int si, int ni, f32 *offset = nullptr); // return drawn content size
-            void drawNodeDragOverlay(int si, ImRect *nodes_bb, f32 *nodes_offsets);
+            void resizeBoxVertical(int section_index, const ImRect &draw_bb);
+            void resizeBoxVerticalBounds(Section &section, int si, const ImRect &draw_bb, const ImRect &hover_bb);
+            void resizeBoxHorizontal(Section &section, int node_index, const ImVec2 &pos);
+            void drawOverlayLayer(const ImVec2 &init_pos);
+            void nodeDragOverlay(int si, int ni, const ImVec2 &pos, const ImVec2& node_rect);
+            ImVec2 drawNode(int si, int ni); // return drawn content size
 
             template <typename T>
             void updateHoverState(T &subject, bool hovered, const ImVec2 &mouse_pos)
@@ -162,7 +164,9 @@ namespace uikit
             void updateDragState(bool hovered, int si, int ni, bool is_content = true);
 
             void allocNodeTabbar(Node &node);
-            void drawTabbar(int si, int ni, ImVec2 &pos, ImVec2 &size);
+            void drawTabbar(int si, int ni, ImVec2 &size);
         };
+
+        APPLIB_API bool tryInsertNode(Section& section, Node& node, size_t index, f32 height);
     } // namespace dock
 } // namespace uikit

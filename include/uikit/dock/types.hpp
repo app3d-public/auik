@@ -10,9 +10,9 @@ namespace uikit
         enum class SectionFlagBits
         {
             none = 0x0,
-            stretch = 0x1,
-            transparent = 0x2,
-            showHelper = 0x4
+            // [Internal flags]
+            scrollbar_hovered = 0x1,
+            op_locked = 0x2
         };
 
         using SectionFlags = Flags<SectionFlagBits>;
@@ -30,10 +30,30 @@ namespace uikit
                 size_t window_id = 0;
             } *tabNav;
             bool isResizing;
+            bool isTransparent;
+            f32 next_offset;
+            f32 extra_offset;
 
-            Node(const astl::vector<Window *> &windows)
-                : id(""), size(0.0f), windows(windows), tabNav(nullptr), isResizing(false)
+            Node(const astl::vector<Window *> &windows, bool isTransparent = false, f32 size = 0.0f)
+                : id(""),
+                  size(size),
+                  windows(windows),
+                  tabNav(nullptr),
+                  isResizing(false),
+                  isTransparent(isTransparent),
+                  next_offset(0.0f),
+                  extra_offset(0.0f)
             {
+            }
+
+            void reset()
+            {
+                id = "";
+                if (tabNav)
+                {
+                    tabNav->tabbar.name = "";
+                    tabNav->tabbar.size({0, 0});
+                }
             }
 
             void destroy(events::Manager *ed)
@@ -54,20 +74,22 @@ namespace uikit
             f32 size = 0.0f;
             f32 min_size = 50.0f;
             f32 fixed_size = FLT_MAX;
+            f32 content_height = 0.0f;
             astl::vector<Node> nodes;
             bool isResizing = false;
-            bool isScrollbarHovered = false;
+            bool isStretch;
             size_t fixed_sections = 0;
 
-            Section(const astl::vector<Node> &nodes, SectionFlags flags = SectionFlagBits::none,
-                    const std::string &id = "", f32 min_size = 50.0f)
+            Section(const astl::vector<Node> &nodes, bool isStretch = false, const std::string &id = "",
+                    f32 min_size = 50.0f)
                 : id(id),
-                  flags(flags),
+                  flags(SectionFlagBits::none),
                   size(0.0f),
                   min_size(min_size),
                   fixed_size(FLT_MAX),
                   nodes(nodes),
                   isResizing(false),
+                  isStretch(isStretch),
                   fixed_sections(0)
             {
             }
@@ -76,12 +98,7 @@ namespace uikit
             {
                 size = 0;
                 id = "";
-                for (auto &node : nodes)
-                {
-                    node.id = "";
-                    node.size = 0;
-                    if (node.tabNav) node.tabNav->tabbar.name = "";
-                }
+                for (auto &node : nodes) node.reset();
             }
         };
 
@@ -100,7 +117,7 @@ namespace uikit
             ImVec2 mouse_pos;
             ImVec2 padding;
             ImVec2 item_spacing;
-            int hover_section;
+            Section *hover_section = nullptr;
             FrameStateFlags flags = FrameStateFlagBits::none;
         };
     } // namespace dock
@@ -110,9 +127,9 @@ template <>
 struct FlagTraits<uikit::dock::SectionFlagBits>
 {
     static constexpr bool isBitmask = true;
-    static constexpr uikit::dock::SectionFlags allFlags =
-        uikit::dock::SectionFlagBits::none | uikit::dock::SectionFlagBits::stretch |
-        uikit::dock::SectionFlagBits::transparent | uikit::dock::SectionFlagBits::showHelper;
+    static constexpr uikit::dock::SectionFlags allFlags = uikit::dock::SectionFlagBits::none |
+                                                          uikit::dock::SectionFlagBits::scrollbar_hovered |
+                                                          uikit::dock::SectionFlagBits::op_locked;
 };
 
 template <>

@@ -347,10 +347,12 @@ namespace uikit
                 ImGui::PopStyleColor();
             }
             if (selected)
-                ImGui::RenderCheckMark(
-                    window->DrawList,
-                    pos + ImVec2(offsets->OffsetMark + stretch_w + g.FontSize * 0.40f, g.FontSize * 0.134f * 0.5f),
-                    ImGui::GetColorU32(ImGuiCol_Text), g.FontSize * 0.866f);
+            {
+                ImVec2 checkmarkPos =
+                    pos + ImVec2(offsets->OffsetMark + stretch_w + g.FontSize * 0.30f + style.ItemInnerSpacing.x * 0.5f,
+                                 label_size.y / 2.0f - style::g_VMenu.arrowRight->height() / 2.0f);
+                style::g_HMenu.checkmark->render(checkmarkPos);
+            }
         }
 
         ImGui::PopID();

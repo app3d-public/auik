@@ -43,6 +43,8 @@ namespace uikit
             }
         }
 
+        virtual void updateStyleStack() {};
+
     protected:
         virtual void renderImpl() = 0;
     };
