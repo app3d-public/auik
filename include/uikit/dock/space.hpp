@@ -20,6 +20,7 @@ namespace uikit
             f32 top_offset = 0;
             f32 bottom_offset = 0;
             f32 stretch_min_size;
+            f32 stretch_section_size;
             f32 height_resize_limit;
             ImU32 node_overlay_color;
             struct Tabbar
@@ -92,6 +93,7 @@ namespace uikit
         class APPLIB_API Space : public Widget
         {
         public:
+            FrameState frame;
             astl::vector<Section> sections;
             PopupMenu popupMenu;
 
@@ -107,9 +109,11 @@ namespace uikit
                     for (auto &node : section.nodes) node.destroy(_e);
             }
 
+            void renderContent();
+
             virtual void render() override;
 
-            Section *hoverSection() const { return _hovered ? _frame.hover_section : nullptr; }
+            Section *hoverSection() const { return _hovered ? frame.hover_section : nullptr; }
 
             bool hovered() const { return _hovered; }
 
@@ -123,8 +127,7 @@ namespace uikit
             ImVec2 windowSize() const { return _window_size; }
 
         private:
-            FrameState _frame;
-            int _stretch_id = INT_MAX;
+            i8 _stretch_min = -1, _stretch_max = -1;
             ImVec2 _window_size;
             bool _hovered = false;
             events::Manager *_e;
@@ -135,12 +138,12 @@ namespace uikit
             void drawSection(int index, ImVec2 size, ImVec2 &pos);
             f32 prerenderSectionNodes(int index);
 
-            void resizeBoxVertical(int section_index, const ImRect &draw_bb);
+            void resizeBoxVertical(int section_index, const ImRect &draw_bb, f32 stretch_size);
             void resizeBoxVerticalBounds(Section &section, int si, const ImRect &draw_bb, const ImRect &hover_bb);
-            void resizeBoxHorizontal(Section &section, int node_index, const ImVec2 &pos);
-            void drawOverlayLayer(const ImVec2 &init_pos);
-            void nodeDragOverlay(int si, int ni, const ImVec2 &pos, const ImVec2& node_rect);
-            ImVec2 drawNode(int si, int ni); // return drawn content size
+            void resizeBoxHorizontal(Section &section, int node_index, const ImVec2 &pos, f32 size);
+            void drawOverlayLayer(const ImVec2 &init_pos, f32 stretch_size);
+            void nodeDragOverlay(int si, int ni, const ImVec2 &pos, const ImVec2 &node_rect);
+            ImVec2 drawNode(int si, int ni, f32 section_size); // return drawn content size
 
             template <typename T>
             void updateHoverState(T &subject, bool hovered, const ImVec2 &mouse_pos)
@@ -149,14 +152,14 @@ namespace uikit
                 {
                     if (_hovered && hovered)
                     {
-                        _frame.flags |= FrameStateFlagBits::resizing;
+                        frame.flags |= FrameStateFlagBits::resizing;
                         subject.isResizing = true;
                     }
-                    _frame.mouse_pos = mouse_pos;
+                    frame.mouse_pos = mouse_pos;
                 }
                 else if (subject.isResizing && (ImGui::IsMouseReleased(ImGuiMouseButton_Left) || mouse_pos.x < 0))
                 {
-                    _frame.flags &= ~FrameStateFlagBits::resizing;
+                    frame.flags &= ~FrameStateFlagBits::resizing;
                     subject.isResizing = false;
                 }
             }
@@ -167,6 +170,14 @@ namespace uikit
             void drawTabbar(int si, int ni, ImVec2 &size);
         };
 
-        APPLIB_API bool tryInsertNode(Section& section, Node& node, size_t index, f32 height);
+        APPLIB_API bool tryInsertNode(Section &section, Node &node, size_t index, f32 height);
+
+        inline void resetFrame(FrameState &frame)
+        {
+            auto &style = ImGui::GetStyle();
+            frame.padding = style.WindowPadding;
+            frame.item_spacing = style.ItemSpacing;
+            frame.flags &= ~(FrameStateFlagBits::op_locked | FrameStateFlagBits::layout_update);
+        }
     } // namespace dock
 } // namespace uikit
