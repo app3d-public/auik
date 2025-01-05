@@ -25,7 +25,8 @@ namespace uikit
             {
                 frame.flags &= ~FrameStateFlagBits::dropped;
                 if (g.NavWindow)
-                    _e->dispatch<ChangeEvent>(is_content ? "ds:window_docked" : "ds:newtab", g.NavWindow->Name, si, ni);
+                    _e->dispatch<ChangeEvent>(is_content ? "ds:window_docked" : "ds:newtab", this, g.NavWindow->Name,
+                                              si, ni);
             }
         }
 
@@ -434,14 +435,13 @@ namespace uikit
             _stretch_max = i;
 
             // Center
-            ImVec2 center_pos = left_pos;
             f32 avail = pos.x - left_pos.x - (style::g_Dock.helper.size.x * (_stretch_max - _stretch_min));
             for (i = _stretch_min; i < _stretch_max + 1; ++i)
             {
-                f32 stretch_size = i == _stretch_max ? pos.x - center_pos.x : (int)(avail * sections[i].size);
-                ImVec2 tmp_pos = center_pos;
+                f32 stretch_size = i == _stretch_max ? pos.x - left_pos.x : (int)(avail * sections[i].size);
+                ImVec2 tmp_pos = left_pos;
                 drawSection(i, ImVec2(stretch_size, 0), tmp_pos);
-                center_pos.x = tmp_pos.x + stretch_size + style::g_Dock.helper.size.x;
+                left_pos.x = tmp_pos.x + stretch_size + style::g_Dock.helper.size.x;
             }
             _window_size = window->Size;
             drawOverlayLayer(init_pos, avail);
@@ -643,7 +643,7 @@ namespace uikit
               _commonItems{{_("dock:menu:undock"),
                             [this]() {
                                 auto window_name = space->sections[_si].nodes[_ni].tabNav->tabbar.activeTab().name;
-                                space->_e->dispatch<ChangeEvent>("ds:undock", window_name.c_str(), _si, _ni);
+                                space->_e->dispatch<ChangeEvent>("ds:undock", space, window_name.c_str(), _si, _ni);
                             }},
                            {_("dock:menu:close"),
                             [this]() {

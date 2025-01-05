@@ -35,32 +35,22 @@ namespace uikit
 
     namespace dock
     {
-        class StretchChangeEvent : public events::IEvent
-        {
-        public:
-            ImVec2 pos;
-            ImVec2 size;
-
-            StretchChangeEvent(const std::string &name = "", ImVec2 pos = ImVec2(0, 0), ImVec2 size = ImVec2(0, 0))
-                : IEvent(name), pos(pos), size(size)
-            {
-            }
-        };
+        class Space;
 
         class ChangeEvent : public events::IEvent
         {
         public:
+            Space *space;
             const char *window_id;
             int si; // section index
             int ni; // node index
 
-            ChangeEvent(const std::string &name = "", const char *window_id = "", int si = -1, int ni = -1)
-                : IEvent(name), window_id(window_id), si(si), ni(ni)
+            ChangeEvent(const std::string &name = "", Space *space = nullptr, const char *window_id = "", int si = -1,
+                        int ni = -1)
+                : IEvent(name), space(space), window_id(window_id), si(si), ni(ni)
             {
             }
         };
-
-        class Space;
 
         class APPLIB_API PopupMenu : public Widget
         {
