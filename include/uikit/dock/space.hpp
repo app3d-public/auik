@@ -116,6 +116,8 @@ namespace uikit
 
             ImVec2 windowSize() const { return _window_size; }
 
+            void drawNode(int section_id, int node_id, f32 section_size, ImVec2 &pos, bool isFirst);
+
         private:
             i8 _stretch_min = -1, _stretch_max = -1;
             ImVec2 _window_size;

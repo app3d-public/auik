@@ -303,6 +303,24 @@ namespace uikit
             draw_list->AddRectFilled(draw_bb.Min, draw_bb.Max, style::g_Dock.node_overlay_color);
         }
 
+        void Space::drawNode(int section_id, int node_id, f32 section_size, ImVec2 &pos, bool isFirst)
+        {
+            auto &section = sections[section_id];
+            if (!(isFirst == 0 && (section.flags & SectionFlagBits::hide_top_line)))
+                resizeBoxHorizontal(section, node_id, pos, section_size);
+            ImGui::SetCursorScreenPos(pos);
+            auto &style = ImGui::GetStyle();
+            ImVec4 node_bg = style.Colors[ImGuiCol_ChildBg];
+            auto &node = section.nodes[node_id];
+            if (node.isTransparent) node_bg.w = 0.0f;
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, node_bg);
+            auto node_rect = drawNode(section_id, node_id, section_size);
+            ImGui::PopStyleColor();
+            if (!(section.flags & (SectionFlagBits::stretch | SectionFlagBits::op_locked)))
+                nodeDragOverlay(section_id, node_id, pos, node_rect);
+            pos.y += node_rect.y + node.extra_offset + style::g_Dock.helper.size.y;
+        }
+
         void Space::drawSection(int index, ImVec2 size, ImVec2 &pos)
         {
             auto &section = sections[index];
@@ -326,22 +344,7 @@ namespace uikit
             {
                 f32 section_size = (section.flags & SectionFlagBits::stretch) ? size.x : section.size;
                 if (!(section.flags & SectionFlagBits::hide_top_line)) pos.y += style::g_Dock.helper.size.y;
-                for (int i = 0; i < section.nodes.size(); ++i)
-                {
-                    auto &node = section.nodes[i];
-                    if (!(i == 0 && (section.flags & SectionFlagBits::hide_top_line)))
-                        resizeBoxHorizontal(section, i, pos, section_size);
-                    ImGui::SetCursorScreenPos(pos);
-                    auto &style = ImGui::GetStyle();
-                    ImVec4 node_bg = style.Colors[ImGuiCol_ChildBg];
-                    if (node.isTransparent) node_bg.w = 0.0f;
-                    ImGui::PushStyleColor(ImGuiCol_ChildBg, node_bg);
-                    auto node_rect = drawNode(index, i, section_size);
-                    ImGui::PopStyleColor();
-                    if (!(section.flags & (SectionFlagBits::stretch | SectionFlagBits::op_locked)))
-                        nodeDragOverlay(index, i, pos, node_rect);
-                    pos.y += node_rect.y + node.extra_offset + style::g_Dock.helper.size.y;
-                }
+                for (int i = 0; i < section.nodes.size(); ++i) drawNode(index, i, section_size, pos, i == 0);
                 // Update sizes for a next frame
                 for (auto &node : section.nodes)
                 {
