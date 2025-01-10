@@ -171,5 +171,12 @@ namespace uikit
             frame.item_spacing = style.ItemSpacing;
             frame.flags &= ~(FrameStateFlagBits::op_locked | FrameStateFlagBits::layout_update);
         }
+
+        inline f32 getAvaliableWidth(Window *window, Space *dock, f32 min_width = 5.0f)
+        {
+            if (window->dockFlags & WindowDockFlags_Docked && dock->frame.flags & FrameStateFlagBits::layout_update)
+                return min_width;
+            return ImMax(ImGui::GetContentRegionAvail().x, min_width);
+        }
     } // namespace dock
 } // namespace uikit
