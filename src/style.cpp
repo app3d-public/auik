@@ -22,6 +22,7 @@ namespace uikit
             imguiStyle.TabBorderSize = 0;
             imguiStyle.TabRounding = 0;
             imguiStyle.SelectableTextAlign.y = 0.5f;
+            imguiStyle.GrabMinSize = 4;
         }
 
         template <>

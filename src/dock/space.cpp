@@ -124,29 +124,23 @@ namespace uikit
             auto &section = sections[si];
             auto &node = section.nodes[ni];
 
-            if (node.id.empty())
-            {
-                node.id = astl::format("%s:%d", section.id.c_str(), ni);
-                node.dockFlags = node.windows.front()->dockFlags;
-            }
+            if (node.id.empty()) node.id = astl::format("%s:%d", section.id.c_str(), ni);
             ImVec2 node_size{section_size, node.size};
             auto init_pos = ImGui::GetCursorPos();
-            if (node.dockFlags & WindowDockFlags_Stretch)
+            if (node.dockFlags() & WindowDockFlags_Stretch)
             {
                 f32 avaliable_ss_height = ImGui::GetWindowHeight() - section.fixed_size;
-                f32 full_ss;
-                if (ni == section.nodes.size() - 1 ||
-                    (ni == section.nodes.size() - 2 && !(section.nodes[ni + 1].dockFlags & WindowDockFlags_Stretch)))
-                    full_ss = avaliable_ss_height - init_pos.y;
-                else
-                    full_ss = avaliable_ss_height * node.size;
+                bool justify =
+                    ni == section.nodes.size() - 1 ||
+                    (ni == section.nodes.size() - 2 && !(section.nodes[ni + 1].dockFlags() & WindowDockFlags_Stretch));
+                f32 full_ss = justify ? avaliable_ss_height - init_pos.y : avaliable_ss_height * node.size;
                 node_size.y = (int)(full_ss - node.extra_offset);
                 if (ni != section.nodes.size() - 1) node_size.y -= style::g_Dock.helper.size.y;
             }
             ImVec2 tabbar_size{0, 0};
             size_t window_id = 0;
             f32 min_width = 0;
-            if (node.dockFlags & WindowDockFlags_TabMenu)
+            if (node.dockFlags() & WindowDockFlags_TabMenu)
             {
                 drawTabbar(si, ni, tabbar_size);
                 window_id = node.tabNav->window_id;
@@ -198,7 +192,7 @@ namespace uikit
             hover_bb.Max = {draw_bb.Max.x, draw_bb.Max.y + style::g_Dock.helper.cap_offset};
             ImVec2 mouse_pos = ImGui::GetMousePos();
             bool hovered = hover_bb.Contains(mouse_pos) && !(frame.flags & FrameStateFlagBits::op_locked);
-            bool allowResize = node_index != 0 && node.dockFlags & WindowDockFlags_Stretch;
+            bool allowResize = node_index != 0 && node.dockFlags() & WindowDockFlags_Stretch;
 
             if (allowResize) updateHoverState(node, hovered, mouse_pos);
             if (hovered || node.isResizing)
@@ -212,7 +206,7 @@ namespace uikit
                     int target_node_id = -1;
                     for (int j = node_index - 1; j >= 0; --j)
                     {
-                        if (section.nodes[j].dockFlags & WindowDockFlags_Stretch)
+                        if (section.nodes[j].dockFlags() & WindowDockFlags_Stretch)
                         {
                             target_node_id = j;
                             break;
@@ -268,7 +262,7 @@ namespace uikit
                 auto &node = section.nodes[i];
                 ImVec2 node_rect = drawNode(index, i, 0);
                 content_max = ImMax(content_max, node_rect.x);
-                if (!(node.dockFlags & WindowDockFlags_Stretch))
+                if (!(node.dockFlags() & WindowDockFlags_Stretch))
                 {
                     node.size = node_rect.y + frame.padding.y * 2.0f;
                     section.fixed_size += node.size;
@@ -291,7 +285,8 @@ namespace uikit
             f32 diff = mouse_pos.y - pos.y;
             bool is_content = diff > node.extra_offset;
             updateDragState(hovered, si, ni, is_content);
-            if (!hovered || !(frame.flags & FrameStateFlagBits::dropped) || !(node.dockFlags & WindowDockFlags_Stretch))
+            if (!hovered || !(frame.flags & FrameStateFlagBits::dropped) ||
+                !(node.dockFlags() & WindowDockFlags_Stretch))
                 return;
             frame.flags |= FrameStateFlagBits::op_locked;
             ImRect draw_bb = node_bb;
@@ -306,7 +301,7 @@ namespace uikit
         void Space::drawNode(int section_id, int node_id, f32 section_size, ImVec2 &pos, bool isFirst)
         {
             auto &section = sections[section_id];
-            if (!(isFirst == 0 && (section.flags & SectionFlagBits::hide_top_line)))
+            if (!isFirst || !(section.flags & SectionFlagBits::hide_top_line))
                 resizeBoxHorizontal(section, node_id, pos, section_size);
             ImGui::SetCursorScreenPos(pos);
             auto &style = ImGui::GetStyle();
@@ -719,7 +714,7 @@ namespace uikit
 
                 for (auto &n : section.nodes)
                 {
-                    if (n.dockFlags & uikit::WindowDockFlags_Stretch)
+                    if (n.dockFlags() & uikit::WindowDockFlags_Stretch)
                     {
                         f32 node_px = limit_size + add_each;
                         n.size = node_px / avaliable_size;

@@ -10,8 +10,8 @@ namespace uikit
     class APPLIB_API Switch final : public Widget
     {
     public:
-        static constexpr f32 width = 35.0f;
-        static constexpr f32 height = 18.0f;
+        static constexpr f32 width = 28.0f;
+        static constexpr f32 height = 15.0f;
 
         Switch(const std::string &label, bool toogled = false)
             : Widget(label), _pressed(false), _hovered(false), _toggled(toogled)

@@ -35,11 +35,11 @@ namespace uikit
                 auto &style = ImGui::GetStyle();
                 ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(style.WindowPadding.x, 5));
                 ImGui::Begin(name.c_str(), nullptr, imguiFlags);
+                ImGui::PopStyleVar();
                 auto *window = ImGui::GetCurrentWindow();
                 window->ChildFlags = dockFlags;
                 renderImpl();
                 ImGui::End();
-                ImGui::PopStyleVar();
             }
         }
 

@@ -57,7 +57,7 @@ namespace uikit
             if (value)
             {
                 ImU32 check_col = ImGui::ColorConvertFloat4ToU32(style::g_CheckBox.mark);
-                const f32 pad = ImMax(1.0f, IM_TRUNC(square_sz / 6.0f));
+                const f32 pad = ImMax(1.0f, IM_TRUNC(square_sz / 5.0f));
                 ImGui::RenderCheckMark(window->DrawList, check_bb.Min + ImVec2(pad, pad), check_col,
                                        square_sz - pad * 2.0f);
             }

@@ -26,7 +26,6 @@ namespace uikit
             std::string id;
             f32 size;
             astl::vector<Window *> windows;
-            WindowDockFlags dockFlags;
             struct TabNavArea
             {
                 TabBar tabbar;
@@ -49,6 +48,8 @@ namespace uikit
                   extra_offset(0.0f)
             {
             }
+
+            WindowDockFlags dockFlags() const { return windows.front()->dockFlags; }
 
             void reset()
             {
@@ -96,7 +97,7 @@ namespace uikit
             {
             }
 
-               Section(const astl::vector<Node> &nodes, SectionFlags flags, f32 size)
+            Section(const astl::vector<Node> &nodes, SectionFlags flags, f32 size)
                 : id(""),
                   flags(flags),
                   size(size),
@@ -106,7 +107,6 @@ namespace uikit
                   isResizing(false),
                   fixed_sections(0)
             {
-                
             }
 
             void reset()
