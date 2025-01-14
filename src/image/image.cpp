@@ -3,20 +3,12 @@
 
 namespace uikit
 {
-    void Image::render()
+    void Image::render(ImVec2 pos, ImVec2 size)
     {
         ImGuiWindow *window = ImGui::GetCurrentWindow();
         if (window->SkipItems)
             return;
-        render(window->DC.CursorPos);
-    }
-
-    void Image::render(ImVec2 pos)
-    {
-        ImGuiWindow *window = ImGui::GetCurrentWindow();
-        if (window->SkipItems)
-            return;
-        const ImRect bb(pos, pos + _size);
+        const ImRect bb(pos, pos + size);
         ImGui::ItemSize(bb);
         if (!ImGui::ItemAdd(bb, 0))
             return;

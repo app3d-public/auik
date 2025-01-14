@@ -73,7 +73,7 @@ namespace uikit
             size.y = ImGui::GetFrameHeight() + style::g_Dock.tabbar.item_spacing;
 
             ImVec2 start_pos = ImGui::GetCursorScreenPos();
-            f32 icon_rect_width = style::g_Dock.tabbar.navIcon->width() + frame.padding.x * 2.0f;
+            f32 icon_rect_width = style::g_Dock.tabbar.navIcon->size().x + frame.padding.x * 2.0f;
 
             nav.tabbar.render();
             if (sections[si].size == 0.0f)
@@ -97,9 +97,10 @@ namespace uikit
             if (nav.btn.pressed) popupMenu.markOpenned(bg_bb, si, ni);
 
             // icon
+            ImVec2 nav_icon_size = style::g_Dock.tabbar.navIcon->size();
             ImVec2 icon_pos = btn_pos;
-            icon_pos.x += (icon_rect_width - style::g_Dock.tabbar.navIcon->width()) / 2.0f;
-            icon_pos.y += (size.y - style::g_Dock.tabbar.navIcon->height()) / 2.0f;
+            icon_pos.x += (icon_rect_width - nav_icon_size.x) / 2.0f;
+            icon_pos.y += (size.y - nav_icon_size.y) / 2.0f;
             style::g_Dock.tabbar.navIcon->render(icon_pos);
 
             ImGui::PopStyleColor(3);
@@ -161,6 +162,7 @@ namespace uikit
             if (section.size == 0)
             {
                 node_rect = ImGui::GetItemRectSize();
+                node_rect.x += ImGui::GetStyle().WindowPadding.x * 2.0f;
                 node_rect.x = ImMax(ImMax(node_rect.x, tabbar_size.x), min_width);
             }
             else

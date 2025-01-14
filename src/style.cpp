@@ -15,6 +15,7 @@ namespace uikit
             imguiStyle.ChildBorderSize = g_General.popupBorderSize;
             imguiStyle.PopupBorderSize = g_General.popupBorderSize;
             imguiStyle.WindowRounding = g_General.windowRounding;
+            imguiStyle.WindowPadding = g_General.windowPadding;
             imguiStyle.PopupRounding = g_General.windowRounding;
             imguiStyle.FrameRounding = g_General.frameRounding;
             imguiStyle.ItemSpacing = g_General.itemSpacing;

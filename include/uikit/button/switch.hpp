@@ -2,6 +2,7 @@
 
 #include <astl/basic_types.hpp>
 #include <core/api.hpp>
+#include <window/window.hpp>
 #include "../style.hpp" // IWYU pragma: keep
 #include "../widget.hpp"
 
@@ -10,11 +11,16 @@ namespace uikit
     class APPLIB_API Switch final : public Widget
     {
     public:
-        static constexpr f32 width = 28.0f;
-        static constexpr f32 height = 15.0f;
+        const f32 width;
+        const f32 height;
 
         Switch(const std::string &label, bool toogled = false)
-            : Widget(label), _pressed(false), _hovered(false), _toggled(toogled)
+            : Widget(label),
+              width(28 * window::getDpi()),
+              height(15 * window::getDpi()),
+              _pressed(false),
+              _hovered(false),
+              _toggled(toogled)
         {
         }
 

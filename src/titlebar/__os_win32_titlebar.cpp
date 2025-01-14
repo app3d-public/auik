@@ -80,9 +80,9 @@ namespace uikit
         ImGui::PushStyleColor(ImGuiCol_HeaderActive, style::g_HMenu.backgroundColor);
         if (ImGui::BeginMainMenuBar())
         {
-            const ImVec2 appPos =
-                ImGui::GetCursorScreenPos() + ImVec2(0, (_controlSize.y - style.icons[IconApp]->height()) * 0.5f);
-            style.icons[IconApp]->render(appPos);
+            auto *icon_app = style.icons[IconApp];
+            const ImVec2 appPos = ImGui::GetCursorScreenPos() + ImVec2(0, (_controlSize.y - icon_app->size().y) * 0.5f);
+            icon_app->render(appPos);
 
             // Menu
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style::g_VMenu.margin);
@@ -148,10 +148,8 @@ namespace uikit
         pos.x += size.x;
         ImVec2 buttonPos = ImGui::GetCursorScreenPos();
         ImVec2 centerPos = ImVec2(buttonPos.x + _controlSize.x / 2, buttonPos.y + _controlSize.y / 2);
-        f32 iconWidth = style.icons[IconMin]->width();
-        f32 iconHeight = style.icons[IconMin]->height();
-        ImVec2 iconRenderPos = ImVec2(centerPos.x - iconWidth / 2, centerPos.y - iconHeight / 2);
-        style.icons[IconMin]->render(iconRenderPos);
+        auto *icon = style.icons[IconMin];
+        icon->render(centerPos - icon->size() * 0.5f);
         ImGui::SameLine();
 
         // Max
@@ -163,17 +161,13 @@ namespace uikit
         centerPos.x += _controlSize.x;
         if (_window.maximized())
         {
-            iconWidth = style.icons[IconRestore]->width();
-            iconHeight = style.icons[IconRestore]->height();
-            iconRenderPos = ImVec2(centerPos.x - iconWidth / 2, centerPos.y - iconHeight / 2);
-            style.icons[IconRestore]->render(iconRenderPos);
+            auto *icon = style.icons[IconRestore];
+            icon->render(centerPos - icon->size() * 0.5f);
         }
         else
         {
-            iconWidth = style.icons[IconMax]->width();
-            iconHeight = style.icons[IconMax]->height();
-            iconRenderPos = ImVec2(centerPos.x - iconWidth / 2, centerPos.y - iconHeight / 2);
-            style.icons[IconMax]->render(iconRenderPos);
+            auto *icon = style.icons[IconMax];
+            icon->render(centerPos - icon->size() * 0.5f);
         }
 
         // Close
@@ -182,10 +176,8 @@ namespace uikit
             ImGui::ColorConvertFloat4ToU32(_controls[2].state == ControlState::Hover ? style.closeColor
                                                                                      : style.tabBackgroundColor));
         centerPos.x += _controlSize.x;
-        iconWidth = style.icons[IconClose]->width();
-        iconHeight = style.icons[IconClose]->height();
-        iconRenderPos = ImVec2(centerPos.x - iconWidth / 2, centerPos.y - iconHeight / 2);
-        style.icons[IconClose]->render(iconRenderPos);
+        icon = style.icons[IconClose];
+        icon->render(centerPos - icon->size() * 0.5f);
     }
 
     void Titlebar::bindEvents()

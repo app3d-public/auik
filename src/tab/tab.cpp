@@ -261,7 +261,7 @@ namespace uikit
             f32 arrowWidth = 0.0f;
             if (!isScrollable)
             {
-                arrowWidth = style::g_ComboBox.arrowIcon->width() + style.ItemSpacing.x * 2.0f +
+                arrowWidth = style::g_ComboBox.arrowIcon->size().x + style.ItemSpacing.x * 2.0f +
                              style.FramePadding.x * 2.0f + style.ItemInnerSpacing.x * 2.0f;
                 availableWidth -= arrowWidth;
             }

@@ -81,7 +81,7 @@ namespace uikit
             auto icon = message.level == window::popup::Style::Warning ? style.warningIcon : style.errorIcon;
             auto iconPos = ImGui::GetCursorScreenPos() + ImVec2(10, 20);
             icon->render(iconPos);
-            pos.x += icon->width() + 40;
+            pos.x += icon->size().x + 40;
             pos.y += 20;
             ImGui::PushFont(style.boldFont);
             ImGui::SetCursorPos(pos);

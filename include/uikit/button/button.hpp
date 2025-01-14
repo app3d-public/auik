@@ -1,9 +1,7 @@
 #ifndef UIKIT_WIDGETS_BUTTON_H
 #define UIKIT_WIDGETS_BUTTON_H
 
-#include <core/api.hpp>
 #include <astl/vector.hpp>
-#include <imgui/imgui.h>
 #include "../style.hpp" // IWYU pragma: keep
 
 namespace uikit
@@ -16,6 +14,8 @@ namespace uikit
             ImVec4 colorActive;
             ImVec4 colorHovered;
             ImVec2 padding;
+            Icon* arrowRight = nullptr;
+            Icon* arrowDown = nullptr;
         } g_Button;
 
         template <>

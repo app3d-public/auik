@@ -203,7 +203,7 @@ namespace uikit
 
         ImVec2 arrowPos =
             pos + ImVec2(offsets->OffsetMark + extra_w + g.FontSize * 0.30f + style.ItemInnerSpacing.x * 0.5f,
-                         label_size.y / 2.0f - style::g_VMenu.arrowRight->height() / 2.0f);
+                         label_size.y / 2.0f - style::g_VMenu.arrowRight->size().y / 2.0f);
         ImGui::RenderText(text_pos, label_c);
         style::g_VMenu.arrowRight->render(arrowPos);
 
@@ -350,7 +350,7 @@ namespace uikit
             {
                 ImVec2 checkmarkPos =
                     pos + ImVec2(offsets->OffsetMark + stretch_w + g.FontSize * 0.30f + style.ItemInnerSpacing.x * 0.5f,
-                                 label_size.y / 2.0f - style::g_VMenu.arrowRight->height() / 2.0f);
+                                 label_size.y / 2.0f - style::g_VMenu.arrowRight->size().y / 2.0f);
                 style::g_HMenu.checkmark->render(checkmarkPos);
             }
         }

@@ -23,8 +23,8 @@ namespace uikit
         ImVec2 uvMax() const { return _uvMax; }
         void uvMax(ImVec2 uvMax) { _uvMax = uvMax; }
 
-        virtual void render() override;
-        void render(ImVec2 pos);
+        virtual void render() override { return render(ImGui::GetCursorScreenPos(), _size); }
+        void render(ImVec2 pos, ImVec2 size);
 
     private:
         ImTextureID _id;

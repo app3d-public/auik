@@ -15,6 +15,7 @@ namespace uikit
             f32 windowRounding;
             f32 frameRounding;
             ImVec2 itemSpacing;
+            ImVec2 windowPadding;
         } g_General;
 
         extern APPLIB_API struct Colors

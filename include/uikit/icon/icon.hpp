@@ -2,6 +2,7 @@
 #define UIKIT_ICONS_H
 
 #include <imgui/imgui.h>
+#include <imgui/imgui_internal.h>
 #include <string>
 #include "../image/image.hpp"
 
@@ -14,10 +15,11 @@ namespace uikit
 
         virtual ~Icon() = default;
 
-        virtual void render(ImVec2 pos) = 0;
+        void render(ImVec2 pos) { render(pos, size()); }
 
-        virtual size_t width() const = 0;
-        virtual size_t height() const = 0;
+        virtual void render(ImVec2 pos, ImVec2 size) = 0;
+
+        virtual ImVec2 size() const = 0;
 
         std::string symbol() const { return _symbol; }
 
@@ -25,7 +27,7 @@ namespace uikit
         std::string _symbol;
     };
 
-    class APPLIB_API FontIcon : public Icon
+    class FontIcon : public Icon
     {
     public:
         FontIcon(const std::string &symbol, ImFont *font, const std::string &u8sequence)
@@ -33,11 +35,14 @@ namespace uikit
         {
         }
 
-        virtual void render(ImVec2 pos) override;
+        virtual void render(ImVec2 pos, ImVec2 size) override
+        {
+            ImGui::PushFont(_font);
+            ImGui::RenderText(pos, _u8sequence.c_str());
+            ImGui::PopFont();
+        }
 
-        virtual size_t width() const override { return _font->FontSize; }
-
-        virtual size_t height() const override { return _font->FontSize; }
+        virtual ImVec2 size() const override { return {_font->FontSize, _font->FontSize}; }
 
         virtual ~FontIcon() = default;
 
@@ -54,18 +59,16 @@ namespace uikit
         {
         }
 
-        virtual void render(ImVec2 pos) override { _image.render(pos); }
+        virtual void render(ImVec2 pos, ImVec2 size) override { _image.render(pos, size); }
 
         virtual ~ImageIcon() = default;
 
-        virtual size_t width() const override { return _size.x; }
-
-        virtual size_t height() const override { return _size.y; }
+        virtual ImVec2 size() const override { return _size; }
 
     private:
         Image _image;
         ImVec2 _size;
     };
-} // namespace ui
+} // namespace uikit
 
 #endif
