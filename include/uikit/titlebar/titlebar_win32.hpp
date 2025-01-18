@@ -64,7 +64,7 @@ namespace uikit
         window::Window &_window;
         events::Manager *e;
         ImVec2 _controlSize;
-        astl::point2D _dragOffset;
+        astl::point2D<i32>_dragOffset;
         f32 _captionWidth;
         f32 _clientWidth;
         struct ControlButton

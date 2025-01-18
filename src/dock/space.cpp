@@ -182,6 +182,12 @@ namespace uikit
             return node_rect;
         }
 
+        bool isHoverOnDrag(FrameState frame)
+        {
+            ImGuiContext &g = *GImGui;
+            return !(frame.flags & FrameStateFlagBits::op_locked) && g.MovingWindow != nullptr;
+        }
+
         void Space::resizeBoxHorizontal(Section &section, int node_index, const ImVec2 &pos, f32 size)
         {
             auto &node = section.nodes[node_index];
@@ -193,7 +199,7 @@ namespace uikit
             hover_bb.Min = {pos.x, pos.y - style::g_Dock.helper.cap_offset};
             hover_bb.Max = {draw_bb.Max.x, draw_bb.Max.y + style::g_Dock.helper.cap_offset};
             ImVec2 mouse_pos = ImGui::GetMousePos();
-            bool hovered = hover_bb.Contains(mouse_pos) && !(frame.flags & FrameStateFlagBits::op_locked);
+            bool hovered = hover_bb.Contains(mouse_pos) && isHoverOnDrag(frame);
             bool allowResize = node_index != 0 && node.dockFlags() & WindowDockFlags_Stretch;
 
             if (allowResize) updateHoverState(node, hovered, mouse_pos);
@@ -456,7 +462,7 @@ namespace uikit
             hover_bb.Min.x -= style::g_Dock.helper.cap_offset;
             hover_bb.Max.x += style::g_Dock.helper.cap_offset;
             ImVec2 mouse_pos = ImGui::GetMousePos();
-            bool hovered = hover_bb.Contains(mouse_pos) && !(frame.flags & FrameStateFlagBits::op_locked);
+            bool hovered = hover_bb.Contains(mouse_pos) && isHoverOnDrag(frame);
             auto &section = sections[section_index];
             if (hovered)
                 section.flags |= SectionFlagBits::op_locked;

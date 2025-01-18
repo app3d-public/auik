@@ -24,6 +24,7 @@ namespace uikit
             imguiStyle.TabRounding = 0;
             imguiStyle.SelectableTextAlign.y = 0.5f;
             imguiStyle.GrabMinSize = 4;
+            imguiStyle.ScrollbarSize = 10;
         }
 
         template <>

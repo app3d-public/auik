@@ -1,7 +1,7 @@
 #include <core/log.hpp>
+#include <implot/implot.h>
 #include <uikit/widget.hpp>
 #include <uikit/window_imgui.hpp>
-
 
 #ifdef _WIN32
     #include <window/platform_win32.hpp>
@@ -25,6 +25,7 @@ namespace uikit
     WindowImGuiBinder::WindowImGuiBinder(window::Window &window, events::Manager *e) : e(e)
     {
         ImGui::CreateContext();
+        ImPlot::CreateContext();
         ImGuiIO &io = ImGui::GetIO();
         IM_ASSERT(io.BackendPlatformUserData == nullptr && "Already initialized a platform backend!");
 
@@ -76,7 +77,7 @@ namespace uikit
         IM_ASSERT(_bd != nullptr);
 
         // Setup display size (every frame to accommodate for window resizing)
-        astl::point2D dimensions = _bd->Window->dimensions();
+        astl::point2D<i32>dimensions = _bd->Window->dimensions();
         io.DisplaySize = ImVec2((f32)dimensions.x, (f32)dimensions.y);
         if (dimensions.x > 0 && dimensions.y > 0) io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
 
@@ -232,6 +233,7 @@ namespace uikit
         io.BackendFlags &=
             ~(ImGuiBackendFlags_HasMouseCursors | ImGuiBackendFlags_HasSetMousePos | ImGuiBackendFlags_HasGamepad);
         IM_DELETE(_bd);
+        ImPlot::DestroyContext();
         ImGui::DestroyContext();
     }
 } // namespace uikit

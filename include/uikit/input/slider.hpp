@@ -3,7 +3,6 @@
 #include <imgui/imgui_internal.h>
 #include <window/window.hpp>
 #include "../widget.hpp"
-#include "core/log.hpp"
 
 namespace uikit
 {
@@ -43,6 +42,8 @@ namespace uikit
             ImGui::ItemSize(frame_bb, style.FramePadding.y);
             if (!ImGui::ItemAdd(frame_bb, id, &frame_bb, 0)) return;
             float factor = (*value - _min) / (_max - _min);
+            if (*value < _min) factor = 0;
+            if (*value > _max) factor = 1;
             ImRect filled;
             filled.Min = frame_bb.Min;
             filled.Min.y += (frame - style::g_Slider.height) * 0.5f;
@@ -78,12 +79,10 @@ namespace uikit
             float mouse_pos = IO.MousePos.x;
             if (hovered && ImGui::IsMouseClicked(0))
             {
-                logTrace("old: %f", *value);
                 float diff = mouse_pos - frame_bb.Min.x;
                 float factor = diff / w;
                 *value = ImClamp(_min + (_max - _min) * factor, _min, _max);
                 if (_round) *value = round(*value);
-                logTrace("new: %f", *value);
             }
             if (held && ImGui::IsMouseDragging(0))
             {
@@ -100,10 +99,8 @@ namespace uikit
                 }
                 else
                 {
-                    logTrace("step_change: %f", step_change);
                     *value = ImClamp(*value + step_change, _min, _max);
                     ImGui::ResetMouseDragDelta();
-                    logTrace("new value: %f", *value);
                 }
             }
         }

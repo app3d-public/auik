@@ -8,10 +8,11 @@ add_library(imgui SHARED
     modules/3rd-party/imgui/imgui.cpp
     modules/3rd-party/imgui/imgui_draw.cpp
     modules/3rd-party/imgui/imgui_widgets.cpp
-    modules/3rd-party/imgui/imgui_demo.cpp
     modules/3rd-party/imgui/imgui_tables.cpp
     modules/3rd-party/imgui/backends/imgui_impl_vulkan.cpp
     modules/3rd-party/imgui/misc/freetype/imgui_freetype.cpp
+    modules/3rd-party/implot/implot.cpp
+    modules/3rd-party/implot/implot_items.cpp
 )
 
 target_compile_definitions(imgui PUBLIC

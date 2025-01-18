@@ -94,9 +94,9 @@ namespace uikit
             {
                 if (ImGui::IsMouseDragging(ImGuiMouseButton_Left))
                 {
-                    astl::point2D cursorPos = _window.cursorPosition();
-                    astl::point2D windowPos = _window.windowPos();
-                    astl::point2D newPos{windowPos.x + cursorPos.x - _dragOffset.x,
+                    astl::point2D<i32>cursorPos = _window.cursorPosition();
+                    astl::point2D<i32>windowPos = _window.windowPos();
+                    astl::point2D<i32>newPos{windowPos.x + cursorPos.x - _dragOffset.x,
                                          windowPos.y + cursorPos.y - _dragOffset.y};
                     _window.windowPos(newPos);
                 }
