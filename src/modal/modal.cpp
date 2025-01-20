@@ -2,7 +2,6 @@
 #include <uikit/button/checkbox.hpp>
 #include <uikit/modal/modal.hpp>
 #include <uikit/text/text.hpp>
-#include <window/window.hpp>
 #ifdef _WIN32
     // Include playsoundapi.h first
     #include <playsoundapi.h>
@@ -63,10 +62,10 @@ namespace uikit
             else
                 state = ChangeState::normal;
         }
-        ImGui::SetNextWindowSize({style.width, 0});
 
+        ImGui::SetNextWindowSize(ImVec2(style.width, 0));
         if (ImGui::BeginPopupModal(message.header.c_str(), nullptr,
-                                   ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoTitleBar))
+                                   ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize))
         {
             int action{-1};
             if (ImGui::IsMouseClicked(0) && !ImGui::IsWindowHovered())
@@ -78,10 +77,9 @@ namespace uikit
             // Rendering
             // Header
             ImVec2 pos = ImGui::GetCursorPos();
-            auto icon = message.level == window::popup::Style::Warning ? style.warningIcon : style.errorIcon;
             auto iconPos = ImGui::GetCursorScreenPos() + ImVec2(10, 20);
-            icon->render(iconPos);
-            pos.x += icon->size().x + 40;
+            style.icon->render(iconPos);
+            pos.x += style.icon->size().x + 40;
             pos.y += 20;
             ImGui::PushFont(style.boldFont);
             ImGui::SetCursorPos(pos);
@@ -90,12 +88,14 @@ namespace uikit
             ImGui::PopFont();
 
             // Message
+            ImGui::PushTextWrapPos(style.width);
             pos.y += ht.height() + 20;
             ImGui::SetCursorPos(pos);
             Text mt(message.message, true);
             mt.render();
             pos.x = ImGui::GetCursorPosX() + 10;
-            pos.y += mt.height() + 40;
+            pos.y += mt.height() + 20;
+            ImGui::PopTextWrapPos();
 
             // Checkbox
             if (it->second.size() > 1)

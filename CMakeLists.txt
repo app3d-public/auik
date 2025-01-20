@@ -11,6 +11,7 @@ add_library(imgui SHARED
     modules/3rd-party/imgui/imgui_tables.cpp
     modules/3rd-party/imgui/backends/imgui_impl_vulkan.cpp
     modules/3rd-party/imgui/misc/freetype/imgui_freetype.cpp
+    modules/3rd-party/imgui/misc/cpp/imgui_stdlib.cpp
     modules/3rd-party/implot/implot.cpp
     modules/3rd-party/implot/implot_items.cpp
 )

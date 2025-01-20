@@ -23,8 +23,7 @@ namespace uikit
             f32 width;
             f32 borderSize;
             ImVec4 borderColor;
-            Icon *warningIcon = nullptr;
-            Icon *errorIcon = nullptr;
+            Icon *icon = nullptr;
         };
     } // namespace style
 
@@ -33,7 +32,6 @@ namespace uikit
     public:
         struct Message
         {
-            window::popup::Style level;
             std::string header;
             std::string message;
             astl::vector<std::pair<window::popup::Buttons, std::function<void()>>> buttons;
