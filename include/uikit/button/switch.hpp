@@ -3,7 +3,6 @@
 #include <astl/basic_types.hpp>
 #include <core/api.hpp>
 #include <window/window.hpp>
-#include "../style.hpp" // IWYU pragma: keep
 #include "../widget.hpp"
 
 namespace uikit

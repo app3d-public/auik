@@ -1,6 +1,5 @@
 #include <imgui/imgui_internal.h>
 #include <uikit/button/checkbox.hpp>
-#include <uikit/utils.hpp>
 #include <uikit/widget.hpp>
 
 namespace uikit

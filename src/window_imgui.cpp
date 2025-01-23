@@ -3,12 +3,6 @@
 #include <uikit/widget.hpp>
 #include <uikit/window_imgui.hpp>
 
-#ifdef _WIN32
-    #include <window/platform_win32.hpp>
-#endif
-
-ImGuiMouseCursor g_LastCursor = 0;
-
 namespace uikit
 {
     static void ImGuiSetClipboardText(void *user_data, const char *text)
@@ -77,7 +71,7 @@ namespace uikit
         IM_ASSERT(_bd != nullptr);
 
         // Setup display size (every frame to accommodate for window resizing)
-        astl::point2D<i32>dimensions = _bd->Window->dimensions();
+        astl::point2D<i32> dimensions = _bd->Window->dimensions();
         io.DisplaySize = ImVec2((f32)dimensions.x, (f32)dimensions.y);
         if (dimensions.x > 0 && dimensions.y > 0) io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
 
@@ -107,7 +101,7 @@ namespace uikit
         if ((io.ConfigFlags & ImGuiConfigFlags_NoMouseCursorChange)) return;
 
         ImGuiMouseCursor imgui_cursor = ImGui::GetMouseCursor();
-        g_LastCursor = imgui_cursor;
+        g_Last_cursor = imgui_cursor;
         {
             window::Window *window = _bd->Window;
             if (imgui_cursor == ImGuiMouseCursor_None || io.MouseDrawCursor)
@@ -153,7 +147,6 @@ namespace uikit
         });
         e->bindEvent(this, "window:input:mouse", [](const window::MouseClickEvent &event) {
             ImGuiIO &io = ImGui::GetIO();
-            updateKeyMods(io, event.mods);
             auto button = event.button;
             if (button != window::io::MouseKey::unknown)
                 io.AddMouseButtonEvent(+button, event.action == window::io::KeyPressState::press);

@@ -1,8 +1,9 @@
 #ifndef UIKIT_WIDGETS_BUTTON_H
 #define UIKIT_WIDGETS_BUTTON_H
 
+#include <astl/basic_types.hpp>
 #include <astl/vector.hpp>
-#include "../style.hpp" // IWYU pragma: keep
+#include "../icon/icon.hpp"
 
 namespace uikit
 {
@@ -14,12 +15,11 @@ namespace uikit
             ImVec4 colorActive;
             ImVec4 colorHovered;
             ImVec2 padding;
-            Icon* arrowRight = nullptr;
-            Icon* arrowDown = nullptr;
+            Icon *arrowRight = nullptr;
+            Icon *arrowDown = nullptr;
         } g_Button;
 
-        template <>
-        APPLIB_API void bindStyle<Button>();
+        APPLIB_API void bindButtonStyle();
     } // namespace style
 
     // Button to close a window

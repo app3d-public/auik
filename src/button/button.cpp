@@ -6,8 +6,7 @@ namespace uikit
     {
         Button g_Button;
 
-        template <>
-        void bindStyle<Button>()
+        void bindButtonStyle()
         {
             auto &colors = ImGui::GetStyle().Colors;
             colors[ImGuiCol_Button] = g_Button.color;

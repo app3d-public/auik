@@ -288,7 +288,7 @@ namespace uikit
             ImRect node_bb;
             node_bb.Min = pos;
             node_bb.Max = {pos.x + section.size, pos.y + node_rect.y + node.extra_offset};
-            bool hovered = node_bb.Contains(mouse_pos) && g_LastCursor == 0;
+            bool hovered = node_bb.Contains(mouse_pos) && g_Last_cursor == 0;
             ImGuiContext &g = *GImGui;
             f32 diff = mouse_pos.y - pos.y;
             bool is_content = diff > node.extra_offset;

@@ -1,7 +1,9 @@
 #ifndef UIKIT_WIDGETS_SELECTABLE_H
 #define UIKIT_WIDGETS_SELECTABLE_H
 
+#include <astl/vector.hpp>
 #include <core/api.hpp>
+#include <imgui/imgui_internal.h>
 #include <string>
 #include "../widget.hpp"
 
@@ -37,6 +39,41 @@ namespace uikit
 
     protected:
         static APPLIB_API ImGuiButtonFlags loadButtonFlags(ImGuiSelectableFlags flags);
+    };
+
+    class APPLIB_API RubberBandSelection final : public Widget
+    {
+    public:
+        RubberBandSelection(const std::string &name)
+            : Widget(name), _isActive(false), _isSelected(false), _start(0, 0), _end(0, 0)
+        {
+        }
+
+        virtual void render() override;
+
+        bool active() const { return _isActive; }
+
+        bool selected() const { return _isSelected; }
+
+        void flush()
+        {
+            _isSelected = false;
+            _item_ids.clear();
+        }
+
+        void try_push(int id, const ImRect &bb)
+        {
+            if (_rect.Overlaps(bb)) _item_ids.push_back(id);
+        }
+
+        const astl::vector<int> &get_items() const { return _item_ids; }
+
+    private:
+        bool _isActive;
+        bool _isSelected;
+        astl::vector<int> _item_ids;
+        ImVec2 _start, _end;
+        ImRect _rect;
     };
 } // namespace uikit
 

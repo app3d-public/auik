@@ -1,7 +1,6 @@
 #include <core/log.hpp>
 #include <dwmapi.h>
 #include <uikit/titlebar/titlebar_win32.hpp>
-#include <window/platform_win32.hpp>
 
 namespace uikit
 {

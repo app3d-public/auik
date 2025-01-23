@@ -1,6 +1,5 @@
 #include <imgui_internal.h>
 #include <uikit/selectable/selectable.hpp>
-#include <uikit/utils.hpp>
 
 namespace uikit
 {
@@ -166,4 +165,33 @@ namespace uikit
         params.pressed = pressed;
         params.hover = hovered;
     }
+
+    void RubberBandSelection::render()
+    {
+        auto &g = *GImGui;
+        auto *window = g.CurrentWindow;
+        assert(window);
+        if (window->SkipItems) return;
+        if (ImGui::IsMouseDragging(ImGuiMouseButton_Left))
+        {
+            auto &io = g.IO;
+            if (!_isActive)
+            {
+                _isActive = true;
+                _start = io.MousePos - ImGui::GetMouseDragDelta();
+            }
+            _end = io.MousePos;
+            auto *draw_list = ImGui::GetWindowDrawList();
+            _rect.Min = {std::min(_start.x, _end.x), std::min(_start.y, _end.y)};
+            _rect.Max = {std::max(_start.x, _end.x), std::max(_start.y, _end.y)};
+            ImU32 col = ImGui::GetColorU32(g.Style.Colors[ImGuiCol_TextSelectedBg]);
+            draw_list->AddRectFilled(_rect.Min, _rect.Max, col, g.Style.FrameRounding);
+        }
+        if (ImGui::IsMouseReleased(0) && _isActive)
+        {
+            _isActive = false;
+            _isSelected = true;
+        }
+    }
+    // }
 } // namespace uikit

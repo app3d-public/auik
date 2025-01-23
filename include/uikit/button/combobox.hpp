@@ -3,7 +3,6 @@
 
 #include <imgui/imgui_internal.h>
 #include "../icon/icon.hpp"
-#include "../style.hpp" // IWYU pragma: keep
 
 namespace uikit
 {

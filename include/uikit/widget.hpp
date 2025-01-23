@@ -1,9 +1,10 @@
 #ifndef APP_UI_WIDGETS_H
 #define APP_UI_WIDGETS_H
 
-#include <string>
-#include <imgui/imgui.h>
+#include <astl/basic_types.hpp>
 #include <core/api.hpp>
+#include <imgui/imgui.h>
+#include <string>
 
 namespace uikit
 {
@@ -19,22 +20,37 @@ namespace uikit
 
         virtual void render() = 0;
     };
+
+    enum class MouseAction
+    {
+        none,
+        click,
+        clickPended,
+        doubleClick,
+        dragStart,
+        dragEnd
+    };
+
+    extern APPLIB_API ImGuiMouseCursor g_Last_cursor;
+
+    APPLIB_API void renderFrame(ImVec2 p_min, ImVec2 p_max, ImU32 fill_col, bool borders, f32 rounding,
+                                ImDrawFlags flags = 0);
 }; // namespace uikit
 
-static inline ImVec2 operator*(const ImVec2 &lhs, const float rhs) { return ImVec2(lhs.x * rhs, lhs.y * rhs); }
-static inline ImVec2 operator/(const ImVec2 &lhs, const float rhs) { return ImVec2(lhs.x / rhs, lhs.y / rhs); }
+static inline ImVec2 operator*(const ImVec2 &lhs, const f32 rhs) { return ImVec2(lhs.x * rhs, lhs.y * rhs); }
+static inline ImVec2 operator/(const ImVec2 &lhs, const f32 rhs) { return ImVec2(lhs.x / rhs, lhs.y / rhs); }
 static inline ImVec2 operator+(const ImVec2 &lhs, const ImVec2 &rhs) { return ImVec2(lhs.x + rhs.x, lhs.y + rhs.y); }
 static inline ImVec2 operator-(const ImVec2 &lhs, const ImVec2 &rhs) { return ImVec2(lhs.x - rhs.x, lhs.y - rhs.y); }
 static inline ImVec2 operator*(const ImVec2 &lhs, const ImVec2 &rhs) { return ImVec2(lhs.x * rhs.x, lhs.y * rhs.y); }
 static inline ImVec2 operator/(const ImVec2 &lhs, const ImVec2 &rhs) { return ImVec2(lhs.x / rhs.x, lhs.y / rhs.y); }
 static inline ImVec2 operator-(const ImVec2 &lhs) { return ImVec2(-lhs.x, -lhs.y); }
-static inline ImVec2 &operator*=(ImVec2 &lhs, const float rhs)
+static inline ImVec2 &operator*=(ImVec2 &lhs, const f32 rhs)
 {
     lhs.x *= rhs;
     lhs.y *= rhs;
     return lhs;
 }
-static inline ImVec2 &operator/=(ImVec2 &lhs, const float rhs)
+static inline ImVec2 &operator/=(ImVec2 &lhs, const f32 rhs)
 {
     lhs.x /= rhs;
     lhs.y /= rhs;
@@ -86,7 +102,5 @@ static inline bool operator!=(const ImVec4 &lhs, const ImVec4 &rhs)
 {
     return lhs.x != rhs.x || lhs.y != rhs.y || lhs.z != rhs.z || lhs.w != rhs.w;
 }
-
-APPLIB_API extern ImGuiMouseCursor g_LastCursor;
 
 #endif

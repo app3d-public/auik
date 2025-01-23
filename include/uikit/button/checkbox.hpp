@@ -1,7 +1,8 @@
 #pragma once
 
+#include <astl/basic_types.hpp>
 #include <core/api.hpp>
-#include "../style.hpp" // IWYU pragma: keep
+#include <imgui/imgui.h>
 
 namespace uikit
 {
@@ -17,11 +18,7 @@ namespace uikit
             ImVec4 mark;
         } g_CheckBox;
 
-        template <>
-        inline void bindStyle<CheckBox>()
-        {
-            ImGui::GetStyle().Colors[ImGuiCol_CheckMark] = g_CheckBox.mark;
-        }
+        inline void bindCheckboxStyle() { ImGui::GetStyle().Colors[ImGuiCol_CheckMark] = g_CheckBox.mark; }
     } // namespace style
 
 } // namespace uikit

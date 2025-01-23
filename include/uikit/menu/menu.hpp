@@ -4,10 +4,11 @@
 #include <astl/enum.hpp>
 #include <astl/list.hpp>
 #include <astl/vector.hpp>
+#include <astl/basic_types.hpp>
 #include <functional>
 #include <imgui/imgui_internal.h>
+#include "../icon/icon.hpp"
 #include "../selectable/selectable.hpp"
-#include "../style.hpp" // IWYU pragma: keep
 
 namespace uikit
 {
@@ -29,7 +30,7 @@ namespace uikit
             ImVec4 hoverColor;
             ImVec2 padding;
             f32 rounding;
-            Icon* checkmark = nullptr;
+            Icon *checkmark = nullptr;
         } g_HMenu;
     } // namespace style
 
