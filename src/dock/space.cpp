@@ -389,6 +389,7 @@ namespace uikit
 
             _hovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows);
             auto window = g.CurrentWindow;
+            if (window->SkipItems) return;
             auto pos = window->DC.CursorPos;
             auto init_pos = pos;
             // Left sections
