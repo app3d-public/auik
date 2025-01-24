@@ -63,7 +63,7 @@ namespace uikit
             clicked,
             continuing,
         } state{ChangeState::normal};
-        Switch _switch{_("UI:Switch:All")};
+        Switch _switch{_("apply_all")};
         int _preventCloseCount{0};
     };
 } // namespace uikit

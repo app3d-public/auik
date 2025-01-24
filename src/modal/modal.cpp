@@ -14,13 +14,13 @@ namespace uikit
         switch (button)
         {
             case window::popup::Buttons::OK:
-                return _("Btn:OK");
+                return _("ok");
             case window::popup::Buttons::Yes:
-                return _("Btn:Yes");
+                return _("yes");
             case window::popup::Buttons::No:
-                return _("Btn:No");
+                return _("no");
             case window::popup::Buttons::Cancel:
-                return _("Btn:Cancel");
+                return _("cancel");
             default:
                 return "Unknown";
         };

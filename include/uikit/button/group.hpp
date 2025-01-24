@@ -30,11 +30,18 @@ namespace uikit
         struct Item
         {
             uikit::Icon *icon;
+            u16 id; // Note: We don't use this field. It needed as id for calls from external context
             bool selected;
-            std::function<void()> callback;
+            std::function<void()> callback = nullptr;
             uikit::Icon *disabledIcon = nullptr;
             bool disabled = false;
+
+            ~Item() {}
         };
+
+        using value_type = Item;
+        using iterator = astl::vector<Item>::iterator;
+        using const_iterator = astl::vector<Item>::const_iterator;
 
         enum class FlagBits
         {
@@ -88,7 +95,17 @@ namespace uikit
 
         void renderAsGroup();
 
-        Item& operator[](size_t index) { return _items[index]; }
+        Item &operator[](size_t index) { return _items[index]; }
+        const Item &operator[](size_t index) const { return _items[index]; }
+
+        iterator begin() { return _items.begin(); }
+        iterator end() { return _items.end(); }
+
+        const_iterator begin() const { return _items.begin(); }
+        const_iterator end() const { return _items.end(); }
+
+        astl::vector<Item> &items() { return _items; }
+        const astl::vector<Item> &items() const { return _items; }
 
     private:
         astl::vector<Item> _items;

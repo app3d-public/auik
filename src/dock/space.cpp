@@ -647,17 +647,17 @@ namespace uikit
 
         PopupMenu::PopupMenu()
             : Widget("dock:menu"),
-              _commonItems{{_("dock:menu:undock"),
+              _commonItems{{_("undock_window"),
                             [this]() {
                                 auto window_name = space->sections[_si].nodes[_ni].tabNav->tabbar.activeTab().name;
                                 space->_e->dispatch<ChangeEvent>("ds:undock", space, window_name.c_str(), _si, _ni);
                             }},
-                           {_("dock:menu:close"),
+                           {_("close_window"),
                             [this]() {
                                 auto &node = space->sections[_si].nodes[_ni];
                                 space->closeWindow(_si, _ni, node.tabNav->tabbar.activeIndex);
                             }},
-                           {_("dock:menu:close:all"),
+                           {_("close_all_windows"),
                             [this]() {
                                 auto &window = space->sections[_si].nodes[_ni].windows;
                                 for (int i = 0; i < window.size(); ++i) space->closeWindow(_si, _ni, 0);

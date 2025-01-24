@@ -41,7 +41,6 @@ namespace uikit
 
         ImVec2 iconPos = selectablePos + (rectSize - _items[index].icon->size()) * 0.5f;
         ImGui::SetCursorScreenPos(iconPos);
-
         if (_items[index].disabled && _items[index].disabledIcon)
             _items[index].disabledIcon->render(iconPos);
         else
