@@ -1,7 +1,6 @@
 #ifndef UIKIT_WIDGETS_TEXT_H
 #define UIKIT_WIDGETS_TEXT_H
 
-#include <astl/basic_types.hpp>
 #include <core/api.hpp>
 #include "../widget.hpp"
 

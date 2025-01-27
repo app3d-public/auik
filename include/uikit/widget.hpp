@@ -1,7 +1,7 @@
 #ifndef APP_UI_WIDGETS_H
 #define APP_UI_WIDGETS_H
 
-#include <astl/basic_types.hpp>
+#include <astl/scalars.hpp>
 #include <core/api.hpp>
 #include <imgui/imgui.h>
 #include <string>

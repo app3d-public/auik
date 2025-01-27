@@ -1,6 +1,6 @@
 #pragma once
 
-#include <astl/basic_types.hpp>
+#include <astl/scalars.hpp>
 #include <core/api.hpp>
 #include <imgui/imgui.h>
 

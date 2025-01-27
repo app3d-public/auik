@@ -3,8 +3,8 @@
 
 #include <astl/enum.hpp>
 #include <astl/list.hpp>
+#include <astl/scalars.hpp>
 #include <astl/vector.hpp>
-#include <astl/basic_types.hpp>
 #include <functional>
 #include <imgui/imgui_internal.h>
 #include "../icon/icon.hpp"

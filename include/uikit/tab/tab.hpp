@@ -1,7 +1,6 @@
 #ifndef UIKIT_WIDGETS_TAB_H
 #define UIKIT_WIDGETS_TAB_H
 
-#include <astl/basic_types.hpp>
 #include <astl/enum.hpp>
 #include <core/disposal_queue.hpp>
 #include <core/event.hpp>
