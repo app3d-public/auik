@@ -33,7 +33,7 @@ namespace uikit
           tabbar(tabbar),
           _window(window),
           e(e),
-          _controlSize(getControllsSize(window.accessBridge().hwnd())),
+          _controlSize(getControllsSize(window::platform::native_access::getHWND(window))),
           _controls{{ControlState::Idle, ControlArea::Min},
                     {ControlState::Idle, ControlArea::Max},
                     {ControlState::Idle, ControlArea::Close}}
@@ -93,10 +93,10 @@ namespace uikit
             {
                 if (ImGui::IsMouseDragging(ImGuiMouseButton_Left))
                 {
-                    astl::point2D<i32>cursorPos = _window.cursorPosition();
-                    astl::point2D<i32>windowPos = _window.windowPos();
-                    astl::point2D<i32>newPos{windowPos.x + cursorPos.x - _dragOffset.x,
-                                         windowPos.y + cursorPos.y - _dragOffset.y};
+                    astl::point2D<i32> cursorPos = _window.cursorPosition();
+                    astl::point2D<i32> windowPos = _window.windowPos();
+                    astl::point2D<i32> newPos{windowPos.x + cursorPos.x - _dragOffset.x,
+                                              windowPos.y + cursorPos.y - _dragOffset.y};
                     _window.windowPos(newPos);
                 }
                 else

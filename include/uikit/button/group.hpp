@@ -12,8 +12,8 @@ namespace uikit
     {
         extern APPLIB_API struct BtnGroup
         {
-            float btnSize;
-            float rounding;
+            f32 btnSize;
+            f32 rounding;
             uikit::Icon *lockIcon;
         } g_BtnGroup;
 
@@ -43,15 +43,20 @@ namespace uikit
         using iterator = astl::vector<Item>::iterator;
         using const_iterator = astl::vector<Item>::const_iterator;
 
-        enum class FlagBits
+        struct FlagBits
         {
-            none = 0x0,
-            resetOnClick = 0x1,
-            toogle = 0x2,
-            lock = 0x4
+            enum enum_type
+            {
+                none = 0x0,
+                resetOnClick = 0x1,
+                toogle = 0x2,
+                lock = 0x4
+            };
+
+            using flag_bitmask = std::true_type;
         };
 
-        using Flags = Flags<FlagBits>;
+        using Flags = astl::flags<FlagBits>;
 
         BtnGroup(const std::string &name, const astl::vector<Item> &items, Flags flags, int activeID)
             : Selectable({"##image_group_" + name,
@@ -115,12 +120,3 @@ namespace uikit
         void renderItem(size_t index, ImVec2 &pos, ImVec2 &rectSize);
     };
 } // namespace uikit
-
-template <>
-struct FlagTraits<uikit::BtnGroup::FlagBits>
-{
-    static constexpr bool isBitmask = true;
-    static constexpr uikit::BtnGroup::Flags allFlags =
-        uikit::BtnGroup::FlagBits::none | uikit::BtnGroup::FlagBits::resetOnClick | uikit::BtnGroup::FlagBits::toogle |
-        uikit::BtnGroup::FlagBits::lock;
-};

@@ -1,8 +1,8 @@
 #ifndef UIKIT_WIDGETS_TAB_H
 #define UIKIT_WIDGETS_TAB_H
 
-#include <astl/basic_types.hpp>
 #include <astl/enum.hpp>
+#include <astl/scalars.hpp>
 #include <core/disposal_queue.hpp>
 #include <core/event.hpp>
 #include "../selectable/selectable.hpp"
@@ -12,14 +12,18 @@ namespace uikit
     class APPLIB_API TabItem : public Selectable
     {
     public:
-        enum class FlagBits : u8
+        struct FlagBits
         {
-            none = 0x0,
-            closable = 0x1,
-            unsaved = 0x2
+            enum enum_type : u8
+            {
+                none = 0x0,
+                closable = 0x1,
+                unsaved = 0x2
+            };
+            using flag_bitmask = std::true_type;
         };
 
-        using Flags = ::Flags<FlagBits>;
+        using Flags = astl::flags<FlagBits>;
 
         u64 id;
 
@@ -54,14 +58,18 @@ namespace uikit
         astl::vector<TabItem> items;
         u8 activeIndex = 0;
 
-        enum class FlagBits : u8
+        struct FlagBits
         {
-            none = 0x0,
-            reorderable = 0x1,
-            scrollable = 0x2,
+            enum enum_type : u8
+            {
+                none = 0x0,
+                reorderable = 0x1,
+                scrollable = 0x2,
+            };
+            using flag_bitmask = std::true_type;
         };
 
-        using Flags = ::Flags<FlagBits>;
+        using Flags = astl::flags<FlagBits>;
 
         struct Style
         {
@@ -163,21 +171,4 @@ namespace uikit
     };
 
 } // namespace uikit
-
-template <>
-struct FlagTraits<uikit::TabItem::FlagBits>
-{
-    static constexpr bool isBitmask = true;
-    static constexpr uikit::TabItem::Flags allFlags =
-        uikit::TabItem::FlagBits::none | uikit::TabItem::FlagBits::closable | uikit::TabItem::FlagBits::unsaved;
-};
-
-template <>
-struct FlagTraits<uikit::TabBar::FlagBits>
-{
-    static constexpr bool isBitmask = true;
-    static constexpr uikit::TabBar::Flags allFlags =
-        uikit::TabBar::FlagBits::none | uikit::TabBar::FlagBits::reorderable | uikit::TabBar::FlagBits::scrollable;
-};
-
 #endif

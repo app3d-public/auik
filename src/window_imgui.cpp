@@ -50,9 +50,9 @@ namespace uikit
         // Set platform dependent data in viewport
         ImGuiViewport *main_viewport = ImGui::GetMainViewport();
 #ifdef _WIN32
-        main_viewport->PlatformHandleRaw = _bd->Window->accessBridge().hwnd();
+        main_viewport->PlatformHandleRaw = window::platform::native_access::getHWND(*_bd->Window);
 #elif defined(__APPLE__)
-        main_viewport->PlatformHandleRaw = (void *)glfwGetCocoaWindow(bd->Window);
+        main_viewport->PlatformHandleRaw = (void *)window::platform::native_access::getUnimpl(bd->Window);
 #else
         IM_UNUSED(main_viewport);
 #endif

@@ -7,19 +7,24 @@ namespace uikit
 {
     namespace dock
     {
-        enum class SectionFlagBits
+        struct SectionFlagBits
         {
-            none = 0x0,
-            hide_top_line = 0x1,
-            discard_padding = 0x2,
-            stretch = 0x4,
-            sync_stretch_hresize = 0x8,
-            // [Internal flags]
-            scrollbar_hovered = 0x10,
-            op_locked = 0x20
+            enum enum_type
+            {
+                none = 0x0,
+                hide_top_line = 0x1,
+                discard_padding = 0x2,
+                stretch = 0x4,
+                sync_stretch_hresize = 0x8,
+                // [Internal flags]
+                scrollbar_hovered = 0x10,
+                op_locked = 0x20
+            };
+
+            using flag_bitmask = std::true_type;
         };
 
-        using SectionFlags = Flags<SectionFlagBits>;
+        using SectionFlags = astl::flags<SectionFlagBits>;
 
         struct Node
         {
@@ -117,16 +122,21 @@ namespace uikit
             }
         };
 
-        enum class FrameStateFlagBits
+        struct FrameStateFlagBits
         {
-            none = 0x0,
-            resizing = 0x1,
-            op_locked = 0x2,
-            dropped = 0x4,
-            layout_update = 0x8
+            enum enum_type
+            {
+                none = 0x0,
+                resizing = 0x1,
+                op_locked = 0x2,
+                dropped = 0x4,
+                layout_update = 0x8
+            };
+
+            using flag_bitmask = std::true_type;
         };
 
-        using FrameStateFlags = Flags<FrameStateFlagBits>;
+        using FrameStateFlags = astl::flags<FrameStateFlagBits>;
 
         struct FrameState
         {
@@ -138,24 +148,3 @@ namespace uikit
         };
     } // namespace dock
 } // namespace uikit
-
-template <>
-struct FlagTraits<uikit::dock::SectionFlagBits>
-{
-    static constexpr bool isBitmask = true;
-    static constexpr uikit::dock::SectionFlags allFlags =
-        uikit::dock::SectionFlagBits::none | uikit::dock::SectionFlagBits::hide_top_line |
-        uikit::dock::SectionFlagBits::discard_padding | uikit::dock::SectionFlagBits::stretch |
-        uikit::dock::SectionFlagBits::sync_stretch_hresize | uikit::dock::SectionFlagBits::scrollbar_hovered |
-        uikit::dock::SectionFlagBits::op_locked;
-};
-
-template <>
-struct FlagTraits<uikit::dock::FrameStateFlagBits>
-{
-    static constexpr bool isBitmask = true;
-    static constexpr uikit::dock::FrameStateFlags allFlags =
-        uikit::dock::FrameStateFlagBits::none | uikit::dock::FrameStateFlagBits::resizing |
-        uikit::dock::FrameStateFlagBits::op_locked | uikit::dock::FrameStateFlagBits::dropped |
-        uikit::dock::FrameStateFlagBits::layout_update;
-};

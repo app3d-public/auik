@@ -16,46 +16,62 @@ add_library(imgui SHARED
     modules/3rd-party/implot/implot_items.cpp
 )
 
+if(WIN32)
+    set(imgui_VERSION 1.91.9 PARENT_SCOPE)
+    gen_manifest_lib("imgui" 1.91.9)
+endif()
+
 target_compile_definitions(imgui PUBLIC
     IMGUI_IMPL_VULKAN_NO_PROTOTYPES
     IMGUI_ENABLE_FREETYPE
 )
 
+# Freetype2
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(FREETYPE2 REQUIRED freetype2)
+
+if(WIN32)
+    if(NOT DEFINED BUILD_EXTERNAL_MANIFEST)
+        set(BUILD_EXTERNAL_MANIFEST OFF)
+    endif()
+
+    if(BUILD_EXTERNAL_MANIFEST)
+        gen_manifest_lib("freetype-6" ${FREETYPE2_VERSION})
+    endif()
+endif()
+
+target_include_directories(imgui PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/modules/3rd-party/imgui
+    ${FREETYPE2_INCLUDE_DIRS})
+target_link_libraries(imgui PUBLIC ${FREETYPE2_LIBRARIES})
+
 if(USE_ASAN)
     target_link_options(imgui PUBLIC -fsanitize=address -fno-omit-frame-pointer)
 endif(USE_ASAN)
-
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(FREETYPE2 REQUIRED freetype2)
-include_directories(modules/3rd-party/imgui ${FREETYPE2_INCLUDE_DIRS})
-target_include_directories(imgui PUBLIC modules/3rd-party/imgui ${FREETYPE2_INCLUDE_DIRS})
-target_link_libraries(imgui PUBLIC ${FREETYPE2_LIBRARIES})
 
 add_files(${PROJECT_NAME} RECURSE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
 add_library(${PROJECT_NAME} SHARED ${SOURCE_FILES})
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
 target_compile_definitions(${PROJECT_NAME} PRIVATE -DAPPLIB_BUILD)
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/include/")
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/modules/3rd-party/")
-
-target_include_directories(${PROJECT_NAME} PRIVATE
-    $<TARGET_PROPERTY:imgui,INCLUDE_DIRECTORIES>
-    $<TARGET_PROPERTY:app3d-window,INCLUDE_DIRECTORIES>
-    $<TARGET_PROPERTY:app3d-core,INCLUDE_DIRECTORIES>
-)
+target_include_directories(${PROJECT_NAME} PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/"
+    "${CMAKE_CURRENT_SOURCE_DIR}/modules/3rd-party/")
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
     app3d-core
     app3d-window
-    imgui
 )
+target_link_libraries(${PROJECT_NAME} PUBLIC imgui)
 
 if(WIN32)
     target_link_libraries(${PROJECT_NAME} PRIVATE
         Winmm
         dwmapi
     )
+
+    # Manifest
+    gen_manifest_lib(${PROJECT_NAME} ${PROJECT_VERSION})
 endif()
 
 set_target_properties(${PROJECT_NAME}

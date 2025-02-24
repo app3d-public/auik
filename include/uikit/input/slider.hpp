@@ -60,7 +60,6 @@ namespace uikit
                 draw_list->AddRectFilled(avaliable.Min, avaliable.Max, aval_color, style.FrameRounding);
             }
 
-            float circle_diam = style::g_Slider.circle_radius * 2;
             ImVec2 circle_center(filled.Max.x, filled.Min.y + (style::g_Slider.height / 2.0f));
             draw_list->AddCircleFilled(circle_center, style::g_Slider.circle_radius, style::g_Slider.circle_color);
 

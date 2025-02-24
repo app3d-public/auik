@@ -1,7 +1,6 @@
 #ifndef UIKIT_WIDGETS_BUTTON_H
 #define UIKIT_WIDGETS_BUTTON_H
 
-#include <astl/basic_types.hpp>
 #include <astl/vector.hpp>
 #include "../icon/icon.hpp"
 

@@ -1,4 +1,4 @@
-#include <astl/basic_types.hpp>
+#include <astl/scalars.hpp>
 #include <imgui/imgui_internal.h>
 #include <uikit/button/combobox.hpp>
 #include <uikit/icon/icon.hpp>
@@ -15,7 +15,7 @@ namespace uikit
         ImGuiContext &g = *GImGui;
         ImGuiWindow *window = ImGui::GetCurrentWindow();
 
-        ImGuiNextWindowDataFlags backup_next_window_data_flags = g.NextWindowData.Flags;
+        ImGuiNextWindowDataFlags backup_next_window_data_flags = g.NextWindowData.HasFlags;
         g.NextWindowData.ClearFlags(); // We behave like Begin() and need to consume those values
         if (window->SkipItems) return false;
 
@@ -106,7 +106,7 @@ namespace uikit
 
         if (!popup_open) return false;
 
-        g.NextWindowData.Flags = backup_next_window_data_flags;
+        g.NextWindowData.HasFlags = backup_next_window_data_flags;
         ImVec2 spacing = {style.ItemSpacing.x, style::g_ComboBox.itemSpacing.y};
         ImVec2 framePadding = {style::g_ComboBox.itemSpacing.x, style.FramePadding.y};
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, spacing);

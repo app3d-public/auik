@@ -1,10 +1,10 @@
 #ifndef UIKIT_WIDGETS_MENU_H
 #define UIKIT_WIDGETS_MENU_H
 
+#include <astl/scalars.hpp>
 #include <astl/enum.hpp>
 #include <astl/list.hpp>
 #include <astl/vector.hpp>
-#include <astl/basic_types.hpp>
 #include <functional>
 #include <imgui/imgui_internal.h>
 #include "../icon/icon.hpp"
@@ -75,13 +75,18 @@ namespace uikit
 
     struct MenuNode
     {
-        enum class FlagBits
+        struct FlagBits
         {
-            data = 0x0,
-            group = 0x1,
-            category = 0x2
+            enum enum_type
+            {
+                data = 0x0,
+                group = 0x1,
+                category = 0x2
+            };
+
+            using flag_bitmask = std::true_type;
         };
-        using Flags = ::Flags<FlagBits>;
+        using Flags = astl::flags<FlagBits>;
 
         Flags flags;
         astl::unique_ptr<Selectable> widget;
@@ -113,13 +118,5 @@ namespace uikit
         MenuBar(MenuBar &&other, const std::string &id) noexcept : Widget(id), nodes(std::move(other.nodes)) {}
     };
 } // namespace uikit
-
-template <>
-struct FlagTraits<uikit::MenuNode::FlagBits>
-{
-    static constexpr bool isBitmask = true;
-    static constexpr uikit::MenuNode::Flags allFlags =
-        uikit::MenuNode::FlagBits::data | uikit::MenuNode::FlagBits::group | uikit::MenuNode::FlagBits::category;
-};
 
 #endif
