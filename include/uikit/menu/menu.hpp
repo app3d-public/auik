@@ -4,6 +4,7 @@
 #include <astl/scalars.hpp>
 #include <astl/enum.hpp>
 #include <astl/list.hpp>
+#include <astl/scalars.hpp>
 #include <astl/vector.hpp>
 #include <functional>
 #include <imgui/imgui_internal.h>
