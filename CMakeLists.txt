@@ -4,26 +4,15 @@ project(app3d-uikit
     LANGUAGES CXX C
     DESCRIPTION "App3d UIKIT Lib")
 
-add_library(imgui SHARED
+set(IMGUI_SRC_FILES
     modules/3rd-party/imgui/imgui.cpp
     modules/3rd-party/imgui/imgui_draw.cpp
     modules/3rd-party/imgui/imgui_widgets.cpp
-    modules/3rd-party/imgui/imgui_tables.cpp
     modules/3rd-party/imgui/backends/imgui_impl_vulkan.cpp
     modules/3rd-party/imgui/misc/freetype/imgui_freetype.cpp
     modules/3rd-party/imgui/misc/cpp/imgui_stdlib.cpp
     modules/3rd-party/implot/implot.cpp
     modules/3rd-party/implot/implot_items.cpp
-)
-
-if(WIN32)
-    set(imgui_VERSION 1.91.9 PARENT_SCOPE)
-    gen_manifest_lib("imgui" 1.91.9)
-endif()
-
-target_compile_definitions(imgui PUBLIC
-    IMGUI_IMPL_VULKAN_NO_PROTOTYPES
-    IMGUI_ENABLE_FREETYPE
 )
 
 # Freetype2
@@ -40,29 +29,29 @@ if(WIN32)
     endif()
 endif()
 
-target_include_directories(imgui PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/modules/3rd-party/imgui
-    ${FREETYPE2_INCLUDE_DIRS})
-target_link_libraries(imgui PUBLIC ${FREETYPE2_LIBRARIES})
-
-if(USE_ASAN)
-    target_link_options(imgui PUBLIC -fsanitize=address -fno-omit-frame-pointer)
-endif(USE_ASAN)
-
 add_files(${PROJECT_NAME} RECURSE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
-add_library(${PROJECT_NAME} SHARED ${SOURCE_FILES})
+add_library(${PROJECT_NAME} SHARED ${IMGUI_SRC_FILES} ${SOURCE_FILES})
+
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
 target_compile_definitions(${PROJECT_NAME} PRIVATE -DAPPLIB_BUILD)
+target_compile_definitions(${PROJECT_NAME} PUBLIC
+    IMGUI_IMPL_VULKAN_NO_PROTOTYPES
+    IMGUI_ENABLE_FREETYPE
+    IMGUI_USER_CONFIG="uikit/integration/imgui.hpp"
+)
 target_include_directories(${PROJECT_NAME} PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/include/"
-    "${CMAKE_CURRENT_SOURCE_DIR}/modules/3rd-party/")
+    "${CMAKE_CURRENT_SOURCE_DIR}/modules/3rd-party/"
+    "${CMAKE_CURRENT_SOURCE_DIR}/modules/3rd-party/imgui/"
+    ${FREETYPE2_INCLUDE_DIRS}
+)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
     app3d-core
     app3d-window
 )
-target_link_libraries(${PROJECT_NAME} PUBLIC imgui)
+target_link_libraries(${PROJECT_NAME} PUBLIC ${FREETYPE2_LIBRARIES})
 
 if(WIN32)
     target_link_libraries(${PROJECT_NAME} PRIVATE
@@ -73,6 +62,10 @@ if(WIN32)
     # Manifest
     gen_manifest_lib(${PROJECT_NAME} ${PROJECT_VERSION})
 endif()
+
+if(USE_ASAN)
+    target_link_options(${PROJECT_NAME} PUBLIC -fsanitize=address -fno-omit-frame-pointer)
+endif(USE_ASAN)
 
 set_target_properties(${PROJECT_NAME}
     PROPERTIES

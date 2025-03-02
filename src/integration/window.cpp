@@ -1,7 +1,7 @@
 #include <core/log.hpp>
 #include <implot/implot.h>
 #include <uikit/widget.hpp>
-#include <uikit/window_imgui.hpp>
+#include <uikit/integration/window.hpp>
 
 namespace uikit
 {
