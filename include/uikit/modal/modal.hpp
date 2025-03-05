@@ -10,6 +10,8 @@
 #include "../icon/icon.hpp"
 #include "../widget.hpp"
 
+#define UIKIT_EVENT_MODAL_SIGN 0x06505A881306AD91
+
 namespace uikit
 {
     namespace style

@@ -182,7 +182,7 @@ namespace uikit
     void Titlebar::bindEvents()
     {
         tabbar.bindEvents();
-        e->bindEvent(this, "window:NCHitTest", [this](window::Win32NativeEvent &e) {
+        e->bindEvent(this, window::event_id::NCHitTest, [this](window::Win32NativeEvent &e) {
             if (e.window != &_window) return;
             POINT cursorPoint = {0};
             cursorPoint.x = LOWORD(e.lParam);
@@ -231,7 +231,7 @@ namespace uikit
             for (auto &control : _controls)
                 if (control.area != _activeArea) control.state = ControlState::Idle;
         });
-        e->bindEvent(this, "window:NCLMouseDown", [this](window::Win32NativeEvent &e) {
+        e->bindEvent(this, window::event_id::NCMouseDown, [this](window::Win32NativeEvent &e) {
             if (e.window != &_window || _activeArea == ControlArea::None) return;
             switch (_activeArea)
             {
@@ -251,7 +251,7 @@ namespace uikit
                     break;
             };
         });
-        e->bindEvent(this, "window:input:mouse", [this](const window::MouseClickEvent &e) {
+        e->bindEvent(this, window::event_id::mouseClick, [this](const window::MouseClickEvent &e) {
             if (e.window != &_window || _activeArea == ControlArea::None) return;
             switch (_activeArea)
             {

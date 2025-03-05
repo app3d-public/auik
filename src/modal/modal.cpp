@@ -155,7 +155,7 @@ namespace uikit
 
     void ModalQueue::bindEvents()
     {
-        e->bindEvent(this, "notification:msgbox",
+        e->bindEvent(this, UIKIT_EVENT_MODAL_SIGN,
                      [this](const events::Event<ModalQueue::Message> &e) { push(e.data); });
     }
 } // namespace uikit

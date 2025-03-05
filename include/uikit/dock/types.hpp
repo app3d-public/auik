@@ -146,5 +146,16 @@ namespace uikit
             Section *hover_section = nullptr;
             FrameStateFlags flags = FrameStateFlagBits::none;
         };
+
+        namespace event_id
+        {
+            enum : u64
+            {
+                none = 0x0,
+                windowDocked = 0x1AFFF3AAFCE36195,
+                newTab = 0x34493086A50E2106,
+                undock = 0x2CFFB00717B9FC3A
+            };
+        };
     } // namespace dock
 } // namespace uikit

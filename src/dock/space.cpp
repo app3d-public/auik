@@ -25,8 +25,8 @@ namespace uikit
             {
                 frame.flags &= ~FrameStateFlagBits::dropped;
                 if (g.NavWindow)
-                    _e->dispatch<ChangeEvent>(is_content ? "ds:window_docked" : "ds:newtab", this, g.NavWindow->Name,
-                                              si, ni);
+                    _e->dispatch<ChangeEvent>(is_content ? event_id::windowDocked : event_id::newTab, this,
+                                              g.NavWindow->Name, si, ni);
             }
         }
 
@@ -44,7 +44,7 @@ namespace uikit
             TabBar tabbar(node.id + ":tab", _e, _disposalQueue, items, TabBar::FlagBits::reorderable, style);
             Selectable btn(astl::format("##%s:btn", node.id.c_str()), false, 2.0f, 0);
             node.tabNav = astl::alloc<Node::TabNavArea>(std::move(tabbar), std::move(btn));
-            _e->bindEvent(&node.tabNav->tabbar, "tabbar:switched", [&node](uikit::TabChangeEvent &e) {
+            _e->bindEvent(&node.tabNav->tabbar, TabBar::event_id::switched, [&node](uikit::TabSwitchEvent &e) {
                 if (e.tabbar != &node.tabNav->tabbar) return;
                 auto it = std::find_if(node.windows.begin(), node.windows.end(),
                                        [&](Window *w) { return w->name == e.current->name; });
@@ -650,7 +650,8 @@ namespace uikit
               _commonItems{{_("undock_window"),
                             [this]() {
                                 auto window_name = space->sections[_si].nodes[_ni].tabNav->tabbar.activeTab().name;
-                                space->_e->dispatch<ChangeEvent>("ds:undock", space, window_name.c_str(), _si, _ni);
+                                space->_e->dispatch<ChangeEvent>(event_id::undock, space, window_name.c_str(), _si,
+                                                                 _ni);
                             }},
                            {_("close_window"),
                             [this]() {

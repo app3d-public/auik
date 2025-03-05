@@ -45,9 +45,8 @@ namespace uikit
             int si; // section index
             int ni; // node index
 
-            ChangeEvent(const std::string &name = "", Space *space = nullptr, const char *window_id = "", int si = -1,
-                        int ni = -1)
-                : IEvent(name), space(space), window_id(window_id), si(si), ni(ni)
+            ChangeEvent(u64 id, Space *space = nullptr, const char *window_id = "", int si = -1, int ni = -1)
+                : IEvent(id), space(space), window_id(window_id), si(si), ni(ni)
             {
             }
         };

@@ -8,6 +8,7 @@ set(IMGUI_SRC_FILES
     modules/3rd-party/imgui/imgui.cpp
     modules/3rd-party/imgui/imgui_draw.cpp
     modules/3rd-party/imgui/imgui_widgets.cpp
+    modules/3rd-party/imgui/imgui_tables.cpp
     modules/3rd-party/imgui/backends/imgui_impl_vulkan.cpp
     modules/3rd-party/imgui/misc/freetype/imgui_freetype.cpp
     modules/3rd-party/imgui/misc/cpp/imgui_stdlib.cpp

@@ -55,6 +55,7 @@ namespace uikit
     class APPLIB_API TabBar : public Widget
     {
     public:
+        struct event_id;
         astl::vector<TabItem> items;
         u8 activeIndex = 0;
 
@@ -129,7 +130,18 @@ namespace uikit
         void renderCombobox();
     };
 
-    struct TabRemoveEvent : public events::IEvent
+    struct TabBar::event_id
+    {
+        enum : u64
+        {
+            none = 0x0,
+            close = 0x33C84BEDF7097480,
+            switched = 0x26274151A3D94FF5,
+            changed = 0x3E025D2B3AC893E4
+        };
+    };
+
+    struct TabCloseEvent : public events::IEvent
     {
         TabBar *tabbar;
         TabItem tab;
@@ -137,9 +149,27 @@ namespace uikit
         bool createOnEmpty;
         bool batch;
 
-        TabRemoveEvent(const std::string &name, TabBar *tabbar, const TabItem &tab, bool confirmed = false,
-                       bool createOnEmpty = true, bool batch = false)
-            : IEvent(name), tabbar(tabbar), tab(tab), confirmed(confirmed), createOnEmpty(createOnEmpty), batch(batch)
+        TabCloseEvent(TabBar *tabbar, const TabItem &tab, bool confirmed = false, bool createOnEmpty = true,
+                      bool batch = false)
+            : IEvent(TabBar::event_id::close),
+              tabbar(tabbar),
+              tab(tab),
+              confirmed(confirmed),
+              createOnEmpty(createOnEmpty),
+              batch(batch)
+        {
+        }
+    };
+
+    struct TabSwitchEvent : public events::IEvent
+    {
+        TabBar *tabbar;
+        astl::vector<TabItem>::iterator prev;
+        astl::vector<TabItem>::iterator current;
+
+        TabSwitchEvent(TabBar *tabbar, const astl::vector<TabItem>::iterator &prev,
+                       const astl::vector<TabItem>::iterator &current)
+            : IEvent(TabBar::event_id::switched), tabbar(tabbar), prev(prev), current(current)
         {
         }
     };
@@ -147,25 +177,12 @@ namespace uikit
     struct TabChangeEvent : public events::IEvent
     {
         TabBar *tabbar;
-        astl::vector<TabItem>::iterator prev;
-        astl::vector<TabItem>::iterator current;
-
-        TabChangeEvent(const std::string &name, TabBar *tabbar, const astl::vector<TabItem>::iterator &prev,
-                       const astl::vector<TabItem>::iterator &current)
-            : IEvent(name), tabbar(tabbar), prev(prev), current(current)
-        {
-        }
-    };
-
-    struct TabInfoEvent : public events::IEvent
-    {
-        TabBar *tabbar;
         std::string displayName;
         TabItem::Flags flags;
 
-        TabInfoEvent(const std::string &name, TabBar *tabbar, const std::string &displayName = "",
-                     TabItem::Flags flags = TabItem::FlagBits::none)
-            : IEvent(name), tabbar(tabbar), displayName(displayName), flags(flags)
+        TabChangeEvent(TabBar *tabbar, const std::string &displayName = "",
+                       TabItem::Flags flags = TabItem::FlagBits::none)
+            : IEvent(TabBar::event_id::changed), tabbar(tabbar), displayName(displayName), flags(flags)
         {
         }
     };
