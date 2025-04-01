@@ -1,12 +1,7 @@
 #ifndef UIKIT_WIDGETS_MENU_H
 #define UIKIT_WIDGETS_MENU_H
 
-#include <astl/scalars.hpp>
-#include <astl/enum.hpp>
-#include <astl/list.hpp>
-#include <astl/scalars.hpp>
-#include <astl/vector.hpp>
-#include <functional>
+#include <acul/enum.hpp>
 #include <imgui/imgui_internal.h>
 #include "../icon/icon.hpp"
 #include "../selectable/selectable.hpp"
@@ -38,7 +33,7 @@ namespace uikit
     class APPLIB_API HMenu final : public Selectable
     {
     public:
-        HMenu(const std::string &name)
+        HMenu(const acul::string &name)
             : Selectable(name, false, style::g_HMenu.rounding,
                          ImGuiSelectableFlags_NoHoldingActiveID | ImGuiSelectableFlags_NoSetKeyOwner |
                              ImGuiSelectableFlags_SelectOnClick | ImGuiSelectableFlags_DontClosePopups)
@@ -51,7 +46,7 @@ namespace uikit
     class APPLIB_API VMenu final : public Selectable
     {
     public:
-        VMenu(const std::string &name)
+        VMenu(const acul::string &name)
             : Selectable(name, false, style::g_VMenu.rounding, ImGuiSelectableFlags_SpanAvailWidth)
         {
         }
@@ -63,10 +58,10 @@ namespace uikit
     {
     public:
         std::function<void()> callback;
-        std::string shortcut;
+        acul::string shortcut;
 
-        MenuItem(const std::string &name, const std::function<void()> &callback = nullptr,
-                 const std::string &shortcut = "")
+        MenuItem(const acul::string &name, const std::function<void()> &callback = nullptr,
+                 const acul::string &shortcut = {})
             : Selectable(name, false, style::g_VMenu.rounding), callback(callback), shortcut(shortcut)
         {
         }
@@ -87,19 +82,19 @@ namespace uikit
 
             using flag_bitmask = std::true_type;
         };
-        using Flags = astl::flags<FlagBits>;
+        using Flags = acul::flags<FlagBits>;
 
         Flags flags;
-        astl::unique_ptr<Selectable> widget;
-        astl::vector<MenuNode> nodes;
+        acul::unique_ptr<Selectable> widget;
+        acul::vector<MenuNode> nodes;
     };
 
     class MenuBar : public Widget
     {
     public:
-        astl::vector<MenuNode> nodes;
+        acul::vector<MenuNode> nodes;
 
-        MenuBar(const std::string &name) : Widget(name) {}
+        MenuBar(const acul::string &name) : Widget(name) {}
         virtual ~MenuBar() = default;
 
         virtual void render() override
@@ -113,10 +108,10 @@ namespace uikit
             ImGui::PopStyleColor(4);
         }
 
-        static APPLIB_API void renderMenuNodes(const astl::vector<MenuNode> &nodes);
+        static APPLIB_API void renderMenuNodes(const acul::vector<MenuNode> &nodes);
 
     protected:
-        MenuBar(MenuBar &&other, const std::string &id) noexcept : Widget(id), nodes(std::move(other.nodes)) {}
+        MenuBar(MenuBar &&other, const acul::string &id) noexcept : Widget(id), nodes(std::move(other.nodes)) {}
     };
 } // namespace uikit
 

@@ -24,13 +24,13 @@ namespace uikit
             using flag_bitmask = std::true_type;
         };
 
-        using SectionFlags = astl::flags<SectionFlagBits>;
+        using SectionFlags = acul::flags<SectionFlagBits>;
 
         struct Node
         {
-            std::string id;
+            acul::string id;
             f32 size;
-            astl::vector<Window *> windows;
+            acul::vector<Window *> windows;
             struct TabNavArea
             {
                 TabBar tabbar;
@@ -42,7 +42,7 @@ namespace uikit
             f32 next_offset;
             f32 extra_offset;
 
-            Node(const astl::vector<Window *> &windows, bool isTransparent = false, f32 size = 0.0f)
+            Node(const acul::vector<Window *> &windows, bool isTransparent = false, f32 size = 0.0f)
                 : id(""),
                   size(size),
                   windows(windows),
@@ -66,30 +66,30 @@ namespace uikit
                 }
             }
 
-            void destroy(events::Manager *ed)
+            void destroy(acul::events::dispatcher *ed)
             {
-                for (auto window : windows) astl::release(window);
+                for (auto window : windows) acul::release(window);
                 if (tabNav)
                 {
-                    ed->unbindListeners(&tabNav->tabbar);
-                    astl::release(tabNav);
+                    ed->unbind_listeners(&tabNav->tabbar);
+                    acul::release(tabNav);
                 }
             }
         };
 
         struct Section
         {
-            std::string id;
+            acul::string id;
             SectionFlags flags;
             f32 size = 0.0f;
             f32 min_size = 50.0f;
             f32 fixed_size = 0;
             f32 content_height = 0.0f;
-            astl::vector<Node> nodes;
+            acul::vector<Node> nodes;
             bool isResizing = false;
             size_t fixed_sections = 0;
 
-            Section(const astl::vector<Node> &nodes, SectionFlags flags, const std::string &id = "",
+            Section(const acul::vector<Node> &nodes, SectionFlags flags, const acul::string &id = "",
                     f32 min_size = 50.0f)
                 : id(id),
                   flags(flags),
@@ -102,7 +102,7 @@ namespace uikit
             {
             }
 
-            Section(const astl::vector<Node> &nodes, SectionFlags flags, f32 size)
+            Section(const acul::vector<Node> &nodes, SectionFlags flags, f32 size)
                 : id(""),
                   flags(flags),
                   size(size),
@@ -136,7 +136,7 @@ namespace uikit
             using flag_bitmask = std::true_type;
         };
 
-        using FrameStateFlags = astl::flags<FrameStateFlagBits>;
+        using FrameStateFlags = acul::flags<FrameStateFlagBits>;
 
         struct FrameState
         {

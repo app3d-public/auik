@@ -9,17 +9,17 @@
 
 namespace uikit
 {
-    std::string getBtnName(window::popup::Buttons button)
+    acul::string getBtnName(awin::popup::Buttons button)
     {
         switch (button)
         {
-            case window::popup::Buttons::OK:
+            case awin::popup::Buttons::OK:
                 return _("ok");
-            case window::popup::Buttons::Yes:
+            case awin::popup::Buttons::Yes:
                 return _("yes");
-            case window::popup::Buttons::No:
+            case awin::popup::Buttons::No:
                 return _("no");
-            case window::popup::Buttons::Cancel:
+            case awin::popup::Buttons::Cancel:
                 return _("cancel");
             default:
                 return "Unknown";
@@ -107,14 +107,14 @@ namespace uikit
             }
 
             // Buttons
-            astl::vector<std::string> buttons(message.buttons.size());
+            acul::vector<acul::string> buttons(message.buttons.size());
             for (int i = 0; i < message.buttons.size(); ++i) buttons[i] = getBtnName(message.buttons[i].first);
             rightControls(buttons, &action, pos.y);
 
             if (action != -1)
             {
                 auto &pair = message.buttons[action];
-                if (pair.first == window::popup::Buttons::Cancel || pair.first == window::popup::Buttons::OK)
+                if (pair.first == awin::popup::Buttons::Cancel || pair.first == awin::popup::Buttons::OK)
                 {
                     if (pair.second) pair.second();
                     if (message.preventClose) _preventCloseCount -= _messages[it->first].size();
@@ -149,13 +149,13 @@ namespace uikit
         if (wasChanged)
         {
             ImGui::CloseCurrentPopup();
-            window::pushEmptyEvent();
+            awin::pushEmptyEvent();
         }
     }
 
     void ModalQueue::bindEvents()
     {
-        e->bindEvent(this, UIKIT_EVENT_MODAL_SIGN,
-                     [this](const events::Event<ModalQueue::Message> &e) { push(e.data); });
+        ed->bind_event(this, UIKIT_EVENT_MODAL_SIGN,
+                       [this](const acul::events::data_event<ModalQueue::Message> &e) { push(e.data); });
     }
 } // namespace uikit

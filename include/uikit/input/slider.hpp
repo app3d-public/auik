@@ -1,7 +1,6 @@
 #pragma once
 
 #include <imgui/imgui_internal.h>
-#include <window/window.hpp>
 #include "../widget.hpp"
 
 namespace uikit
@@ -10,8 +9,8 @@ namespace uikit
     {
         extern APPLIB_API struct Slider
         {
-            float height;
-            float circle_radius;
+            f32 height;
+            f32 circle_radius;
             ImU32 fill_color;
             ImU32 circle_color;
         } g_Slider;
@@ -23,7 +22,7 @@ namespace uikit
     public:
         T *value;
 
-        InputSlider(const std::string &name, T *value, T min, T max, bool round = false)
+        InputSlider(const acul::string &name, T *value, T min, T max, bool round = false)
             : Widget(name), value(value), _min(min), _max(max), _round(round)
         {
         }
@@ -36,12 +35,12 @@ namespace uikit
             ImGuiContext &g = *GImGui;
             const ImGuiStyle &style = g.Style;
             const ImGuiID id = window->GetID(name.c_str());
-            const float w = ImGui::CalcItemWidth();
-            const float frame = ImGui::GetFrameHeight();
+            const f32 w = ImGui::CalcItemWidth();
+            const f32 frame = ImGui::GetFrameHeight();
             const ImRect frame_bb(window->DC.CursorPos, window->DC.CursorPos + ImVec2(w, frame));
             ImGui::ItemSize(frame_bb, style.FramePadding.y);
             if (!ImGui::ItemAdd(frame_bb, id, &frame_bb, 0)) return;
-            float factor = (*value - _min) / (_max - _min);
+            f32 factor = (*value - _min) / (_max - _min);
             if (*value < _min) factor = 0;
             if (*value > _max) factor = 1;
             ImRect filled;
@@ -75,18 +74,18 @@ namespace uikit
         {
             bool hovered, held;
             ImGui::ButtonBehavior(frame_bb, id, &hovered, &held, ImGuiButtonFlags_PressedOnClickReleaseAnywhere);
-            float mouse_pos = IO.MousePos.x;
+            f32 mouse_pos = IO.MousePos.x;
             if (hovered && ImGui::IsMouseClicked(0))
             {
-                float diff = mouse_pos - frame_bb.Min.x;
-                float factor = diff / w;
+                f32 diff = mouse_pos - frame_bb.Min.x;
+                f32 factor = diff / w;
                 *value = ImClamp(_min + (_max - _min) * factor, _min, _max);
                 if (_round) *value = round(*value);
             }
             if (held && ImGui::IsMouseDragging(0))
             {
-                float drag_delta = ImGui::GetMouseDragDelta(0).x / w;
-                float step_change = (_max - _min) * drag_delta;
+                f32 drag_delta = ImGui::GetMouseDragDelta(0).x / w;
+                f32 step_change = (_max - _min) * drag_delta;
                 if (_round)
                 {
                     int steps = static_cast<int>(round(step_change));

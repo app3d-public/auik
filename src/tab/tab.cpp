@@ -1,16 +1,16 @@
-#include <core/disposal_queue.hpp>
+#include <acul/disposal_queue.hpp>
+#include <awin/window.hpp>
 #include <imgui/imgui_internal.h>
 #include <uikit/button/button.hpp>
 #include <uikit/button/combobox.hpp>
 #include <uikit/tab/tab.hpp>
-#include <window/window.hpp>
 
 namespace uikit
 {
-    class TabMemCache : public MemCache
+    class TabMemCache : public acul::mem_cache
     {
     public:
-        TabMemCache(u8 *activeIndex, astl::vector<TabItem> *items) : activeIndex(activeIndex), _items(items)
+        TabMemCache(u8 *activeIndex, acul::vector<TabItem> *items) : activeIndex(activeIndex), _items(items)
         {
             ++itemsLeft;
         }
@@ -27,7 +27,7 @@ namespace uikit
         static size_t offset;
         static size_t itemsLeft;
         u8 *activeIndex;
-        astl::vector<TabItem> *_items;
+        acul::vector<TabItem> *_items;
 
         virtual void _free() = 0;
     };
@@ -35,7 +35,7 @@ namespace uikit
     class AddMemCache : public TabMemCache
     {
     public:
-        AddMemCache(TabItem tab, u8 *activeIndex, astl::vector<TabItem> *items)
+        AddMemCache(TabItem tab, u8 *activeIndex, acul::vector<TabItem> *items)
             : TabMemCache(activeIndex, items), _tab(tab)
         {
         }
@@ -54,7 +54,7 @@ namespace uikit
     class RemoveMemCache : public TabMemCache
     {
     public:
-        RemoveMemCache(const astl::vector<TabItem>::iterator &it, u8 *activeIndex, astl::vector<TabItem> *items)
+        RemoveMemCache(const acul::vector<TabItem>::iterator &it, u8 *activeIndex, acul::vector<TabItem> *items)
             : TabMemCache(activeIndex, items), _it(it)
         {
         }
@@ -67,7 +67,7 @@ namespace uikit
         }
 
     private:
-        astl::vector<TabItem>::iterator _it;
+        acul::vector<TabItem>::iterator _it;
     };
 
     size_t TabMemCache::offset = 0;
@@ -130,13 +130,13 @@ namespace uikit
         return outputSize;
     }
 
-    bool TabBar::renderTab(astl::vector<TabItem>::iterator &begin, int index)
+    bool TabBar::renderTab(acul::vector<TabItem>::iterator &begin, int index)
     {
         if (_drag.it != begin)
         {
             if (begin->renderItem())
             {
-                e->dispatch<TabCloseEvent>(this, *begin, false);
+                ed->dispatch<TabCloseEvent>(this, *begin, false);
                 return false;
             }
         }
@@ -220,13 +220,13 @@ namespace uikit
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 6));
             for (auto &item : items)
             {
-                std::string label = item.name;
+                acul::string label = item.name;
                 SelectableParams params{.selected = index == activeIndex};
                 Selectable::render(label.c_str(), params);
                 if (params.pressed)
                 {
                     activeIndex = index;
-                    window::pushEmptyEvent();
+                    awin::pushEmptyEvent();
                 }
                 ++index;
             }
@@ -318,9 +318,9 @@ namespace uikit
                 if (begin->pressed && !wasDragReset)
                 {
                     if (activeIndex != index)
-                        e->dispatch<TabSwitchEvent>(this, items.begin() + activeIndex, items.begin() + index);
+                        ed->dispatch<TabSwitchEvent>(this, items.begin() + activeIndex, items.begin() + index);
                     activeIndex = index;
-                    window::pushEmptyEvent();
+                    awin::pushEmptyEvent();
                 }
                 ++begin;
             }
@@ -340,7 +340,7 @@ namespace uikit
         auto it = std::find_if(items.begin(), items.end(), [&](const TabItem &item) { return item.name == tab.name; });
         if (it != items.end())
         {
-            _disposalQueue.push(astl::alloc<RemoveMemCache>(it, &activeIndex, &items));
+            _disposalQueue.push(acul::alloc<RemoveMemCache>(it, &activeIndex, &items));
             return true;
         }
         return false;
@@ -352,18 +352,18 @@ namespace uikit
         if (it != items.end())
             activeIndex = it - items.begin();
         else
-            _disposalQueue.push(astl::alloc<AddMemCache>(tab, &activeIndex, &items));
+            _disposalQueue.push(acul::alloc<AddMemCache>(tab, &activeIndex, &items));
     }
 
     void TabBar::bindEvents()
     {
         if (_flags & FlagBits::scrollable)
-            e->bindEvent(this, window::event_id::scroll, [this](const window::ScrollEvent &event) {
+            ed->bind_event(this, awin::event_id::scroll, [this](const awin::ScrollEvent &event) {
                 if (!_isHovered) return;
                 ImGuiIO &io = ImGui::GetIO();
                 io.AddKeyEvent(ImGuiMod_Shift, true);
             });
-        e->bindEvent(this, event_id::changed, [this](const TabChangeEvent &e) {
+        ed->bind_event(this, event_id::changed, [this](const TabChangeEvent &e) {
             if (e.tabbar != this) return;
             if (e.flags & TabItem::FlagBits::unsaved)
                 items[activeIndex].flags() |= TabItem::FlagBits::unsaved;

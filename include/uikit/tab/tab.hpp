@@ -1,10 +1,9 @@
 #ifndef UIKIT_WIDGETS_TAB_H
 #define UIKIT_WIDGETS_TAB_H
 
-#include <astl/enum.hpp>
-#include <astl/scalars.hpp>
-#include <core/disposal_queue.hpp>
-#include <core/event.hpp>
+#include <acul/disposal_queue.hpp>
+#include <acul/enum.hpp>
+#include <acul/event.hpp>
 #include "../selectable/selectable.hpp"
 
 namespace uikit
@@ -23,11 +22,11 @@ namespace uikit
             using flag_bitmask = std::true_type;
         };
 
-        using Flags = astl::flags<FlagBits>;
+        using Flags = acul::flags<FlagBits>;
 
         u64 id;
 
-        TabItem(u64 id, const std::string &label, const std::function<void()> &onRender = nullptr,
+        TabItem(u64 id, const acul::string &label, const std::function<void()> &onRender = nullptr,
                 Flags flags = FlagBits::none, f32 rounding = 0.0f)
             : Selectable({label, false, rounding, ImGuiSelectableFlags_AllowItemOverlap, {0.0f, 0.0f}, true}),
               id(id),
@@ -56,7 +55,7 @@ namespace uikit
     {
     public:
         struct event_id;
-        astl::vector<TabItem> items;
+        acul::vector<TabItem> items;
         u8 activeIndex = 0;
 
         struct FlagBits
@@ -70,7 +69,7 @@ namespace uikit
             using flag_bitmask = std::true_type;
         };
 
-        using Flags = astl::flags<FlagBits>;
+        using Flags = acul::flags<FlagBits>;
 
         struct Style
         {
@@ -79,13 +78,19 @@ namespace uikit
             f32 scrollOffsetRL;
         };
 
-        TabBar(const std::string &id, events::Manager *e, DisposalQueue &disposalQueue,
-               const astl::vector<TabItem> &items, Flags flags = FlagBits::none, const Style &style = {})
-            : Widget(id), items(items), e(e), _disposalQueue(disposalQueue), _flags(flags), _height(0.0f), _style(style)
+        TabBar(const acul::string &id, acul::events::dispatcher *ed, acul::disposal_queue &disposalQueue,
+               const acul::vector<TabItem> &items, Flags flags = FlagBits::none, const Style &style = {})
+            : Widget(id),
+              items(items),
+              ed(ed),
+              _disposalQueue(disposalQueue),
+              _flags(flags),
+              _height(0.0f),
+              _style(style)
         {
         }
 
-        ~TabBar() { e->unbindListeners(this); }
+        ~TabBar() { ed->unbind_listeners(this); }
 
         virtual void render() override;
 
@@ -110,8 +115,8 @@ namespace uikit
         bool isHovered() const { return _isHovered; }
 
     private:
-        events::Manager *e;
-        DisposalQueue &_disposalQueue;
+        acul::events::dispatcher *ed;
+        acul::disposal_queue &_disposalQueue;
         bool _isHovered{false};
         Flags _flags;
         f32 _avaliableWidth{0};
@@ -119,13 +124,13 @@ namespace uikit
         Style _style;
         struct DragData
         {
-            std::optional<astl::vector<TabItem>::iterator> it{std::nullopt};
+            std::optional<acul::vector<TabItem>::iterator> it{std::nullopt};
             ImVec2 pos;
             f32 posOffset{0};
             f32 offset{0};
         } _drag;
 
-        bool renderTab(astl::vector<TabItem>::iterator &begin, int index);
+        bool renderTab(acul::vector<TabItem>::iterator &begin, int index);
         void renderDragged();
         void renderCombobox();
     };
@@ -141,7 +146,7 @@ namespace uikit
         };
     };
 
-    struct TabCloseEvent : public events::IEvent
+    struct TabCloseEvent : public acul::events::event
     {
         TabBar *tabbar;
         TabItem tab;
@@ -151,7 +156,7 @@ namespace uikit
 
         TabCloseEvent(TabBar *tabbar, const TabItem &tab, bool confirmed = false, bool createOnEmpty = true,
                       bool batch = false)
-            : IEvent(TabBar::event_id::close),
+            : event(TabBar::event_id::close),
               tabbar(tabbar),
               tab(tab),
               confirmed(confirmed),
@@ -161,28 +166,28 @@ namespace uikit
         }
     };
 
-    struct TabSwitchEvent : public events::IEvent
+    struct TabSwitchEvent : public acul::events::event
     {
         TabBar *tabbar;
-        astl::vector<TabItem>::iterator prev;
-        astl::vector<TabItem>::iterator current;
+        acul::vector<TabItem>::iterator prev;
+        acul::vector<TabItem>::iterator current;
 
-        TabSwitchEvent(TabBar *tabbar, const astl::vector<TabItem>::iterator &prev,
-                       const astl::vector<TabItem>::iterator &current)
-            : IEvent(TabBar::event_id::switched), tabbar(tabbar), prev(prev), current(current)
+        TabSwitchEvent(TabBar *tabbar, const acul::vector<TabItem>::iterator &prev,
+                       const acul::vector<TabItem>::iterator &current)
+            : event(TabBar::event_id::switched), tabbar(tabbar), prev(prev), current(current)
         {
         }
     };
 
-    struct TabChangeEvent : public events::IEvent
+    struct TabChangeEvent : public acul::events::event
     {
         TabBar *tabbar;
-        std::string displayName;
+        acul::string displayName;
         TabItem::Flags flags;
 
-        TabChangeEvent(TabBar *tabbar, const std::string &displayName = "",
+        TabChangeEvent(TabBar *tabbar, const acul::string &displayName = {},
                        TabItem::Flags flags = TabItem::FlagBits::none)
-            : IEvent(TabBar::event_id::changed), tabbar(tabbar), displayName(displayName), flags(flags)
+            : event(TabBar::event_id::changed), tabbar(tabbar), displayName(displayName), flags(flags)
         {
         }
     };

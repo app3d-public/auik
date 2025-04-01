@@ -21,7 +21,7 @@ namespace uikit
         ImGuiWindowFlags imguiFlags;
         WindowDockFlags dockFlags;
 
-        Window(const std::string &name, WindowDockFlags dockFlags = 0, ImGuiWindowFlags imguiFlags = 0)
+        Window(const acul::string &name, WindowDockFlags dockFlags = 0, ImGuiWindowFlags imguiFlags = 0)
             : Widget(name), imguiFlags(imguiFlags), dockFlags(dockFlags)
         {
         }

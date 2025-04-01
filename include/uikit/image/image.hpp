@@ -1,7 +1,7 @@
 #ifndef UIKIT_WIDGETS_IMAGE_H
 #define UIKIT_WIDGETS_IMAGE_H
 
-#include <core/api.hpp>
+#include <acul/api.hpp>
 #include "../widget.hpp"
 
 namespace uikit

@@ -1,12 +1,9 @@
 #ifndef UIKIT_WIDGETS_MODAL_H
 #define UIKIT_WIDGETS_MODAL_H
 
-#include <core/event.hpp>
-#include <core/locales.hpp>
-#include <functional>
-#include <string>
+#include <acul/locales.hpp>
+#include <awin/popup.hpp>
 #include <uikit/button/switch.hpp>
-#include <window/popup.hpp>
 #include "../icon/icon.hpp"
 #include "../widget.hpp"
 
@@ -34,17 +31,17 @@ namespace uikit
     public:
         struct Message
         {
-            std::string header;
-            std::string message;
-            astl::vector<std::pair<window::popup::Buttons, std::function<void()>>> buttons;
+            acul::string header;
+            acul::string message;
+            acul::vector<std::pair<awin::popup::Buttons, std::function<void()>>> buttons;
             bool preventClose = false;
         };
 
         style::ModalQueue style;
 
-        ModalQueue(events::Manager *e) : Widget("modalqueue"), e(e) {}
+        ModalQueue(acul::events::dispatcher *ed) : Widget("modalqueue"), ed(ed) {}
 
-        ~ModalQueue() { e->unbindListeners(this); }
+        ~ModalQueue() { ed->unbind_listeners(this); }
 
         virtual void render() override;
 
@@ -57,8 +54,8 @@ namespace uikit
         int preventCloseCount() const { return _preventCloseCount; }
 
     private:
-        events::Manager *e;
-        astl::map<std::string, astl::vector<Message>> _messages;
+        acul::events::dispatcher *ed;
+        acul::map<acul::string, acul::vector<Message>> _messages;
         enum class ChangeState
         {
             normal,

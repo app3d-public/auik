@@ -1,9 +1,8 @@
-#include <astl/hash.hpp>
-#include <astl/string.hpp>
-#include <core/locales.hpp>
-#include <core/task.hpp>
+#include <acul/locales.hpp>
+#include <acul/string/utils.hpp>
+#include <acul/task.hpp>
+#include <awin/window.hpp>
 #include <uikit/dock/space.hpp>
-#include <window/window.hpp>
 
 namespace uikit
 {
@@ -25,26 +24,26 @@ namespace uikit
             {
                 frame.flags &= ~FrameStateFlagBits::dropped;
                 if (g.NavWindow)
-                    _e->dispatch<ChangeEvent>(is_content ? event_id::windowDocked : event_id::newTab, this,
-                                              g.NavWindow->Name, si, ni);
+                    _ed->dispatch<ChangeEvent>(is_content ? event_id::windowDocked : event_id::newTab, this,
+                                               g.NavWindow->Name, si, ni);
             }
         }
 
         void Space::allocNodeTabbar(Node &node)
         {
-            astl::vector<TabItem> items;
+            acul::vector<TabItem> items;
             items.reserve(node.windows.size());
             for (int i = 0; i < node.windows.size(); ++i)
             {
-                u64 id = std::hash<std::string>()(node.windows[i]->name);
+                u64 id = std::hash<acul::string>()(node.windows[i]->name);
                 items.emplace_back(id, node.windows[i]->name);
             }
             TabBar::Style style;
             style.size = {0, 0};
-            TabBar tabbar(node.id + ":tab", _e, _disposalQueue, items, TabBar::FlagBits::reorderable, style);
-            Selectable btn(astl::format("##%s:btn", node.id.c_str()), false, 2.0f, 0);
-            node.tabNav = astl::alloc<Node::TabNavArea>(std::move(tabbar), std::move(btn));
-            _e->bindEvent(&node.tabNav->tabbar, TabBar::event_id::switched, [&node](uikit::TabSwitchEvent &e) {
+            TabBar tabbar(node.id + ":tab", _ed, _disposalQueue, items, TabBar::FlagBits::reorderable, style);
+            Selectable btn(acul::format("##%s:btn", node.id.c_str()), false, 2.0f, 0);
+            node.tabNav = acul::alloc<Node::TabNavArea>(std::move(tabbar), std::move(btn));
+            _ed->bind_event(&node.tabNav->tabbar, TabBar::event_id::switched, [&node](uikit::TabSwitchEvent &e) {
                 if (e.tabbar != &node.tabNav->tabbar) return;
                 auto it = std::find_if(node.windows.begin(), node.windows.end(),
                                        [&](Window *w) { return w->name == e.current->name; });
@@ -61,7 +60,7 @@ namespace uikit
             if (nav.tabbar.name.empty())
             {
                 nav.tabbar.name = node.id + ":tab";
-                nav.btn.name = astl::format("##%s:btn", node.id.c_str());
+                nav.btn.name = acul::format("##%s:btn", node.id.c_str());
             }
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {frame.item_spacing.x, style::g_Dock.tabbar.item_spacing});
@@ -125,7 +124,7 @@ namespace uikit
             auto &section = sections[si];
             auto &node = section.nodes[ni];
 
-            if (node.id.empty()) node.id = astl::format("%s:%d", section.id.c_str(), ni);
+            if (node.id.empty()) node.id = acul::format("%s:%d", section.id.c_str(), ni);
             ImVec2 node_size{section_size, node.size};
             auto init_pos = ImGui::GetCursorPos();
             if (node.dockFlags() & WindowDockFlags_Stretch)
@@ -328,7 +327,7 @@ namespace uikit
         {
             auto &section = sections[index];
             section.flags &= ~SectionFlagBits::scrollbar_hovered;
-            if (section.id.empty()) section.id = astl::format("dock:%llx", astl::IDGen()());
+            if (section.id.empty()) section.id = acul::format("dock:%llx", acul::id_gen()());
 
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, frame.padding);
@@ -453,7 +452,7 @@ namespace uikit
             _window_size = window->Size;
             drawOverlayLayer(init_pos, avail);
 
-            if (frame.flags & FrameStateFlagBits::layout_update) window::pushEmptyEvent();
+            if (frame.flags & FrameStateFlagBits::layout_update) awin::pushEmptyEvent();
             if (!ImGui::IsMouseDragging(ImGuiMouseButton_Left)) frame.flags &= ~FrameStateFlagBits::dropped;
         }
 
@@ -501,7 +500,7 @@ namespace uikit
                             section.size = ImClamp(section.size + delta_x, section.min_size, FLT_MAX);
                     }
                     frame.mouse_pos = mouse_pos;
-                    window::pushEmptyEvent();
+                    awin::pushEmptyEvent();
                 }
             }
             else
@@ -609,40 +608,41 @@ namespace uikit
         void Space::closeWindow(int si, int ni, int tab_id, const std::function<void(uikit::Window *window)> &callback)
         {
             auto &node = sections[si].nodes[ni];
-            std::string name = node.tabNav->tabbar.items[tab_id].name;
+            acul::string name = node.tabNav->tabbar.items[tab_id].name;
             auto it = std::find_if(node.windows.begin(), node.windows.end(), [&](auto &w) { return w->name == name; });
             if (it == node.windows.end()) return;
             node.tabNav->tabbar.removeTab(node.tabNav->tabbar.items[tab_id]);
-            _disposalQueue.push(astl::alloc<task::MemCache>(task::addTask([callback, it, &node, si, ni, this]() {
-                callback(*it);
-                node.windows.erase(it);
-                auto &section = sections[si];
-                if (node.windows.empty())
-                {
-                    node.destroy(_e);
-                    auto removed_size = section.nodes[ni].size;
-                    section.nodes.erase(section.nodes.begin() + ni);
-                    if (!section.nodes.empty())
+            _disposalQueue.push(
+                acul::alloc<acul::task::mem_cache>(acul::task::add_task([callback, it, &node, si, ni, this]() {
+                    callback(*it);
+                    node.windows.erase(it);
+                    auto &section = sections[si];
+                    if (node.windows.empty())
                     {
-                        auto &adusted_node = ni == 0 ? section.nodes.front() : section.nodes[ni - 1];
-                        adusted_node.size += removed_size;
+                        node.destroy(_ed);
+                        auto removed_size = section.nodes[ni].size;
+                        section.nodes.erase(section.nodes.begin() + ni);
+                        if (!section.nodes.empty())
+                        {
+                            auto &adusted_node = ni == 0 ? section.nodes.front() : section.nodes[ni - 1];
+                            adusted_node.size += removed_size;
+                        }
                     }
-                }
-                else
-                {
-                    auto new_active_it = std::find_if(node.windows.begin(), node.windows.end(), [&](auto &w) {
-                        return w->name == node.tabNav->tabbar.activeTab().name;
-                    });
-                    if (new_active_it == node.windows.end())
-                        node.tabNav->window_id = 0;
                     else
-                        node.tabNav->window_id = new_active_it - node.windows.begin();
-                }
-                if (section.nodes.empty())
-                    sections.erase(sections.begin() + si);
-                else
-                    section.reset();
-            })));
+                    {
+                        auto new_active_it = std::find_if(node.windows.begin(), node.windows.end(), [&](auto &w) {
+                            return w->name == node.tabNav->tabbar.activeTab().name;
+                        });
+                        if (new_active_it == node.windows.end())
+                            node.tabNav->window_id = 0;
+                        else
+                            node.tabNav->window_id = new_active_it - node.windows.begin();
+                    }
+                    if (section.nodes.empty())
+                        sections.erase(sections.begin() + si);
+                    else
+                        section.reset();
+                })));
         }
 
         PopupMenu::PopupMenu()
@@ -650,8 +650,8 @@ namespace uikit
               _commonItems{{_("undock_window"),
                             [this]() {
                                 auto window_name = space->sections[_si].nodes[_ni].tabNav->tabbar.activeTab().name;
-                                space->_e->dispatch<ChangeEvent>(event_id::undock, space, window_name.c_str(), _si,
-                                                                 _ni);
+                                space->_ed->dispatch<ChangeEvent>(event_id::undock, space, window_name.c_str(), _si,
+                                                                  _ni);
                             }},
                            {_("close_window"),
                             [this]() {

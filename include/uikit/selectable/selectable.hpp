@@ -1,17 +1,15 @@
 #ifndef UIKIT_WIDGETS_SELECTABLE_H
 #define UIKIT_WIDGETS_SELECTABLE_H
 
-#include <astl/vector.hpp>
-#include <core/api.hpp>
+#include <acul/vector.hpp>
 #include <imgui/imgui_internal.h>
-#include <string>
 #include "../widget.hpp"
 
 namespace uikit
 {
     struct SelectableParams
     {
-        float rounding = 0.0f;
+        f32 rounding = 0.0f;
         ImGuiSelectableFlags sFlags = ImGuiSelectableFlags_None; //< Selectable flags
         ImGuiButtonFlags bFlags = ImGuiButtonFlags_None;         //< Button flags
         ImDrawFlags dFlags = ImDrawFlags_None;                   //< Draw flags
@@ -25,7 +23,7 @@ namespace uikit
     class APPLIB_API Selectable : public Widget, public SelectableParams
     {
     public:
-        Selectable(const std::string &label = "", bool selected = false, float rounding = 0.0f,
+        Selectable(const acul::string &label = "", bool selected = false, f32 rounding = 0.0f,
                    ImGuiSelectableFlags sFlags = 0, const ImVec2 &size = ImVec2(0, 0), bool showBackground = false)
             : Widget(label),
               SelectableParams(rounding, sFlags, loadButtonFlags(sFlags), ImDrawFlags_None, size, selected, false,
@@ -44,7 +42,7 @@ namespace uikit
     class APPLIB_API RubberBandSelection final : public Widget
     {
     public:
-        RubberBandSelection(const std::string &name)
+        RubberBandSelection(const acul::string &name)
             : Widget(name), _isActive(false), _isSelected(false), _start(0, 0), _end(0, 0)
         {
         }
@@ -66,12 +64,12 @@ namespace uikit
             if (_rect.Overlaps(bb)) _item_ids.push_back(id);
         }
 
-        const astl::vector<int> &get_items() const { return _item_ids; }
+        const acul::vector<int> &get_items() const { return _item_ids; }
 
     private:
         bool _isActive;
         bool _isSelected;
-        astl::vector<int> _item_ids;
+        acul::vector<int> _item_ids;
         ImVec2 _start, _end;
         ImRect _rect;
     };

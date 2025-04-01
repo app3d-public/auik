@@ -1,6 +1,5 @@
 #include <uikit/search/searchbox.hpp>
-// Include header first
-#include <imgui/misc/cpp/imgui_stdlib.h>
+#include <uikit/text/text.hpp>
 
 namespace uikit
 {
@@ -12,12 +11,12 @@ namespace uikit
     void SearchBox::render()
     {
         auto &style = ImGui::GetStyle();
-        float width = ImGui::CalcItemWidth();
-        float input_width = width < 100 ? 10
-                                        : width - style::g_Search.filterIcon->size().x -
-                                              style::g_Search.searchIcon->size().x - style.ItemSpacing.x * 2;
+        f32 width = ImGui::CalcItemWidth();
+        f32 input_width = width < 100 ? 10
+                                      : width - style::g_Search.filterIcon->size().x -
+                                            style::g_Search.searchIcon->size().x - style.ItemSpacing.x * 2;
         auto *window = ImGui::GetCurrentWindow();
-        float frame_height = ImGui::GetFrameHeight();
+        f32 frame_height = ImGui::GetFrameHeight();
 
         // Background for search icon
         ImRect background;
@@ -40,7 +39,7 @@ namespace uikit
         pos.x += style::g_Search.searchIcon->size().x + style.ItemSpacing.x;
         ImGui::SetCursorScreenPos(pos);
         ImGui::SetNextItemWidth(input_width);
-        ImGui::InputTextWithHint(name.c_str(), _hint.c_str(), &_text);
+        inputTextWithHint(name.c_str(), _hint.c_str(), &_text);
         ImGui::PopStyleColor();
 
         // Filter icon

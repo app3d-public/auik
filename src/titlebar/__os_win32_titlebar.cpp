@@ -1,4 +1,4 @@
-#include <core/log.hpp>
+#include <acul/log.hpp>
 #include <dwmapi.h>
 #include <uikit/titlebar/titlebar_win32.hpp>
 
@@ -15,25 +15,25 @@ namespace uikit
             hr = DwmGetWindowAttribute(hwnd, DWMWA_CAPTION_BUTTON_BOUNDS, &rect, sizeof(rect));
             if (SUCCEEDED(hr))
             {
-                controlSize.x = (rect.right - rect.left) / 3.0f * window::getDpi();
-                controlSize.y = (rect.bottom - rect.top) * window::getDpi();
+                controlSize.x = (rect.right - rect.left) / 3.0f * awin::getDpi();
+                controlSize.y = (rect.bottom - rect.top) * awin::getDpi();
                 return controlSize;
             }
         }
         logWarn("Failed to get DWMWA_CAPTION_BUTTON_BOUNDS");
-        controlSize.x = GetSystemMetrics(SM_CXSIZE) * window::getDpi();
-        controlSize.y = GetSystemMetrics(SM_CYSIZE) * window::getDpi();
+        controlSize.x = GetSystemMetrics(SM_CXSIZE) * awin::getDpi();
+        controlSize.y = GetSystemMetrics(SM_CYSIZE) * awin::getDpi();
         return controlSize;
     }
 
-    Titlebar::Titlebar(window::Window &window, events::Manager *e, MenuBar *menubar, const TabBar &tabbar,
+    Titlebar::Titlebar(awin::Window &window, acul::events::dispatcher *ed, MenuBar *menubar, const TabBar &tabbar,
                        const Style &style)
         : MenuBar(std::move(*menubar), "titlebar"),
           style(style),
           tabbar(tabbar),
           _window(window),
-          e(e),
-          _controlSize(getControllsSize(window::platform::native_access::getHWND(window))),
+          ed(ed),
+          _controlSize(getControllsSize(awin::platform::native_access::getHWND(window))),
           _controls{{ControlState::Idle, ControlArea::Min},
                     {ControlState::Idle, ControlArea::Max},
                     {ControlState::Idle, ControlArea::Close}}
@@ -93,9 +93,9 @@ namespace uikit
             {
                 if (ImGui::IsMouseDragging(ImGuiMouseButton_Left))
                 {
-                    astl::point2D<i32> cursorPos = _window.cursorPosition();
-                    astl::point2D<i32> windowPos = _window.windowPos();
-                    astl::point2D<i32> newPos{windowPos.x + cursorPos.x - _dragOffset.x,
+                    acul::point2D<i32> cursorPos = _window.cursorPosition();
+                    acul::point2D<i32> windowPos = _window.windowPos();
+                    acul::point2D<i32> newPos{windowPos.x + cursorPos.x - _dragOffset.x,
                                               windowPos.y + cursorPos.y - _dragOffset.y};
                     _window.windowPos(newPos);
                 }
@@ -182,7 +182,7 @@ namespace uikit
     void Titlebar::bindEvents()
     {
         tabbar.bindEvents();
-        e->bindEvent(this, window::event_id::NCHitTest, [this](window::Win32NativeEvent &e) {
+        ed->bind_event(this, awin::event_id::NCHitTest, [this](awin::Win32NativeEvent &e) {
             if (e.window != &_window) return;
             POINT cursorPoint = {0};
             cursorPoint.x = LOWORD(e.lParam);
@@ -231,7 +231,7 @@ namespace uikit
             for (auto &control : _controls)
                 if (control.area != _activeArea) control.state = ControlState::Idle;
         });
-        e->bindEvent(this, window::event_id::NCMouseDown, [this](window::Win32NativeEvent &e) {
+        ed->bind_event(this, awin::event_id::NCMouseDown, [this](awin::Win32NativeEvent &e) {
             if (e.window != &_window || _activeArea == ControlArea::None) return;
             switch (_activeArea)
             {
@@ -251,12 +251,12 @@ namespace uikit
                     break;
             };
         });
-        e->bindEvent(this, window::event_id::mouseClick, [this](const window::MouseClickEvent &e) {
+        ed->bind_event(this, awin::event_id::mouseClick, [this](const awin::MouseClickEvent &e) {
             if (e.window != &_window || _activeArea == ControlArea::None) return;
             switch (_activeArea)
             {
                 case ControlArea::Min:
-                    if (e.action == window::io::KeyPressState::press)
+                    if (e.action == awin::io::KeyPressState::press)
                         _controls[0].state = ControlState::Active;
                     else
                     {
@@ -265,7 +265,7 @@ namespace uikit
                     }
                     break;
                 case ControlArea::Max:
-                    if (e.action == window::io::KeyPressState::press)
+                    if (e.action == awin::io::KeyPressState::press)
                         _controls[1].state = ControlState::Active;
                     else
                     {
@@ -274,7 +274,7 @@ namespace uikit
                     }
                     break;
                 case ControlArea::Close:
-                    if (e.action == window::io::KeyPressState::press)
+                    if (e.action == awin::io::KeyPressState::press)
                         _controls[2].state = ControlState::Active;
                     else
                     {

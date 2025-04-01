@@ -1,7 +1,6 @@
 #ifndef UIKIT_WIDGETS_TEXT_H
 #define UIKIT_WIDGETS_TEXT_H
 
-#include <core/api.hpp>
 #include "../widget.hpp"
 
 namespace uikit
@@ -9,9 +8,9 @@ namespace uikit
     class APPLIB_API Text : public Widget
     {
     public:
-        Text(const std::string &text, bool wrapped = false) : Widget(text), _wrapped(wrapped), _text_size{0, 0} {}
+        Text(const acul::string &text, bool wrapped = false) : Widget(text), _wrapped(wrapped), _text_size{0, 0} {}
 
-        Text &operator=(const std::string &text)
+        Text &operator=(const acul::string &text)
         {
             name = text;
             return *this;
@@ -34,12 +33,15 @@ namespace uikit
         void renderText(const ImVec2 text_pos);
     };
 
-    inline f32 getMaxTextWidth(std::string items[], size_t size)
+    inline f32 getMaxTextWidth(acul::string items[], size_t size)
     {
         f32 max = 0;
         for (size_t i = 0; i < size; ++i) max = std::max(max, ImGui::CalcTextSize(items[i].c_str()).x);
         return max;
     }
+
+    bool inputTextWithHint(const char *label, const char *hint, acul::string *str, ImGuiInputTextFlags flags = 0,
+                           ImGuiInputTextCallback callback = nullptr, void *user_data = nullptr);
 } // namespace uikit
 
 #endif

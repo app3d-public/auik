@@ -1,10 +1,8 @@
 #ifndef APP_UI_WIDGETS_H
 #define APP_UI_WIDGETS_H
 
-#include <astl/scalars.hpp>
-#include <core/api.hpp>
+#include <acul/string/string.hpp>
 #include <imgui/imgui.h>
-#include <string>
 
 namespace uikit
 {
@@ -12,9 +10,9 @@ namespace uikit
     {
     public:
         bool enabled;
-        std::string name;
+        acul::string name;
 
-        Widget(const std::string &name, bool enabled = true) : enabled(enabled), name(name) {}
+        Widget(const acul::string &name, bool enabled = true) : enabled(enabled), name(name) {}
 
         virtual ~Widget() = default;
 

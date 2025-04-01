@@ -1,8 +1,6 @@
 #pragma once
 
-#include <astl/enum.hpp>
-#include <astl/vector.hpp>
-#include <functional>
+#include <acul/enum.hpp>
 #include "../icon/icon.hpp"
 #include "../selectable/selectable.hpp"
 
@@ -40,8 +38,8 @@ namespace uikit
         };
 
         using value_type = Item;
-        using iterator = astl::vector<Item>::iterator;
-        using const_iterator = astl::vector<Item>::const_iterator;
+        using iterator = acul::vector<Item>::iterator;
+        using const_iterator = acul::vector<Item>::const_iterator;
 
         struct FlagBits
         {
@@ -56,9 +54,9 @@ namespace uikit
             using flag_bitmask = std::true_type;
         };
 
-        using Flags = astl::flags<FlagBits>;
+        using Flags = acul::flags<FlagBits>;
 
-        BtnGroup(const std::string &name, const astl::vector<Item> &items, Flags flags, int activeID)
+        BtnGroup(const acul::string &name, const acul::vector<Item> &items, Flags flags, int activeID)
             : Selectable({"##image_group_" + name,
                           false,
                           style::g_BtnGroup.rounding,
@@ -109,11 +107,11 @@ namespace uikit
         const_iterator begin() const { return _items.begin(); }
         const_iterator end() const { return _items.end(); }
 
-        astl::vector<Item> &items() { return _items; }
-        const astl::vector<Item> &items() const { return _items; }
+        acul::vector<Item> &items() { return _items; }
+        const acul::vector<Item> &items() const { return _items; }
 
     private:
-        astl::vector<Item> _items;
+        acul::vector<Item> _items;
         Flags _flags;
         int _activeID;
 

@@ -11,7 +11,6 @@ set(IMGUI_SRC_FILES
     modules/3rd-party/imgui/imgui_tables.cpp
     modules/3rd-party/imgui/backends/imgui_impl_vulkan.cpp
     modules/3rd-party/imgui/misc/freetype/imgui_freetype.cpp
-    modules/3rd-party/imgui/misc/cpp/imgui_stdlib.cpp
     modules/3rd-party/implot/implot.cpp
     modules/3rd-party/implot/implot_items.cpp
 )
@@ -49,8 +48,8 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
-    app3d-core
-    app3d-window
+    ${ACUL_LIB_NAME}
+    ${AWIN_LIB_NAME}
 )
 target_link_libraries(${PROJECT_NAME} PUBLIC ${FREETYPE2_LIBRARIES})
 

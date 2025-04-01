@@ -1,7 +1,7 @@
 #pragma once
 
-#include <core/api.hpp>
-#include <window/window.hpp>
+#include <acul/api.hpp>
+#include <awin/window.hpp>
 #include "../widget.hpp"
 
 namespace uikit
@@ -12,10 +12,10 @@ namespace uikit
         const f32 width;
         const f32 height;
 
-        Switch(const std::string &label, bool toogled = false)
+        Switch(const acul::string &label, bool toogled = false)
             : Widget(label),
-              width(28 * window::getDpi()),
-              height(15 * window::getDpi()),
+              width(28 * awin::getDpi()),
+              height(15 * awin::getDpi()),
               _pressed(false),
               _hovered(false),
               _toggled(toogled)

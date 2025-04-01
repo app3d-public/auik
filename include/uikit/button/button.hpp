@@ -1,7 +1,7 @@
 #ifndef UIKIT_WIDGETS_BUTTON_H
 #define UIKIT_WIDGETS_BUTTON_H
 
-#include <astl/vector.hpp>
+#include <acul/vector.hpp>
 #include "../icon/icon.hpp"
 
 namespace uikit
@@ -25,7 +25,7 @@ namespace uikit
     bool closeButton(ImGuiID id, const ImVec2 &pos);
 
     // Control buttons (Yes/No/Canel/etc)
-    APPLIB_API void rightControls(const astl::vector<std::string> &buttons, int *selected = nullptr, f32 y_offset = 0);
+    APPLIB_API void rightControls(const acul::vector<acul::string> &buttons, int *selected = nullptr, f32 y_offset = 0);
 } // namespace uikit
 
 #endif

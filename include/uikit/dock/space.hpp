@@ -37,7 +37,7 @@ namespace uikit
     {
         class Space;
 
-        class ChangeEvent : public events::IEvent
+        class ChangeEvent : public acul::events::event
         {
         public:
             Space *space;
@@ -46,7 +46,7 @@ namespace uikit
             int ni; // node index
 
             ChangeEvent(u64 id, Space *space = nullptr, const char *window_id = "", int si = -1, int ni = -1)
-                : IEvent(id), space(space), window_id(window_id), si(si), ni(ni)
+                : event(id), space(space), window_id(window_id), si(si), ni(ni)
             {
             }
         };
@@ -83,11 +83,11 @@ namespace uikit
         {
         public:
             FrameState frame;
-            astl::vector<Section> sections;
+            acul::vector<Section> sections;
             PopupMenu popupMenu;
 
-            explicit Space(events::Manager *e, DisposalQueue &disposalQueue)
-                : Widget("dockspace"), _e(e), _disposalQueue(disposalQueue)
+            explicit Space(acul::events::dispatcher *ed, acul::disposal_queue &disposalQueue)
+                : Widget("dockspace"), _ed(ed), _disposalQueue(disposalQueue)
             {
                 popupMenu.space = this;
             }
@@ -95,7 +95,7 @@ namespace uikit
             ~Space()
             {
                 for (auto &section : sections)
-                    for (auto &node : section.nodes) node.destroy(_e);
+                    for (auto &node : section.nodes) node.destroy(_ed);
             }
 
             void renderContent();
@@ -108,7 +108,7 @@ namespace uikit
 
             void closeWindow(int si, int ni, int tab_id)
             {
-                closeWindow(si, ni, tab_id, [](uikit::Window *window) { astl::release(window); });
+                closeWindow(si, ni, tab_id, [](uikit::Window *window) { acul::release(window); });
             }
 
             void closeWindow(int si, int ni, int tab_id, const std::function<void(uikit::Window *window)> &callback);
@@ -121,8 +121,8 @@ namespace uikit
             i8 _stretch_min = -1, _stretch_max = -1;
             ImVec2 _window_size;
             bool _hovered = false;
-            events::Manager *_e;
-            DisposalQueue &_disposalQueue;
+            acul::events::dispatcher *_ed;
+            acul::disposal_queue &_disposalQueue;
 
             friend class PopupMenu;
 

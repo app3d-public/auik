@@ -7,17 +7,14 @@ namespace uikit
     {
         ImGuiContext &g = *GImGui;
         ImGuiWindow *window = ImGui::GetCurrentWindow();
-        if (window->SkipItems)
-            return;
+        if (window->SkipItems) return;
         const ImVec2 text_pos(window->DC.CursorPos.x, window->DC.CursorPos.y + window->DC.CurrLineTextBaseOffset);
         if (_wrapped)
         {
             bool need_backup = (g.CurrentWindow->DC.TextWrapPos < 0.0f);
-            if (need_backup)
-                ImGui::PushTextWrapPos(0.0f);
+            if (need_backup) ImGui::PushTextWrapPos(0.0f);
             renderTextWrapped(text_pos);
-            if (need_backup)
-                ImGui::PopTextWrapPos();
+            if (need_backup) ImGui::PopTextWrapPos();
         }
         else
             renderText(text_pos);
@@ -50,8 +47,7 @@ namespace uikit
                 while (line < text_end && lines_skipped < lines_skippable)
                 {
                     const char *line_end = (const char *)memchr(line, '\n', text_end - line);
-                    if (!line_end)
-                        line_end = text_end;
+                    if (!line_end) line_end = text_end;
                     _text_size.x = ImMax(_text_size.x, ImGui::CalcTextSize(line, line_end).x);
                     line = line_end + 1;
                     lines_skipped++;
@@ -64,12 +60,10 @@ namespace uikit
                 ImRect line_rect(pos, pos + ImVec2(FLT_MAX, line_height));
                 while (line < text_end)
                 {
-                    if (ImGui::IsClippedEx(line_rect, 0))
-                        break;
+                    if (ImGui::IsClippedEx(line_rect, 0)) break;
 
                     const char *line_end = (const char *)memchr(line, '\n', text_end - line);
-                    if (!line_end)
-                        line_end = text_end;
+                    if (!line_end) line_end = text_end;
                     _text_size.x = ImMax(_text_size.x, ImGui::CalcTextSize(line, line_end).x);
                     ImGui::RenderText(pos, line, line_end, false);
                     line = line_end + 1;
@@ -83,8 +77,7 @@ namespace uikit
                 while (line < text_end)
                 {
                     const char *line_end = (const char *)memchr(line, '\n', text_end - line);
-                    if (!line_end)
-                        line_end = text_end;
+                    if (!line_end) line_end = text_end;
                     _text_size.x = ImMax(_text_size.x, ImGui::CalcTextSize(line, line_end).x);
                     line = line_end + 1;
                     lines_skipped++;
@@ -112,10 +105,52 @@ namespace uikit
 
         ImRect bb(text_pos, text_pos + _text_size);
         ImGui::ItemSize(_text_size, 0.0f);
-        if (!ImGui::ItemAdd(bb, 0))
-            return;
+        if (!ImGui::ItemAdd(bb, 0)) return;
 
         // Render (we don't hide text after ## in this end-user function)
         ImGui::RenderTextWrapped(bb.Min, start, end, wrap_width);
+    }
+
+    struct InputTextCallback_UserData
+    {
+        acul::string *Str;
+        ImGuiInputTextCallback ChainCallback;
+        void *ChainCallbackUserData;
+    };
+
+    static int inputTextCallback(ImGuiInputTextCallbackData *data)
+    {
+        InputTextCallback_UserData *user_data = (InputTextCallback_UserData *)data->UserData;
+        if (data->EventFlag == ImGuiInputTextFlags_CallbackResize)
+        {
+            // Resize string callback
+            // If for some reason we refuse the new length (BufTextLen) and/or capacity (BufSize) we need to set them
+            // back to what we want.
+            acul::string *str = user_data->Str;
+            IM_ASSERT(data->Buf == str->c_str());
+            str->resize(data->BufTextLen);
+            data->Buf = (char *)str->c_str();
+        }
+        else if (user_data->ChainCallback)
+        {
+            // Forward to user callback, if any
+            data->UserData = user_data->ChainCallbackUserData;
+            return user_data->ChainCallback(data);
+        }
+        return 0;
+    }
+
+    bool inputTextWithHint(const char *label, const char *hint, acul::string *str, ImGuiInputTextFlags flags,
+                           ImGuiInputTextCallback callback, void *user_data)
+    {
+        IM_ASSERT((flags & ImGuiInputTextFlags_CallbackResize) == 0);
+        flags |= ImGuiInputTextFlags_CallbackResize;
+
+        InputTextCallback_UserData cb_user_data;
+        cb_user_data.Str = str;
+        cb_user_data.ChainCallback = callback;
+        cb_user_data.ChainCallbackUserData = user_data;
+        return ImGui::InputTextWithHint(label, hint, (char *)str->c_str(), str->capacity() + 1, flags,
+                                        inputTextCallback, &cb_user_data);
     }
 } // namespace uikit

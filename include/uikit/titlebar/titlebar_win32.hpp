@@ -1,7 +1,7 @@
 #ifndef UIKIT_WIDGETS_TITLEBAR_WIN32_H
 #define UIKIT_WIDGETS_TITLEBAR_WIN32_H
 
-#include <window/window.hpp>
+#include <awin/window.hpp>
 #include "../menu/menu.hpp"
 #include "../tab/tab.hpp"
 
@@ -51,20 +51,20 @@ namespace uikit
         } style;
         TabBar tabbar;
 
-        Titlebar(window::Window &window, events::Manager *e, MenuBar *menubar, const TabBar &tabbar,
+        Titlebar(awin::Window &window, acul::events::dispatcher *ed, MenuBar *menubar, const TabBar &tabbar,
                  const Style &style);
 
-        ~Titlebar() { e->unbindListeners(this); }
+        ~Titlebar() { ed->unbind_listeners(this); }
 
         virtual void render() override;
 
         void bindEvents();
 
     private:
-        window::Window &_window;
-        events::Manager *e;
+        awin::Window &_window;
+        acul::events::dispatcher *ed;
         ImVec2 _controlSize;
-        astl::point2D<i32>_dragOffset;
+        acul::point2D<i32> _dragOffset;
         f32 _captionWidth;
         f32 _clientWidth;
         struct ControlButton

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <astl/memory.hpp>
 #include "../widget.hpp"
 
 namespace uikit
@@ -16,7 +15,7 @@ namespace uikit
 
         bool pressed() const { return _pressed; }
 
-        ~CollapseHeader() { astl::release(_content); }
+        ~CollapseHeader() { acul::release(_content); }
 
     private:
         bool _collapsed;

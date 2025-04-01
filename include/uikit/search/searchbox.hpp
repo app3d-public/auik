@@ -17,11 +17,11 @@ namespace uikit
     class APPLIB_API SearchBox final : public Widget
     {
     public:
-        SearchBox(const std::string &name, const std::string &hint) : Widget(name), _hint(hint) {}
+        SearchBox(const acul::string &name, const acul::string &hint) : Widget(name), _hint(hint) {}
 
         virtual void render() override;
 
     private:
-        std::string _hint, _text;
+        acul::string _hint, _text;
     };
 } // namespace uikit
