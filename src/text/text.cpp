@@ -140,6 +140,20 @@ namespace uikit
         return 0;
     }
 
+    bool inputText(const char *label, acul::string *str, ImGuiInputTextFlags flags, ImGuiInputTextCallback callback,
+                   void *user_data)
+    {
+        IM_ASSERT((flags & ImGuiInputTextFlags_CallbackResize) == 0);
+        flags |= ImGuiInputTextFlags_CallbackResize;
+
+        InputTextCallback_UserData cb_user_data;
+        cb_user_data.Str = str;
+        cb_user_data.ChainCallback = callback;
+        cb_user_data.ChainCallbackUserData = user_data;
+        return ImGui::InputText(label, (char *)str->c_str(), str->capacity() + 1, flags, inputTextCallback,
+                                &cb_user_data);
+    }
+
     bool inputTextWithHint(const char *label, const char *hint, acul::string *str, ImGuiInputTextFlags flags,
                            ImGuiInputTextCallback callback, void *user_data)
     {

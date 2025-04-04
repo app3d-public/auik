@@ -40,8 +40,11 @@ namespace uikit
         return max;
     }
 
-    bool inputTextWithHint(const char *label, const char *hint, acul::string *str, ImGuiInputTextFlags flags = 0,
-                           ImGuiInputTextCallback callback = nullptr, void *user_data = nullptr);
+    APPLIB_API bool inputText(const char *label, acul::string *str, ImGuiInputTextFlags flags = 0,
+                              ImGuiInputTextCallback callback = nullptr, void *user_data = nullptr);
+    APPLIB_API bool inputTextWithHint(const char *label, const char *hint, acul::string *str,
+                                      ImGuiInputTextFlags flags = 0, ImGuiInputTextCallback callback = nullptr,
+                                      void *user_data = nullptr);
 } // namespace uikit
 
 #endif
