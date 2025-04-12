@@ -126,7 +126,7 @@ namespace uikit
             ImGui::PushStyleVar(
                 ImGuiStyleVar_ChildRounding,
                 style.PopupRounding); // First level will use _PopupRounding, subsequent will use _ChildRounding
-            selected = ImGui::BeginPopupEx(id, window_flags); // menu_is_open can be 'false' when the popup is
+            selected = ImGui::BeginPopupMenuEx(id, label_c, window_flags); // menu_is_open can be 'false' when the popup is
                                                               // completely clipped (e.g. zero size display)
             ImGui::PopStyleVar();
             if (selected)
