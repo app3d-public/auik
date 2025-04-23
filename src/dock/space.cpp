@@ -612,37 +612,36 @@ namespace uikit
             auto it = std::find_if(node.windows.begin(), node.windows.end(), [&](auto &w) { return w->name == name; });
             if (it == node.windows.end()) return;
             node.tabNav->tabbar.removeTab(node.tabNav->tabbar.items[tab_id]);
-            _disposalQueue.push(
-                acul::alloc<acul::task::mem_cache>(acul::task::add_task([callback, it, &node, si, ni, this]() {
-                    callback(*it);
-                    node.windows.erase(it);
-                    auto &section = sections[si];
-                    if (node.windows.empty())
+            _disposalQueue.push(acul::alloc<acul::mem_cache>([callback, it, &node, si, ni, this]() {
+                callback(*it);
+                node.windows.erase(it);
+                auto &section = sections[si];
+                if (node.windows.empty())
+                {
+                    node.destroy(_ed);
+                    auto removed_size = section.nodes[ni].size;
+                    section.nodes.erase(section.nodes.begin() + ni);
+                    if (!section.nodes.empty())
                     {
-                        node.destroy(_ed);
-                        auto removed_size = section.nodes[ni].size;
-                        section.nodes.erase(section.nodes.begin() + ni);
-                        if (!section.nodes.empty())
-                        {
-                            auto &adusted_node = ni == 0 ? section.nodes.front() : section.nodes[ni - 1];
-                            adusted_node.size += removed_size;
-                        }
+                        auto &adusted_node = ni == 0 ? section.nodes.front() : section.nodes[ni - 1];
+                        adusted_node.size += removed_size;
                     }
+                }
+                else
+                {
+                    auto new_active_it = std::find_if(node.windows.begin(), node.windows.end(), [&](auto &w) {
+                        return w->name == node.tabNav->tabbar.activeTab().name;
+                    });
+                    if (new_active_it == node.windows.end())
+                        node.tabNav->window_id = 0;
                     else
-                    {
-                        auto new_active_it = std::find_if(node.windows.begin(), node.windows.end(), [&](auto &w) {
-                            return w->name == node.tabNav->tabbar.activeTab().name;
-                        });
-                        if (new_active_it == node.windows.end())
-                            node.tabNav->window_id = 0;
-                        else
-                            node.tabNav->window_id = new_active_it - node.windows.begin();
-                    }
-                    if (section.nodes.empty())
-                        sections.erase(sections.begin() + si);
-                    else
-                        section.reset();
-                })));
+                        node.tabNav->window_id = new_active_it - node.windows.begin();
+                }
+                if (section.nodes.empty())
+                    sections.erase(sections.begin() + si);
+                else
+                    section.reset();
+            }));
         }
 
         PopupMenu::PopupMenu()

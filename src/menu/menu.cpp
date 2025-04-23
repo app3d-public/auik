@@ -281,7 +281,7 @@ namespace uikit
             ImGui::SetNextWindowPos(popup_pos, ImGuiCond_Always); // Note: misleading: the value will serve as reference
                                                                   // for FindBestWindowPosForPopup(), not actual pos.
             ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, style.PopupRounding);
-            selected = ImGui::BeginPopupEx(id, window_flags);
+            selected = ImGui::BeginPopupMenuEx(id, label_c, window_flags);
             ImGui::PopStyleVar();
             if (selected)
             {

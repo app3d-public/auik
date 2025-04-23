@@ -10,18 +10,18 @@ namespace uikit
     class TabMemCache : public acul::mem_cache
     {
     public:
-        TabMemCache(u8 *activeIndex, acul::vector<TabItem> *items) : activeIndex(activeIndex), _items(items)
+        TabMemCache(u8 *activeIndex, acul::vector<TabItem> *items)
+            : acul::mem_cache([this]() {
+                  _free();
+                  if (--itemsLeft == 0) offset = 0;
+              }),
+              activeIndex(activeIndex),
+              _items(items)
         {
             ++itemsLeft;
         }
 
         virtual ~TabMemCache() = default;
-
-        virtual void free() override
-        {
-            _free();
-            if (--itemsLeft == 0) offset = 0;
-        }
 
     protected:
         static size_t offset;
@@ -50,6 +50,7 @@ namespace uikit
     private:
         TabItem _tab;
     };
+
 
     class RemoveMemCache : public TabMemCache
     {
