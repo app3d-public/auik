@@ -127,7 +127,6 @@ namespace uikit
             ImGui::SetCursorPos({_captionWidth, 0});
 
             renderControls();
-
             ImGui::EndMainMenuBar();
         }
 

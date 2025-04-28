@@ -26,7 +26,7 @@ namespace uikit
         // Setup backend capabilities flags
         _bd = IM_NEW(ImGuiBackendData)();
         io.BackendPlatformUserData = (void *)_bd;
-        io.BackendPlatformName = "imgui_impl_windowA3D";
+        io.BackendPlatformName = "imgui_impl_awin";
         io.BackendFlags |= ImGuiBackendFlags_HasMouseCursors;
         io.BackendFlags |= ImGuiBackendFlags_HasSetMousePos;
 

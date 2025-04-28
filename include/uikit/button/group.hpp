@@ -111,7 +111,7 @@ namespace uikit
         const acul::vector<Item> &items() const { return _items; }
 
     private:
-        acul::vector<Item> _items;
+    acul::vector<Item> _items;
         Flags _flags;
         int _activeID;
 

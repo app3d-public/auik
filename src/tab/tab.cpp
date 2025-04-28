@@ -51,7 +51,6 @@ namespace uikit
         TabItem _tab;
     };
 
-
     class RemoveMemCache : public TabMemCache
     {
     public:
