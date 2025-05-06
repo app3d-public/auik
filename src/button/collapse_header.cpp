@@ -24,7 +24,7 @@ namespace uikit
                                                     : hovered ? ImGuiCol_FrameBgHovered
                                                               : ImGuiCol_FrameBg]);
         draw_list->AddRectFilled(bb.Min, bb.Max, col, style.FrameRounding);
-        auto *icon = _collapsed ? style::g_Button.arrowRight : style::g_Button.arrowDown;
+        auto *icon = _collapsed ? style::g_button.arrow_right : style::g_button.arrow_down;
         ImVec2 icon_size = icon->size();
         icon->render({bb.Min.x + style.WindowPadding.x, bb.Min.y + (height - icon_size.y) * 0.5f});
 

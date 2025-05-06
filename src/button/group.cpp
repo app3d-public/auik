@@ -4,11 +4,11 @@ namespace uikit
 {
     namespace style
     {
-        BtnGroup g_BtnGroup{0.0f, 0.0f, nullptr};
-        BtnGroupH g_BtnGroupH{};
+        BtnGroup g_btn_group{0.0f, 0.0f, nullptr};
+        BtnGroupH g_btn_group_h{};
     } // namespace style
 
-    void BtnGroup::renderItem(size_t index, ImVec2 &pos, ImVec2 &rectSize)
+    void BtnGroup::render_item(size_t index, ImVec2 &pos, ImVec2 &rect_size)
     {
         ImGui::PushID(index);
         ImGui::SetCursorScreenPos(pos);
@@ -16,19 +16,19 @@ namespace uikit
         Selectable::render();
         if (pressed)
         {
-            if (_flags != FlagBits::none)
+            if (_flags != FlagBits::None)
             {
-                if (_flags & FlagBits::resetOnClick && index != _activeID)
+                if (_flags & FlagBits::ResetOnClick && index != _active_id)
                 {
-                    if (_activeID >= 0)
+                    if (_active_id >= 0)
                     {
-                        _items[_activeID].selected = false;
-                        _items[_activeID].disabled = true;
+                        _items[_active_id].selected = false;
+                        _items[_active_id].disabled = true;
                         _items[index].disabled = false;
                     }
-                    _activeID = index;
+                    _active_id = index;
                 }
-                if (_flags & FlagBits::toogle)
+                if (_flags & FlagBits::Toogle)
                     _items[index].selected = !_items[index].selected;
                 else
                     _items[index].selected = true;
@@ -36,39 +36,39 @@ namespace uikit
             _items[index].callback();
         }
 
-        ImVec2 selectablePos = ImGui::GetItemRectMin();
-        rectSize = ImGui::GetItemRectSize();
+        ImVec2 selectable_pos = ImGui::GetItemRectMin();
+        rect_size = ImGui::GetItemRectSize();
 
-        ImVec2 iconPos = selectablePos + (rectSize - _items[index].icon->size()) * 0.5f;
+        ImVec2 iconPos = selectable_pos + (rect_size - _items[index].icon->size()) * 0.5f;
         ImGui::SetCursorScreenPos(iconPos);
-        if (_items[index].disabled && _items[index].disabledIcon)
-            _items[index].disabledIcon->render(iconPos);
+        if (_items[index].disabled && _items[index].disabled_icon)
+            _items[index].disabled_icon->render(iconPos);
         else
             _items[index].icon->render(iconPos);
 
         // Lock
-        if (_flags & FlagBits::lock && _items[index].selected)
+        if (_flags & FlagBits::Lock && _items[index].selected)
         {
-            auto diff = selectablePos - iconPos;
-            auto lockPos = iconPos;
-            lockPos.x -= diff.x * 0.75f;
-            lockPos.y -= diff.y * 0.5f;
-            style::g_BtnGroup.lockIcon->render(lockPos);
+            auto diff = selectable_pos - iconPos;
+            auto lock_pos = iconPos;
+            lock_pos.x -= diff.x * 0.75f;
+            lock_pos.y -= diff.y * 0.5f;
+            style::g_btn_group.lock_icon->render(lock_pos);
         }
         ImGui::PopID();
     }
 
-    void BtnGroup::renderAsGroup()
+    void BtnGroup::render_as_group()
     {
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
-        float totalWidth = _items.size() * size.x;
-        ImVec2 childSize = ImVec2(totalWidth, size.y);
+        f32 total_width = _items.size() * size.x;
+        ImVec2 child_size = ImVec2(total_width, size.y);
 
         ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, style::g_BtnGroupH.groupBg);
-        ImGui::PushStyleColor(ImGuiCol_Header, style::g_BtnGroupH.groupItemBg);
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, style::g_btn_group_h.group_bg);
+        ImGui::PushStyleColor(ImGuiCol_Header, style::g_btn_group_h.group_item_bg);
 
-        if (ImGui::BeginChild(name.c_str(), childSize, false,
+        if (ImGui::BeginChild(name.c_str(), child_size, false,
                               ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
         {
             ImVec2 pos = ImGui::GetCursorScreenPos();
@@ -77,14 +77,14 @@ namespace uikit
                 auto rounding_copy = rounding;
                 if (i == 0 || i == _items.size() - 1)
                 {
-                    auto cornerFlags = i == 0 ? ImDrawFlags_RoundCornersLeft : ImDrawFlags_RoundCornersRight;
-                    dFlags = cornerFlags & ImDrawFlags_RoundCornersMask_;
+                    auto corner_flags = i == 0 ? ImDrawFlags_RoundCornersLeft : ImDrawFlags_RoundCornersRight;
+                    draw_flags = corner_flags & ImDrawFlags_RoundCornersMask_;
                 }
                 else
                     rounding = 0.0f;
-                ImVec2 rectSize;
-                renderItem(i, pos, rectSize);
-                pos.x += rectSize.x;
+                ImVec2 rect_size;
+                render_item(i, pos, rect_size);
+                pos.x += rect_size.x;
                 rounding = rounding_copy;
             }
         }

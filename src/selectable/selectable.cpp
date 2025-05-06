@@ -3,19 +3,19 @@
 
 namespace uikit
 {
-    ImGuiButtonFlags Selectable::loadButtonFlags(ImGuiSelectableFlags flags)
+    ImGuiButtonFlags Selectable::load_button_flags(ImGuiSelectableFlags flags)
     {
         ImGuiContext &g = *GImGui;
-        ImGuiButtonFlags buttonFlags = 0;
-        if (flags & ImGuiSelectableFlags_NoHoldingActiveID) buttonFlags |= ImGuiButtonFlags_NoHoldingActiveId;
-        if (flags & ImGuiSelectableFlags_NoSetKeyOwner) buttonFlags |= ImGuiButtonFlags_NoSetKeyOwner;
-        if (flags & ImGuiSelectableFlags_SelectOnClick) buttonFlags |= ImGuiButtonFlags_PressedOnClick;
-        if (flags & ImGuiSelectableFlags_SelectOnRelease) buttonFlags |= ImGuiButtonFlags_PressedOnRelease;
+        ImGuiButtonFlags button_flags = 0;
+        if (flags & ImGuiSelectableFlags_NoHoldingActiveID) button_flags |= ImGuiButtonFlags_NoHoldingActiveId;
+        if (flags & ImGuiSelectableFlags_NoSetKeyOwner) button_flags |= ImGuiButtonFlags_NoSetKeyOwner;
+        if (flags & ImGuiSelectableFlags_SelectOnClick) button_flags |= ImGuiButtonFlags_PressedOnClick;
+        if (flags & ImGuiSelectableFlags_SelectOnRelease) button_flags |= ImGuiButtonFlags_PressedOnRelease;
         if (flags & ImGuiSelectableFlags_AllowDoubleClick)
-            buttonFlags |= ImGuiButtonFlags_PressedOnClickRelease | ImGuiButtonFlags_PressedOnDoubleClick;
+            button_flags |= ImGuiButtonFlags_PressedOnClickRelease | ImGuiButtonFlags_PressedOnDoubleClick;
         if ((flags & ImGuiSelectableFlags_AllowOverlap) || (g.LastItemData.ItemFlags & ImGuiItemFlags_AllowOverlap))
-            buttonFlags |= ImGuiButtonFlags_AllowOverlap;
-        return buttonFlags;
+            button_flags |= ImGuiButtonFlags_AllowOverlap;
+        return button_flags;
     }
 
     void Selectable::render(const char *label, SelectableParams &params)
@@ -39,10 +39,10 @@ namespace uikit
         // Fill horizontal space
         // We don't support (size < 0.0f) in Selectable() because the ItemSpacing extension would make explicitly
         // right-aligned sizes not visibly match other widgets.
-        const bool span_all_columns = (params.sFlags & ImGuiSelectableFlags_SpanAllColumns) != 0;
-        const float min_x = span_all_columns ? window->ParentWorkRect.Min.x : pos.x;
-        const float max_x = span_all_columns ? window->ParentWorkRect.Max.x : window->WorkRect.Max.x;
-        if (params.size.x == 0.0f || (params.sFlags & ImGuiSelectableFlags_SpanAvailWidth))
+        const bool span_all_columns = (params.selectable_flags & ImGuiSelectableFlags_SpanAllColumns) != 0;
+        const f32 min_x = span_all_columns ? window->ParentWorkRect.Min.x : pos.x;
+        const f32 max_x = span_all_columns ? window->ParentWorkRect.Max.x : window->WorkRect.Max.x;
+        if (params.size.x == 0.0f || (params.selectable_flags & ImGuiSelectableFlags_SpanAvailWidth))
             size.x = ImMax(label_size.x, max_x - min_x);
 
         // Text stays at the submission position, but bounding box may be extended on both sides
@@ -52,12 +52,12 @@ namespace uikit
         // Selectables are meant to be tightly packed together with no click-gap, so we extend their box to cover
         // spacing between selectable.
         ImRect bb(min_x, pos.y, text_max.x, text_max.y);
-        if ((params.sFlags & ImGuiSelectableFlags_NoPadWithHalfSpacing) == 0)
+        if ((params.selectable_flags & ImGuiSelectableFlags_NoPadWithHalfSpacing) == 0)
         {
-            const float spacing_x = span_all_columns ? 0.0f : style.ItemSpacing.x;
-            const float spacing_y = style.ItemSpacing.y;
-            const float spacing_L = IM_TRUNC(spacing_x * 0.50f);
-            const float spacing_U = IM_TRUNC(spacing_y * 0.50f);
+            const f32 spacing_x = span_all_columns ? 0.0f : style.ItemSpacing.x;
+            const f32 spacing_y = style.ItemSpacing.y;
+            const f32 spacing_L = IM_TRUNC(spacing_x * 0.50f);
+            const f32 spacing_U = IM_TRUNC(spacing_y * 0.50f);
             bb.Min.x -= spacing_L;
             bb.Min.y -= spacing_U;
             bb.Max.x += (spacing_x - spacing_L);
@@ -66,15 +66,15 @@ namespace uikit
 
         // Modify ClipRect for the ItemAdd(), faster than doing a PushColumnsBackground/PushTableBackgroundChannel
         // for every Selectable..
-        const float backup_clip_rect_min_x = window->ClipRect.Min.x;
-        const float backup_clip_rect_max_x = window->ClipRect.Max.x;
+        const f32 backup_clip_rect_min_x = window->ClipRect.Min.x;
+        const f32 backup_clip_rect_max_x = window->ClipRect.Max.x;
         if (span_all_columns)
         {
             window->ClipRect.Min.x = window->ParentWorkRect.Min.x;
             window->ClipRect.Max.x = window->ParentWorkRect.Max.x;
         }
 
-        const bool disabled_item = (params.sFlags & ImGuiSelectableFlags_Disabled) != 0;
+        const bool disabled_item = (params.selectable_flags & ImGuiSelectableFlags_Disabled) != 0;
         const bool item_add = ImGui::ItemAdd(
             bb, id, NULL, disabled_item ? (ImGuiItemFlags_)ImGuiItemFlags_Disabled : ImGuiItemFlags_None);
 
@@ -103,7 +103,7 @@ namespace uikit
         const bool was_selected = params.selected;
         bool held;
         bool pressed, hovered;
-        pressed = ImGui::ButtonBehavior(bb, id, &hovered, &held, params.bFlags);
+        pressed = ImGui::ButtonBehavior(bb, id, &hovered, &held, params.btn_flags);
 
         // Auto-select when moved into
         // - This will be more fully fleshed in the range-select branch
@@ -114,13 +114,13 @@ namespace uikit
         //   BeginSelection() calling PushFocusScope())
         //   - (2) usage will fail with clipped items
         //   The multi-select API aim to fix those issues, e.g. may be replaced with a BeginSelection() API.
-        if ((params.sFlags & ImGuiSelectableFlags_SelectOnNav) && g.NavJustMovedToId != 0 &&
+        if ((params.selectable_flags & ImGuiSelectableFlags_SelectOnNav) && g.NavJustMovedToId != 0 &&
             g.NavJustMovedToFocusScopeId == g.CurrentFocusScopeId)
             if (g.NavJustMovedToId == id) params.selected = pressed = true;
 
         // Update NavId when clicking or when Hovering (this doesn't happen on most widgets), so navigation can be
         // resumed with keyboard/gamepad
-        if (pressed || (hovered && (params.sFlags & ImGuiSelectableFlags_SetNavIdOnHover)))
+        if (pressed || (hovered && (params.selectable_flags & ImGuiSelectableFlags_SetNavIdOnHover)))
         {
             if (!g.NavHighlightItemUnderNav && g.NavWindow == window && g.NavLayer == window->DC.NavLayerCurrent)
             {
@@ -135,14 +135,14 @@ namespace uikit
         if (params.selected != was_selected) g.LastItemData.StatusFlags |= ImGuiItemStatusFlags_ToggledSelection;
 
         // Render
-        if (hovered || params.selected || params.showBackground)
+        if (hovered || params.selected || params.show_background)
         {
             const ImU32 col = ImGui::GetColorU32((held && hovered) ? ImGuiCol_HeaderActive
                                                  : hovered         ? ImGuiCol_HeaderHovered
                                                  : params.selected ? ImGuiCol_Header
                                                                    : ImGuiCol_PopupBg);
 
-            renderFrame(bb.Min, bb.Max, col, false, params.rounding, params.dFlags);
+            renderFrame(bb.Min, bb.Max, col, false, params.rounding, params.draw_flags);
         }
         if (g.NavId == id)
             ImGui::RenderNavHighlight(bb, id, ImGuiNavHighlightFlags_Compact | ImGuiNavHighlightFlags_NoRounding);
@@ -158,7 +158,7 @@ namespace uikit
 
         // Automatically close popups
         if (pressed && (window->Flags & ImGuiWindowFlags_Popup) &&
-            !(params.sFlags & ImGuiSelectableFlags_NoAutoClosePopups) &&
+            !(params.selectable_flags & ImGuiSelectableFlags_NoAutoClosePopups) &&
             (g.LastItemData.ItemFlags & ImGuiItemFlags_AutoClosePopups))
             ImGui::CloseCurrentPopup();
         if (disabled_item && !disabled_global) ImGui::EndDisabled();
@@ -175,9 +175,9 @@ namespace uikit
         if (ImGui::IsMouseDragging(ImGuiMouseButton_Left))
         {
             auto &io = g.IO;
-            if (!_isActive)
+            if (!_is_active)
             {
-                _isActive = true;
+                _is_active = true;
                 _start = io.MousePos - ImGui::GetMouseDragDelta();
             }
             _end = io.MousePos;
@@ -187,10 +187,10 @@ namespace uikit
             ImU32 col = ImGui::GetColorU32(g.Style.Colors[ImGuiCol_TextSelectedBg]);
             draw_list->AddRectFilled(_rect.Min, _rect.Max, col, g.Style.FrameRounding);
         }
-        if (ImGui::IsMouseReleased(0) && _isActive)
+        if (ImGui::IsMouseReleased(0) && _is_active)
         {
-            _isActive = false;
-            _isSelected = true;
+            _is_active = false;
+            _is_selected = true;
         }
     }
     // }

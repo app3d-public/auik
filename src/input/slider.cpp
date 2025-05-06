@@ -4,6 +4,6 @@ namespace uikit
 {
     namespace style
     {
-        Slider g_Slider;
+        Slider g_slider;
     }
 } // namespace uikit

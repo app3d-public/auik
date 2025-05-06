@@ -29,7 +29,7 @@ namespace uikit
     void ModalQueue::push(const Message &message)
     {
         _messages[message.header].push_back(message);
-        if (message.preventClose) ++_preventCloseCount;
+        if (message.prevent_close) ++_prevent_close_count;
     }
 
     void ModalQueue::render()
@@ -42,25 +42,25 @@ namespace uikit
 
         // Style
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.padding);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, style.borderSize);
-        ImGui::PushStyleColor(ImGuiCol_Border, style.borderColor);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, style.border_size);
+        ImGui::PushStyleColor(ImGuiCol_Border, style.border_color);
 
-        bool wasChanged{false};
-        if (state == ChangeState::normal)
-            ImGui::PushStyleColor(ImGuiCol_PopupBg, style.backgroundColor);
+        bool was_changed{false};
+        if (state == ChangeState::Normal)
+            ImGui::PushStyleColor(ImGuiCol_PopupBg, style.background_color);
         else
         {
-            ImGui::PushStyleColor(ImGuiCol_PopupBg, style.flipColor);
-            if (state == ChangeState::clicked)
+            ImGui::PushStyleColor(ImGuiCol_PopupBg, style.flip_color);
+            if (state == ChangeState::Clicked)
             {
-                wasChanged = true;
-                state = ChangeState::continuing;
+                was_changed = true;
+                state = ChangeState::Continuing;
 #ifdef _WIN32
                 PlaySound(TEXT("SystemHand"), NULL, SND_ALIAS | SND_ASYNC);
 #endif
             }
             else
-                state = ChangeState::normal;
+                state = ChangeState::Normal;
         }
 
         ImGui::SetNextWindowSize(ImVec2(style.width, 0));
@@ -70,18 +70,18 @@ namespace uikit
             int action{-1};
             if (ImGui::IsMouseClicked(0) && !ImGui::IsWindowHovered())
             {
-                state = ChangeState::clicked;
-                wasChanged = true;
+                state = ChangeState::Clicked;
+                was_changed = true;
             }
 
             // Rendering
             // Header
             ImVec2 pos = ImGui::GetCursorPos();
-            auto iconPos = ImGui::GetCursorScreenPos() + ImVec2(10, 20);
-            style.icon->render(iconPos);
+            auto icon_pos = ImGui::GetCursorScreenPos() + ImVec2(10, 20);
+            style.icon->render(icon_pos);
             pos.x += style.icon->size().x + 40;
             pos.y += 20;
-            ImGui::PushFont(style.boldFont);
+            ImGui::PushFont(style.bold_font);
             ImGui::SetCursorPos(pos);
             Text ht(message.header, true);
             ht.render();
@@ -100,8 +100,8 @@ namespace uikit
             // Checkbox
             if (it->second.size() > 1)
             {
-                ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, {style::g_CheckBox.spacing, 0});
-                ImGui::SetCursorPos(pos + ImVec2(0, style::g_Button.padding.y * 0.5f));
+                ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, {style::g_check_box.spacing, 0});
+                ImGui::SetCursorPos(pos + ImVec2(0, style::g_button.padding.y * 0.5f));
                 _switch.render();
                 ImGui::PopStyleVar();
             }
@@ -109,7 +109,7 @@ namespace uikit
             // Buttons
             acul::vector<acul::string> buttons(message.buttons.size());
             for (int i = 0; i < message.buttons.size(); ++i) buttons[i] = getBtnName(message.buttons[i].first);
-            rightControls(buttons, &action, pos.y);
+            right_controls(buttons, &action, pos.y);
 
             if (action != -1)
             {
@@ -117,7 +117,7 @@ namespace uikit
                 if (pair.first == awin::popup::Buttons::Cancel || pair.first == awin::popup::Buttons::OK)
                 {
                     if (pair.second) pair.second();
-                    if (message.preventClose) _preventCloseCount -= _messages[it->first].size();
+                    if (message.prevent_close) _prevent_close_count -= _messages[it->first].size();
                     _messages.erase(it->first);
                 }
                 else
@@ -127,33 +127,33 @@ namespace uikit
                     {
                         for (auto &msg : arr)
                             if (auto callback = msg.buttons[action].second) callback();
-                        if (message.preventClose) _preventCloseCount -= arr.size();
+                        if (message.prevent_close) _prevent_close_count -= arr.size();
                         _messages.erase(it->first);
                     }
                     else
                     {
                         if (pair.second) pair.second();
-                        if (message.preventClose) --_preventCloseCount;
+                        if (message.prevent_close) --_prevent_close_count;
                         arr.erase(arr.begin());
                         if (arr.empty()) _messages.erase(it->first);
                     }
                 }
                 _switch.toogled(false);
-                wasChanged = true;
+                was_changed = true;
             }
 
             ImGui::EndPopup();
         }
         ImGui::PopStyleVar(2);
         ImGui::PopStyleColor(2);
-        if (wasChanged)
+        if (was_changed)
         {
             ImGui::CloseCurrentPopup();
-            awin::pushEmptyEvent();
+            awin::push_empty_event();
         }
     }
 
-    void ModalQueue::bindEvents()
+    void ModalQueue::bind_events()
     {
         ed->bind_event(this, UIKIT_EVENT_MODAL_SIGN,
                        [this](const acul::events::data_event<ModalQueue::Message> &e) { push(e.data); });

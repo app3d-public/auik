@@ -14,8 +14,8 @@ namespace uikit
 
         Switch(const acul::string &label, bool toogled = false)
             : Widget(label),
-              width(28 * awin::getDpi()),
-              height(15 * awin::getDpi()),
+              width(28 * awin::get_dpi()),
+              height(15 * awin::get_dpi()),
               _pressed(false),
               _hovered(false),
               _toggled(toogled)
@@ -44,6 +44,6 @@ namespace uikit
             ImVec4 bg;
             ImColor color;
             ImVec4 colorActive;
-        } g_Switch;
+        } g_switch;
     } // namespace style
 } // namespace uikit

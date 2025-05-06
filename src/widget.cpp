@@ -4,7 +4,7 @@
 
 namespace uikit
 {
-    ImGuiMouseCursor g_Last_cursor = ImGuiMouseCursor_None;
+    ImGuiMouseCursor g_last_cursor = ImGuiMouseCursor_None;
 
     void renderFrame(ImVec2 p_min, ImVec2 p_max, ImU32 fill_col, bool borders, f32 rounding, ImDrawFlags flags)
     {

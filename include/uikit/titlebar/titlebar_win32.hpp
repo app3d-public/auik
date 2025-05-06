@@ -42,11 +42,11 @@ namespace uikit
     public:
         struct Style
         {
-            ImVec4 closeColor;
-            ImVec4 hoverColor;
-            ImVec2 submenuPadding;
-            ImVec4 tabActiveColor;
-            ImVec4 tabBackgroundColor;
+            ImVec4 close_color;
+            ImVec4 hover_color;
+            ImVec2 submenu_padding;
+            ImVec4 tab_active_color;
+            ImVec4 tab_background_color;
             Icon *icons[IconMaxValue];
         } style;
         TabBar tabbar;
@@ -58,23 +58,23 @@ namespace uikit
 
         virtual void render() override;
 
-        void bindEvents();
+        void bind_events();
 
     private:
         awin::Window &_window;
         acul::events::dispatcher *ed;
-        ImVec2 _controlSize;
-        acul::point2D<i32> _dragOffset;
-        f32 _captionWidth;
-        f32 _clientWidth;
+        ImVec2 _control_size;
+        acul::point2D<i32> _drag_offset;
+        f32 _caption_width;
+        f32 _client_width;
         struct ControlButton
         {
             ControlState state;
             ControlArea area;
         } _controls[3];
-        ControlArea _activeArea{ControlArea::None};
+        ControlArea _active_area{ControlArea::None};
 
-        void renderControls();
+        void render_controls();
     };
 } // namespace uikit
 #endif

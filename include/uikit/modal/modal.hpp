@@ -15,13 +15,13 @@ namespace uikit
     {
         struct ModalQueue
         {
-            ImFont *boldFont;
-            ImVec4 backgroundColor;
-            ImVec4 flipColor;
+            ImFont *bold_font;
+            ImVec4 background_color;
+            ImVec4 flip_color;
             ImVec2 padding;
             f32 width;
-            f32 borderSize;
-            ImVec4 borderColor;
+            f32 border_size;
+            ImVec4 border_color;
             Icon *icon = nullptr;
         };
     } // namespace style
@@ -34,7 +34,7 @@ namespace uikit
             acul::string header;
             acul::string message;
             acul::vector<std::pair<awin::popup::Buttons, std::function<void()>>> buttons;
-            bool preventClose = false;
+            bool prevent_close = false;
         };
 
         style::ModalQueue style;
@@ -47,23 +47,23 @@ namespace uikit
 
         void push(const Message &message);
 
-        void bindEvents();
+        void bind_events();
 
         bool empty() const { return _messages.empty(); }
 
-        int preventCloseCount() const { return _preventCloseCount; }
+        int prevent_close_count() const { return _prevent_close_count; }
 
     private:
         acul::events::dispatcher *ed;
         acul::map<acul::string, acul::vector<Message>> _messages;
         enum class ChangeState
         {
-            normal,
-            clicked,
-            continuing,
-        } state{ChangeState::normal};
+            Normal,
+            Clicked,
+            Continuing,
+        } state{ChangeState::Normal};
         Switch _switch{_("apply_all")};
-        int _preventCloseCount{0};
+        int _prevent_close_count{0};
     };
 } // namespace uikit
 

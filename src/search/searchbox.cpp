@@ -39,7 +39,7 @@ namespace uikit
         pos.x += style::g_Search.searchIcon->size().x + style.ItemSpacing.x;
         ImGui::SetCursorScreenPos(pos);
         ImGui::SetNextItemWidth(input_width);
-        inputTextWithHint(name.c_str(), _hint.c_str(), &_text);
+        input_text_with_hint(name.c_str(), _hint.c_str(), &_text);
         ImGui::PopStyleColor();
 
         // Filter icon

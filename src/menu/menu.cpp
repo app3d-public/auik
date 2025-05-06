@@ -5,10 +5,10 @@ namespace uikit
 {
     namespace style
     {
-        VMenu g_VMenu;
-        HMenu g_HMenu;
+        VMenu g_vmenu;
+        HMenu g_hmenu;
     } // namespace style
-    static bool IsRootOfOpenMenuSet()
+    static bool is_root_of_open_menu_set()
     {
         ImGuiContext &g = *GImGui;
         ImGuiWindow *window = g.CurrentWindow;
@@ -62,7 +62,7 @@ namespace uikit
         // Odd hack to allow hovering across menus of a same menu-set (otherwise we wouldn't be able to hover parent
         // without always being a Child window) This is only done for items for the menu set and not the full parent
         // window.
-        const bool menuset_is_open = IsRootOfOpenMenuSet();
+        const bool menuset_is_open = is_root_of_open_menu_set();
         if (menuset_is_open) ImGui::PushItemFlag(ImGuiItemFlags_NoWindowHoverableCheck, true);
 
         // The reference position stored in popup_pos will be used by Begin() to find a suitable position for the child
@@ -126,8 +126,9 @@ namespace uikit
             ImGui::PushStyleVar(
                 ImGuiStyleVar_ChildRounding,
                 style.PopupRounding); // First level will use _PopupRounding, subsequent will use _ChildRounding
-            selected = ImGui::BeginPopupMenuEx(id, label_c, window_flags); // menu_is_open can be 'false' when the popup is
-                                                              // completely clipped (e.g. zero size display)
+            selected =
+                ImGui::BeginPopupMenuEx(id, label_c, window_flags); // menu_is_open can be 'false' when the popup is
+                                                                    // completely clipped (e.g. zero size display)
             ImGui::PopStyleVar();
             if (selected)
             {
@@ -146,7 +147,7 @@ namespace uikit
     {
         ImGuiWindow *window = ImGui::GetCurrentWindow();
         if (window->SkipItems) return;
-        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, style::g_VMenu.hoverColor);
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, style::g_vmenu.hover_color);
         ImGuiContext &g = *GImGui;
         const ImGuiStyle &style = g.Style;
         auto label_c = name.c_str();
@@ -183,7 +184,7 @@ namespace uikit
         // Odd hack to allow hovering across menus of a same menu-set (otherwise we wouldn't be able to hover parent
         // without always being a Child window) This is only done for items for the menu set and not the full parent
         // window.
-        const bool menuset_is_open = IsRootOfOpenMenuSet();
+        const bool menuset_is_open = is_root_of_open_menu_set();
         if (menuset_is_open) ImGui::PushItemFlag(ImGuiItemFlags_NoWindowHoverableCheck, true);
 
         // The reference position stored in popup_pos will be used by Begin() to find a suitable position for the child
@@ -196,16 +197,16 @@ namespace uikit
         f32 checkmark_w = IM_TRUNC(g.FontSize * 1.20f);
         f32 min_w = window->DC.MenuColumns.DeclColumns(0.0f, label_size.x, 0.0f, checkmark_w); // Feedback to next frame
         f32 extra_w = ImMax(0.0f, ImGui::GetContentRegionAvail().x - min_w);
-        ImVec2 text_pos(window->DC.CursorPos.x + offsets->OffsetLabel + style::g_VMenu.padding.x,
+        ImVec2 text_pos(window->DC.CursorPos.x + offsets->OffsetLabel + style::g_vmenu.padding.x,
                         window->DC.CursorPos.y + window->DC.CurrLineTextBaseOffset);
-        size = ImVec2(min_w + style::g_VMenu.padding.x, label_size.y);
+        size = ImVec2(min_w + style::g_vmenu.padding.x, label_size.y);
         Selectable::render("", *this);
 
         ImVec2 arrowPos =
             pos + ImVec2(offsets->OffsetMark + extra_w + g.FontSize * 0.30f + style.ItemInnerSpacing.x * 0.5f,
-                         label_size.y / 2.0f - style::g_VMenu.arrowRight->size().y / 2.0f);
+                         label_size.y / 2.0f - style::g_vmenu.arrowRight->size().y / 2.0f);
         ImGui::RenderText(text_pos, label_c);
-        style::g_VMenu.arrowRight->render(arrowPos);
+        style::g_vmenu.arrowRight->render(arrowPos);
 
         hover = (g.HoveredId == id) && enabled && !g.NavHighlightItemUnderNav;
         if (menuset_is_open) ImGui::PopItemFlag();
@@ -304,13 +305,13 @@ namespace uikit
 
         ImGuiContext &g = *GImGui;
         ImGuiStyle &style = g.Style;
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style::g_VMenu.padding);
-        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, style::g_VMenu.hoverColor);
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style::g_vmenu.padding);
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, style::g_vmenu.hover_color);
         ImVec2 pos = window->DC.CursorPos;
         auto label_c = name.c_str();
         ImVec2 label_size = ImGui::CalcTextSize(label_c, nullptr, true);
 
-        const bool menuset_is_open = IsRootOfOpenMenuSet();
+        const bool menuset_is_open = is_root_of_open_menu_set();
         if (menuset_is_open) ImGui::PushItemFlag(ImGuiItemFlags_NoWindowHoverableCheck, true);
 
         // We've been using the equivalent of ImGuiSelectableFlags_SetNavIdOnHover on all Selectable() since early Nav
@@ -320,38 +321,38 @@ namespace uikit
 
         const ImGuiMenuColumns *offsets = &window->DC.MenuColumns;
 
-        auto shortcutPtr = shortcut.c_str();
-        f32 shortcut_w = (shortcutPtr && shortcutPtr[0]) ? ImGui::CalcTextSize(shortcutPtr, nullptr).x : 0.0f;
+        auto shortcut_ptr = shortcut.c_str();
+        f32 shortcut_w = (shortcut_ptr && shortcut_ptr[0]) ? ImGui::CalcTextSize(shortcut_ptr, nullptr).x : 0.0f;
         f32 checkmark_w = IM_TRUNC(g.FontSize * 1.20f);
         f32 min_w = window->DC.MenuColumns.DeclColumns(0.0f, label_size.x, shortcut_w, checkmark_w);
         f32 stretch_w = ImMax(0.0f, ImGui::GetContentRegionAvail().x - min_w);
-        size = ImVec2(min_w + style::g_VMenu.padding.x, label_size.y);
+        size = ImVec2(min_w + style::g_vmenu.padding.x, label_size.y);
         Selectable::render("", *this);
 
         if (g.LastItemData.StatusFlags & ImGuiItemStatusFlags_Visible)
         {
             const ImVec4 text_color =
-                style.Colors[sFlags & ImGuiSelectableFlags_Disabled ? ImGuiCol_TextDisabled : ImGuiCol_Text];
+                style.Colors[selectable_flags & ImGuiSelectableFlags_Disabled ? ImGuiCol_TextDisabled : ImGuiCol_Text];
             ImGui::PushStyleColor(ImGuiCol_Text, text_color);
-            ImGui::RenderText(pos + ImVec2(offsets->OffsetLabel + style::g_VMenu.padding.x, 0.0f), label_c);
+            ImGui::RenderText(pos + ImVec2(offsets->OffsetLabel + style::g_vmenu.padding.x, 0.0f), label_c);
             ImGui::PopStyleColor();
             if (shortcut_w > 0.0f)
             {
                 ImVec2 shortcut_pos = ImVec2(
                     window->Pos.x + window->Size.x - shortcut_w - style.ItemSpacing.x - style.WindowPadding.x, pos.y);
                 if (hover)
-                    ImGui::PushStyleColor(ImGuiCol_Text, style::g_VMenu.disabledHoverColor);
+                    ImGui::PushStyleColor(ImGuiCol_Text, style::g_vmenu.disabled_hover_color);
                 else
                     ImGui::PushStyleColor(ImGuiCol_Text, style.Colors[ImGuiCol_TextDisabled]);
-                ImGui::RenderText(shortcut_pos, shortcutPtr);
+                ImGui::RenderText(shortcut_pos, shortcut_ptr);
                 ImGui::PopStyleColor();
             }
             if (selected)
             {
-                ImVec2 checkmarkPos =
+                ImVec2 checkmark_pos =
                     pos + ImVec2(offsets->OffsetMark + stretch_w + g.FontSize * 0.30f + style.ItemInnerSpacing.x * 0.5f,
-                                 label_size.y / 2.0f - style::g_VMenu.arrowRight->size().y / 2.0f);
-                style::g_HMenu.checkmark->render(checkmarkPos);
+                                 label_size.y / 2.0f - style::g_vmenu.arrowRight->size().y / 2.0f);
+                style::g_hmenu.checkmark->render(checkmark_pos);
             }
         }
 
@@ -361,28 +362,28 @@ namespace uikit
         {
             if (callback) callback();
             pressed = false;
-            awin::pushEmptyEvent();
+            awin::push_empty_event();
         }
 
         ImGui::PopStyleVar();
         ImGui::PopStyleColor();
     }
 
-    void MenuBar::renderMenuNodes(const acul::vector<MenuNode> &nodes)
+    void MenuBar::render_menu_nodes(const acul::vector<MenuNode> &nodes)
     {
         for (int i = 0; i < nodes.size(); i++)
         {
             auto &node = nodes[i];
-            if (node.flags & MenuNode::FlagBits::group)
+            if (node.flags & MenuNode::FlagBits::Group)
             {
-                if (node.flags & MenuNode::FlagBits::category)
+                if (node.flags & MenuNode::FlagBits::Category)
                 {
-                    renderMenuNodes(node.nodes);
+                    render_menu_nodes(node.nodes);
                     if (i != nodes.size() - 1)
                     {
-                        ImGui::SetCursorPosY(ImGui::GetCursorPosY() + style::g_VMenu.padding.y / 2.0f);
+                        ImGui::SetCursorPosY(ImGui::GetCursorPosY() + style::g_vmenu.padding.y / 2.0f);
                         ImGui::Separator();
-                        ImGui::SetCursorPosY(ImGui::GetCursorPosY() + style::g_VMenu.padding.y / 2.0f);
+                        ImGui::SetCursorPosY(ImGui::GetCursorPosY() + style::g_vmenu.padding.y / 2.0f);
                     }
                 }
                 else
@@ -390,7 +391,7 @@ namespace uikit
                     node.widget->render();
                     if (node.widget->selected)
                     {
-                        renderMenuNodes(node.nodes);
+                        render_menu_nodes(node.nodes);
                         ImGui::EndMenu();
                     }
                 }

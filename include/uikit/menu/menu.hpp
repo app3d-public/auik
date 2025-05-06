@@ -15,26 +15,26 @@ namespace uikit
             f32 rounding;
             ImVec2 padding;
             ImVec2 margin;
-            ImVec4 disabledHoverColor;
-            ImVec4 hoverColor;
+            ImVec4 disabled_hover_color;
+            ImVec4 hover_color;
             Icon *arrowRight = nullptr;
-        } g_VMenu;
+        } g_vmenu;
 
         extern APPLIB_API struct HMenu
         {
-            ImVec4 backgroundColor;
-            ImVec4 hoverColor;
+            ImVec4 background_color;
+            ImVec4 hover_color;
             ImVec2 padding;
             f32 rounding;
             Icon *checkmark = nullptr;
-        } g_HMenu;
+        } g_hmenu;
     } // namespace style
 
     class APPLIB_API HMenu final : public Selectable
     {
     public:
         HMenu(const acul::string &name)
-            : Selectable(name, false, style::g_HMenu.rounding,
+            : Selectable(name, false, style::g_hmenu.rounding,
                          ImGuiSelectableFlags_NoHoldingActiveID | ImGuiSelectableFlags_NoSetKeyOwner |
                              ImGuiSelectableFlags_SelectOnClick | ImGuiSelectableFlags_DontClosePopups)
         {
@@ -47,7 +47,7 @@ namespace uikit
     {
     public:
         VMenu(const acul::string &name)
-            : Selectable(name, false, style::g_VMenu.rounding, ImGuiSelectableFlags_SpanAvailWidth)
+            : Selectable(name, false, style::g_vmenu.rounding, ImGuiSelectableFlags_SpanAvailWidth)
         {
         }
 
@@ -62,7 +62,7 @@ namespace uikit
 
         MenuItem(const acul::string &name, const std::function<void()> &callback = nullptr,
                  const acul::string &shortcut = {})
-            : Selectable(name, false, style::g_VMenu.rounding), callback(callback), shortcut(shortcut)
+            : Selectable(name, false, style::g_vmenu.rounding), callback(callback), shortcut(shortcut)
         {
         }
 
@@ -75,9 +75,9 @@ namespace uikit
         {
             enum enum_type
             {
-                data = 0x0,
-                group = 0x1,
-                category = 0x2
+                Data = 0x0,
+                Group = 0x1,
+                Category = 0x2
             };
 
             using flag_bitmask = std::true_type;
@@ -99,16 +99,16 @@ namespace uikit
 
         virtual void render() override
         {
-            auto &style = style::g_HMenu;
-            ImGui::PushStyleColor(ImGuiCol_MenuBarBg, style.backgroundColor);
-            ImGui::PushStyleColor(ImGuiCol_Header, style.hoverColor);
-            ImGui::PushStyleColor(ImGuiCol_HeaderHovered, style.hoverColor);
-            ImGui::PushStyleColor(ImGuiCol_HeaderActive, style.backgroundColor);
-            renderMenuNodes(nodes);
+            auto &style = style::g_hmenu;
+            ImGui::PushStyleColor(ImGuiCol_MenuBarBg, style.background_color);
+            ImGui::PushStyleColor(ImGuiCol_Header, style.hover_color);
+            ImGui::PushStyleColor(ImGuiCol_HeaderHovered, style.hover_color);
+            ImGui::PushStyleColor(ImGuiCol_HeaderActive, style.background_color);
+            render_menu_nodes(nodes);
             ImGui::PopStyleColor(4);
         }
 
-        static APPLIB_API void renderMenuNodes(const acul::vector<MenuNode> &nodes);
+        static APPLIB_API void render_menu_nodes(const acul::vector<MenuNode> &nodes);
 
     protected:
         MenuBar(MenuBar &&other, const acul::string &id) noexcept : Widget(id), nodes(std::move(other.nodes)) {}

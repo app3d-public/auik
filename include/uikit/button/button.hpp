@@ -11,21 +11,22 @@ namespace uikit
         extern APPLIB_API struct Button
         {
             ImVec4 color;
-            ImVec4 colorActive;
-            ImVec4 colorHovered;
+            ImVec4 active_color;
+            ImVec4 hovered_color;
             ImVec2 padding;
-            Icon *arrowRight = nullptr;
-            Icon *arrowDown = nullptr;
-        } g_Button;
+            Icon *arrow_right = nullptr;
+            Icon *arrow_down = nullptr;
+        } g_button;
 
-        APPLIB_API void bindButtonStyle();
+        APPLIB_API void bind_button_style();
     } // namespace style
 
     // Button to close a window
-    bool closeButton(ImGuiID id, const ImVec2 &pos);
+    bool close_button(ImGuiID id, const ImVec2 &pos);
 
     // Control buttons (Yes/No/Canel/etc)
-    APPLIB_API void rightControls(const acul::vector<acul::string> &buttons, int *selected = nullptr, f32 y_offset = 0);
+    APPLIB_API void right_controls(const acul::vector<acul::string> &buttons, int *selected = nullptr,
+                                   f32 y_offset = 0);
 } // namespace uikit
 
 #endif

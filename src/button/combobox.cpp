@@ -6,7 +6,7 @@ namespace uikit
 {
     namespace style
     {
-        ComboBox g_ComboBox;
+        ComboBox g_combo_box;
     }
 
     APPLIB_API bool beginCombo(const char *label, const char *preview_value, ImGuiComboFlags flags)
@@ -70,10 +70,10 @@ namespace uikit
                                                               : ImDrawFlags_RoundCornersRight);
             if (value_x2 + arrow_size - style.FramePadding.x <= bb.Max.x)
             {
-                if (style::g_ComboBox.arrowIcon)
+                if (style::g_combo_box.arrowIcon)
                 {
                     ImVec2 arrowSize{value_x2 + style.FramePadding.y, bb.Min.y + style.FramePadding.y};
-                    style::g_ComboBox.arrowIcon->render(arrowSize);
+                    style::g_combo_box.arrowIcon->render(arrowSize);
                 }
                 else // Use ImGui Native
                 {
@@ -106,8 +106,8 @@ namespace uikit
         if (!popup_open) return false;
 
         g.NextWindowData.HasFlags = backup_next_window_data_flags;
-        ImVec2 spacing = {style.ItemSpacing.x, style::g_ComboBox.itemSpacing.y};
-        ImVec2 framePadding = {style::g_ComboBox.itemSpacing.x, style.FramePadding.y};
+        ImVec2 spacing = {style.ItemSpacing.x, style::g_combo_box.itemSpacing.y};
+        ImVec2 framePadding = {style::g_combo_box.itemSpacing.x, style.FramePadding.y};
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, spacing);
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, framePadding);
         return ImGui::BeginComboPopup(popup_id, bb, flags);

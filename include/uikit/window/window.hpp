@@ -18,34 +18,34 @@ namespace uikit
     class Window : public Widget
     {
     public:
-        ImGuiWindowFlags imguiFlags;
-        WindowDockFlags dockFlags;
+        ImGuiWindowFlags imgui_flags;
+        WindowDockFlags dock_flags;
 
-        Window(const acul::string &name, WindowDockFlags dockFlags = 0, ImGuiWindowFlags imguiFlags = 0)
-            : Widget(name), imguiFlags(imguiFlags), dockFlags(dockFlags)
+        Window(const acul::string &name, WindowDockFlags dock_flags = 0, ImGuiWindowFlags imgui_flags = 0)
+            : Widget(name), imgui_flags(imgui_flags), dock_flags(dock_flags)
         {
         }
 
         virtual void render() override
         {
-            if (dockFlags & WindowDockFlags_Docked)
-                renderImpl();
+            if (dock_flags & WindowDockFlags_Docked)
+                render_impl();
             else
             {
                 auto &style = ImGui::GetStyle();
                 ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(style.WindowPadding.x, 5));
-                ImGui::Begin(name.c_str(), nullptr, imguiFlags);
+                ImGui::Begin(name.c_str(), nullptr, imgui_flags);
                 ImGui::PopStyleVar();
                 auto *window = ImGui::GetCurrentWindow();
-                window->ChildFlags = dockFlags;
-                renderImpl();
+                window->ChildFlags = dock_flags;
+                render_impl();
                 ImGui::End();
             }
         }
 
-        virtual void updateStyleStack() {};
+        virtual void update_style_stack() {};
 
     protected:
-        virtual void renderImpl() = 0;
+        virtual void render_impl() = 0;
     };
 } // namespace uikit

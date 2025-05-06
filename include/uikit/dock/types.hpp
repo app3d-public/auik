@@ -11,14 +11,14 @@ namespace uikit
         {
             enum enum_type
             {
-                none = 0x0,
-                hide_top_line = 0x1,
-                discard_padding = 0x2,
-                stretch = 0x4,
-                sync_stretch_hresize = 0x8,
+                None = 0x0,
+                HideTopLine = 0x1,
+                DiscardPadding = 0x2,
+                Stretch = 0x4,
+                SyncStretchHResize = 0x8,
                 // [Internal flags]
-                scrollbar_hovered = 0x10,
-                op_locked = 0x20
+                ScrollbarHovered = 0x10,
+                OpLocked = 0x20
             };
 
             using flag_bitmask = std::true_type;
@@ -36,43 +36,43 @@ namespace uikit
                 TabBar tabbar;
                 Selectable btn;
                 size_t window_id = 0;
-            } *tabNav;
-            bool isResizing;
-            bool isTransparent;
+            } *tab_nav_area;
+            bool is_resizing;
+            bool is_transparent;
             f32 next_offset;
             f32 extra_offset;
 
-            Node(const acul::vector<Window *> &windows, bool isTransparent = false, f32 size = 0.0f)
+            Node(const acul::vector<Window *> &windows, bool is_transparent = false, f32 size = 0.0f)
                 : id(""),
                   size(size),
                   windows(windows),
-                  tabNav(nullptr),
-                  isResizing(false),
-                  isTransparent(isTransparent),
+                  tab_nav_area(nullptr),
+                  is_resizing(false),
+                  is_transparent(is_transparent),
                   next_offset(0.0f),
                   extra_offset(0.0f)
             {
             }
 
-            WindowDockFlags dockFlags() const { return windows.front()->dockFlags; }
+            WindowDockFlags dock_flags() const { return windows.front()->dock_flags; }
 
             void reset()
             {
                 id = "";
-                if (tabNav)
+                if (tab_nav_area)
                 {
-                    tabNav->tabbar.name = "";
-                    tabNav->tabbar.size({0, 0});
+                    tab_nav_area->tabbar.name = "";
+                    tab_nav_area->tabbar.size({0, 0});
                 }
             }
 
             void destroy(acul::events::dispatcher *ed)
             {
                 for (auto window : windows) acul::release(window);
-                if (tabNav)
+                if (tab_nav_area)
                 {
-                    ed->unbind_listeners(&tabNav->tabbar);
-                    acul::release(tabNav);
+                    ed->unbind_listeners(&tab_nav_area->tabbar);
+                    acul::release(tab_nav_area);
                 }
             }
         };
@@ -86,7 +86,7 @@ namespace uikit
             f32 fixed_size = 0;
             f32 content_height = 0.0f;
             acul::vector<Node> nodes;
-            bool isResizing = false;
+            bool is_resizing = false;
             size_t fixed_sections = 0;
 
             Section(const acul::vector<Node> &nodes, SectionFlags flags, const acul::string &id = "",
@@ -97,7 +97,7 @@ namespace uikit
                   min_size(min_size),
                   fixed_size(0),
                   nodes(nodes),
-                  isResizing(false),
+                  is_resizing(false),
                   fixed_sections(0)
             {
             }
@@ -109,7 +109,7 @@ namespace uikit
                   min_size(50.0f),
                   fixed_size(0),
                   nodes(nodes),
-                  isResizing(false),
+                  is_resizing(false),
                   fixed_sections(0)
             {
             }
@@ -126,11 +126,11 @@ namespace uikit
         {
             enum enum_type
             {
-                none = 0x0,
-                resizing = 0x1,
-                op_locked = 0x2,
-                dropped = 0x4,
-                layout_update = 0x8
+                None = 0x0,
+                Resizing = 0x1,
+                OpLocked = 0x2,
+                Dropped = 0x4,
+                LayoutUpdate = 0x8
             };
 
             using flag_bitmask = std::true_type;
@@ -144,17 +144,17 @@ namespace uikit
             ImVec2 padding;
             ImVec2 item_spacing;
             Section *hover_section = nullptr;
-            FrameStateFlags flags = FrameStateFlagBits::none;
+            FrameStateFlags flags = FrameStateFlagBits::None;
         };
 
         namespace event_id
         {
             enum : u64
             {
-                none = 0x0,
-                windowDocked = 0x1AFFF3AAFCE36195,
-                newTab = 0x34493086A50E2106,
-                undock = 0x2CFFB00717B9FC3A
+                None = 0x0,
+                WindowDocked = 0x1AFFF3AAFCE36195,
+                NewTab = 0x34493086A50E2106,
+                Undock = 0x2CFFB00717B9FC3A
             };
         };
     } // namespace dock

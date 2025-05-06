@@ -13,7 +13,7 @@ namespace uikit
             f32 circle_radius;
             ImU32 fill_color;
             ImU32 circle_color;
-        } g_Slider;
+        } g_slider;
     } // namespace style
 
     template <typename T>
@@ -45,12 +45,12 @@ namespace uikit
             if (*value > _max) factor = 1;
             ImRect filled;
             filled.Min = frame_bb.Min;
-            filled.Min.y += (frame - style::g_Slider.height) * 0.5f;
+            filled.Min.y += (frame - style::g_slider.height) * 0.5f;
             filled.Max.x = filled.Min.x + w * factor;
-            filled.Max.y = filled.Min.y + style::g_Slider.height;
+            filled.Max.y = filled.Min.y + style::g_slider.height;
             auto *draw_list = g.CurrentWindow->DrawList;
             if (filled.Max.x > filled.Min.x)
-                draw_list->AddRectFilled(filled.Min, filled.Max, style::g_Slider.fill_color, style.FrameRounding);
+                draw_list->AddRectFilled(filled.Min, filled.Max, style::g_slider.fill_color, style.FrameRounding);
 
             ImRect avaliable{{filled.Max.x, filled.Min.y}, {filled.Min.x + w, filled.Max.y}};
             if (avaliable.Max.x > avaliable.Min.x)
@@ -59,8 +59,8 @@ namespace uikit
                 draw_list->AddRectFilled(avaliable.Min, avaliable.Max, aval_color, style.FrameRounding);
             }
 
-            ImVec2 circle_center(filled.Max.x, filled.Min.y + (style::g_Slider.height / 2.0f));
-            draw_list->AddCircleFilled(circle_center, style::g_Slider.circle_radius, style::g_Slider.circle_color);
+            ImVec2 circle_center(filled.Max.x, filled.Min.y + (style::g_slider.height / 2.0f));
+            draw_list->AddCircleFilled(circle_center, style::g_slider.circle_radius, style::g_slider.circle_color);
 
             processMouseBehavior(frame_bb, w, id, g.IO);
         }

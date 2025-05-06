@@ -10,12 +10,12 @@ namespace uikit
     class TabMemCache : public acul::mem_cache
     {
     public:
-        TabMemCache(u8 *activeIndex, acul::vector<TabItem> *items)
+        TabMemCache(u8 *active_index, acul::vector<TabItem> *items)
             : acul::mem_cache([this]() {
                   _free();
                   if (--itemsLeft == 0) offset = 0;
               }),
-              activeIndex(activeIndex),
+              active_index(active_index),
               _items(items)
         {
             ++itemsLeft;
@@ -26,7 +26,7 @@ namespace uikit
     protected:
         static size_t offset;
         static size_t itemsLeft;
-        u8 *activeIndex;
+        u8 *active_index;
         acul::vector<TabItem> *_items;
 
         virtual void _free() = 0;
@@ -35,8 +35,8 @@ namespace uikit
     class AddMemCache : public TabMemCache
     {
     public:
-        AddMemCache(TabItem tab, u8 *activeIndex, acul::vector<TabItem> *items)
-            : TabMemCache(activeIndex, items), _tab(tab)
+        AddMemCache(TabItem tab, u8 *active_index, acul::vector<TabItem> *items)
+            : TabMemCache(active_index, items), _tab(tab)
         {
         }
 
@@ -44,7 +44,7 @@ namespace uikit
         {
             _items->push_back(_tab);
             ++offset;
-            *activeIndex = _items->size() - 1;
+            *active_index = _items->size() - 1;
         }
 
     private:
@@ -54,14 +54,14 @@ namespace uikit
     class RemoveMemCache : public TabMemCache
     {
     public:
-        RemoveMemCache(const acul::vector<TabItem>::iterator &it, u8 *activeIndex, acul::vector<TabItem> *items)
-            : TabMemCache(activeIndex, items), _it(it)
+        RemoveMemCache(const acul::vector<TabItem>::iterator &it, u8 *active_index, acul::vector<TabItem> *items)
+            : TabMemCache(active_index, items), _it(it)
         {
         }
 
         virtual void _free() override
         {
-            if (*activeIndex == _items->size() - 1 && *activeIndex != 0) --(*activeIndex);
+            if (*active_index == _items->size() - 1 && *active_index != 0) --(*active_index);
             _items->erase(_it + offset);
             --offset;
         }
@@ -73,68 +73,68 @@ namespace uikit
     size_t TabMemCache::offset = 0;
     size_t TabMemCache::itemsLeft = 0;
 
-    bool TabItem::renderItem()
+    bool TabItem::render_item()
     {
-        size = calculateItemSize();
+        size = calculate_item_size();
         auto pos = ImGui::GetCursorPos();
         ImGuiWindow *window = GImGui->CurrentWindow;
-        auto screenPos = window->DC.CursorPos;
+        auto screen_pos = window->DC.CursorPos;
         Selectable::render();
         auto &style = ImGui::GetStyle();
         pos.x += size.x + style.ItemSpacing.x + style.ItemInnerSpacing.x;
         ImGui::SetCursorPos(pos);
 
-        if (_tabFlags & TabItem::FlagBits::closable || _tabFlags & TabItem::FlagBits::unsaved)
+        if (_tab_flags & TabItem::FlagBits::Closable || _tab_flags & TabItem::FlagBits::Unsaved)
         {
-            bool wantDelete = false;
+            bool want_delete = false;
             ImGuiID id = window->GetID(name.c_str());
             const ImGuiID close_button_id = ImGui::GetIDWithSeed("#CLOSE", NULL, id);
-            ImVec2 nextPos{0, 0};
-            if (_tabFlags & TabItem::FlagBits::closable)
+            ImVec2 next_pos{0, 0};
+            if (_tab_flags & TabItem::FlagBits::Closable)
             {
                 f32 closeSize = ImMax(2.0f, GImGui->FontSize * 0.5f + 1.0f) + style.ItemSpacing.x;
-                nextPos = screenPos + ImVec2{size.x - closeSize, style.ItemSpacing.y};
-                if (closeButton(close_button_id, nextPos)) wantDelete = true;
+                next_pos = screen_pos + ImVec2{size.x - closeSize, style.ItemSpacing.y};
+                if (close_button(close_button_id, next_pos)) want_delete = true;
             }
-            if (_tabFlags & TabItem::FlagBits::unsaved)
+            if (_tab_flags & TabItem::FlagBits::Unsaved)
             {
                 ImGuiContext &g = *GImGui;
                 f32 bulletSize = ImMax(2.0f, g.FontSize * 0.5f + 1.0f);
-                nextPos.x -= bulletSize + style.ItemSpacing.x;
-                ImVec2 end = nextPos + ImVec2(bulletSize, size.y * 0.5f + bulletSize * 0.5f);
-                const ImRect bullet_bb(nextPos, end);
+                next_pos.x -= bulletSize + style.ItemSpacing.x;
+                ImVec2 end = next_pos + ImVec2(bulletSize, size.y * 0.5f + bulletSize * 0.5f);
+                const ImRect bullet_bb(next_pos, end);
                 ImDrawList *draw_list = window->DrawList;
                 ImGui::RenderBullet(draw_list, bullet_bb.GetCenter(), ImGui::GetColorU32(ImGuiCol_Text));
             }
-            return wantDelete;
+            return want_delete;
         }
         return false;
     }
 
-    ImVec2 TabItem::calculateItemSize()
+    ImVec2 TabItem::calculate_item_size()
     {
         auto &style = ImGui::GetStyle();
-        auto labelSize = ImGui::CalcTextSize(name.c_str());
-        ImVec2 outputSize = labelSize + style.ItemSpacing * 2.0f;
-        if (_tabFlags & FlagBits::unsaved || _tabFlags & FlagBits::closable)
+        auto label_size = ImGui::CalcTextSize(name.c_str());
+        ImVec2 output_size = label_size + style.ItemSpacing * 2.0f;
+        if (_tab_flags & FlagBits::Unsaved || _tab_flags & FlagBits::Closable)
         {
             ImGuiContext &g = *GImGui;
-            f32 closeSize = ImMax(2.0f, g.FontSize * 0.5f + 1.0f);
-            f32 width = closeSize + style.ItemSpacing.x;
-            if (_tabFlags & FlagBits::unsaved && _tabFlags & FlagBits::closable)
-                outputSize.x += 2.0f * width;
+            f32 close_size = ImMax(2.0f, g.FontSize * 0.5f + 1.0f);
+            f32 width = close_size + style.ItemSpacing.x;
+            if (_tab_flags & FlagBits::Unsaved && _tab_flags & FlagBits::Closable)
+                output_size.x += 2.0f * width;
             else
-                outputSize.x += width;
+                output_size.x += width;
         }
-        outputSize.x += style.ItemSpacing.x;
-        return outputSize;
+        output_size.x += style.ItemSpacing.x;
+        return output_size;
     }
 
-    bool TabBar::renderTab(acul::vector<TabItem>::iterator &begin, int index)
+    bool TabBar::render_tab(acul::vector<TabItem>::iterator &begin, int index)
     {
         if (_drag.it != begin)
         {
-            if (begin->renderItem())
+            if (begin->render_item())
             {
                 ed->dispatch<TabCloseEvent>(this, *begin, false);
                 return false;
@@ -143,26 +143,26 @@ namespace uikit
         else
         {
             ImGui::Dummy(begin->size);
-            ImVec2 nextPos = _drag.pos;
+            ImVec2 next_pos = _drag.pos;
             const auto &style = ImGui::GetStyle();
-            nextPos.x += begin->size.x + style.ItemSpacing.x + style.ItemInnerSpacing.x;
-            ImGui::SetCursorPos(nextPos);
+            next_pos.x += begin->size.x + style.ItemSpacing.x + style.ItemInnerSpacing.x;
+            ImGui::SetCursorPos(next_pos);
             if (_drag.offset < 0)
             {
                 if (begin != items.begin())
                 {
                     auto prev = std::prev(begin);
 
-                    if (_drag.offset + _drag.posOffset <= prev->size.x * -0.5f)
+                    if (_drag.offset + _drag.pos_offset <= prev->size.x * -0.5f)
                     {
-                        _drag.posOffset = prev->size.x * 0.5f + style.ItemSpacing.x + style.ItemInnerSpacing.x;
+                        _drag.pos_offset = prev->size.x * 0.5f + style.ItemSpacing.x + style.ItemInnerSpacing.x;
                         std::rotate(prev, begin, std::next(begin));
                         ImGui::ResetMouseDragDelta();
                         _drag.it = prev;
-                        if (index == activeIndex)
-                            activeIndex = index - 1;
-                        else if (index - 1 == activeIndex)
-                            activeIndex = index;
+                        if (index == active_index)
+                            active_index = index - 1;
+                        else if (index - 1 == active_index)
+                            active_index = index;
                     }
                 }
             }
@@ -170,48 +170,48 @@ namespace uikit
             if (_drag.offset > 0)
             {
                 auto next = std::next(begin);
-                if (next != items.end() && _drag.offset + _drag.posOffset >= next->size.x * 0.5f)
+                if (next != items.end() && _drag.offset + _drag.pos_offset >= next->size.x * 0.5f)
                 {
-                    _drag.posOffset = next->size.x * -.5f - style.ItemSpacing.x - style.ItemInnerSpacing.x;
+                    _drag.pos_offset = next->size.x * -.5f - style.ItemSpacing.x - style.ItemInnerSpacing.x;
                     std::rotate(begin, next, std::next(next));
                     ImGui::ResetMouseDragDelta();
                     _drag.it = next;
-                    if (index == activeIndex)
-                        ++activeIndex;
-                    else if (index + 1 == activeIndex)
-                        activeIndex = index;
+                    if (index == active_index)
+                        ++active_index;
+                    else if (index + 1 == active_index)
+                        active_index = index;
                 }
             }
         }
         return false;
     }
 
-    void TabBar::renderDragged()
+    void TabBar::render_dragged()
     {
-        ImGui::SetCursorPos({_drag.pos.x + _drag.offset + _drag.posOffset, _drag.pos.y});
-        _drag.it.value()->renderItem();
+        ImGui::SetCursorPos({_drag.pos.x + _drag.offset + _drag.pos_offset, _drag.pos.y});
+        _drag.it.value()->render_item();
 
         // Scroll tabbar if no enough space to render prev/next tabs
-        ImVec2 windowSize = ImGui::GetWindowSize();
-        f32 currentScroll = ImGui::GetScrollX();
-        f32 maxScroll = ImGui::GetScrollMaxX();
-        f32 startPosOfTab = _drag.pos.x + _drag.offset;
-        f32 endPosOfTab = startPosOfTab + _drag.it.value()->size.x;
-        if (endPosOfTab > windowSize.x + currentScroll)
+        ImVec2 window_size = ImGui::GetWindowSize();
+        f32 current_scroll = ImGui::GetScrollX();
+        f32 max_scroll = ImGui::GetScrollMaxX();
+        f32 start_pos_of_tab = _drag.pos.x + _drag.offset;
+        f32 end_pos_of_tab = start_pos_of_tab + _drag.it.value()->size.x;
+        if (end_pos_of_tab > window_size.x + current_scroll)
         {
-            f32 scrollAmount = endPosOfTab - windowSize.x - currentScroll;
-            f32 newScroll = currentScroll + scrollAmount;
-            newScroll = (newScroll > maxScroll) ? maxScroll : newScroll;
-            ImGui::SetScrollX(newScroll * _style.scrollOffsetLR);
+            f32 scroll_amount = end_pos_of_tab - window_size.x - current_scroll;
+            f32 new_scroll = current_scroll + scroll_amount;
+            new_scroll = (new_scroll > max_scroll) ? max_scroll : new_scroll;
+            ImGui::SetScrollX(new_scroll * _style.scroll_offset_lr);
         }
-        else if (startPosOfTab < currentScroll)
+        else if (start_pos_of_tab < current_scroll)
         {
-            f32 newScroll = currentScroll - startPosOfTab;
-            ImGui::SetScrollX(currentScroll - newScroll >= 0 ? newScroll * _style.scrollOffsetRL : 0);
+            f32 newScroll = current_scroll - start_pos_of_tab;
+            ImGui::SetScrollX(current_scroll - newScroll >= 0 ? newScroll * _style.scroll_offset_rl : 0);
         }
     }
 
-    void TabBar::renderCombobox()
+    void TabBar::render_combobox()
     {
         size_t index = 0;
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
@@ -221,12 +221,12 @@ namespace uikit
             for (auto &item : items)
             {
                 acul::string label = item.name;
-                SelectableParams params{.selected = index == activeIndex};
+                SelectableParams params{.selected = index == active_index};
                 Selectable::render(label.c_str(), params);
                 if (params.pressed)
                 {
-                    activeIndex = index;
-                    awin::pushEmptyEvent();
+                    active_index = index;
+                    awin::push_empty_event();
                 }
                 ++index;
             }
@@ -238,7 +238,7 @@ namespace uikit
 
     void TabBar::render()
     {
-        std::function<void()> onRender;
+        std::function<void()> render_callback;
         auto &style = ImGui::GetStyle();
         ImVec2 size = _style.size;
         if (_style.size.x == 0) _style.size.x = ImGui::GetContentRegionAvail().x;
@@ -246,46 +246,46 @@ namespace uikit
         if (ImGui::BeginChild(name.c_str(), size, true))
         {
             if (ImGui::IsWindowHovered())
-                _isHovered = true;
-            else if (_flags & FlagBits::scrollable)
+                _is_hovered = true;
+            else if (_flags & FlagBits::Scrollable)
             {
                 auto &io = ImGui::GetIO();
-                if (_isHovered && io.KeyMods & ImGuiMod_Shift) io.AddKeyEvent(ImGuiMod_Shift, false);
+                if (_is_hovered && io.KeyMods & ImGuiMod_Shift) io.AddKeyEvent(ImGuiMod_Shift, false);
             }
             const auto &style = ImGui::GetStyle();
-            f32 availableWidth = ImGui::GetContentRegionAvail().x;
-            bool isScrollable = _flags & FlagBits::scrollable;
-            bool isReorderable = _flags & FlagBits::reorderable;
+            f32 available_width = ImGui::GetContentRegionAvail().x;
+            bool is_scrollable = _flags & FlagBits::Scrollable;
+            bool is_reorderable = _flags & FlagBits::Reorderable;
 
             // Pre-calculate available width if not scrollable
-            f32 arrowWidth = 0.0f;
-            if (!isScrollable)
+            f32 arrow_width = 0.0f;
+            if (!is_scrollable)
             {
-                arrowWidth = style::g_ComboBox.arrowIcon->size().x + style.ItemSpacing.x * 2.0f +
-                             style.FramePadding.x * 2.0f + style.ItemInnerSpacing.x * 2.0f;
-                availableWidth -= arrowWidth;
+                arrow_width = style::g_combo_box.arrowIcon->size().x + style.ItemSpacing.x * 2.0f +
+                              style.FramePadding.x * 2.0f + style.ItemInnerSpacing.x * 2.0f;
+                available_width -= arrow_width;
             }
 
-            bool stopRender = false;
+            bool stop_render = false;
             int index{0};
             for (auto begin = items.begin(); begin != items.end(); ++index)
             {
                 f32 itemWidth = begin->size.x + style.ItemSpacing.x;
 
                 // Adjust available width and determine if rendering should stop
-                if (!isScrollable)
+                if (!is_scrollable)
                 {
-                    availableWidth -= itemWidth;
-                    if (availableWidth < 0) stopRender = true;
+                    available_width -= itemWidth;
+                    if (available_width < 0) stop_render = true;
                 }
 
                 // Handle selection and rendering logic
-                begin->selected = index == activeIndex;
-                if (index == activeIndex) onRender = begin->onRender();
+                begin->selected = index == active_index;
+                if (index == active_index) render_callback = begin->render_callback();
 
                 // Handle reorderable logic
-                bool wasDragReset{false};
-                if (isReorderable)
+                bool was_drag_reset{false};
+                if (is_reorderable)
                 {
                     // Dragging logic
                     if (_drag.it.has_value())
@@ -299,9 +299,9 @@ namespace uikit
                         {
                             _drag.offset = 0;
                             _drag.pos = {0, 0};
-                            _drag.posOffset = 0;
+                            _drag.pos_offset = 0;
                             _drag.it.reset();
-                            wasDragReset = true;
+                            was_drag_reset = true;
                         }
                     }
                     else if (begin->hover && ImGui::IsMouseDragging(0))
@@ -312,64 +312,64 @@ namespace uikit
                 }
 
                 // Only render if scrollable or not stopped
-                if (isScrollable || !stopRender) renderTab(begin, index);
+                if (is_scrollable || !stop_render) render_tab(begin, index);
 
                 // Update active index if pressed
-                if (begin->pressed && !wasDragReset)
+                if (begin->pressed && !was_drag_reset)
                 {
-                    if (activeIndex != index)
-                        ed->dispatch<TabSwitchEvent>(this, items.begin() + activeIndex, items.begin() + index);
-                    activeIndex = index;
-                    awin::pushEmptyEvent();
+                    if (active_index != index)
+                        ed->dispatch<TabSwitchEvent>(this, items.begin() + active_index, items.begin() + index);
+                    active_index = index;
+                    awin::push_empty_event();
                 }
                 ++begin;
             }
 
-            if (_drag.it.has_value()) renderDragged();
-            if (!(_flags & FlagBits::scrollable) && stopRender) renderCombobox();
+            if (_drag.it.has_value()) render_dragged();
+            if (!(_flags & FlagBits::Scrollable) && stop_render) render_combobox();
 
-            _avaliableWidth = ImGui::GetContentRegionAvail().x - arrowWidth;
+            _avaliable_width = ImGui::GetContentRegionAvail().x - arrow_width;
             _height = ImGui::GetWindowHeight();
         }
         ImGui::EndChild();
-        if (onRender) onRender();
+        if (render_callback) render_callback();
     }
 
-    bool TabBar::removeTab(const TabItem &tab)
+    bool TabBar::remove_tab(const TabItem &tab)
     {
         auto it = std::find_if(items.begin(), items.end(), [&](const TabItem &item) { return item.name == tab.name; });
         if (it != items.end())
         {
-            _disposalQueue.push(acul::alloc<RemoveMemCache>(it, &activeIndex, &items));
+            _disposal_queue.push(acul::alloc<RemoveMemCache>(it, &active_index, &items));
             return true;
         }
         return false;
     }
 
-    void TabBar::newTab(const TabItem &tab)
+    void TabBar::new_tab(const TabItem &tab)
     {
         auto it = std::find_if(items.begin(), items.end(), [&](const TabItem &item) { return item.id == tab.id; });
         if (it != items.end())
-            activeIndex = it - items.begin();
+            active_index = it - items.begin();
         else
-            _disposalQueue.push(acul::alloc<AddMemCache>(tab, &activeIndex, &items));
+            _disposal_queue.push(acul::alloc<AddMemCache>(tab, &active_index, &items));
     }
 
-    void TabBar::bindEvents()
+    void TabBar::bind_events()
     {
-        if (_flags & FlagBits::scrollable)
-            ed->bind_event(this, awin::event_id::scroll, [this](const awin::ScrollEvent &event) {
-                if (!_isHovered) return;
+        if (_flags & FlagBits::Scrollable)
+            ed->bind_event(this, awin::event_id::Scroll, [this](const awin::ScrollEvent &event) {
+                if (!_is_hovered) return;
                 ImGuiIO &io = ImGui::GetIO();
                 io.AddKeyEvent(ImGuiMod_Shift, true);
             });
-        ed->bind_event(this, event_id::changed, [this](const TabChangeEvent &e) {
+        ed->bind_event(this, event_id::Changed, [this](const TabChangeEvent &e) {
             if (e.tabbar != this) return;
-            if (e.flags & TabItem::FlagBits::unsaved)
-                items[activeIndex].flags() |= TabItem::FlagBits::unsaved;
+            if (e.flags & TabItem::FlagBits::Unsaved)
+                items[active_index].flags() |= TabItem::FlagBits::Unsaved;
             else
-                items[activeIndex].flags() &= ~TabItem::FlagBits::unsaved;
-            if (!e.displayName.empty()) items[activeIndex].name = e.displayName;
+                items[active_index].flags() &= ~TabItem::FlagBits::Unsaved;
+            if (!e.display_name.empty()) items[active_index].name = e.display_name;
         });
     }
 } // namespace uikit

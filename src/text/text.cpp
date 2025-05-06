@@ -13,14 +13,14 @@ namespace uikit
         {
             bool need_backup = (g.CurrentWindow->DC.TextWrapPos < 0.0f);
             if (need_backup) ImGui::PushTextWrapPos(0.0f);
-            renderTextWrapped(text_pos);
+            render_text_wrapped(text_pos);
             if (need_backup) ImGui::PopTextWrapPos();
         }
         else
-            renderText(text_pos);
+            render_text(text_pos);
     }
 
-    void Text::renderText(const ImVec2 text_pos)
+    void Text::render_text(const ImVec2 text_pos)
     {
         // Long text!
         // Perform manual coarse clipping to optimize for long multi-line text
@@ -92,7 +92,7 @@ namespace uikit
         }
     }
 
-    void Text::renderTextWrapped(const ImVec2 text_pos)
+    void Text::render_text_wrapped(const ImVec2 text_pos)
     {
         // Common case
         ImGuiWindow *window = ImGui::GetCurrentWindow();
@@ -118,7 +118,7 @@ namespace uikit
         void *ChainCallbackUserData;
     };
 
-    static int inputTextCallback(ImGuiInputTextCallbackData *data)
+    static int input_text_callback(ImGuiInputTextCallbackData *data)
     {
         InputTextCallback_UserData *user_data = (InputTextCallback_UserData *)data->UserData;
         if (data->EventFlag == ImGuiInputTextFlags_CallbackResize)
@@ -140,8 +140,8 @@ namespace uikit
         return 0;
     }
 
-    bool inputText(const char *label, acul::string *str, ImGuiInputTextFlags flags, ImGuiInputTextCallback callback,
-                   void *user_data)
+    bool input_text(const char *label, acul::string *str, ImGuiInputTextFlags flags, ImGuiInputTextCallback callback,
+                    void *user_data)
     {
         IM_ASSERT((flags & ImGuiInputTextFlags_CallbackResize) == 0);
         flags |= ImGuiInputTextFlags_CallbackResize;
@@ -150,11 +150,11 @@ namespace uikit
         cb_user_data.Str = str;
         cb_user_data.ChainCallback = callback;
         cb_user_data.ChainCallbackUserData = user_data;
-        return ImGui::InputText(label, (char *)str->c_str(), str->capacity() + 1, flags, inputTextCallback,
+        return ImGui::InputText(label, (char *)str->c_str(), str->capacity() + 1, flags, input_text_callback,
                                 &cb_user_data);
     }
 
-    bool inputTextWithHint(const char *label, const char *hint, acul::string *str, ImGuiInputTextFlags flags,
+    bool input_text_with_hint(const char *label, const char *hint, acul::string *str, ImGuiInputTextFlags flags,
                            ImGuiInputTextCallback callback, void *user_data)
     {
         IM_ASSERT((flags & ImGuiInputTextFlags_CallbackResize) == 0);
@@ -165,6 +165,6 @@ namespace uikit
         cb_user_data.ChainCallback = callback;
         cb_user_data.ChainCallbackUserData = user_data;
         return ImGui::InputTextWithHint(label, hint, (char *)str->c_str(), str->capacity() + 1, flags,
-                                        inputTextCallback, &cb_user_data);
+                                        input_text_callback, &cb_user_data);
     }
 } // namespace uikit

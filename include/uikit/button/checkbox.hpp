@@ -15,9 +15,9 @@ namespace uikit
             f32 size;
             ImVec4 bg;
             ImVec4 mark;
-        } g_CheckBox;
+        } g_check_box;
 
-        inline void bindCheckboxStyle() { ImGui::GetStyle().Colors[ImGuiCol_CheckMark] = g_CheckBox.mark; }
+        inline void bind_checkbox_style() { ImGui::GetStyle().Colors[ImGuiCol_CheckMark] = g_check_box.mark; }
     } // namespace style
 
 } // namespace uikit
