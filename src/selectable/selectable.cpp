@@ -142,7 +142,7 @@ namespace uikit
                                                  : params.selected ? ImGuiCol_Header
                                                                    : ImGuiCol_PopupBg);
 
-            renderFrame(bb.Min, bb.Max, col, false, params.rounding, params.draw_flags);
+            render_frame(bb.Min, bb.Max, col, false, params.rounding, params.draw_flags);
         }
         if (g.NavId == id)
             ImGui::RenderNavHighlight(bb, id, ImGuiNavHighlightFlags_Compact | ImGuiNavHighlightFlags_NoRounding);

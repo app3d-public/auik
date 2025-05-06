@@ -41,7 +41,7 @@ namespace uikit
             TabBar::Style style;
             style.size = {0, 0};
             TabBar tabbar(node.id + ":tab", _ed, _disposal_queue, items, TabBar::FlagBits::Reorderable, style);
-            Selectable btn(acul::format("##%s:btn", node.id.c_str()), false, 2.0f, 0);
+            Selectable btn(acul::format("##%s:btn", node.id.c_str()));
             node.tab_nav_area = acul::alloc<Node::TabNavArea>(std::move(tabbar), std::move(btn));
             _ed->bind_event(&node.tab_nav_area->tabbar, TabBar::event_id::Switched, [&node](uikit::TabSwitchEvent &e) {
                 if (e.tabbar != &node.tab_nav_area->tabbar) return;
@@ -71,29 +71,18 @@ namespace uikit
 
             size.y = ImGui::GetFrameHeight() + style::g_dock.tabbar.item_spacing;
 
-            ImVec2 start_pos = ImGui::GetCursorScreenPos();
             f32 icon_rect_width = style::g_dock.tabbar.nav_icon->size().x + frame.padding.x * 2.0f;
 
-            nav.tabbar.render();
-            if (sections[section_id].size == 0.0f)
-                nav.tabbar.size({ImGui::GetWindowWidth() - nav.tabbar.avaliable_width(), size.y});
-            size.x = ImMax(nav.tabbar.size().x + icon_rect_width, sections[section_id].size);
-
-            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
-            // bg
-            ImRect bg_bb;
-            bg_bb.Min = {start_pos.x + nav.tabbar.size().x, start_pos.y};
-            bg_bb.Max = start_pos + size;
-            auto *draw_list = ImGui::GetCurrentWindow()->DrawList;
-            draw_list->AddRectFilled(bg_bb.Min, bg_bb.Max, style::g_dock.tabbar.background);
-
-            // btn
-            ImGui::PushStyleColor(ImGuiCol_Header, style::g_dock.tabbar.background);
-            nav.btn.size = {icon_rect_width, size.y};
-            ImVec2 btn_pos = {bg_bb.Max.x - icon_rect_width, start_pos.y};
+            // Button
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
+            auto *window = GImGui->CurrentWindow;
+            ImVec2 start_pos = window->DC.CursorPos;
+            ImVec2 btn_pos = {window->Pos.x + window->Size.x - icon_rect_width, start_pos.y};
             ImGui::SetCursorScreenPos(btn_pos);
+            nav.btn.size = {icon_rect_width, size.y};
             nav.btn.render();
-            if (nav.btn.pressed) popup_menu.mark_openned(bg_bb, section_id, node_id);
+            if (nav.btn.pressed)
+                popup_menu.mark_openned({ImGui::GetItemRectMin(), ImGui::GetItemRectMax()}, section_id, node_id);
 
             // icon
             ImVec2 nav_icon_size = style::g_dock.tabbar.nav_icon->size();
@@ -101,8 +90,16 @@ namespace uikit
             icon_pos.x += (icon_rect_width - nav_icon_size.x) / 2.0f;
             icon_pos.y += (size.y - nav_icon_size.y) / 2.0f;
             style::g_dock.tabbar.nav_icon->render(icon_pos);
+            ImGui::PopStyleVar();
+            ImGui::SetCursorScreenPos(start_pos);
 
-            ImGui::PopStyleColor(3);
+            nav.tabbar.render();
+            if (sections[section_id].size == 0.0f)
+                nav.tabbar.size({ImGui::GetWindowWidth() - nav.tabbar.size().x - icon_rect_width, size.y});
+            size.x = ImMax(nav.tabbar.size().x + icon_rect_width, sections[section_id].size);
+
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
+            ImGui::PopStyleColor(2);
             ImGui::PopStyleVar(4);
         }
 

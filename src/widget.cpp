@@ -6,7 +6,7 @@ namespace uikit
 {
     ImGuiMouseCursor g_last_cursor = ImGuiMouseCursor_None;
 
-    void renderFrame(ImVec2 p_min, ImVec2 p_max, ImU32 fill_col, bool borders, f32 rounding, ImDrawFlags flags)
+    void render_frame(ImVec2 p_min, ImVec2 p_max, ImU32 fill_col, bool borders, f32 rounding, ImDrawFlags flags)
     {
         ImGuiContext &g = *GImGui;
         ImGuiWindow *window = g.CurrentWindow;

@@ -31,7 +31,7 @@ namespace uikit
 
     extern APPLIB_API ImGuiMouseCursor g_last_cursor;
 
-    APPLIB_API void renderFrame(ImVec2 p_min, ImVec2 p_max, ImU32 fill_col, bool borders, f32 rounding,
+    APPLIB_API void render_frame(ImVec2 p_min, ImVec2 p_max, ImU32 fill_col, bool borders, f32 rounding,
                                 ImDrawFlags flags = 0);
 }; // namespace uikit
 

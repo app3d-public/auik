@@ -51,7 +51,7 @@ namespace uikit
                 color = ImGui::ColorConvertFloat4ToU32(style::g_check_box.bg);
             else
                 color = ImGui::GetColorU32(ImGuiCol_FrameBg);
-            renderFrame(check_bb.Min, check_bb.Max, color, true, style.FrameRounding);
+            render_frame(check_bb.Min, check_bb.Max, color, true, style.FrameRounding);
 
             if (value)
             {

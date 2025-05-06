@@ -92,16 +92,16 @@ namespace uikit
             ImVec2 next_pos{0, 0};
             if (_tab_flags & TabItem::FlagBits::Closable)
             {
-                f32 closeSize = ImMax(2.0f, GImGui->FontSize * 0.5f + 1.0f) + style.ItemSpacing.x;
-                next_pos = screen_pos + ImVec2{size.x - closeSize, style.ItemSpacing.y};
+                f32 close_size = ImMax(2.0f, GImGui->FontSize * 0.5f + 1.0f) + style.ItemSpacing.x;
+                next_pos = screen_pos + ImVec2{size.x - close_size, style.ItemSpacing.y};
                 if (close_button(close_button_id, next_pos)) want_delete = true;
             }
             if (_tab_flags & TabItem::FlagBits::Unsaved)
             {
                 ImGuiContext &g = *GImGui;
-                f32 bulletSize = ImMax(2.0f, g.FontSize * 0.5f + 1.0f);
-                next_pos.x -= bulletSize + style.ItemSpacing.x;
-                ImVec2 end = next_pos + ImVec2(bulletSize, size.y * 0.5f + bulletSize * 0.5f);
+                f32 bullet_size = ImMax(2.0f, g.FontSize * 0.5f + 1.0f);
+                next_pos.x -= bullet_size + style.ItemSpacing.x;
+                ImVec2 end = next_pos + ImVec2(bullet_size, size.y * 0.5f + bullet_size * 0.5f);
                 const ImRect bullet_bb(next_pos, end);
                 ImDrawList *draw_list = window->DrawList;
                 ImGui::RenderBullet(draw_list, bullet_bb.GetCenter(), ImGui::GetColorU32(ImGuiCol_Text));
@@ -189,7 +189,16 @@ namespace uikit
     void TabBar::render_dragged()
     {
         ImGui::SetCursorPos({_drag.pos.x + _drag.offset + _drag.pos_offset, _drag.pos.y});
-        _drag.it.value()->render_item();
+        auto& style = ImGui::GetStyle();
+        ImGui::PushStyleColor(ImGuiCol_Header, style.Colors[ImGuiCol_HeaderActive]);
+        ImGui::PushStyleColor(ImGuiCol_PopupBg, style.Colors[ImGuiCol_HeaderActive]);
+        auto& el = *_drag.it.value();
+        bool old_show_background = el.show_background;
+        el.show_background = true;
+        el.render_item();
+        el.show_background = old_show_background;
+        ImGui::PopStyleColor(2);
+
 
         // Scroll tabbar if no enough space to render prev/next tabs
         ImVec2 window_size = ImGui::GetWindowSize();
