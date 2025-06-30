@@ -26,6 +26,27 @@ namespace uikit
         acul::string _symbol;
     };
 
+    class MissingIcon : public Icon
+    {
+    public:
+        MissingIcon() : Icon("__missing__") {}
+
+        virtual void render(ImVec2 pos, ImVec2 size) override
+        {
+            ImDrawList *draw = ImGui::GetWindowDrawList();
+            draw->AddRectFilled(pos, pos + size, IM_COL32(0, 0, 0, 255));
+            draw->AddRect(pos, pos + size, IM_COL32(255, 255, 255, 255));
+        }
+
+        virtual ImVec2 size() const override { return {8.0f, 8.0f}; }
+
+        static MissingIcon *instance()
+        {
+            static MissingIcon inst;
+            return &inst;
+        }
+    };
+
     class FontIcon : public Icon
     {
     public:
@@ -41,7 +62,15 @@ namespace uikit
             ImGui::PopFont();
         }
 
-        virtual ImVec2 size() const override { return {_font->FontSize, _font->FontSize}; }
+        virtual ImVec2 size() const override
+        {
+#if IMGUI_VERSION_NUM > 19195
+            f32 sz = _font->LegacySize;
+#else
+            f32 sz = _font->FontSize;
+#endif
+            return {sz, sz};
+        }
 
         virtual ~FontIcon() = default;
 
@@ -49,12 +78,12 @@ namespace uikit
         acul::string _u8sequence;
         ImFont *_font;
     };
-
     class ImageIcon : public Icon
     {
     public:
-        ImageIcon(const acul::string &symbol, ImTextureID id, ImVec2 size, ImVec2 uvMin = {0, 0}, ImVec2 uvMax = {1, 1})
-            : Icon(symbol), _image(id, size, uvMin, uvMax), _size(size)
+        ImageIcon(const acul::string &symbol, ImTextureID id, ImVec2 size, ImVec2 uv_min = {0, 0},
+                  ImVec2 uv_max = {1, 1})
+            : Icon(symbol), _image(id, size, uv_min, uv_max), _size(size)
         {
         }
 

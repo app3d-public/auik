@@ -113,6 +113,6 @@ namespace uikit
         Flags _flags;
         int _active_id;
 
-        void render_item(size_t index, ImVec2 &pos, ImVec2 &rect_size);
+        void render_item(int index, ImVec2 &pos, ImVec2 &rect_size);
     };
 } // namespace uikit

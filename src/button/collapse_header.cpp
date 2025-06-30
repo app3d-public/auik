@@ -29,7 +29,6 @@ namespace uikit
         icon->render({bb.Min.x + style.WindowPadding.x, bb.Min.y + (height - icon_size.y) * 0.5f});
 
         ImVec2 text_size = ImGui::CalcTextSize(name);
-        ImVec2 text_pos = window->DC.CursorPos;
         ImVec2 init_pos = window->DC.CursorPos;
         window->DC.CursorPos.x += style.WindowPadding.x + icon_size.x + style.ItemSpacing.x;
         window->DC.CursorPos.y += (height - text_size.y) * 0.5f;

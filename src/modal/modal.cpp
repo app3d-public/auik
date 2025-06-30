@@ -9,7 +9,7 @@
 
 namespace uikit
 {
-    acul::string getBtnName(awin::popup::Buttons button)
+    acul::string get_btn_name(awin::popup::Buttons button)
     {
         switch (button)
         {
@@ -108,7 +108,7 @@ namespace uikit
 
             // Buttons
             acul::vector<acul::string> buttons(message.buttons.size());
-            for (int i = 0; i < message.buttons.size(); ++i) buttons[i] = getBtnName(message.buttons[i].first);
+            for (size_t i = 0; i < message.buttons.size(); ++i) buttons[i] = get_btn_name(message.buttons[i].first);
             right_controls(buttons, &action, pos.y);
 
             if (action != -1)

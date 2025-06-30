@@ -33,7 +33,7 @@ namespace uikit
         {
             acul::vector<TabItem> items;
             items.reserve(node.windows.size());
-            for (int i = 0; i < node.windows.size(); ++i)
+            for (size_t i = 0; i < node.windows.size(); ++i)
             {
                 u64 id = std::hash<acul::string>()(node.windows[i]->name);
                 items.emplace_back(id, node.windows[i]->name);
@@ -126,12 +126,12 @@ namespace uikit
             if (node.dock_flags() & WindowDockFlags_Stretch)
             {
                 f32 avaliable_ss_height = ImGui::GetWindowHeight() - section.fixed_size;
-                bool justify = node_id == section.nodes.size() - 1 ||
-                               (node_id == section.nodes.size() - 2 &&
+                bool justify = node_id == (int)section.nodes.size() - 1 ||
+                               (node_id == (int)section.nodes.size() - 2 &&
                                 !(section.nodes[node_id + 1].dock_flags() & WindowDockFlags_Stretch));
                 f32 full_ss = justify ? avaliable_ss_height - init_pos.y : avaliable_ss_height * node.size;
                 node_size.y = (int)(full_ss - node.extra_offset);
-                if (node_id != section.nodes.size() - 1) node_size.y -= style::g_dock.helper.size.y;
+                if (node_id != (int)section.nodes.size() - 1) node_size.y -= style::g_dock.helper.size.y;
             }
             ImVec2 tabbar_size{0, 0};
             size_t window_id = 0;
@@ -258,7 +258,7 @@ namespace uikit
             section.fixed_sections = 0;
             f32 height = ImGui::GetContentRegionAvail().y;
             f32 content_max = 0.0f;
-            for (int i = 0; i < section.nodes.size(); ++i)
+            for (size_t i = 0; i < section.nodes.size(); ++i)
             {
                 ImGui::SetCursorPos({0, 0});
                 auto &node = section.nodes[i];
@@ -341,7 +341,7 @@ namespace uikit
             {
                 f32 section_size = (section.flags & SectionFlagBits::Stretch) ? size.x : section.size;
                 if (!(section.flags & SectionFlagBits::HideTopLine)) pos.y += style::g_dock.helper.size.y;
-                for (int i = 0; i < section.nodes.size(); ++i) draw_node(index, i, section_size, pos, i == 0);
+                for (size_t i = 0; i < section.nodes.size(); ++i) draw_node(index, i, section_size, pos, i == 0);
                 // Update sizes for a next frame
                 for (auto &node : section.nodes)
                 {
@@ -387,7 +387,7 @@ namespace uikit
             auto pos = window->DC.CursorPos;
             auto init_pos = pos;
             // Left sections
-            for (int i = 0; i < sections.size(); i++)
+            for (size_t i = 0; i < sections.size(); i++)
             {
                 auto &section = sections[i];
                 ImVec2 child_size = ImVec2(0, window->Size.y);
@@ -412,7 +412,7 @@ namespace uikit
             f32 max_width = ImGui::GetWindowContentRegionMax().x;
             pos.x = max_width;
             f32 right_rendered_width = 0;
-            int i = sections.size() - 1;
+            i8 i = sections.size() - 1;
             for (; i > _stretch_min; --i)
             {
                 auto &section = sections[i];
@@ -422,7 +422,7 @@ namespace uikit
                 {
                     child_size.x = section.size;
                     right_rendered_width += child_size.x;
-                    if (i != sections.size() - 1) right_rendered_width += style::g_dock.helper.size.x;
+                    if (i != (i8)sections.size() - 1) right_rendered_width += style::g_dock.helper.size.x;
                     pos.x = max_width - right_rendered_width;
                 }
                 else
@@ -659,7 +659,7 @@ namespace uikit
                   {_("close_all_windows"),
                    [this]() {
                        auto &window = space->sections[_section_id].nodes[_node_id].windows;
-                       for (int i = 0; i < window.size(); ++i) space->close_window(_section_id, _node_id, 0);
+                       for (size_t i = 0; i < window.size(); ++i) space->close_window(_section_id, _node_id, 0);
                    }}},
               _is_openned(false)
         {

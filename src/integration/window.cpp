@@ -5,6 +5,16 @@
 
 namespace uikit
 {
+    struct ImGuiBackendData
+    {
+        awin::Window *window;
+        f64 time;
+        awin::Cursor mouse_cursors[ImGuiMouseCursor_COUNT];
+        ImVec2 last_valid_mouse_pos;
+#ifdef _WIN32
+        WNDPROC prev_wnd_proc;
+#endif
+    };
 
     static void imgui_set_clipboard_text(void *user_data, const char *text)
     {
@@ -171,11 +181,7 @@ namespace uikit
         });
     }
 
-    static ImGuiBackendData *getBackendData()
-    {
-        return ImGui::GetCurrentContext() ? (ImGuiBackendData *)ImGui::GetIO().BackendPlatformUserData : nullptr;
-    }
-
+#ifdef _WIN32
     static ImGuiMouseSource GetMouseSourceFromMessageExtraInfo()
     {
         LPARAM extra_info = ::GetMessageExtraInfo();
@@ -208,12 +214,16 @@ namespace uikit
         }
         return ::CallWindowProcW(bd->prev_wnd_proc, hWnd, msg, wParam, lParam);
     }
+#endif
 
     WindowImGuiBinder::~WindowImGuiBinder()
     {
         LOG_INFO("Destroying ImGui context");
         IM_ASSERT(_bd != nullptr && "No platform backend to shutdown, or already shutdown?");
         ImGuiIO &io = ImGui::GetIO();
+
+        for (ImGuiMouseCursor cursor_n = 0; cursor_n < ImGuiMouseCursor_COUNT; cursor_n++)
+            _bd->mouse_cursors[cursor_n].reset();
 
 #ifdef _WIN32
         ImGuiViewport *main_viewport = ImGui::GetMainViewport();

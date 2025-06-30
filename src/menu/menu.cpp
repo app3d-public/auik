@@ -371,7 +371,7 @@ namespace uikit
 
     void MenuBar::render_menu_nodes(const acul::vector<MenuNode> &nodes)
     {
-        for (int i = 0; i < nodes.size(); i++)
+        for (size_t i = 0; i < nodes.size(); i++)
         {
             auto &node = nodes[i];
             if (node.flags & MenuNode::FlagBits::Group)

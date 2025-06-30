@@ -67,7 +67,7 @@ namespace uikit
         auto &style = ImGui::GetStyle();
 
         f32 total_width = 0.0f;
-        for (int i = 0; i < buttons.size(); ++i)
+        for (size_t i = 0; i < buttons.size(); ++i)
         {
             f32 btn_width = ImGui::CalcTextSize(buttons[i].c_str()).x + uikit::style::g_button.padding.x * 2;
             if (i < buttons.size() - 1) btn_width += style.ItemSpacing.x;
@@ -77,7 +77,7 @@ namespace uikit
         f32 start_x = width - total_width - style.WindowPadding.x;
         ImGui::SetCursorPosX(start_x);
 
-        for (int i = 0; i < buttons.size(); ++i)
+        for (size_t i = 0; i < buttons.size(); ++i)
         {
             bool is_last = i == buttons.size() - 1;
             if (is_last) ImGui::PushStyleColor(ImGuiCol_Button, uikit::style::g_button.color);

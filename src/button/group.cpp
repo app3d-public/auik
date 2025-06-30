@@ -8,7 +8,7 @@ namespace uikit
         BtnGroupH g_btn_group_h{};
     } // namespace style
 
-    void BtnGroup::render_item(size_t index, ImVec2 &pos, ImVec2 &rect_size)
+    void BtnGroup::render_item(int index, ImVec2 &pos, ImVec2 &rect_size)
     {
         ImGui::PushID(index);
         ImGui::SetCursorScreenPos(pos);
@@ -39,18 +39,18 @@ namespace uikit
         ImVec2 selectable_pos = ImGui::GetItemRectMin();
         rect_size = ImGui::GetItemRectSize();
 
-        ImVec2 iconPos = selectable_pos + (rect_size - _items[index].icon->size()) * 0.5f;
-        ImGui::SetCursorScreenPos(iconPos);
+        ImVec2 icon_pos = selectable_pos + (rect_size - _items[index].icon->size()) * 0.5f;
+        ImGui::SetCursorScreenPos(icon_pos);
         if (_items[index].disabled && _items[index].disabled_icon)
-            _items[index].disabled_icon->render(iconPos);
+            _items[index].disabled_icon->render(icon_pos);
         else
-            _items[index].icon->render(iconPos);
+            _items[index].icon->render(icon_pos);
 
         // Lock
         if (_flags & FlagBits::Lock && _items[index].selected)
         {
-            auto diff = selectable_pos - iconPos;
-            auto lock_pos = iconPos;
+            auto diff = selectable_pos - icon_pos;
+            auto lock_pos = icon_pos;
             lock_pos.x -= diff.x * 0.75f;
             lock_pos.y -= diff.y * 0.5f;
             style::g_btn_group.lock_icon->render(lock_pos);

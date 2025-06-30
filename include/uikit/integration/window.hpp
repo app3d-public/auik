@@ -12,20 +12,6 @@
 
 namespace uikit
 {
-    namespace
-    {
-        struct ImGuiBackendData
-        {
-            awin::Window *window;
-            f64 time;
-            awin::Cursor mouse_cursors[ImGuiMouseCursor_COUNT];
-            ImVec2 last_valid_mouse_pos;
-#ifdef _WIN32
-            WNDPROC prev_wnd_proc;
-#endif
-        };
-    } // namespace
-
     class APPLIB_API WindowImGuiBinder
     {
     public:
@@ -39,7 +25,7 @@ namespace uikit
 
     private:
         acul::events::dispatcher *ed;
-        ImGuiBackendData *_bd;
+        struct ImGuiBackendData *_bd;
         acul::map<awin::io::Key, ImGuiKey> _key_map{{awin::io::Key::Tab, ImGuiKey_Tab},
                                                     {awin::io::Key::Left, ImGuiKey_LeftArrow},
                                                     {awin::io::Key::Right, ImGuiKey_RightArrow},
