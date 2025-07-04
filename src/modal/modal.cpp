@@ -1,13 +1,13 @@
-#include <uikit/button/button.hpp>
-#include <uikit/button/checkbox.hpp>
-#include <uikit/modal/modal.hpp>
-#include <uikit/text/text.hpp>
+#include <auik/button/button.hpp>
+#include <auik/button/checkbox.hpp>
+#include <auik/modal/modal.hpp>
+#include <auik/text/text.hpp>
 #ifdef _WIN32
     // Include playsoundapi.h first
     #include <playsoundapi.h>
 #endif
 
-namespace uikit
+namespace auik
 {
     acul::string get_btn_name(awin::popup::Buttons button)
     {
@@ -155,7 +155,7 @@ namespace uikit
 
     void ModalQueue::bind_events()
     {
-        ed->bind_event(this, UIKIT_EVENT_MODAL_SIGN,
+        ed->bind_event(this, AUIK_EVENT_MODAL_SIGN,
                        [this](const acul::events::data_event<ModalQueue::Message> &e) { push(e.data); });
     }
-} // namespace uikit
+} // namespace auik

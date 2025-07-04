@@ -1,7 +1,7 @@
 #include <awin/window.hpp>
-#include <uikit/menu/menu.hpp>
+#include <auik/menu/menu.hpp>
 
-namespace uikit
+namespace auik
 {
     namespace style
     {
@@ -400,4 +400,4 @@ namespace uikit
                 node.widget->render();
         }
     }
-} // namespace uikit
+} // namespace auik

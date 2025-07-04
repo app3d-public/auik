@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.17)
-project(app3d-uikit
+project(auik
     VERSION 0.0.1
     LANGUAGES CXX C
-    DESCRIPTION "App3d UIKIT Lib")
+    DESCRIPTION "App3d UI Kit Library")
 
 set(IMGUI_SRC_FILES
     modules/3rd-party/imgui/imgui.cpp
@@ -38,7 +38,7 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE -DAPPLIB_BUILD)
 target_compile_definitions(${PROJECT_NAME} PUBLIC
     IMGUI_IMPL_VULKAN_NO_PROTOTYPES
     IMGUI_ENABLE_FREETYPE
-    IMGUI_USER_CONFIG="uikit/integration/imgui.hpp"
+    IMGUI_USER_CONFIG="auik/integration/imgui.hpp"
 )
 target_include_directories(${PROJECT_NAME} PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/include/"
@@ -48,8 +48,8 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
-    ${ACUL_LIB_NAME}
-    ${AWIN_LIB_NAME}
+    acul
+    awin
 )
 target_link_libraries(${PROJECT_NAME} PUBLIC ${FREETYPE2_LIBRARIES})
 

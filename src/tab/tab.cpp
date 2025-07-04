@@ -1,11 +1,11 @@
 #include <acul/disposal_queue.hpp>
+#include <auik/button/button.hpp>
+#include <auik/button/combobox.hpp>
+#include <auik/tab/tab.hpp>
 #include <awin/window.hpp>
 #include <imgui/imgui_internal.h>
-#include <uikit/button/button.hpp>
-#include <uikit/button/combobox.hpp>
-#include <uikit/tab/tab.hpp>
 
-namespace uikit
+namespace auik
 {
     class TabMemCache : public acul::mem_cache
     {
@@ -189,16 +189,15 @@ namespace uikit
     void TabBar::render_dragged()
     {
         ImGui::SetCursorPos({_drag.pos.x + _drag.offset + _drag.pos_offset, _drag.pos.y});
-        auto& style = ImGui::GetStyle();
+        auto &style = ImGui::GetStyle();
         ImGui::PushStyleColor(ImGuiCol_Header, style.Colors[ImGuiCol_HeaderActive]);
         ImGui::PushStyleColor(ImGuiCol_PopupBg, style.Colors[ImGuiCol_HeaderActive]);
-        auto& el = *_drag.it.value();
+        auto &el = *_drag.it.value();
         bool old_show_background = el.show_background;
         el.show_background = true;
         el.render_item();
         el.show_background = old_show_background;
         ImGui::PopStyleColor(2);
-
 
         // Scroll tabbar if no enough space to render prev/next tabs
         ImVec2 window_size = ImGui::GetWindowSize();
@@ -224,7 +223,7 @@ namespace uikit
     {
         size_t index = 0;
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-        if (beginCombo("##v", nullptr, ImGuiComboFlags_NoPreview | ImGuiComboFlags_HeightLargest))
+        if (begin_combo("##v", nullptr, ImGuiComboFlags_NoPreview | ImGuiComboFlags_HeightLargest))
         {
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 6));
             for (auto &item : items)
@@ -240,7 +239,7 @@ namespace uikit
                 ++index;
             }
             ImGui::PopStyleVar();
-            endCombo();
+            end_combo();
         }
         ImGui::PopStyleColor();
     }
@@ -381,4 +380,4 @@ namespace uikit
             if (!e.display_name.empty()) items[active_index].name = e.display_name;
         });
     }
-} // namespace uikit
+} // namespace auik

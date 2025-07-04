@@ -1,7 +1,7 @@
-#include <uikit/search/searchbox.hpp>
-#include <uikit/text/text.hpp>
+#include <auik/search/searchbox.hpp>
+#include <auik/text/text.hpp>
 
-namespace uikit
+namespace auik
 {
     namespace style
     {
@@ -47,4 +47,4 @@ namespace uikit
         pos.y += (ImGui::GetFrameHeight() - style::g_Search.filterIcon->size().y) / 2.0f;
         style::g_Search.filterIcon->render(pos);
     }
-} // namespace uikit
+} // namespace auik

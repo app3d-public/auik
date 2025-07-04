@@ -2,9 +2,9 @@
 #include <acul/string/utils.hpp>
 #include <acul/task.hpp>
 #include <awin/window.hpp>
-#include <uikit/dock/space.hpp>
+#include <auik/dock/space.hpp>
 
-namespace uikit
+namespace auik
 {
     namespace style
     {
@@ -43,7 +43,7 @@ namespace uikit
             TabBar tabbar(node.id + ":tab", _ed, _disposal_queue, items, TabBar::FlagBits::Reorderable, style);
             Selectable btn(acul::format("##%s:btn", node.id.c_str()));
             node.tab_nav_area = acul::alloc<Node::TabNavArea>(std::move(tabbar), std::move(btn));
-            _ed->bind_event(&node.tab_nav_area->tabbar, TabBar::event_id::Switched, [&node](uikit::TabSwitchEvent &e) {
+            _ed->bind_event(&node.tab_nav_area->tabbar, TabBar::event_id::Switched, [&node](auik::TabSwitchEvent &e) {
                 if (e.tabbar != &node.tab_nav_area->tabbar) return;
                 auto it = std::find_if(node.windows.begin(), node.windows.end(),
                                        [&](Window *w) { return w->name == e.current->name; });
@@ -602,7 +602,7 @@ namespace uikit
         }
 
         void Space::close_window(int section_id, int node_id, int tab_id,
-                                 const std::function<void(uikit::Window *window)> &callback)
+                                 const std::function<void(auik::Window *window)> &callback)
         {
             auto &node = sections[section_id].nodes[node_id];
             acul::string name = node.tab_nav_area->tabbar.items[tab_id].name;
@@ -700,7 +700,7 @@ namespace uikit
 
             // Check if enough space
             if (avaliable_size <= 0.0f) return false;
-            f32 limit_size = uikit::style::g_dock.height_resize_limit;
+            f32 limit_size = auik::style::g_dock.height_resize_limit;
             size_t stretch_count = section.nodes.size() - section.fixed_sections;
             if ((stretch_count + 1) * limit_size > avaliable_size) return false;
 
@@ -722,7 +722,7 @@ namespace uikit
 
                 for (auto &n : section.nodes)
                 {
-                    if (n.dock_flags() & uikit::WindowDockFlags_Stretch)
+                    if (n.dock_flags() & auik::WindowDockFlags_Stretch)
                     {
                         f32 node_px = limit_size + add_each;
                         n.size = node_px / avaliable_size;
@@ -734,4 +734,4 @@ namespace uikit
             return true;
         }
     } // namespace dock
-} // namespace uikit
+} // namespace auik

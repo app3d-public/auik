@@ -1,9 +1,9 @@
 #include <acul/log.hpp>
 #include <implot/implot.h>
-#include <uikit/integration/window.hpp>
-#include <uikit/widget.hpp>
+#include <auik/integration/window.hpp>
+#include <auik/widget.hpp>
 
-namespace uikit
+namespace auik
 {
     struct ImGuiBackendData
     {
@@ -239,4 +239,4 @@ namespace uikit
         ImPlot::DestroyContext();
         ImGui::DestroyContext();
     }
-} // namespace uikit
+} // namespace auik

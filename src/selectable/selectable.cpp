@@ -1,7 +1,7 @@
 #include <imgui/imgui_internal.h>
-#include <uikit/selectable/selectable.hpp>
+#include <auik/selectable/selectable.hpp>
 
-namespace uikit
+namespace auik
 {
     ImGuiButtonFlags Selectable::load_button_flags(ImGuiSelectableFlags flags)
     {
@@ -194,4 +194,4 @@ namespace uikit
         }
     }
     // }
-} // namespace uikit
+} // namespace auik

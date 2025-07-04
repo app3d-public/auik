@@ -1,7 +1,7 @@
 #include <imgui/imgui_internal.h>
-#include <uikit/button/switch.hpp>
+#include <auik/button/switch.hpp>
 
-namespace uikit
+namespace auik
 {
     namespace style
     {
@@ -54,4 +54,4 @@ namespace uikit
         }
     }
 
-} // namespace uikit
+} // namespace auik

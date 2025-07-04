@@ -1,15 +1,15 @@
 #include <imgui/imgui_internal.h>
-#include <uikit/button/combobox.hpp>
-#include <uikit/icon/icon.hpp>
+#include <auik/button/combobox.hpp>
+#include <auik/icon/icon.hpp>
 
-namespace uikit
+namespace auik
 {
     namespace style
     {
         ComboBox g_combo_box;
     }
 
-    APPLIB_API bool beginCombo(const char *label, const char *preview_value, ImGuiComboFlags flags)
+    APPLIB_API bool begin_combo(const char *label, const char *preview_value, ImGuiComboFlags flags)
     {
         ImGuiContext &g = *GImGui;
         ImGuiWindow *window = ImGui::GetCurrentWindow();
@@ -112,4 +112,4 @@ namespace uikit
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, framePadding);
         return ImGui::BeginComboPopup(popup_id, bb, flags);
     }
-} // namespace uikit
+} // namespace auik

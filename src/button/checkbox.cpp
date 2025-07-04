@@ -1,8 +1,8 @@
 #include <imgui/imgui_internal.h>
-#include <uikit/button/checkbox.hpp>
-#include <uikit/widget.hpp>
+#include <auik/button/checkbox.hpp>
+#include <auik/widget.hpp>
 
-namespace uikit
+namespace auik
 {
     namespace style
     {
@@ -68,4 +68,4 @@ namespace uikit
         return pressed;
     }
 
-} // namespace uikit
+} // namespace auik

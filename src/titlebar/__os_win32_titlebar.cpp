@@ -1,8 +1,8 @@
 #include <acul/log.hpp>
 #include <dwmapi.h>
-#include <uikit/titlebar/titlebar_win32.hpp>
+#include <auik/titlebar/titlebar_win32.hpp>
 
-namespace uikit
+namespace auik
 {
     ImVec2 get_controls_size(HWND hwnd)
     {
@@ -286,4 +286,4 @@ namespace uikit
             }
         });
     }
-} // namespace uikit
+} // namespace auik

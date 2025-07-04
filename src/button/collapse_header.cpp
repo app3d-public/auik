@@ -1,8 +1,8 @@
 #include <imgui/imgui_internal.h>
-#include <uikit/button/button.hpp>
-#include <uikit/button/collapse_header.hpp>
+#include <auik/button/button.hpp>
+#include <auik/button/collapse_header.hpp>
 
-namespace uikit
+namespace auik
 {
     void CollapseHeader::render()
     {
@@ -40,4 +40,4 @@ namespace uikit
 
         if (!_collapsed) _content->render();
     }
-} // namespace uikit
+} // namespace auik

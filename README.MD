@@ -1,6 +1,6 @@
-# app3d-uikit
+# app3d-auik
 
-App3d-UIKIT is a comprehensive suite of class-oriented widgets for creating user interfaces within the App3D project using [Dear ImGui](https://github.com/ocornut/imgui). This component is dedicated to facilitating the development of visually appealing and functionally rich 3D interfaces, aiming to provide developers with the necessary tools for integrating sophisticated UI elements into their App3D applications seamlessly.
+App3d-auik is a comprehensive suite of class-oriented widgets for creating user interfaces within the App3D project using [Dear ImGui](https://github.com/ocornut/imgui). This component is dedicated to facilitating the development of visually appealing and functionally rich 3D interfaces, aiming to provide developers with the necessary tools for integrating sophisticated UI elements into their App3D applications seamlessly.
 
 ## Features
 
@@ -10,15 +10,15 @@ App3d-UIKIT is a comprehensive suite of class-oriented widgets for creating user
 
 ## Getting Started
 
-Integrating `app3d-uikit` into your App3D project involves a few straightforward steps:
+Integrating `app3d-auik` into your App3D project involves a few straightforward steps:
 
 1. **Integration with Your Project**
    - Ensure that your project is already set up with ImGui and the App3D enviroment.
-   - Incorporate the `app3d-uikit` component into your project to start leveraging its capabilities.
+   - Incorporate the `app3d-auik` component into your project to start leveraging its capabilities.
 
 2. **Using the Widgets**
-   - Utilize the widgets by following the structured approach provided by `app3d-uikit` to enhance your application's user interface.
+   - Utilize the widgets by following the structured approach provided by `app3d-auik` to enhance your application's user interface.
 
 ## Dependencies
 
-`app3d-uikit` is built on top of [Dear ImGui](https://github.com/ocornut/imgui), necessitating its presence in the project for the UI components to function correctly within the App3D environment.
+`app3d-auik` is built on top of [Dear ImGui](https://github.com/ocornut/imgui), necessitating its presence in the project for the UI components to function correctly within the App3D environment.

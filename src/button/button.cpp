@@ -1,6 +1,6 @@
-#include <uikit/button/button.hpp>
+#include <auik/button/button.hpp>
 
-namespace uikit
+namespace auik
 {
     namespace style
     {
@@ -57,10 +57,10 @@ namespace uikit
     void right_controls(const acul::vector<acul::string> &buttons, int *selected, f32 y_offset)
     {
         ImGui::SetCursorPosY(y_offset == 0.0f ? ImGui::GetCursorPosY() + 10.0f : y_offset);
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, uikit::style::g_button.padding);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, auik::style::g_button.padding);
         ImGui::PushStyleColor(ImGuiCol_Button, {0, 0, 0, 0});
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, uikit::style::g_button.active_color);
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, uikit::style::g_button.hovered_color);
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, auik::style::g_button.active_color);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, auik::style::g_button.hovered_color);
 
         f32 x_offset{0};
         auto width = ImGui::GetWindowWidth();
@@ -69,7 +69,7 @@ namespace uikit
         f32 total_width = 0.0f;
         for (size_t i = 0; i < buttons.size(); ++i)
         {
-            f32 btn_width = ImGui::CalcTextSize(buttons[i].c_str()).x + uikit::style::g_button.padding.x * 2;
+            f32 btn_width = ImGui::CalcTextSize(buttons[i].c_str()).x + auik::style::g_button.padding.x * 2;
             if (i < buttons.size() - 1) btn_width += style.ItemSpacing.x;
             total_width += btn_width;
         }
@@ -80,7 +80,7 @@ namespace uikit
         for (size_t i = 0; i < buttons.size(); ++i)
         {
             bool is_last = i == buttons.size() - 1;
-            if (is_last) ImGui::PushStyleColor(ImGuiCol_Button, uikit::style::g_button.color);
+            if (is_last) ImGui::PushStyleColor(ImGuiCol_Button, auik::style::g_button.color);
             if (ImGui::Button(buttons[i].c_str()) && selected) *selected = i;
             if (is_last) ImGui::PopStyleColor();
             if (i < buttons.size() - 1) ImGui::SameLine();
@@ -90,4 +90,4 @@ namespace uikit
         ImGui::PopStyleVar();
         ImGui::PopStyleColor(3);
     }
-} // namespace uikit
+} // namespace auik

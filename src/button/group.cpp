@@ -1,6 +1,6 @@
-#include <uikit/button/group.hpp>
+#include <auik/button/group.hpp>
 
-namespace uikit
+namespace auik
 {
     namespace style
     {
@@ -92,4 +92,4 @@ namespace uikit
         ImGui::PopStyleColor(2);
         ImGui::PopStyleVar(2);
     }
-} // namespace uikit
+} // namespace auik

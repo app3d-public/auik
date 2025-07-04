@@ -1,7 +1,7 @@
-#include <uikit/image/image.hpp>
+#include <auik/image/image.hpp>
 #include <imgui/imgui_internal.h>
 
-namespace uikit
+namespace auik
 {
     void Image::render(ImVec2 pos, ImVec2 size)
     {

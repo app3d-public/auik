@@ -1,9 +1,9 @@
-#include <uikit/input/slider.hpp>
+#include <auik/input/slider.hpp>
 
-namespace uikit
+namespace auik
 {
     namespace style
     {
         Slider g_slider;
     }
-} // namespace uikit
+} // namespace auik

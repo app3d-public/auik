@@ -1,7 +1,7 @@
 #include <imgui/imgui_internal.h>
-#include <uikit/text/text.hpp>
+#include <auik/text/text.hpp>
 
-namespace uikit
+namespace auik
 {
     void Text::render()
     {
@@ -167,4 +167,4 @@ namespace uikit
         return ImGui::InputTextWithHint(label, hint, (char *)str->c_str(), str->capacity() + 1, flags,
                                         input_text_callback, &cb_user_data);
     }
-} // namespace uikit
+} // namespace auik

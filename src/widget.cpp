@@ -1,8 +1,8 @@
 #include <awin/window.hpp>
 #include <imgui/imgui_internal.h>
-#include <uikit/widget.hpp>
+#include <auik/widget.hpp>
 
-namespace uikit
+namespace auik
 {
     ImGuiMouseCursor g_last_cursor = ImGuiMouseCursor_None;
 
@@ -19,4 +19,4 @@ namespace uikit
             window->DrawList->AddRect(p_min, p_max, ImGui::GetColorU32(ImGuiCol_Border), rounding, flags, border_size);
         }
     }
-} // namespace uikit
+} // namespace auik
