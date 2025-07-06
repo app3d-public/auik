@@ -204,9 +204,9 @@ namespace auik
 
         ImVec2 arrowPos =
             pos + ImVec2(offsets->OffsetMark + extra_w + g.FontSize * 0.30f + style.ItemInnerSpacing.x * 0.5f,
-                         label_size.y / 2.0f - style::g_vmenu.arrowRight->size().y / 2.0f);
+                         label_size.y / 2.0f - style::g_vmenu.arrow_right->size().y / 2.0f);
         ImGui::RenderText(text_pos, label_c);
-        style::g_vmenu.arrowRight->render(arrowPos);
+        style::g_vmenu.arrow_right->render(arrowPos);
 
         hover = (g.HoveredId == id) && enabled && !g.NavHighlightItemUnderNav;
         if (menuset_is_open) ImGui::PopItemFlag();
@@ -351,7 +351,7 @@ namespace auik
             {
                 ImVec2 checkmark_pos =
                     pos + ImVec2(offsets->OffsetMark + stretch_w + g.FontSize * 0.30f + style.ItemInnerSpacing.x * 0.5f,
-                                 label_size.y / 2.0f - style::g_vmenu.arrowRight->size().y / 2.0f);
+                                 label_size.y / 2.0f - style::g_vmenu.arrow_right->size().y / 2.0f);
                 style::g_hmenu.checkmark->render(checkmark_pos);
             }
         }

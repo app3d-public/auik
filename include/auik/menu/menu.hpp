@@ -17,7 +17,7 @@ namespace auik
             ImVec2 margin;
             ImVec4 disabled_hover_color;
             ImVec4 hover_color;
-            Icon *arrowRight = nullptr;
+            Icon *arrow_right = nullptr;
         } g_vmenu;
 
         extern APPLIB_API struct HMenu

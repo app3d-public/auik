@@ -13,8 +13,8 @@ namespace auik
         auto &style = ImGui::GetStyle();
         f32 width = ImGui::CalcItemWidth();
         f32 input_width = width < 100 ? 10
-                                      : width - style::g_Search.filterIcon->size().x -
-                                            style::g_Search.searchIcon->size().x - style.ItemSpacing.x * 2;
+                                      : width - style::g_Search.filter_icon->size().x -
+                                            style::g_Search.search_icon->size().x - style.ItemSpacing.x * 2;
         auto *window = ImGui::GetCurrentWindow();
         f32 frame_height = ImGui::GetFrameHeight();
 
@@ -30,13 +30,13 @@ namespace auik
         // Search icon
         ImVec2 search_icon_pos = window->DC.CursorPos;
         search_icon_pos.x += style.FramePadding.x;
-        search_icon_pos.y += (ImGui::GetFrameHeight() - style::g_Search.searchIcon->size().y) / 2.0f;
-        style::g_Search.searchIcon->render(search_icon_pos);
+        search_icon_pos.y += (ImGui::GetFrameHeight() - style::g_Search.search_icon->size().y) / 2.0f;
+        style::g_Search.search_icon->render(search_icon_pos);
 
         // Input
-        ImGui::PushStyleColor(ImGuiCol_TextDisabled, style::g_Search.hintColor);
+        ImGui::PushStyleColor(ImGuiCol_TextDisabled, style::g_Search.hint_color);
         ImVec2 pos = window->DC.CursorPos;
-        pos.x += style::g_Search.searchIcon->size().x + style.ItemSpacing.x;
+        pos.x += style::g_Search.search_icon->size().x + style.ItemSpacing.x;
         ImGui::SetCursorScreenPos(pos);
         ImGui::SetNextItemWidth(input_width);
         input_text_with_hint(name.c_str(), _hint.c_str(), &_text);
@@ -44,7 +44,7 @@ namespace auik
 
         // Filter icon
         pos.x += input_width + style.ItemSpacing.x;
-        pos.y += (ImGui::GetFrameHeight() - style::g_Search.filterIcon->size().y) / 2.0f;
-        style::g_Search.filterIcon->render(pos);
+        pos.y += (ImGui::GetFrameHeight() - style::g_Search.filter_icon->size().y) / 2.0f;
+        style::g_Search.filter_icon->render(pos);
     }
 } // namespace auik

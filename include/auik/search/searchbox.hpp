@@ -8,9 +8,9 @@ namespace auik
     {
         extern APPLIB_API struct SearchBox
         {
-            Icon *searchIcon;
-            Icon *filterIcon;
-            ImU32 hintColor;
+            Icon *search_icon;
+            Icon *filter_icon;
+            ImU32 hint_color;
         } g_Search;
     } // namespace style
 
