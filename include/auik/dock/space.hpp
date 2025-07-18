@@ -146,14 +146,14 @@ namespace auik
                 {
                     if (_hovered && hovered)
                     {
-                        frame.flags |= FrameStateFlagBits::Resizing;
+                        frame.flags |= FrameStateFlagBits::resizing;
                         subject.is_resizing = true;
                     }
                     frame.mouse_pos = mouse_pos;
                 }
                 else if (subject.is_resizing && (ImGui::IsMouseReleased(ImGuiMouseButton_Left) || mouse_pos.x < 0))
                 {
-                    frame.flags &= ~FrameStateFlagBits::Resizing;
+                    frame.flags &= ~FrameStateFlagBits::resizing;
                     subject.is_resizing = false;
                 }
             }
@@ -171,12 +171,12 @@ namespace auik
             auto &style = ImGui::GetStyle();
             frame.padding = style.WindowPadding;
             frame.item_spacing = style.ItemSpacing;
-            frame.flags &= ~(FrameStateFlagBits::OpLocked | FrameStateFlagBits::LayoutUpdate);
+            frame.flags &= ~(FrameStateFlagBits::op_locked | FrameStateFlagBits::layout_update);
         }
 
         inline f32 get_avaliable_width(Window *window, Space *dock, f32 min_width = 5.0f)
         {
-            if (window->dock_flags & WindowDockFlags_Docked && dock->frame.flags & FrameStateFlagBits::LayoutUpdate)
+            if (window->dock_flags & WindowDockFlags_Docked && dock->frame.flags & FrameStateFlagBits::layout_update)
                 return min_width;
             return ImMax(ImGui::GetContentRegionAvail().x, min_width);
         }

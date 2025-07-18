@@ -1,5 +1,5 @@
-#include <awin/window.hpp>
 #include <auik/menu/menu.hpp>
+#include <awin/window.hpp>
 
 namespace auik
 {
@@ -374,9 +374,9 @@ namespace auik
         for (size_t i = 0; i < nodes.size(); i++)
         {
             auto &node = nodes[i];
-            if (node.flags & MenuNode::FlagBits::Group)
+            if (node.flags & MenuNode::FlagBits::group)
             {
-                if (node.flags & MenuNode::FlagBits::Category)
+                if (node.flags & MenuNode::FlagBits::category)
                 {
                     render_menu_nodes(node.nodes);
                     if (i != nodes.size() - 1)

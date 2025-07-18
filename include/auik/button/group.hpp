@@ -43,10 +43,10 @@ namespace auik
         {
             enum enum_type
             {
-                None = 0x0,
-                ResetOnClick = 0x1,
-                Toogle = 0x2,
-                Lock = 0x4
+                none = 0x0,
+                reset_on_click = 0x1,
+                toogle = 0x2,
+                lock = 0x4
             };
 
             using flag_bitmask = std::true_type;

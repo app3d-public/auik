@@ -39,7 +39,9 @@ namespace auik
 
         style::ModalQueue style;
 
-        ModalQueue(acul::events::dispatcher *ed) : Widget("modalqueue"), ed(ed) {}
+        ModalQueue(acul::events::dispatcher *ed, f32 dpi) : Widget("modalqueue"), ed(ed), _switch(_("apply_all"), dpi)
+        {
+        }
 
         ~ModalQueue() { ed->unbind_listeners(this); }
 
@@ -58,11 +60,11 @@ namespace auik
         acul::map<acul::string, acul::vector<Message>> _messages;
         enum class ChangeState
         {
-            Normal,
-            Clicked,
-            Continuing,
-        } state{ChangeState::Normal};
-        Switch _switch{_("apply_all")};
+            normal,
+            clicked,
+            continuing,
+        } state{ChangeState::normal};
+        Switch _switch;
         int _prevent_close_count{0};
     };
 } // namespace auik

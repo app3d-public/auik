@@ -1,8 +1,8 @@
 #include <acul/locales.hpp>
 #include <acul/string/utils.hpp>
 #include <acul/task.hpp>
-#include <awin/window.hpp>
 #include <auik/dock/space.hpp>
+#include <awin/window.hpp>
 
 namespace auik
 {
@@ -16,15 +16,15 @@ namespace auik
         void Space::update_drag_state(bool hovered, int section_id, int node_id, bool is_content)
         {
             ImGuiContext &g = *GImGui;
-            if (_hovered || frame.flags & FrameStateFlagBits::Resizing) return;
+            if (_hovered || frame.flags & FrameStateFlagBits::resizing) return;
             if (ImGui::IsMouseDragging(ImGuiMouseButton_Left) && g.MovingWindow &&
                 !(g.MovingWindow->ChildFlags & WindowDockFlags_NoDock))
-                frame.flags |= FrameStateFlagBits::Dropped;
-            else if (frame.flags & FrameStateFlagBits::Dropped && hovered)
+                frame.flags |= FrameStateFlagBits::dropped;
+            else if (frame.flags & FrameStateFlagBits::dropped && hovered)
             {
-                frame.flags &= ~FrameStateFlagBits::Dropped;
+                frame.flags &= ~FrameStateFlagBits::dropped;
                 if (g.NavWindow)
-                    _ed->dispatch<ChangeEvent>(is_content ? event_id::WindowDocked : event_id::NewTab, this,
+                    _ed->dispatch<ChangeEvent>(is_content ? event_id::window_docked : event_id::new_tab, this,
                                                g.NavWindow->Name, section_id, node_id);
             }
         }
@@ -146,8 +146,9 @@ namespace auik
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, frame.item_spacing);
             auto *window = node.windows[window_id];
             window->update_style_stack();
-            auto child_flags = section.flags & SectionFlagBits::DiscardPadding ? ImGuiChildFlags_None
-                                                                               : ImGuiChildFlags_AlwaysUseWindowPadding;
+            auto child_flags = section.flags & SectionFlagBits::discard_padding
+                                   ? ImGuiChildFlags_None
+                                   : ImGuiChildFlags_AlwaysUseWindowPadding;
             ImGui::BeginChild(node.id.c_str(), node_size, child_flags, window->imgui_flags);
             ImGui::BeginGroup();
             window->render();
@@ -162,12 +163,12 @@ namespace auik
             else
                 node_rect = node_size;
             ImGui::PopStyleVar();
-            if (!(section.flags & SectionFlagBits::ScrollbarHovered))
+            if (!(section.flags & SectionFlagBits::scrollbar_hovered))
             {
                 bool scrollbar_hovered = is_scrollbar_hovered();
-                if (scrollbar_hovered) section.flags |= SectionFlagBits::ScrollbarHovered;
+                if (scrollbar_hovered) section.flags |= SectionFlagBits::scrollbar_hovered;
             }
-            if (frame.flags & FrameStateFlagBits::Resizing)
+            if (frame.flags & FrameStateFlagBits::resizing)
                 frame.hover_section = nullptr;
             else if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows))
                 frame.hover_section = &sections[section_id];
@@ -179,7 +180,7 @@ namespace auik
         bool is_hover_on_drag(FrameState frame)
         {
             ImGuiContext &g = *GImGui;
-            return !(frame.flags & FrameStateFlagBits::OpLocked) && g.MovingWindow != nullptr;
+            return !(frame.flags & FrameStateFlagBits::op_locked) && g.MovingWindow != nullptr;
         }
 
         void Space::resize_box_horizontal(Section &section, int node_index, const ImVec2 &pos, f32 size)
@@ -201,7 +202,7 @@ namespace auik
             {
                 if (allowResize && (_hovered || node.is_resizing)) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
                 draw_list->AddRectFilled(draw_bb.Min, draw_bb.Max, style::g_dock.helper.hover_color);
-                frame.flags |= FrameStateFlagBits::OpLocked;
+                frame.flags |= FrameStateFlagBits::op_locked;
                 if (node.is_resizing)
                 {
                     f32 delta_y = mouse_pos.y - frame.mouse_pos.y;
@@ -228,7 +229,7 @@ namespace auik
                         f32 clamped_delta_ratio = std::clamp(delta_ratio, max_delta_target, max_delta_node);
                         if (clamped_delta_ratio != 0.0f)
                         {
-                            if (section.flags & SectionFlagBits::SyncStretchHResize)
+                            if (section.flags & SectionFlagBits::sync_stretch_hresize)
                             {
                                 for (int i = _stretch_min; i <= _stretch_max; i++)
                                 {
@@ -287,10 +288,10 @@ namespace auik
             f32 diff = mouse_pos.y - pos.y;
             bool is_content = diff > node.extra_offset;
             update_drag_state(hovered, section_id, node_id, is_content);
-            if (!hovered || !(frame.flags & FrameStateFlagBits::Dropped) ||
+            if (!hovered || !(frame.flags & FrameStateFlagBits::dropped) ||
                 !(node.dock_flags() & WindowDockFlags_Stretch))
                 return;
-            frame.flags |= FrameStateFlagBits::OpLocked;
+            frame.flags |= FrameStateFlagBits::op_locked;
             ImRect draw_bb = node_bb;
             if (is_content)
                 draw_bb.Min.y += node.extra_offset - style::g_dock.helper.size.y;
@@ -303,7 +304,7 @@ namespace auik
         void Space::draw_node(int section_id, int node_id, f32 section_size, ImVec2 &pos, bool isFirst)
         {
             auto &section = sections[section_id];
-            if (!isFirst || !(section.flags & SectionFlagBits::HideTopLine))
+            if (!isFirst || !(section.flags & SectionFlagBits::hide_top_line))
                 resize_box_horizontal(section, node_id, pos, section_size);
             ImGui::SetCursorScreenPos(pos);
             auto &style = ImGui::GetStyle();
@@ -313,7 +314,7 @@ namespace auik
             ImGui::PushStyleColor(ImGuiCol_ChildBg, node_bg);
             auto node_rect = draw_node(section_id, node_id, section_size);
             ImGui::PopStyleColor();
-            if (!(section.flags & (SectionFlagBits::Stretch | SectionFlagBits::OpLocked)))
+            if (!(section.flags & (SectionFlagBits::stretch | SectionFlagBits::op_locked)))
                 node_drag_overlay(section_id, node_id, pos, node_rect);
             pos.y += node_rect.y + node.extra_offset + style::g_dock.helper.size.y;
         }
@@ -321,7 +322,7 @@ namespace auik
         void Space::draw_section(int index, ImVec2 size, ImVec2 &pos)
         {
             auto &section = sections[index];
-            section.flags &= ~SectionFlagBits::ScrollbarHovered;
+            section.flags &= ~SectionFlagBits::scrollbar_hovered;
             if (section.id.empty()) section.id = acul::format("dock:%llx", acul::id_gen()());
 
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
@@ -331,7 +332,7 @@ namespace auik
             {
                 ImGui::SetCursorScreenPos(pos);
                 auto pre_size = ImMax(prerender_section_nodes(index) + frame.padding.x * 2.0f, 50.0f);
-                if (!(section.flags & SectionFlagBits::Stretch))
+                if (!(section.flags & SectionFlagBits::stretch))
                 {
                     section.size = pre_size;
                     section.min_size = pre_size;
@@ -339,8 +340,8 @@ namespace auik
             }
             else
             {
-                f32 section_size = (section.flags & SectionFlagBits::Stretch) ? size.x : section.size;
-                if (!(section.flags & SectionFlagBits::HideTopLine)) pos.y += style::g_dock.helper.size.y;
+                f32 section_size = (section.flags & SectionFlagBits::stretch) ? size.x : section.size;
+                if (!(section.flags & SectionFlagBits::hide_top_line)) pos.y += style::g_dock.helper.size.y;
                 for (size_t i = 0; i < section.nodes.size(); ++i) draw_node(index, i, section_size, pos, i == 0);
                 // Update sizes for a next frame
                 for (auto &node : section.nodes)
@@ -391,13 +392,13 @@ namespace auik
             {
                 auto &section = sections[i];
                 ImVec2 child_size = ImVec2(0, window->Size.y);
-                if (section.flags & SectionFlagBits::Stretch)
+                if (section.flags & SectionFlagBits::stretch)
                 {
                     _stretch_min = i;
                     break;
                 }
                 if (section.size == 0.0f)
-                    frame.flags |= FrameStateFlagBits::LayoutUpdate;
+                    frame.flags |= FrameStateFlagBits::layout_update;
                 else
                     child_size.x = section.size;
                 draw_section(i, child_size, pos);
@@ -416,7 +417,7 @@ namespace auik
             for (; i > _stretch_min; --i)
             {
                 auto &section = sections[i];
-                if (section.flags & SectionFlagBits::Stretch) break;
+                if (section.flags & SectionFlagBits::stretch) break;
                 ImVec2 child_size = ImVec2(0, window->Size.y);
                 if (section.size != 0.0f)
                 {
@@ -428,7 +429,7 @@ namespace auik
                 else
                 {
                     pos.x -= child_size.x;
-                    frame.flags |= FrameStateFlagBits::LayoutUpdate;
+                    frame.flags |= FrameStateFlagBits::layout_update;
                 }
                 draw_section(i, child_size, pos);
                 pos.y = init_pos.y;
@@ -447,8 +448,8 @@ namespace auik
             _window_size = window->Size;
             draw_overlay_layer(init_pos, avail);
 
-            if (frame.flags & FrameStateFlagBits::LayoutUpdate) awin::push_empty_event();
-            if (!ImGui::IsMouseDragging(ImGuiMouseButton_Left)) frame.flags &= ~FrameStateFlagBits::Dropped;
+            if (frame.flags & FrameStateFlagBits::layout_update) awin::push_empty_event();
+            if (!ImGui::IsMouseDragging(ImGuiMouseButton_Left)) frame.flags &= ~FrameStateFlagBits::dropped;
         }
 
         void Space::resize_box_vertical(int section_index, const ImRect &draw_bb, f32 stretch_size)
@@ -460,19 +461,19 @@ namespace auik
             bool hovered = hover_bb.Contains(mouse_pos) && is_hover_on_drag(frame);
             auto &section = sections[section_index];
             if (hovered)
-                section.flags |= SectionFlagBits::OpLocked;
+                section.flags |= SectionFlagBits::op_locked;
             else
-                section.flags &= ~SectionFlagBits::OpLocked;
+                section.flags &= ~SectionFlagBits::op_locked;
             update_hover_state(section, hovered, mouse_pos);
             auto *draw_list = ImGui::GetCurrentWindow()->DrawList;
             if (hovered || section.is_resizing)
             {
-                section.flags |= SectionFlagBits::OpLocked;
+                section.flags |= SectionFlagBits::op_locked;
                 update_drag_state(hovered, section_index + 1, -1);
-                if (_hovered || frame.flags & FrameStateFlagBits::Resizing)
+                if (_hovered || frame.flags & FrameStateFlagBits::resizing)
                     ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
                 draw_list->AddRectFilled(draw_bb.Min, draw_bb.Max, style::g_dock.helper.hover_color);
-                frame.flags |= FrameStateFlagBits::OpLocked;
+                frame.flags |= FrameStateFlagBits::op_locked;
                 if (section.is_resizing)
                 {
                     f32 delta_x = mouse_pos.x - frame.mouse_pos.x;
@@ -500,7 +501,7 @@ namespace auik
             }
             else
             {
-                section.flags &= ~SectionFlagBits::OpLocked;
+                section.flags &= ~SectionFlagBits::op_locked;
                 if (section_index != _stretch_min - 1 && section_index != _stretch_max + 1)
                     draw_list->AddRectFilled(draw_bb.Min, draw_bb.Max, style::g_dock.helper.color);
             }
@@ -512,15 +513,15 @@ namespace auik
             ImVec2 mouse_pos = ImGui::GetMousePos();
             bool hovered = hover_bb.Contains(mouse_pos);
             if (hovered)
-                section.flags |= SectionFlagBits::OpLocked;
+                section.flags |= SectionFlagBits::op_locked;
             else
-                section.flags &= ~SectionFlagBits::OpLocked;
+                section.flags &= ~SectionFlagBits::op_locked;
             update_drag_state(hovered, update_id, -1);
-            if (hovered && frame.flags & FrameStateFlagBits::Dropped)
+            if (hovered && frame.flags & FrameStateFlagBits::dropped)
             {
                 auto *draw_list = ImGui::GetForegroundDrawList();
                 draw_list->AddRectFilled(draw_bb.Min, draw_bb.Max, style::g_dock.helper.hover_color);
-                frame.flags |= FrameStateFlagBits::OpLocked;
+                frame.flags |= FrameStateFlagBits::op_locked;
             }
         }
 
@@ -648,7 +649,7 @@ namespace auik
                    [this]() {
                        auto window_name =
                            space->sections[_section_id].nodes[_node_id].tab_nav_area->tabbar.active_tab().name;
-                       space->_ed->dispatch<ChangeEvent>(event_id::Undock, space, window_name.c_str(), _section_id,
+                       space->_ed->dispatch<ChangeEvent>(event_id::undock, space, window_name.c_str(), _section_id,
                                                          _node_id);
                    }},
                   {_("close_window"),

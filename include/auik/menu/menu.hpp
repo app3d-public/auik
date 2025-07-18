@@ -75,9 +75,9 @@ namespace auik
         {
             enum enum_type
             {
-                Data = 0x0,
-                Group = 0x1,
-                Category = 0x2
+                data = 0x0,
+                group = 0x1,
+                category = 0x2
             };
 
             using flag_bitmask = std::true_type;

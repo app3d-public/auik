@@ -1,7 +1,7 @@
 #include <acul/log.hpp>
-#include <implot/implot.h>
 #include <auik/integration/window.hpp>
 #include <auik/widget.hpp>
+#include <implot/implot.h>
 
 namespace auik
 {
@@ -23,8 +23,8 @@ namespace auik
 
     static const char *imgui_get_clipboard_string(void *user_data)
     {
-        awin::get_clipboard_string(*(awin::Window *)user_data);
-        return awin::platform::env.clipboard_data.c_str();
+        auto str = awin::get_clipboard_string(*(awin::Window *)user_data);
+        return str.c_str();
     }
 
 #ifdef _WIN32
@@ -52,15 +52,15 @@ namespace auik
         io.GetClipboardTextFn = imgui_get_clipboard_string;
         io.ClipboardUserData = _bd->window;
 
-        _bd->mouse_cursors[ImGuiMouseCursor_Arrow] = awin::Cursor::create(awin::Cursor::Type::Arrow);
-        _bd->mouse_cursors[ImGuiMouseCursor_TextInput] = awin::Cursor::create(awin::Cursor::Type::Ibeam);
-        _bd->mouse_cursors[ImGuiMouseCursor_ResizeNS] = awin::Cursor::create(awin::Cursor::Type::ResizeNS);
-        _bd->mouse_cursors[ImGuiMouseCursor_ResizeEW] = awin::Cursor::create(awin::Cursor::Type::ResizeEW);
-        _bd->mouse_cursors[ImGuiMouseCursor_Hand] = awin::Cursor::create(awin::Cursor::Type::Hand);
-        _bd->mouse_cursors[ImGuiMouseCursor_ResizeAll] = awin::Cursor::create(awin::Cursor::Type::ResizeAll);
-        _bd->mouse_cursors[ImGuiMouseCursor_ResizeNESW] = awin::Cursor::create(awin::Cursor::Type::ResizeNESW);
-        _bd->mouse_cursors[ImGuiMouseCursor_ResizeNWSE] = awin::Cursor::create(awin::Cursor::Type::ResizeNWSE);
-        _bd->mouse_cursors[ImGuiMouseCursor_NotAllowed] = awin::Cursor::create(awin::Cursor::Type::NotAllowed);
+        _bd->mouse_cursors[ImGuiMouseCursor_Arrow] = awin::Cursor::create(awin::Cursor::Type::arrow);
+        _bd->mouse_cursors[ImGuiMouseCursor_TextInput] = awin::Cursor::create(awin::Cursor::Type::ibeam);
+        _bd->mouse_cursors[ImGuiMouseCursor_ResizeNS] = awin::Cursor::create(awin::Cursor::Type::resize_ns);
+        _bd->mouse_cursors[ImGuiMouseCursor_ResizeEW] = awin::Cursor::create(awin::Cursor::Type::resize_ew);
+        _bd->mouse_cursors[ImGuiMouseCursor_Hand] = awin::Cursor::create(awin::Cursor::Type::hand);
+        _bd->mouse_cursors[ImGuiMouseCursor_ResizeAll] = awin::Cursor::create(awin::Cursor::Type::resize_all);
+        _bd->mouse_cursors[ImGuiMouseCursor_ResizeNESW] = awin::Cursor::create(awin::Cursor::Type::resize_nesw);
+        _bd->mouse_cursors[ImGuiMouseCursor_ResizeNWSE] = awin::Cursor::create(awin::Cursor::Type::resize_nwse);
+        _bd->mouse_cursors[ImGuiMouseCursor_NotAllowed] = awin::Cursor::create(awin::Cursor::Type::not_allowed);
 
         // Set platform dependent data in viewport
         ImGuiViewport *main_viewport = ImGui::GetMainViewport();
@@ -130,20 +130,20 @@ namespace auik
 
     void update_key_mods(ImGuiIO &io, const awin::io::KeyMode &mods)
     {
-        io.AddKeyEvent(ImGuiMod_Ctrl, mods & awin::io::KeyModeBits::Control);
-        io.AddKeyEvent(ImGuiMod_Shift, mods & awin::io::KeyModeBits::Shift);
-        io.AddKeyEvent(ImGuiMod_Alt, mods & awin::io::KeyModeBits::Alt);
-        io.AddKeyEvent(ImGuiMod_Super, mods & awin::io::KeyModeBits::Super);
+        io.AddKeyEvent(ImGuiMod_Ctrl, mods & awin::io::KeyModeBits::control);
+        io.AddKeyEvent(ImGuiMod_Shift, mods & awin::io::KeyModeBits::shift);
+        io.AddKeyEvent(ImGuiMod_Alt, mods & awin::io::KeyModeBits::alt);
+        io.AddKeyEvent(ImGuiMod_Super, mods & awin::io::KeyModeBits::super);
     }
 
     void WindowImGuiBinder::bind_events()
     {
         LOG_INFO("Binding ImGui listeners");
-        ed->bind_event(this, awin::event_id::Focus, [](const awin::FocusEvent &event) {
+        ed->bind_event(this, awin::event_id::focus, [](const awin::FocusEvent &event) {
             ImGuiIO &io = ImGui::GetIO();
             io.AddFocusEvent(event.focused);
         });
-        ed->bind_event(this, awin::event_id::MouseEnter, [this](const awin::MouseEnterEvent &event) {
+        ed->bind_event(this, awin::event_id::mouse_enter, [this](const awin::MouseEnterEvent &event) {
             ImGuiIO &io = ImGui::GetIO();
             if (event.entered)
                 io.AddMousePosEvent(_bd->last_valid_mouse_pos.x, _bd->last_valid_mouse_pos.y);
@@ -153,31 +153,31 @@ namespace auik
                 io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);
             }
         });
-        ed->bind_event(this, awin::event_id::MouseMoveAbs, [this](const awin::PosEvent &event) {
+        ed->bind_event(this, awin::event_id::mouse_move, [this](const awin::PosEvent &event) {
             ImGuiIO &io = ImGui::GetIO();
             io.AddMousePosEvent(event.position.x, event.position.y);
             _bd->last_valid_mouse_pos = ImVec2(event.position.x, event.position.y);
         });
-        ed->bind_event(this, awin::event_id::MouseClick, [](const awin::MouseClickEvent &event) {
+        ed->bind_event(this, awin::event_id::mouse_click, [](const awin::MouseClickEvent &event) {
             ImGuiIO &io = ImGui::GetIO();
             auto button = event.button;
-            if (button != awin::io::MouseKey::Unknown)
-                io.AddMouseButtonEvent(+button, event.action == awin::io::KeyPressState::Press);
+            if (button != awin::io::MouseKey::unknown)
+                io.AddMouseButtonEvent(+button, event.action == awin::io::KeyPressState::press);
         });
-        ed->bind_event(this, awin::event_id::Scroll, [](const awin::ScrollEvent &event) {
+        ed->bind_event(this, awin::event_id::scroll, [](const awin::ScrollEvent &event) {
             ImGuiIO &io = ImGui::GetIO();
             io.AddMouseWheelEvent(event.h, event.v);
         });
-        ed->bind_event(this, awin::event_id::KeyInput, [this](const awin::KeyInputEvent &event) {
+        ed->bind_event(this, awin::event_id::key_input, [this](const awin::KeyInputEvent &event) {
             ImGuiIO &io = ImGui::GetIO();
             update_key_mods(io, event.mods);
             auto it = _key_map.find(event.key);
             ImGuiKey imgui_key = it != _key_map.end() ? it->second : ImGuiKey_None;
-            io.AddKeyEvent(imgui_key, event.action != awin::io::KeyPressState::Release);
+            io.AddKeyEvent(imgui_key, event.action != awin::io::KeyPressState::release);
         });
-        ed->bind_event(this, awin::event_id::CharInput, [](const awin::CharInputEvent &event) {
+        ed->bind_event(this, awin::event_id::char_input, [](const awin::CharInputEvent &event) {
             ImGuiIO &io = ImGui::GetIO();
-            io.AddInputCharacter(event.charCode);
+            io.AddInputCharacter(event.char_code);
         });
     }
 

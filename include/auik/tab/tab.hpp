@@ -15,9 +15,9 @@ namespace auik
         {
             enum enum_type : u8
             {
-                None = 0x0,
-                Closable = 0x1,
-                Unsaved = 0x2
+                none = 0x0,
+                closable = 0x1,
+                unsaved = 0x2
             };
             using flag_bitmask = std::true_type;
         };
@@ -27,7 +27,7 @@ namespace auik
         u64 id;
 
         TabItem(u64 id, const acul::string &label, const std::function<void()> &render_callback = nullptr,
-                Flags flags = FlagBits::None, f32 rounding = 0.0f)
+                Flags flags = FlagBits::none, f32 rounding = 0.0f)
             : Selectable({label, false, rounding, ImGuiSelectableFlags_AllowItemOverlap, {0.0f, 0.0f}, true}),
               id(id),
               _render_callback(render_callback),
@@ -186,7 +186,7 @@ namespace auik
         TabItem::Flags flags;
 
         TabChangeEvent(TabBar *tabbar, const acul::string &display_name = {},
-                       TabItem::Flags flags = TabItem::FlagBits::None)
+                       TabItem::Flags flags = TabItem::FlagBits::none)
             : event(TabBar::event_id::Changed), tabbar(tabbar), display_name(display_name), flags(flags)
         {
         }

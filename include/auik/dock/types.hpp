@@ -11,14 +11,14 @@ namespace auik
         {
             enum enum_type
             {
-                None = 0x0,
-                HideTopLine = 0x1,
-                DiscardPadding = 0x2,
-                Stretch = 0x4,
-                SyncStretchHResize = 0x8,
+                none = 0x0,
+                hide_top_line = 0x1,
+                discard_padding = 0x2,
+                stretch = 0x4,
+                sync_stretch_hresize = 0x8,
                 // [Internal flags]
-                ScrollbarHovered = 0x10,
-                OpLocked = 0x20
+                scrollbar_hovered = 0x10,
+                op_locked = 0x20
             };
 
             using flag_bitmask = std::true_type;
@@ -126,11 +126,11 @@ namespace auik
         {
             enum enum_type
             {
-                None = 0x0,
-                Resizing = 0x1,
-                OpLocked = 0x2,
-                Dropped = 0x4,
-                LayoutUpdate = 0x8
+                none = 0x0,
+                resizing = 0x1,
+                op_locked = 0x2,
+                dropped = 0x4,
+                layout_update = 0x8
             };
 
             using flag_bitmask = std::true_type;
@@ -144,17 +144,17 @@ namespace auik
             ImVec2 padding;
             ImVec2 item_spacing;
             Section *hover_section = nullptr;
-            FrameStateFlags flags = FrameStateFlagBits::None;
+            FrameStateFlags flags = FrameStateFlagBits::none;
         };
 
         namespace event_id
         {
             enum : u64
             {
-                None = 0x0,
-                WindowDocked = 0x1AFFF3AAFCE36195,
-                NewTab = 0x34493086A50E2106,
-                Undock = 0x2CFFB00717B9FC3A
+                none = 0x0,
+                window_docked = 0x1AFFF3AAFCE36195,
+                new_tab = 0x34493086A50E2106,
+                undock = 0x2CFFB00717B9FC3A
             };
         };
     } // namespace dock

@@ -13,13 +13,13 @@ namespace auik
     {
         switch (button)
         {
-            case awin::popup::Buttons::OK:
+            case awin::popup::Buttons::ok:
                 return _("ok");
-            case awin::popup::Buttons::Yes:
+            case awin::popup::Buttons::yes:
                 return _("yes");
-            case awin::popup::Buttons::No:
+            case awin::popup::Buttons::no:
                 return _("no");
-            case awin::popup::Buttons::Cancel:
+            case awin::popup::Buttons::cancel:
                 return _("cancel");
             default:
                 return "Unknown";
@@ -46,21 +46,21 @@ namespace auik
         ImGui::PushStyleColor(ImGuiCol_Border, style.border_color);
 
         bool was_changed{false};
-        if (state == ChangeState::Normal)
+        if (state == ChangeState::normal)
             ImGui::PushStyleColor(ImGuiCol_PopupBg, style.background_color);
         else
         {
             ImGui::PushStyleColor(ImGuiCol_PopupBg, style.flip_color);
-            if (state == ChangeState::Clicked)
+            if (state == ChangeState::clicked)
             {
                 was_changed = true;
-                state = ChangeState::Continuing;
+                state = ChangeState::continuing;
 #ifdef _WIN32
                 PlaySound(TEXT("SystemHand"), NULL, SND_ALIAS | SND_ASYNC);
 #endif
             }
             else
-                state = ChangeState::Normal;
+                state = ChangeState::normal;
         }
 
         ImGui::SetNextWindowSize(ImVec2(style.width, 0));
@@ -70,7 +70,7 @@ namespace auik
             int action{-1};
             if (ImGui::IsMouseClicked(0) && !ImGui::IsWindowHovered())
             {
-                state = ChangeState::Clicked;
+                state = ChangeState::clicked;
                 was_changed = true;
             }
 
@@ -114,7 +114,7 @@ namespace auik
             if (action != -1)
             {
                 auto &pair = message.buttons[action];
-                if (pair.first == awin::popup::Buttons::Cancel || pair.first == awin::popup::Buttons::OK)
+                if (pair.first == awin::popup::Buttons::cancel || pair.first == awin::popup::Buttons::ok)
                 {
                     if (pair.second) pair.second();
                     if (message.prevent_close) _prevent_close_count -= _messages[it->first].size();

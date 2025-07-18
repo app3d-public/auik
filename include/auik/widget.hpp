@@ -23,10 +23,10 @@ namespace auik
     {
         none,
         click,
-        clickPended,
-        doubleClick,
-        dragStart,
-        dragEnd
+        click_pended,
+        double_click,
+        drag_start,
+        drag_end
     };
 
     extern APPLIB_API ImGuiMouseCursor g_last_cursor;

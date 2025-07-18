@@ -16,9 +16,9 @@ namespace auik
         Selectable::render();
         if (pressed)
         {
-            if (_flags != FlagBits::None)
+            if (_flags != FlagBits::none)
             {
-                if (_flags & FlagBits::ResetOnClick && index != _active_id)
+                if (_flags & FlagBits::reset_on_click && index != _active_id)
                 {
                     if (_active_id >= 0)
                     {
@@ -28,7 +28,7 @@ namespace auik
                     }
                     _active_id = index;
                 }
-                if (_flags & FlagBits::Toogle)
+                if (_flags & FlagBits::toogle)
                     _items[index].selected = !_items[index].selected;
                 else
                     _items[index].selected = true;
@@ -47,7 +47,7 @@ namespace auik
             _items[index].icon->render(icon_pos);
 
         // Lock
-        if (_flags & FlagBits::Lock && _items[index].selected)
+        if (_flags & FlagBits::lock && _items[index].selected)
         {
             auto diff = selectable_pos - icon_pos;
             auto lock_pos = icon_pos;

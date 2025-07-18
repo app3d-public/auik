@@ -20,43 +20,43 @@ namespace auik
     {
         enum DecorationIcons
         {
-            IconMin,
-            IconMax,
-            IconRestore,
-            IconClose,
-            IconApp,
-            IconMaxValue
+            ICON_MIN,
+            ICON_MAX,
+            ICON_RESTORE,
+            ICON_CLOSE,
+            ICON_APP,
+            ICON_MAX_VALUE
         };
 
         enum class ControlState
         {
-            Idle,
-            Hover,
-            Active
+            idle,
+            hover,
+            active
         };
 
         enum class ControlArea
         {
-            None,
-            Client,
-            Caption,
-            Min,
-            Max,
-            Close
+            none,
+            client,
+            caption,
+            min,
+            max,
+            close
         };
 
     public:
         struct Style
         {
             ImVec4 close_color;
-            Icon *icons[IconMaxValue];
+            Icon *icons[ICON_MAX_VALUE];
         } style;
 
         TitlebarDecorator(const ImVec2 &control_size,
                           void (*bind_events_call)(acul::events::dispatcher *, awin::Window &, Titlebar *))
-            : _controls{{ControlState::Idle, ControlArea::Min},
-                        {ControlState::Idle, ControlArea::Max},
-                        {ControlState::Idle, ControlArea::Close}},
+            : _controls{{ControlState::idle, ControlArea::min},
+                        {ControlState::idle, ControlArea::max},
+                        {ControlState::idle, ControlArea::close}},
               _control_size(control_size),
               bind_events_call(bind_events_call)
         {
@@ -66,7 +66,7 @@ namespace auik
 
         void render_app_icon()
         {
-            auto *icon_app = style.icons[IconApp];
+            auto *icon_app = style.icons[ICON_APP];
             const struct ImVec2 app_pos =
                 ImGui::GetCursorScreenPos() + ImVec2(0, (_control_size.y - icon_app->size().y) * 0.5f);
             icon_app->render(app_pos);
@@ -99,7 +99,7 @@ namespace auik
             ControlState state;
             ControlArea area;
         } _controls[3];
-        ControlArea _active_area{ControlArea::None};
+        ControlArea _active_area{ControlArea::none};
         ImVec2 _control_size;
         acul::point2D<i32> _drag_offset;
 

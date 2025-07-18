@@ -162,32 +162,32 @@ namespace auik
         ImVec2 size = ImVec2(_control_size.x + 1, _control_size.y + 1);
         ImGui::GetWindowDrawList()->AddRectFilled(
             pos, ImVec2(pos.x + size.x, pos.y + size.y),
-            ImGui::ColorConvertFloat4ToU32(_controls[0].state == ControlState::Hover ? style.hover_color
+            ImGui::ColorConvertFloat4ToU32(_controls[0].state == ControlState::hover ? style.hover_color
                                                                                      : style.tab_background_color));
         pos.x += size.x;
         ImVec2 button_pos = ImGui::GetCursorScreenPos();
         ImVec2 center_pos = ImVec2(button_pos.x + _control_size.x / 2, button_pos.y + _control_size.y / 2);
-        auto *icon = this->style.icons[IconMin];
+        auto *icon = this->style.icons[ICON_MIN];
         icon->render(center_pos - icon->size() * 0.5f);
         ImGui::SameLine();
 
         // Max
         ImGui::GetWindowDrawList()->AddRectFilled(
             pos, ImVec2(pos.x + size.x, pos.y + size.y),
-            ImGui::ColorConvertFloat4ToU32(_controls[1].state == ControlState::Hover ? style.hover_color
+            ImGui::ColorConvertFloat4ToU32(_controls[1].state == ControlState::hover ? style.hover_color
                                                                                      : style.tab_background_color));
         pos.x += size.x;
         center_pos.x += _control_size.x;
-        icon = this->style.icons[window.maximized() ? IconRestore : IconMax];
+        icon = this->style.icons[window.maximized() ? ICON_RESTORE : ICON_MAX];
         icon->render(center_pos - icon->size() * 0.5f);
 
         // Close
         ImGui::GetWindowDrawList()->AddRectFilled(
             pos, ImVec2(pos.x + size.x, pos.y + size.y),
-            ImGui::ColorConvertFloat4ToU32(_controls[2].state == ControlState::Hover ? this->style.close_color
+            ImGui::ColorConvertFloat4ToU32(_controls[2].state == ControlState::hover ? this->style.close_color
                                                                                      : style.tab_background_color));
         center_pos.x += _control_size.x;
-        icon = this->style.icons[IconClose];
+        icon = this->style.icons[ICON_CLOSE];
         icon->render(center_pos - icon->size() * 0.5f);
     }
 

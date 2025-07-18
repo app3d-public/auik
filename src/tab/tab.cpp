@@ -84,19 +84,19 @@ namespace auik
         pos.x += size.x + style.ItemSpacing.x + style.ItemInnerSpacing.x;
         ImGui::SetCursorPos(pos);
 
-        if (_tab_flags & TabItem::FlagBits::Closable || _tab_flags & TabItem::FlagBits::Unsaved)
+        if (_tab_flags & TabItem::FlagBits::closable || _tab_flags & TabItem::FlagBits::unsaved)
         {
             bool want_delete = false;
             ImGuiID id = window->GetID(name.c_str());
             const ImGuiID close_button_id = ImGui::GetIDWithSeed("#CLOSE", NULL, id);
             ImVec2 next_pos{0, 0};
-            if (_tab_flags & TabItem::FlagBits::Closable)
+            if (_tab_flags & TabItem::FlagBits::closable)
             {
                 f32 close_size = ImMax(2.0f, GImGui->FontSize * 0.5f + 1.0f) + style.ItemSpacing.x;
                 next_pos = screen_pos + ImVec2{size.x - close_size, style.ItemSpacing.y};
                 if (close_button(close_button_id, next_pos)) want_delete = true;
             }
-            if (_tab_flags & TabItem::FlagBits::Unsaved)
+            if (_tab_flags & TabItem::FlagBits::unsaved)
             {
                 ImGuiContext &g = *GImGui;
                 f32 bullet_size = ImMax(2.0f, g.FontSize * 0.5f + 1.0f);
@@ -116,12 +116,12 @@ namespace auik
         auto &style = ImGui::GetStyle();
         auto label_size = ImGui::CalcTextSize(name.c_str());
         ImVec2 output_size = label_size + style.ItemSpacing * 2.0f;
-        if (_tab_flags & FlagBits::Unsaved || _tab_flags & FlagBits::Closable)
+        if (_tab_flags & FlagBits::unsaved || _tab_flags & FlagBits::closable)
         {
             ImGuiContext &g = *GImGui;
             f32 close_size = ImMax(2.0f, g.FontSize * 0.5f + 1.0f);
             f32 width = close_size + style.ItemSpacing.x;
-            if (_tab_flags & FlagBits::Unsaved && _tab_flags & FlagBits::Closable)
+            if (_tab_flags & FlagBits::unsaved && _tab_flags & FlagBits::closable)
                 output_size.x += 2.0f * width;
             else
                 output_size.x += width;
@@ -366,17 +366,17 @@ namespace auik
     void TabBar::bind_events()
     {
         if (_flags & FlagBits::Scrollable)
-            ed->bind_event(this, awin::event_id::Scroll, [this](const awin::ScrollEvent &event) {
+            ed->bind_event(this, awin::event_id::scroll, [this](const awin::ScrollEvent &event) {
                 if (!_is_hovered) return;
                 ImGuiIO &io = ImGui::GetIO();
                 io.AddKeyEvent(ImGuiMod_Shift, true);
             });
         ed->bind_event(this, event_id::Changed, [this](const TabChangeEvent &e) {
             if (e.tabbar != this) return;
-            if (e.flags & TabItem::FlagBits::Unsaved)
-                items[active_index].flags() |= TabItem::FlagBits::Unsaved;
+            if (e.flags & TabItem::FlagBits::unsaved)
+                items[active_index].flags() |= TabItem::FlagBits::unsaved;
             else
-                items[active_index].flags() &= ~TabItem::FlagBits::Unsaved;
+                items[active_index].flags() &= ~TabItem::FlagBits::unsaved;
             if (!e.display_name.empty()) items[active_index].name = e.display_name;
         });
     }

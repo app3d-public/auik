@@ -12,13 +12,8 @@ namespace auik
         const f32 width;
         const f32 height;
 
-        Switch(const acul::string &label, bool toogled = false)
-            : Widget(label),
-              width(28 * awin::get_dpi()),
-              height(15 * awin::get_dpi()),
-              _pressed(false),
-              _hovered(false),
-              _toggled(toogled)
+        Switch(const acul::string &label, f32 dpi, bool toogled = false)
+            : Widget(label), width(28 * dpi), height(15 * dpi), _pressed(false), _hovered(false), _toggled(toogled)
         {
         }
 
