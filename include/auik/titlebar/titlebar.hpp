@@ -52,8 +52,8 @@ namespace auik
             Icon *icons[ICON_MAX_VALUE];
         } style;
 
-        TitlebarDecorator(const ImVec2 &control_size,
-                          void (*bind_events_call)(acul::events::dispatcher *, awin::Window &, Titlebar *))
+        TitlebarDecorator(const ImVec2 &control_size = {},
+                          void (*bind_events_call)(acul::events::dispatcher *, awin::Window &, Titlebar *) = nullptr)
             : _controls{{ControlState::idle, ControlArea::min},
                         {ControlState::idle, ControlArea::max},
                         {ControlState::idle, ControlArea::close}},
@@ -104,40 +104,37 @@ namespace auik
         acul::point2D<i32> _drag_offset;
 
         void (*bind_events_call)(acul::events::dispatcher *, awin::Window &, Titlebar *);
-        friend void bind_events(acul::events::dispatcher *, awin::Window &, Titlebar *);
+        friend void decorator_bind_events(acul::events::dispatcher *, awin::Window &, Titlebar *);
     };
 
     class APPLIB_API Titlebar final : public MenuBar
     {
     public:
-        class Decorator;
         TitlebarStyle style;
         TabBar tabbar;
 
         Titlebar(awin::Window &window, MenuBar *menubar, const TabBar &tabbar);
 
-        ~Titlebar() { acul::release(_decorator); }
-
-        bool is_client_decorated() const { return _decorator != nullptr; }
-
-        void bind_events(acul::events::dispatcher *ed);
+        inline void bind_events(acul::events::dispatcher *ed)
+        {
+            tabbar.bind_events();
+#ifdef _WIN32
+            _decorator.bind_events(ed, _window, this);
+#endif
+        }
 
         virtual void render() override;
 
-        void bind_decoration_style(const TitlebarDecorator::Style &style) { _decorator->style = style; }
+        void bind_decoration_style(const TitlebarDecorator::Style &style) { _decorator.style = style; }
 
     private:
         awin::Window &_window;
         f32 _caption_width;
         f32 _client_width;
-        TitlebarDecorator *_decorator;
+#ifdef _WIN32
+        TitlebarDecorator _decorator;
+#endif
 
-        friend void bind_events(acul::events::dispatcher *, awin::Window &, Titlebar *);
+        friend void decorator_bind_events(acul::events::dispatcher *, awin::Window &, Titlebar *);
     };
-
-    inline void Titlebar::bind_events(acul::events::dispatcher *ed)
-    {
-        tabbar.bind_events();
-        if (_decorator) _decorator->bind_events(ed, _window, this);
-    }
 } // namespace auik

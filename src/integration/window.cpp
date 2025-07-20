@@ -1,6 +1,7 @@
 #include <acul/log.hpp>
 #include <auik/integration/window.hpp>
 #include <auik/widget.hpp>
+#include <awin/native_access.hpp>
 #include <implot/implot.h>
 
 namespace auik
@@ -65,9 +66,9 @@ namespace auik
         // Set platform dependent data in viewport
         ImGuiViewport *main_viewport = ImGui::GetMainViewport();
 #ifdef _WIN32
-        main_viewport->PlatformHandleRaw = awin::platform::native_access::get_hwnd(*_bd->window);
+        main_viewport->PlatformHandleRaw = awin::native_access::get_hwnd(*_bd->window);
 #elif defined(__APPLE__)
-        main_viewport->PlatformHandleRaw = (void *)awin::platform::native_access::get_uinmpl(bd->window);
+        main_viewport->PlatformHandleRaw = (void *)awin::native_access::get_uinmpl(bd->window);
 #else
         IM_UNUSED(main_viewport);
 #endif
@@ -192,7 +193,8 @@ namespace auik
 
     LRESULT CALLBACK imgui_wnd_proc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
     {
-        ImGuiBackendData *bd = getBackendData();
+        ImGuiBackendData *bd =
+            ImGui::GetCurrentContext() ? (ImGuiBackendData *)ImGui::GetIO().BackendPlatformUserData : nullptr;
         switch (msg)
         {
             case WM_MOUSEMOVE:
