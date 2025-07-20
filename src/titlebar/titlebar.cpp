@@ -203,8 +203,9 @@ namespace auik
             control_width = control_size.x;
             target_height = control_size.y;
         }
-#endif
+#else
         target_height = ImGui::GetFontSize() + ImGui::GetStyle().FramePadding.y * 4.0f;
+#endif
         f32 padding_y = IM_ROUND((target_height - g.FontSize) / 2.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10.0f, padding_y));
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style::g_hmenu.padding);

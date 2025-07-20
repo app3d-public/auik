@@ -180,7 +180,7 @@ namespace auik
         bool is_hover_on_drag(FrameState frame)
         {
             ImGuiContext &g = *GImGui;
-            return !(frame.flags & FrameStateFlagBits::op_locked) && g.MovingWindow != nullptr;
+            return !(frame.flags & FrameStateFlagBits::op_locked) && g.MovingWindow == nullptr;
         }
 
         void Space::resize_box_horizontal(Section &section, int node_index, const ImVec2 &pos, f32 size)
@@ -195,12 +195,12 @@ namespace auik
             hover_bb.Max = {draw_bb.Max.x, draw_bb.Max.y + style::g_dock.helper.cap_offset};
             ImVec2 mouse_pos = ImGui::GetMousePos();
             bool hovered = hover_bb.Contains(mouse_pos) && is_hover_on_drag(frame);
-            bool allowResize = node_index != 0 && node.dock_flags() & WindowDockFlags_Stretch;
+            bool allow_resize = node_index != 0 && node.dock_flags() & WindowDockFlags_Stretch;
 
-            if (allowResize) update_hover_state(node, hovered, mouse_pos);
+            if (allow_resize) update_hover_state(node, hovered, mouse_pos);
             if (hovered || node.is_resizing)
             {
-                if (allowResize && (_hovered || node.is_resizing)) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+                if (allow_resize && (_hovered || node.is_resizing)) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
                 draw_list->AddRectFilled(draw_bb.Min, draw_bb.Max, style::g_dock.helper.hover_color);
                 frame.flags |= FrameStateFlagBits::op_locked;
                 if (node.is_resizing)
@@ -301,10 +301,10 @@ namespace auik
             draw_list->AddRectFilled(draw_bb.Min, draw_bb.Max, style::g_dock.node_overlay_color);
         }
 
-        void Space::draw_node(int section_id, int node_id, f32 section_size, ImVec2 &pos, bool isFirst)
+        void Space::draw_node(int section_id, int node_id, f32 section_size, ImVec2 &pos, bool is_first)
         {
             auto &section = sections[section_id];
-            if (!isFirst || !(section.flags & SectionFlagBits::hide_top_line))
+            if (!is_first || !(section.flags & SectionFlagBits::hide_top_line))
                 resize_box_horizontal(section, node_id, pos, section_size);
             ImGui::SetCursorScreenPos(pos);
             auto &style = ImGui::GetStyle();
