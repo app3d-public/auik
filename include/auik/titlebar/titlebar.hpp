@@ -125,8 +125,9 @@ namespace auik
 
         virtual void render() override;
 
+#ifdef _WIN32
         void bind_decoration_style(const TitlebarDecorator::Style &style) { _decorator.style = style; }
-
+#endif
     private:
         awin::Window &_window;
         f32 _caption_width;
