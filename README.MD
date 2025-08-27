@@ -1,24 +1,45 @@
-# app3d-auik
+# App3D UI Kit
 
-App3d-auik is a comprehensive suite of class-oriented widgets for creating user interfaces within the App3D project using [Dear ImGui](https://github.com/ocornut/imgui). This component is dedicated to facilitating the development of visually appealing and functionally rich 3D interfaces, aiming to provide developers with the necessary tools for integrating sophisticated UI elements into their App3D applications seamlessly.
-
-## Features
-
-- **Class-Oriented Approach:** Enables the use of object-oriented programming to create and manage GUI elements efficiently.
-- **Designed for App3D:** Tailored for easy integration with the App3D project, enhancing the development experience with customizable UI components.
-- **Customization:** Offers extensive customization options for widgets to meet the unique requirements of different projects.
+**Auik** is a comprehensive suite of class-oriented widgets for creating user interfaces within the App3D project using [Dear ImGui](https://github.com/ocornut/imgui). This component is dedicated to facilitating the development of visually appealing and functionally rich 3D interfaces, aiming to provide developers with the necessary tools for integrating sophisticated UI elements into their App3D applications seamlessly.
 
 ## Getting Started
 
-Integrating `app3d-auik` into your App3D project involves a few straightforward steps:
+Integrating auik into your App3D project involves a few straightforward steps:
 
 1. **Integration with Your Project**
    - Ensure that your project is already set up with ImGui and the App3D enviroment.
-   - Incorporate the `app3d-auik` component into your project to start leveraging its capabilities.
+   - Incorporate the `auik` component into your project to start leveraging its capabilities.
 
 2. **Using the Widgets**
-   - Utilize the widgets by following the structured approach provided by `app3d-auik` to enhance your application's user interface.
+   - Utilize the widgets by following the structured approach provided by `auikk` to enhance your application's user interface.
 
-## Dependencies
+## Limitations
+- Currently auik widgets uses `awin` API for synchronization some events. Auik is not compatible with other window systems yet.
+- The ImGui support is limited to ImGui v1.91.9 or less.
 
-`app3d-auik` is built on top of [Dear ImGui](https://github.com/ocornut/imgui), necessitating its presence in the project for the UI components to function correctly within the App3D environment.
+## Building
+
+### Supported compilers:
+- GNU GCC
+- Clang
+
+### Supported OS:
+- Linux
+- Microsoft Windows
+
+### Cmake options:
+- `USE_ASAN`: Enable address sanitizer
+
+### Bundled submodules
+The following dependencies are included as git submodules and must be checked out when cloning:
+- [acbt](https://git.homedatasrv.ru/app3d/acbt)
+- [acul](https://git.homedatasrv.ru/app3d/acul)
+- [awin](https://git.homedatasrv.ru/app3d/awin)
+- [Dear ImGui](https://github.com/ocornut/imgui)
+- [implot](https://github.com/epezent/implot)
+
+## License
+This project is licensed under the [MIT License](LICENSE).
+
+## Contacts
+For any questions or feedback, you can reach out via [email](mailto:wusikijeronii@gmail.com) or open a new issue.
