@@ -1,8 +1,17 @@
 cmake_minimum_required(VERSION 3.17)
+
+if(NOT DEFINED ACBT_PROJECT_LOADED)
+    include(cmake/project.cmake)
+endif()
+
 project(auik
     VERSION 0.0.1
     LANGUAGES CXX C
     DESCRIPTION "App3d UI Kit Library")
+
+if(NOT DEFINED ACBT_LOADED)
+    include(cmake/utils.cmake)
+endif()
 
 set(IMGUI_SRC_FILES
     modules/3rd-party/imgui/imgui.cpp
@@ -46,6 +55,11 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/modules/3rd-party/imgui/"
     ${FREETYPE2_INCLUDE_DIRS}
 )
+
+if(PROJECT_IS_TOP_LEVEL)
+    add_subdirectory(acul)
+    add_subdirectory(awin)
+endif()
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
     acul

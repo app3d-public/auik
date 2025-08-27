@@ -2,6 +2,7 @@
 #define AUIK_WIDGETS_MENU_H
 
 #include <acul/enum.hpp>
+#include <acul/memory/smart_ptr.hpp>
 #include <imgui/imgui_internal.h>
 #include "../icon/icon.hpp"
 #include "../selectable/selectable.hpp"

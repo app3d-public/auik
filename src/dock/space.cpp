@@ -1,6 +1,7 @@
-#include <acul/locales.hpp>
+#include <acul/locales/locales.hpp>
 #include <acul/string/utils.hpp>
 #include <acul/task.hpp>
+#include <algorithm>
 #include <auik/dock/space.hpp>
 #include <awin/window.hpp>
 
@@ -257,7 +258,6 @@ namespace auik
             auto &section = sections[index];
             section.fixed_size = 0.0f;
             section.fixed_sections = 0;
-            f32 height = ImGui::GetContentRegionAvail().y;
             f32 content_max = 0.0f;
             for (size_t i = 0; i < section.nodes.size(); ++i)
             {
@@ -284,7 +284,6 @@ namespace auik
             node_bb.Min = pos;
             node_bb.Max = {pos.x + section.size, pos.y + node_rect.y + node.extra_offset};
             bool hovered = node_bb.Contains(mouse_pos) && g_last_cursor == 0;
-            ImGuiContext &g = *GImGui;
             f32 diff = mouse_pos.y - pos.y;
             bool is_content = diff > node.extra_offset;
             update_drag_state(hovered, section_id, node_id, is_content);
@@ -669,7 +668,6 @@ namespace auik
         void PopupMenu::try_open(const ImVec2 &padding)
         {
             if (!_is_openned) return;
-            bool isSizeCalculated = false;
             if (ImGui::IsPopupOpen(name.c_str()))
             {
                 if (_size.x - padding.x * 2.0f != 0.0f)

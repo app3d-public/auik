@@ -1,6 +1,7 @@
-#include <imgui/imgui_internal.h>
 #include <auik/button/checkbox.hpp>
 #include <auik/widget.hpp>
+#include <imgui/imgui_internal.h>
+
 
 namespace auik
 {
@@ -25,13 +26,12 @@ namespace auik
 
         const ImVec2 pos = window->DC.CursorPos;
         const ImRect total_bb(
-            pos + ImVec2(0, vertical_offset), // Смещаем чекбокс по вертикали для центровки
+            pos + ImVec2(0, vertical_offset),
             pos + ImVec2(square_sz + (label_size.x > 0.0f ? style.ItemInnerSpacing.x + label_size.x : 0.0f),
                          label_size.y + style.FramePadding.y * 2.0f));
         ImGui::ItemSize(total_bb, style.FramePadding.y);
 
         const bool is_visible = ImGui::ItemAdd(total_bb, id);
-        const bool is_multi_select = (g.LastItemData.ItemFlags & ImGuiItemFlags_IsMultiSelect) != 0;
 
         bool hovered, held;
         bool pressed = ImGui::ButtonBehavior(total_bb, id, &hovered, &held);

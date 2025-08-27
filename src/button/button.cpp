@@ -62,7 +62,6 @@ namespace auik
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, auik::style::g_button.active_color);
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, auik::style::g_button.hovered_color);
 
-        f32 x_offset{0};
         auto width = ImGui::GetWindowWidth();
         auto &style = ImGui::GetStyle();
 

@@ -1,7 +1,7 @@
 #ifndef AUIK_WIDGETS_MODAL_H
 #define AUIK_WIDGETS_MODAL_H
 
-#include <acul/locales.hpp>
+#include <acul/locales/locales.hpp>
 #include <auik/button/switch.hpp>
 #include <awin/popup.hpp>
 #include "../icon/icon.hpp"
@@ -57,7 +57,7 @@ namespace auik
 
     private:
         acul::events::dispatcher *ed;
-        acul::map<acul::string, acul::vector<Message>> _messages;
+        acul::hashmap<acul::string, acul::vector<Message>> _messages;
         enum class ChangeState
         {
             normal,

@@ -172,8 +172,7 @@ namespace auik
         ed->bind_event(this, awin::event_id::key_input, [this](const awin::KeyInputEvent &event) {
             ImGuiIO &io = ImGui::GetIO();
             update_key_mods(io, event.mods);
-            auto it = _key_map.find(event.key);
-            ImGuiKey imgui_key = it != _key_map.end() ? it->second : ImGuiKey_None;
+            ImGuiKey imgui_key = (ImGuiKey) _keymap.find(event.key);
             io.AddKeyEvent(imgui_key, event.action != awin::io::KeyPressState::release);
         });
         ed->bind_event(this, awin::event_id::char_input, [](const awin::CharInputEvent &event) {
