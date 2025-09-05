@@ -40,7 +40,7 @@ endif()
 
 add_files(${PROJECT_NAME} RECURSE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
-add_library(${PROJECT_NAME} SHARED ${IMGUI_SRC_FILES} ${SOURCE_FILES})
+add_library(${PROJECT_NAME} SHARED ${IMGUI_SRC_FILES} ${AUIK_SRC})
 
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
 target_compile_definitions(${PROJECT_NAME} PRIVATE -DAPPLIB_BUILD)
