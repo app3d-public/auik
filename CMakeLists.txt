@@ -57,8 +57,8 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 )
 
 if(PROJECT_IS_TOP_LEVEL)
-    add_subdirectory(acul)
-    add_subdirectory(awin)
+    add_subdirectory(modules/acul)
+    add_subdirectory(modules/awin)
 endif()
 
 target_link_libraries(${PROJECT_NAME} PRIVATE

@@ -32,9 +32,9 @@ Integrating auik into your App3D project involves a few straightforward steps:
 
 ### Bundled submodules
 The following dependencies are included as git submodules and must be checked out when cloning:
-- [acbt](https://git.homedatasrv.ru/app3d/acbt)
-- [acul](https://git.homedatasrv.ru/app3d/acul)
-- [awin](https://git.homedatasrv.ru/app3d/awin)
+- [acbt](https://github.com/app3d-public/acbt)
+- [acul](https://github.com/app3d-public/acul)
+- [awin](https://github.com/app3d-public/awin)
 - [Dear ImGui](https://github.com/ocornut/imgui)
 - [implot](https://github.com/epezent/implot)
 
