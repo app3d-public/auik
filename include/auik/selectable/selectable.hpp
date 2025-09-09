@@ -11,8 +11,8 @@ namespace auik
     {
         f32 rounding = 0.0f;
         ImGuiSelectableFlags selectable_flags = ImGuiSelectableFlags_None; //< Selectable flags
-        ImGuiButtonFlags btn_flags = ImGuiButtonFlags_None;               //< Button flags
-        ImDrawFlags draw_flags = ImDrawFlags_None;                        //< Draw flags
+        ImGuiButtonFlags btn_flags = ImGuiButtonFlags_None;                //< Button flags
+        ImDrawFlags draw_flags = ImDrawFlags_None;                         //< Draw flags
         ImVec2 size = ImVec2(0, 0);
         bool selected = false;
         bool hover = false;
@@ -26,9 +26,15 @@ namespace auik
         Selectable(const acul::string &label = "", bool selected = false, f32 rounding = 0.0f,
                    ImGuiSelectableFlags selectable_flags = 0, const ImVec2 &size = ImVec2(0, 0),
                    bool show_background = false)
-            : Widget(label),
-              SelectableParams(rounding, selectable_flags, load_button_flags(selectable_flags), ImDrawFlags_None, size,
-                               selected, false, false, false)
+            : Widget(label), SelectableParams{rounding,
+                                              selectable_flags,
+                                              load_button_flags(selectable_flags),
+                                              ImDrawFlags_None,
+                                              size,
+                                              selected,
+                                              false,
+                                              false,
+                                              false}
         {
         }
 

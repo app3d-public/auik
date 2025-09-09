@@ -83,7 +83,5 @@ endif(USE_ASAN)
 
 set_target_properties(${PROJECT_NAME}
     PROPERTIES
-    CXX_STANDARD 23
-    CXX_STANDARD_REQUIRED YES
     CXX_EXTENSIONS YES
 )

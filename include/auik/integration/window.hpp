@@ -7,7 +7,6 @@
 #include <awin/window.hpp>
 #include <imgui/imgui.h>
 
-
 namespace auik
 {
     namespace internal
@@ -17,9 +16,9 @@ namespace auik
             using value_type = int;
             using enum_type = int;
 
-            static constexpr enum_type unknown = ImGuiKey_None;
+            static ACUL_CONSTINIT enum_type unknown = ImGuiKey_None;
 
-            static consteval void fill_lut_table(std::array<enum_type, 256> &a)
+            static ACUL_CONSTEVAL void fill_lut_table(std::array<enum_type, 256> &a)
             {
                 a[awin::io::Key::tab] = ImGuiKey_Tab;
                 a[awin::io::Key::left] = ImGuiKey_LeftArrow;
