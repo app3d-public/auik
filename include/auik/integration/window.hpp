@@ -16,7 +16,7 @@ namespace auik
             using value_type = int;
             using enum_type = int;
 
-            static ACUL_CONSTINIT enum_type unknown = ImGuiKey_None;
+            inline static constexpr enum_type unknown = ImGuiKey_None;
 
             static ACUL_CONSTEVAL void fill_lut_table(std::array<enum_type, 256> &a)
             {
