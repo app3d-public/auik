@@ -181,7 +181,11 @@ namespace auik
         bool is_hover_on_drag(FrameState frame)
         {
             ImGuiContext &g = *GImGui;
-            return !(frame.flags & FrameStateFlagBits::op_locked) && g.MovingWindow == nullptr;
+            if (frame.flags & FrameStateFlagBits::op_locked) return false;
+            if (g.MovingWindow != nullptr) return false;
+            if (ImGui::IsMouseDragging(ImGuiMouseButton_Left) && !(frame.flags & FrameStateFlagBits::resizing))
+                return false;
+            return true;
         }
 
         void Space::resize_box_horizontal(Section &section, int node_index, const ImVec2 &pos, f32 size)
