@@ -38,6 +38,7 @@ namespace auik
         init_pos.y += height + style.WindowPadding.y;
         ImGui::SetCursorScreenPos(init_pos);
 
+        assert(_content);
         if (!_collapsed) _content->render();
     }
 } // namespace auik

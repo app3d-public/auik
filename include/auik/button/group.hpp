@@ -28,7 +28,7 @@ namespace auik
         struct Item
         {
             auik::Icon *icon;
-            u16 id; // Note: We don't use this field. It needed as id for calls from external context
+            u32 id; // Note: We don't use this field. It needed as id for calls from external context
             bool selected;
             std::function<void()> callback = nullptr;
             auik::Icon *disabled_icon = nullptr;

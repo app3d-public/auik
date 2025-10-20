@@ -8,6 +8,7 @@ namespace auik
     class APPLIB_API Text : public Widget
     {
     public:
+        bool changed = false;
         Text(const acul::string &text, bool wrapped = false) : Widget(text), _wrapped(wrapped), _text_size{0, 0} {}
 
         Text &operator=(const acul::string &text)
@@ -41,10 +42,10 @@ namespace auik
     }
 
     APPLIB_API bool input_text(const char *label, acul::string *str, ImGuiInputTextFlags flags = 0,
-                              ImGuiInputTextCallback callback = nullptr, void *user_data = nullptr);
+                               ImGuiInputTextCallback callback = nullptr, void *user_data = nullptr);
     APPLIB_API bool input_text_with_hint(const char *label, const char *hint, acul::string *str,
-                                      ImGuiInputTextFlags flags = 0, ImGuiInputTextCallback callback = nullptr,
-                                      void *user_data = nullptr);
+                                         ImGuiInputTextFlags flags = 0, ImGuiInputTextCallback callback = nullptr,
+                                         void *user_data = nullptr);
 } // namespace auik
 
 #endif

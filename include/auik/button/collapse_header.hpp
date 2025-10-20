@@ -15,6 +15,8 @@ namespace auik
 
         bool pressed() const { return _pressed; }
 
+        Widget* content() {return _content;}
+
         ~CollapseHeader() { acul::release(_content); }
 
     private:
