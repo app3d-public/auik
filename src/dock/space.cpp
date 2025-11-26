@@ -43,6 +43,7 @@ namespace auik
             style.size = {0, 0};
             TabBar tabbar(node.id + ":tab", _ed, _disposal_queue, items, TabBar::FlagBits::Reorderable, style);
             Selectable btn(acul::format("##%s:btn", node.id.c_str()));
+            btn.show_background = true;
             node.tab_nav_area = acul::alloc<Node::TabNavArea>(std::move(tabbar), std::move(btn));
             _ed->bind_event(&node.tab_nav_area->tabbar, TabBar::event_id::Switched, [&node](auik::TabSwitchEvent &e) {
                 if (e.tabbar != &node.tab_nav_area->tabbar) return;
@@ -70,7 +71,8 @@ namespace auik
             ImGui::PushStyleColor(ImGuiCol_Header, colors[ImGuiCol_ChildBg]);
             ImGui::PushStyleColor(ImGuiCol_ChildBg, style::g_dock.tabbar.background);
 
-            size.y = ImGui::GetFrameHeight() + style::g_dock.tabbar.item_spacing;
+            f32 padding = 5;
+            size.y = ImGui::GetFrameHeight() + style::g_dock.tabbar.item_spacing + padding;
 
             f32 icon_rect_width = style::g_dock.tabbar.nav_icon->size().x + frame.padding.x * 2.0f;
 
@@ -80,16 +82,17 @@ namespace auik
             ImVec2 start_pos = window->DC.CursorPos;
             ImVec2 btn_pos = {window->Pos.x + window->Size.x - icon_rect_width, start_pos.y};
             ImGui::SetCursorScreenPos(btn_pos);
-            nav.btn.size = {icon_rect_width, size.y};
+            nav.btn.size = {icon_rect_width, size.y - padding + 2};
+            ImGui::PushStyleColor(ImGuiCol_PopupBg, colors[ImGuiCol_ChildBg]);
             nav.btn.render();
+                        ImGui::PopStyleColor();
             if (nav.btn.pressed)
                 popup_menu.mark_openned({ImGui::GetItemRectMin(), ImGui::GetItemRectMax()}, section_id, node_id);
-
             // icon
             ImVec2 nav_icon_size = style::g_dock.tabbar.nav_icon->size();
             ImVec2 icon_pos = btn_pos;
             icon_pos.x += (icon_rect_width - nav_icon_size.x) / 2.0f;
-            icon_pos.y += (size.y - nav_icon_size.y) / 2.0f;
+            icon_pos.y += (size.y - padding + 2 - nav_icon_size.y) / 2.0f;
             style::g_dock.tabbar.nav_icon->render(icon_pos);
             ImGui::PopStyleVar();
             ImGui::SetCursorScreenPos(start_pos);
@@ -102,6 +105,15 @@ namespace auik
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
             ImGui::PopStyleColor(2);
             ImGui::PopStyleVar(4);
+
+            auto* draw_list = window->DrawList;
+            ImRect padding_bb;
+            padding_bb.Min.x = start_pos.x;
+            padding_bb.Min.y = start_pos.y + size.y - padding + 2;
+            padding_bb.Max.x = start_pos.x + size.x;
+            padding_bb.Max.y = start_pos.y + size.y;
+            auto col = ImGui::ColorConvertFloat4ToU32(colors[ImGuiCol_ChildBg]);
+            draw_list->AddRectFilled(padding_bb.Min, padding_bb.Max, col);
         }
 
         bool is_scrollbar_hovered()
