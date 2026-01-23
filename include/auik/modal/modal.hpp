@@ -33,7 +33,7 @@ namespace auik
         {
             acul::string header;
             acul::string message;
-            acul::vector<std::pair<awin::popup::Buttons, std::function<void()>>> buttons;
+            acul::vector<acul::pair<awin::popup::Buttons, std::function<void()>>> buttons;
             bool prevent_close = false;
         };
 
