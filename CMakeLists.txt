@@ -77,10 +77,6 @@ if(WIN32)
     gen_manifest_lib(lib${PROJECT_NAME} ${PROJECT_VERSION})
 endif()
 
-if(USE_ASAN)
-    target_link_options(${PROJECT_NAME} PUBLIC -fsanitize=address -fno-omit-frame-pointer)
-endif(USE_ASAN)
-
 set_target_properties(${PROJECT_NAME}
     PROPERTIES
     CXX_EXTENSIONS YES

@@ -27,9 +27,6 @@ Integrating auik into your App3D project involves a few straightforward steps:
 - Linux
 - Microsoft Windows
 
-### Cmake options:
-- `USE_ASAN`: Enable address sanitizer
-
 ### Bundled submodules
 The following dependencies are included as git submodules and must be checked out when cloning:
 - [acbt](https://github.com/app3d-public/acbt)

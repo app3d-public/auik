@@ -1,4 +1,3 @@
-#include <acul/log.hpp>
 #include <auik/integration/window.hpp>
 #include <auik/widget.hpp>
 #include <awin/native_access.hpp>
@@ -139,7 +138,6 @@ namespace auik
 
     void WindowImGuiBinder::bind_events()
     {
-        LOG_INFO("Binding ImGui listeners");
         ed->bind_event(this, awin::event_id::focus, [](const awin::FocusEvent &event) {
             ImGuiIO &io = ImGui::GetIO();
             io.AddFocusEvent(event.focused);
@@ -219,7 +217,6 @@ namespace auik
 
     WindowImGuiBinder::~WindowImGuiBinder()
     {
-        LOG_INFO("Destroying ImGui context");
         IM_ASSERT(_bd != nullptr && "No platform backend to shutdown, or already shutdown?");
         ImGuiIO &io = ImGui::GetIO();
 

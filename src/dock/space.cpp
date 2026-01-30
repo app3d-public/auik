@@ -1,3 +1,4 @@
+#include <acul/hash/utils.hpp>
 #include <acul/locales/locales.hpp>
 #include <acul/string/utils.hpp>
 #include <acul/task.hpp>
@@ -85,7 +86,7 @@ namespace auik
             nav.btn.size = {icon_rect_width, size.y - padding + 2};
             ImGui::PushStyleColor(ImGuiCol_PopupBg, colors[ImGuiCol_ChildBg]);
             nav.btn.render();
-                        ImGui::PopStyleColor();
+            ImGui::PopStyleColor();
             if (nav.btn.pressed)
                 popup_menu.mark_openned({ImGui::GetItemRectMin(), ImGui::GetItemRectMax()}, section_id, node_id);
             // icon
@@ -106,7 +107,7 @@ namespace auik
             ImGui::PopStyleColor(2);
             ImGui::PopStyleVar(4);
 
-            auto* draw_list = window->DrawList;
+            auto *draw_list = window->DrawList;
             ImRect padding_bb;
             padding_bb.Min.x = start_pos.x;
             padding_bb.Min.y = start_pos.y + size.y - padding + 2;

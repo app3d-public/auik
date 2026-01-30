@@ -24,7 +24,6 @@ namespace auik
                 return control_size;
             }
         }
-        LOG_WARN("Failed to get DWMWA_CAPTION_BUTTON_BOUNDS");
         control_size.x = GetSystemMetrics(SM_CXSIZE) * dpi;
         control_size.y = GetSystemMetrics(SM_CYSIZE) * dpi;
         return control_size;
