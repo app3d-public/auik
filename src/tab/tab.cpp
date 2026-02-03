@@ -35,14 +35,14 @@ namespace auik
     class AddMemCache : public TabMemCache
     {
     public:
-        AddMemCache(TabItem tab, u8 *active_index, acul::vector<TabItem> *items)
-            : TabMemCache(active_index, items), _tab(tab)
+        AddMemCache(TabItem &tab, u8 *active_index, acul::vector<TabItem> *items)
+            : TabMemCache(active_index, items), _tab(std::move(tab))
         {
         }
 
         virtual void _free() override
         {
-            _items->push_back(_tab);
+            _items->push_back(std::move(_tab));
             ++offset;
             *active_index = _items->size() - 1;
         }
@@ -246,7 +246,7 @@ namespace auik
 
     void TabBar::render()
     {
-        std::function<void()> render_callback;
+        const acul::unique_function<void()> *render_callback = nullptr;
         auto &style = ImGui::GetStyle();
         ImVec2 size = _style.size;
         if (_style.size.x == 0) _style.size.x = ImGui::GetContentRegionAvail().x;
@@ -289,7 +289,7 @@ namespace auik
 
                 // Handle selection and rendering logic
                 begin->selected = index == active_index;
-                if (index == active_index) render_callback = begin->render_callback();
+                if (index == active_index) render_callback = &begin->render_callback();
 
                 // Handle reorderable logic
                 bool was_drag_reset{false};
@@ -340,7 +340,7 @@ namespace auik
             _height = ImGui::GetWindowHeight();
         }
         ImGui::EndChild();
-        if (render_callback) render_callback();
+        if (render_callback) (*render_callback)();
     }
 
     bool TabBar::remove_tab(const TabItem &tab)
@@ -354,13 +354,13 @@ namespace auik
         return false;
     }
 
-    void TabBar::new_tab(const TabItem &tab)
+    void TabBar::new_tab(TabItem &tab)
     {
         auto it = std::find_if(items.begin(), items.end(), [&](const TabItem &item) { return item.id == tab.id; });
         if (it != items.end())
             active_index = it - items.begin();
         else
-            _disposal_queue.push(acul::alloc<AddMemCache>(tab, &active_index, &items));
+            _disposal_queue.push(acul::make_unique<AddMemCache>(tab, &active_index, &items));
     }
 
     void TabBar::bind_events()

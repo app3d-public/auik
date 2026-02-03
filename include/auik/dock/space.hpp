@@ -113,7 +113,7 @@ namespace auik
             }
 
             void close_window(int section_id, int node_id, int tab_id,
-                              const std::function<void(auik::Window *window)> &callback);
+                              acul::unique_function<void(auik::Window *window)> callback);
 
             ImVec2 window_size() const { return _window_size; }
 

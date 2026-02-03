@@ -26,19 +26,22 @@ namespace auik
 
         u64 id;
 
-        TabItem(u64 id, const acul::string &label, const std::function<void()> &render_callback = nullptr,
+        TabItem(u64 id, const acul::string &label, acul::unique_function<void()> render_callback = nullptr,
                 Flags flags = FlagBits::none, f32 rounding = 0.0f)
             : Selectable({label, false, rounding, ImGuiSelectableFlags_AllowItemOverlap, {0.0f, 0.0f}, true}),
               id(id),
-              _render_callback(render_callback),
+              _render_callback(std::move(render_callback)),
               _tab_flags(flags)
         {
         }
 
         bool render_item();
 
-        std::function<void()> &render_callback() { return _render_callback; }
-        void render_callback(const std::function<void()> &render_callback) { _render_callback = render_callback; }
+        acul::unique_function<void()> &render_callback() { return _render_callback; }
+        void render_callback(acul::unique_function<void()> &render_callback)
+        {
+            _render_callback = std::move(render_callback);
+        }
 
         ImVec2 calculate_item_size();
 
@@ -47,7 +50,7 @@ namespace auik
         const Flags flags() const { return _tab_flags; }
 
     private:
-        std::function<void()> _render_callback;
+        acul::unique_function<void()> _render_callback;
         Flags _tab_flags;
     };
 
@@ -79,9 +82,9 @@ namespace auik
         };
 
         TabBar(const acul::string &id, acul::events::dispatcher *ed, acul::disposal_queue &disposal_queue,
-               const acul::vector<TabItem> &items, Flags flags = FlagBits::None, const Style &style = {})
+               acul::vector<TabItem> &&items, Flags flags = FlagBits::None, const Style &style = {})
             : Widget(id),
-              items(items),
+              items(std::move(items)),
               ed(ed),
               _disposal_queue(disposal_queue),
               _flags(flags),
@@ -89,6 +92,11 @@ namespace auik
               _style(style)
         {
         }
+
+        TabBar(const TabBar &) = delete;
+        TabBar &operator=(const TabBar &) = delete;
+        TabBar(TabBar &&) noexcept = default;
+        TabBar &operator=(TabBar &&) noexcept = delete;
 
         ~TabBar() { ed->unbind_listeners(this); }
 
@@ -108,7 +116,7 @@ namespace auik
 
         bool empty() const { return items.empty(); }
 
-        void new_tab(const TabItem &tab);
+        void new_tab(TabItem &tab);
 
         bool remove_tab(const TabItem &tab);
 
@@ -154,11 +162,11 @@ namespace auik
         bool create_on_empty;
         bool batch;
 
-        TabCloseEvent(TabBar *tabbar, const TabItem &tab, bool confirmed = false, bool create_on_empty = true,
+        TabCloseEvent(TabBar *tabbar, TabItem &tab, bool confirmed = false, bool create_on_empty = true,
                       bool batch = false)
             : event(TabBar::event_id::Close),
               tabbar(tabbar),
-              tab(tab),
+              tab(std::move(tab)),
               confirmed(confirmed),
               create_on_empty(create_on_empty),
               batch(batch)

@@ -113,7 +113,7 @@ namespace auik
         TitlebarStyle style;
         TabBar tabbar;
 
-        Titlebar(awin::Window &window, MenuBar *menubar, const TabBar &tabbar);
+        Titlebar(awin::Window &window, MenuBar *menubar, TabBar &&tabbar);
 
         inline void bind_events(acul::events::dispatcher *ed)
         {

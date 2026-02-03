@@ -33,7 +33,7 @@ namespace auik
         {
             acul::string header;
             acul::string message;
-            acul::vector<acul::pair<awin::popup::Buttons, std::function<void()>>> buttons;
+            acul::vector<acul::pair<awin::popup::Buttons, acul::unique_function<void()>>> buttons;
             bool prevent_close = false;
         };
 
@@ -47,7 +47,7 @@ namespace auik
 
         virtual void render() override;
 
-        void push(const Message &message);
+        void push(Message &&message);
 
         void bind_events();
 

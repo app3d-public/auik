@@ -179,9 +179,9 @@ namespace auik
     }
 #endif
 
-    Titlebar::Titlebar(awin::Window &window, MenuBar *menubar, const TabBar &tabbar)
+    Titlebar::Titlebar(awin::Window &window, MenuBar *menubar, TabBar &&tabbar)
         : MenuBar(std::move(*menubar), "titlebar"),
-          tabbar(tabbar),
+          tabbar(std::move(tabbar)),
           _window(window)
 #ifdef _WIN32
           ,

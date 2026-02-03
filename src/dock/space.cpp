@@ -42,7 +42,7 @@ namespace auik
             }
             TabBar::Style style;
             style.size = {0, 0};
-            TabBar tabbar(node.id + ":tab", _ed, _disposal_queue, items, TabBar::FlagBits::Reorderable, style);
+            TabBar tabbar(node.id + ":tab", _ed, _disposal_queue, std::move(items), TabBar::FlagBits::Reorderable, style);
             Selectable btn(acul::format("##%s:btn", node.id.c_str()));
             btn.show_background = true;
             node.tab_nav_area = acul::alloc<Node::TabNavArea>(std::move(tabbar), std::move(btn));
@@ -619,15 +619,15 @@ namespace auik
         }
 
         void Space::close_window(int section_id, int node_id, int tab_id,
-                                 const std::function<void(auik::Window *window)> &callback)
+                                 acul::unique_function<void(auik::Window *window)> callback)
         {
             auto &node = sections[section_id].nodes[node_id];
             acul::string name = node.tab_nav_area->tabbar.items[tab_id].name;
             auto it = std::find_if(node.windows.begin(), node.windows.end(), [&](auto &w) { return w->name == name; });
             if (it == node.windows.end()) return;
             node.tab_nav_area->tabbar.remove_tab(node.tab_nav_area->tabbar.items[tab_id]);
-            _disposal_queue.push(acul::alloc<acul::mem_cache>([callback, it, &node, section_id, node_id, this]() {
-                callback(*it);
+            _disposal_queue.emplace([cb = std::move(callback), it, &node, section_id, node_id, this]() {
+                cb(*it);
                 node.windows.erase(it);
                 auto &section = sections[section_id];
                 if (node.windows.empty())
@@ -655,7 +655,7 @@ namespace auik
                     sections.erase(sections.begin() + section_id);
                 else
                     section.reset();
-            }));
+            });
         }
 
         PopupMenu::PopupMenu()

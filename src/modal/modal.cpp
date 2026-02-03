@@ -26,9 +26,9 @@ namespace auik
         };
     }
 
-    void ModalQueue::push(const Message &message)
+    void ModalQueue::push(Message &&message)
     {
-        _messages[message.header].push_back(message);
+        _messages[message.header].push_back(std::move(message));
         if (message.prevent_close) ++_prevent_close_count;
     }
 
@@ -126,7 +126,7 @@ namespace auik
                     if (_switch.toogled())
                     {
                         for (auto &msg : arr)
-                            if (auto callback = msg.buttons[action].second) callback();
+                            if (auto &callback = msg.buttons[action].second) callback();
                         if (message.prevent_close) _prevent_close_count -= arr.size();
                         _messages.erase(it->first);
                     }
@@ -156,6 +156,6 @@ namespace auik
     void ModalQueue::bind_events()
     {
         ed->bind_event(this, AUIK_EVENT_MODAL_SIGN,
-                       [this](const acul::events::data_event<ModalQueue::Message> &e) { push(e.data); });
+                       [this](acul::events::data_event<ModalQueue::Message> &e) { push(std::move(e.data)); });
     }
 } // namespace auik

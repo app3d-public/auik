@@ -2,6 +2,7 @@
 #define AUIK_WIDGETS_MENU_H
 
 #include <acul/enum.hpp>
+#include <acul/functional/unique_function.hpp>
 #include <acul/memory/smart_ptr.hpp>
 #include <imgui/imgui_internal.h>
 #include "../icon/icon.hpp"
@@ -58,12 +59,12 @@ namespace auik
     class APPLIB_API MenuItem final : public Selectable
     {
     public:
-        std::function<void()> callback;
+        acul::unique_function<void()> callback;
         acul::string shortcut;
 
-        MenuItem(const acul::string &name, const std::function<void()> &callback = nullptr,
+        MenuItem(const acul::string &name, acul::unique_function<void()> callback = nullptr,
                  const acul::string &shortcut = {})
-            : Selectable(name, false, style::g_vmenu.rounding), callback(callback), shortcut(shortcut)
+            : Selectable(name, false, style::g_vmenu.rounding), callback(std::move(callback)), shortcut(shortcut)
         {
         }
 

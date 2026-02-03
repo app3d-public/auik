@@ -36,6 +36,8 @@ namespace auik
                 TabBar tabbar;
                 Selectable btn;
                 size_t window_id = 0;
+
+                TabNavArea(TabBar &&t, Selectable &&b) : tabbar(std::move(t)), btn(std::move(b)) {}
             } *tab_nav_area;
             bool is_resizing;
             bool is_transparent;

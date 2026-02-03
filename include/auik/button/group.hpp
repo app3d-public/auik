@@ -1,6 +1,7 @@
 #pragma once
 
 #include <acul/enum.hpp>
+#include <acul/functional/unique_function.hpp>
 #include "../icon/icon.hpp"
 #include "../selectable/selectable.hpp"
 
@@ -30,7 +31,7 @@ namespace auik
             auik::Icon *icon;
             u32 id; // Note: We don't use this field. It needed as id for calls from external context
             bool selected;
-            std::function<void()> callback = nullptr;
+            acul::unique_function<void()> callback;
             auik::Icon *disabled_icon = nullptr;
             bool disabled = false;
         };
@@ -54,13 +55,13 @@ namespace auik
 
         using Flags = acul::flags<FlagBits>;
 
-        BtnGroup(const acul::string &name, const acul::vector<Item> &items, Flags flags, int active_id)
+        BtnGroup(const acul::string &name, acul::vector<Item> items, Flags flags, int active_id)
             : Selectable({"##image_group_" + name,
                           false,
                           style::g_btn_group.rounding,
                           0,
                           {style::g_btn_group.btn_size, style::g_btn_group.btn_size}}),
-              _items(items),
+              _items(std::move(items)),
               _flags(flags),
               _active_id(active_id)
         {
