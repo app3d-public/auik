@@ -26,17 +26,28 @@ namespace auik
         };
     } // namespace style
 
+    using ModalBtn = acul::pair<awin::popup::Buttons, acul::unique_function<void()>>;
+    struct ModalMessage
+    {
+        acul::string header;
+        acul::string message;
+        acul::vector<acul::pair<awin::popup::Buttons, acul::unique_function<void()>>> buttons;
+        bool prevent_close = false;
+    };
+
+    template <typename... Args>
+    acul::vector<ModalBtn> make_modal_btn_list(Args &&...args)
+    {
+        acul::vector<ModalBtn> v;
+        (v.emplace_back(std::forward<Args>(args)), ...);
+        return v;
+    }
+
+    using ModalEvent = acul::events::data_event<ModalMessage>;
+
     class APPLIB_API ModalQueue final : public Widget
     {
     public:
-        struct Message
-        {
-            acul::string header;
-            acul::string message;
-            acul::vector<acul::pair<awin::popup::Buttons, acul::unique_function<void()>>> buttons;
-            bool prevent_close = false;
-        };
-
         style::ModalQueue style;
 
         ModalQueue(acul::events::dispatcher *ed, f32 dpi) : Widget("modalqueue"), ed(ed), _switch(_("apply_all"), dpi)
@@ -47,7 +58,7 @@ namespace auik
 
         virtual void render() override;
 
-        void push(Message &&message);
+        void push(ModalMessage &&message);
 
         void bind_events();
 
@@ -57,7 +68,7 @@ namespace auik
 
     private:
         acul::events::dispatcher *ed;
-        acul::hashmap<acul::string, acul::vector<Message>> _messages;
+        acul::hashmap<acul::string, acul::vector<ModalMessage>> _messages;
         enum class ChangeState
         {
             normal,

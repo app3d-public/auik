@@ -35,7 +35,7 @@ namespace auik
     class AddMemCache : public TabMemCache
     {
     public:
-        AddMemCache(TabItem &tab, u8 *active_index, acul::vector<TabItem> *items)
+        AddMemCache(TabItem tab, u8 *active_index, acul::vector<TabItem> *items)
             : TabMemCache(active_index, items), _tab(std::move(tab))
         {
         }
@@ -340,7 +340,7 @@ namespace auik
             _height = ImGui::GetWindowHeight();
         }
         ImGui::EndChild();
-        if (render_callback) (*render_callback)();
+        if (render_callback && *render_callback) (*render_callback)();
     }
 
     bool TabBar::remove_tab(const TabItem &tab)
@@ -354,13 +354,13 @@ namespace auik
         return false;
     }
 
-    void TabBar::new_tab(TabItem &tab)
+    void TabBar::new_tab(TabItem tab)
     {
         auto it = std::find_if(items.begin(), items.end(), [&](const TabItem &item) { return item.id == tab.id; });
         if (it != items.end())
             active_index = it - items.begin();
         else
-            _disposal_queue.push(acul::make_unique<AddMemCache>(tab, &active_index, &items));
+            _disposal_queue.push(acul::make_unique<AddMemCache>(std::move(tab), &active_index, &items));
     }
 
     void TabBar::bind_events()

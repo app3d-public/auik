@@ -26,7 +26,7 @@ namespace auik
         };
     }
 
-    void ModalQueue::push(Message &&message)
+    void ModalQueue::push(ModalMessage &&message)
     {
         _messages[message.header].push_back(std::move(message));
         if (message.prevent_close) ++_prevent_close_count;
@@ -38,7 +38,8 @@ namespace auik
 
         const auto &it = _messages.begin();
         auto &message = it->second.front();
-        ImGui::OpenPopup(message.header.c_str());
+        const auto &header = it->first;
+        ImGui::OpenPopup(header.c_str());
 
         // Style
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.padding);
@@ -64,7 +65,7 @@ namespace auik
         }
 
         ImGui::SetNextWindowSize(ImVec2(style.width, 0));
-        if (ImGui::BeginPopupModal(message.header.c_str(), nullptr,
+        if (ImGui::BeginPopupModal(header.c_str(), nullptr,
                                    ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize))
         {
             int action{-1};
@@ -83,7 +84,7 @@ namespace auik
             pos.y += 20;
             ImGui::PushFont(style.bold_font);
             ImGui::SetCursorPos(pos);
-            Text ht(message.header, true);
+            Text ht(header, true);
             ht.render();
             ImGui::PopFont();
 
@@ -155,7 +156,6 @@ namespace auik
 
     void ModalQueue::bind_events()
     {
-        ed->bind_event(this, AUIK_EVENT_MODAL_SIGN,
-                       [this](acul::events::data_event<ModalQueue::Message> &e) { push(std::move(e.data)); });
+        ed->bind_event(this, AUIK_EVENT_MODAL_SIGN, [this](ModalEvent &e) { push(std::move(e.data)); });
     }
 } // namespace auik

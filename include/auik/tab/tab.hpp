@@ -116,7 +116,7 @@ namespace auik
 
         bool empty() const { return items.empty(); }
 
-        void new_tab(TabItem &tab);
+        void new_tab(TabItem tab);
 
         bool remove_tab(const TabItem &tab);
 

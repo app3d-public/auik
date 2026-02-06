@@ -116,4 +116,12 @@ namespace auik
 
         void render_item(int index, ImVec2 &pos, ImVec2 &rect_size);
     };
+
+    template <typename... Args>
+    inline acul::vector<BtnGroup::Item> make_btn_group_items_list(Args &&...args)
+    {
+        acul::vector<BtnGroup::Item> items;
+        (items.emplace_back(std::forward<Args>(args)), ...);
+        return items;
+    }
 } // namespace auik
