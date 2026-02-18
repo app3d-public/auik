@@ -3,7 +3,9 @@
 #include <acul/disposal_queue.hpp>
 #include <acul/enum.hpp>
 #include <acul/event.hpp>
+#include <amal/vector.hpp>
 #include <vulkan/vulkan.h>
+#include "theme.hpp"
 
 namespace auik::v2
 {
@@ -26,12 +28,19 @@ namespace auik::v2
     {
     public:
         WidgetFlags widget_flags;
+        struct
+        {
+            StyleID id = 0;
+            u32 type_id = 0;
+        } style;
 
         Widget(u32 id, WidgetFlags flags, Widget *parent = nullptr) : widget_flags(flags), _id(id), _parent(parent) {}
 
         u32 id() const { return _id; }
 
-        virtual void render() {}
+        virtual void record_commands() {}
+
+        virtual void update_immediate_commands() {}
 
     protected:
         u32 _id;
@@ -48,9 +57,8 @@ namespace auik::v2
     {
         // Callbacks
         void (*push_data_to_stream)(DrawStream *, void *) = nullptr;
-        void (*clear_stream)(DrawStream *, VkCommandBuffer) = nullptr;
+        void (*push_widget_to_cache)(DrawStream *, Widget *) = nullptr;
         void (*render)(DrawStream *, VkCommandBuffer) = nullptr;
-        void (*next_call)(DrawStream *, VkCommandBuffer) = nullptr;
         void (*destroy)(DrawStream *) = nullptr;
 
         // Data
@@ -60,21 +68,19 @@ namespace auik::v2
         u32 write_id = 0;
     };
 
-    inline void push_data_to_stream(DrawStream *stream, void *data) { stream->push_data_to_stream(stream, data); }
-
-    inline void clear_stream(DrawStream *stream)
+    inline void push_data_to_stream(DrawStream *stream, void *data)
     {
-        stream->clear_stream(stream, nullptr);
-        stream->next_call = stream->render;
+        assert(stream && stream->push_data_to_stream);
+        stream->push_data_to_stream(stream, data);
     }
 
-    inline void render_stream(DrawStream *stream, VkCommandBuffer cmd)
+    inline void push_widget_to_cache(DrawStream *stream, Widget *widget)
     {
-        stream->render(stream, cmd);
-        stream->next_call = stream->clear_stream;
+        assert(stream && stream->push_widget_to_cache);
+        stream->push_widget_to_cache(stream, widget);
     }
 
-    inline void next_stream_call(DrawStream *stream, VkCommandBuffer cmd) { stream->next_call(stream, cmd); }
+    inline void render_stream(DrawStream *stream, VkCommandBuffer cmd) { stream->render(stream, cmd); }
 
     struct DrawLayer
     {
@@ -159,7 +165,7 @@ namespace auik::v2
         for (u32 stream_id = 0; stream_id < layer.stream_count; stream_id++)
         {
             auto &stream = layer.streams[stream_id];
-            if (stream.sizes[frame_id] > 0) next_stream_call(&stream, cmd);
+            if (stream.sizes[frame_id] > 0) render_stream(&stream, cmd);
         }
     }
 

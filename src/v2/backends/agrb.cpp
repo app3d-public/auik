@@ -1,5 +1,6 @@
 #include <agrb/vector.hpp>
-#include <auik/v2/pipelines/quads.hpp>
+#include <auik/v2/pipelines.hpp>
+#include "../pipelines/quads_stream.hpp"
 
 namespace auik::v2::detail
 {
@@ -13,12 +14,12 @@ namespace auik::v2::detail
         ++stream->sizes[frame_id];
     }
 
-    void clear_quads_stream(DrawStream *stream, VkCommandBuffer cmd)
+    void clear_quads_stream(DrawStream *stream, VkCommandBuffer cmd, u32 frame_id)
     {
-        auto *gpu_data = static_cast<QuadsStream *>(stream->stream_instances[stream->write_id]);
+        auto *gpu_data = static_cast<QuadsStream *>(stream->stream_instances[frame_id]);
         auto *pVector = static_cast<agrb::vector<QuadsInstanceData> *>(gpu_data->draw_instances);
         pVector->clear();
-        stream->sizes[stream->write_id] = 0;
+        stream->sizes[frame_id] = 0;
     }
 
     void destroy_quads_stream_gpu_data(DrawStream *stream)
