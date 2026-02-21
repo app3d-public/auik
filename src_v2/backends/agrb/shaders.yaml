@@ -1,0 +1,6 @@
+auik:
+  quads:
+    id: 0x94C21750
+    stages:
+      - vs: "quads/quads.vert"
+      - fs: "quads/quads.frag"

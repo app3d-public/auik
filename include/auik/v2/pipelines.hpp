@@ -1,10 +1,9 @@
 #pragma once
 
-#pragma once
-
 #include "draw.hpp"
+#include "theme.hpp"
 
-namespace auik::v2::detail
+namespace auik::v2
 {
     struct QuadsInstanceData
     {
@@ -18,8 +17,17 @@ namespace auik::v2::detail
         u32 corner_mask;
     };
 
-    APPLIB_API void create_quads_stream_retained(DrawPipeline *pipeline, DrawStream &stream);
-    APPLIB_API void create_quads_stream_immediate(DrawPipeline *pipeline, DrawStream &stream);
+    APPLIB_API void create_quads_stream_retained(DrawStream &stream);
+    APPLIB_API void create_quads_stream_immediate(DrawStream &stream);
+
+    inline void fill_quads_instance_by_style(const Style &style, QuadsInstanceData &data)
+    {
+        data.background_color = style.background_color();
+        data.border_color = style.border_color();
+        data.border_radius = style.border_radius();
+        data.border_thickness = style.border_thickness();
+        data.corner_mask = style.corner_mask();
+    }
 
     struct TexturesInstanceData
     {
@@ -29,4 +37,4 @@ namespace auik::v2::detail
         u32 texture_id;
         amal::vec2 texture_offset;
     };
-} // namespace auik::v2::detail
+} // namespace auik::v2

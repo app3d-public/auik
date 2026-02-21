@@ -1,4 +1,6 @@
+#include <acul/memory/alloc.hpp>
 #include <auik/v2/theme.hpp>
+#include <auik/v2/window.hpp>
 
 namespace auik::v2
 {
@@ -120,5 +122,38 @@ namespace auik::v2
         _style_options.emplace(full_key, id);
         clear_resolved_cache();
         return id;
+    }
+
+    Theme *create_default_theme()
+    {
+        auto *theme = acul::alloc<Theme>();
+
+        // Base palette
+        const auto c_surface = color_rgba8(41, 41, 43, 255);       // ~0.16
+        const auto c_surface_light = color_rgba8(74, 74, 75, 255); // ~0.29
+        const auto c_hover = color_rgba8(97, 97, 97, 255);         // ~0.38
+        const auto c_active = color_rgba8(107, 107, 108, 255);     // ~0.42
+
+        // Global settings.
+        theme->add_style(AUIK_STYLE_ID_GLOBAL, make_style().text_color({1.0f}).margin(amal::vec2{8.0f, 8.0f}));
+
+        // Window body.
+        theme->add_style(AUIK_STYLE_ID_WINDOW_TYPE, make_style()
+                                                        .padding(amal::vec2{10.0f, 8.0f})
+                                                        .background_color(c_surface)
+                                                        .border_color({0.2f, 0.2f, 0.2f, 1.0f})
+                                                        .border_radius(4.0f)
+                                                        .border_thickness(1.0f));
+        theme->add_style(AUIK_STYLE_ID_WINDOW_TYPE, make_style().background_color(c_hover), StyleState::hover);
+        theme->add_style(AUIK_STYLE_ID_WINDOW_TYPE, make_style().background_color(c_active), StyleState::active);
+
+        // Window header.
+        theme->add_style(
+            AUIK_STYLE_ID_WINDOW_HEADER_TYPE,
+            make_style().padding(amal::vec2{10.0f, 8.0f}).background_color(c_surface_light).border_radius(4.0f));
+        theme->add_style(AUIK_STYLE_ID_WINDOW_HEADER_TYPE, make_style().background_color(c_hover), StyleState::hover);
+        theme->add_style(AUIK_STYLE_ID_WINDOW_HEADER_TYPE, make_style().background_color(c_active), StyleState::active);
+
+        return theme;
     }
 } // namespace auik::v2

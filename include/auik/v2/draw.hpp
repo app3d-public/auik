@@ -1,179 +1,78 @@
 #pragma once
 
-#include <acul/disposal_queue.hpp>
-#include <acul/enum.hpp>
-#include <acul/event.hpp>
-#include <amal/vector.hpp>
-#include <vulkan/vulkan.h>
-#include "theme.hpp"
+#include <acul/api.hpp>
+#include <acul/memory/alloc.hpp>
+#include <acul/scalars.hpp>
+#include <cassert>
+#include "detail/context.hpp"
+
+#define AUIK_MAIN_LAYER      0
+#define AUIK_RETAINED_STREAM 0
 
 namespace auik::v2
 {
-    struct WidgetFlagBits
-    {
-        enum enum_type
-        {
-            none = 0x0,
-            visible = 0x1,
-            active = 0x2,
-            hovered = 0x4,
-            configurable = 0x8
-        };
-        using flag_bitmask = std::true_type;
-    };
+    class Widget;
 
-    using WidgetFlags = acul::flags<WidgetFlagBits>;
-
-    class Widget
-    {
-    public:
-        WidgetFlags widget_flags;
-        struct
-        {
-            StyleID id = 0;
-            u32 type_id = 0;
-        } style;
-
-        Widget(u32 id, WidgetFlags flags, Widget *parent = nullptr) : widget_flags(flags), _id(id), _parent(parent) {}
-
-        u32 id() const { return _id; }
-
-        virtual void record_commands() {}
-
-        virtual void update_immediate_commands() {}
-
-    protected:
-        u32 _id;
-        Widget *_parent = nullptr;
-    };
-
-    struct DrawPipeline
-    {
-        VkPipeline handle;
-        VkPipelineLayout layout;
-    };
+    struct DrawPipeline;
 
     struct DrawStream
     {
-        // Callbacks
         void (*push_data_to_stream)(DrawStream *, void *) = nullptr;
         void (*push_widget_to_cache)(DrawStream *, Widget *) = nullptr;
-        void (*render)(DrawStream *, VkCommandBuffer) = nullptr;
+        void (*render)(DrawStream *, void *, void *) = nullptr;
         void (*destroy)(DrawStream *) = nullptr;
 
-        // Data
-        void **stream_instances = nullptr;
-        DrawPipeline *pipeline;
-        u32 *sizes;
-        u32 write_id = 0;
+        void *stream_instances = nullptr;
+        void *runtime_data = nullptr;
+        DrawPipeline *pipeline = nullptr;
+        u32 *draw_sizes = nullptr;
+    };
+
+    struct DrawLayer
+    {
+        u32 subpass = 0;
+        DrawStream *streams = nullptr;
+        u32 stream_count = 0;
     };
 
     inline void push_data_to_stream(DrawStream *stream, void *data)
     {
-        assert(stream && stream->push_data_to_stream);
+        assert(stream->push_data_to_stream);
         stream->push_data_to_stream(stream, data);
     }
 
     inline void push_widget_to_cache(DrawStream *stream, Widget *widget)
     {
-        assert(stream && stream->push_widget_to_cache);
+        assert(stream->push_widget_to_cache);
         stream->push_widget_to_cache(stream, widget);
     }
 
-    inline void render_stream(DrawStream *stream, VkCommandBuffer cmd) { stream->render(stream, cmd); }
-
-    struct DrawLayer
+    inline void render_stream(DrawStream *stream, void *render_ctx)
     {
-        u32 subpass;
-        DrawStream *streams;
-        u32 stream_count = 0;
-    };
-
-    namespace detail
-    {
-        extern APPLIB_API struct Context
-        {
-            DrawLayer *layers = nullptr;
-            u32 layer_count = 0;
-            acul::events::dispatcher *ed = nullptr;
-            acul::disposal_queue *disposal_queue = nullptr;
-            acul::vector<Widget *> widget_tree;
-            void *gpu_backend = nullptr;
-            acul::point2D<u32> window_size;
-            u32 frame_id = 0;
-            u32 frames_in_flight = 0;
-        } *g_context;
-    }; // namespace detail
-
-    inline detail::Context &get_context()
-    {
-        assert(detail::g_context && "auik context is not initialized");
-        return *detail::g_context;
+        assert(stream && stream->render);
+        stream->render(stream, render_ctx, detail::get_context().gpu_backend);
     }
 
     inline void next_frame_id()
     {
-        auto &ctx = get_context();
+        auto &ctx = detail::get_context();
         ctx.frame_id = (ctx.frame_id + 1) % ctx.frames_in_flight;
     }
 
-    struct CreateInfo
-    {
-        acul::events::dispatcher *ed = nullptr;
-        acul::disposal_queue *disposal_queue = nullptr;
-        u32 layer_count = 0;
-        DrawLayer *layers = nullptr;
-        void *gpu_backend = nullptr;
-
-        CreateInfo &set_ed(acul::events::dispatcher *ed)
-        {
-            this->ed = ed;
-            return *this;
-        }
-
-        CreateInfo &set_disposal_queue(acul::disposal_queue *disposal_queue)
-        {
-            this->disposal_queue = disposal_queue;
-            return *this;
-        }
-
-        CreateInfo &set_layers(DrawLayer *layers, u32 layer_count)
-        {
-            this->layers = layers;
-            this->layer_count = layer_count;
-            return *this;
-        }
-
-        CreateInfo &set_gpu_backend(void *gpu_backend)
-        {
-            this->gpu_backend = gpu_backend;
-            return *this;
-        }
-    };
-
-    inline void init_library(const CreateInfo &create_info)
-    {
-        detail::g_context = acul::alloc<detail::Context>();
-        detail::g_context->ed = create_info.ed;
-        detail::g_context->disposal_queue = create_info.disposal_queue;
-        detail::g_context->layer_count = create_info.layer_count;
-        detail::g_context->layers = create_info.layers;
-    }
-
-    inline void render_layer(const DrawLayer &layer, VkCommandBuffer cmd, u32 frame_id)
+    inline void render_layer(const DrawLayer &layer, void *render_ctx, u32 frame_id)
     {
         for (u32 stream_id = 0; stream_id < layer.stream_count; stream_id++)
         {
             auto &stream = layer.streams[stream_id];
-            if (stream.sizes[frame_id] > 0) render_stream(&stream, cmd);
+            render_stream(&stream, render_ctx);
         }
     }
 
-    inline void render_all_layers(VkCommandBuffer cmd)
+    inline void render_all_layers(DrawLayer *layers, u32 layer_count, void *render_ctx)
     {
-        auto &ctx = get_context();
-        for (u32 layer_id = 0; layer_id < ctx.layer_count; layer_id++)
-            render_layer(ctx.layers[layer_id], cmd, ctx.frame_id);
-        next_frame_id(); // todo: replace to gpu update flag check
-    };
+        auto &ctx = detail::get_context();
+        for (u32 layer_id = 0; layer_id < layer_count; layer_id++)
+            render_layer(layers[layer_id], render_ctx, ctx.frame_id);
+        next_frame_id();
+    }
 } // namespace auik::v2

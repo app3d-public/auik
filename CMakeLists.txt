@@ -81,3 +81,5 @@ set_target_properties(${PROJECT_NAME}
     PROPERTIES
     CXX_EXTENSIONS YES
 )
+
+add_subdirectory(src_v2)
