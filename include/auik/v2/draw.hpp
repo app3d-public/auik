@@ -1,7 +1,6 @@
 #pragma once
 
 #include <acul/api.hpp>
-#include <acul/memory/alloc.hpp>
 #include <acul/scalars.hpp>
 #include <cassert>
 #include "detail/context.hpp"
@@ -51,6 +50,12 @@ namespace auik::v2
     {
         assert(stream && stream->render);
         stream->render(stream, render_ctx, detail::get_context().gpu_backend);
+    }
+
+    inline void destroy_draw_stream(DrawStream *stream)
+    {
+        assert(stream && stream->destroy);
+        stream->destroy(stream);
     }
 
     inline void next_frame_id()

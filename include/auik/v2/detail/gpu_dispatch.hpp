@@ -5,6 +5,7 @@
 
 namespace auik::v2::detail
 {
+
     extern APPLIB_API struct GPUDispatch
     {
         QuadsGPUDispatch quads;

@@ -53,7 +53,6 @@ namespace auik::v2::detail
         destroy_quads_stream_gpu_data(stream, g_gpu_dispatch.quads);
         auto *widgets_cache = static_cast<ImStreamData *>(stream->runtime_data);
         acul::release(widgets_cache, get_context().frames_in_flight);
-
         if (stream->draw_sizes) acul::release(stream->draw_sizes, get_context().frames_in_flight);
         stream->runtime_data = nullptr;
         stream->stream_instances = nullptr;

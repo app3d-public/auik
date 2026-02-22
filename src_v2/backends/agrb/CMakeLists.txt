@@ -27,7 +27,14 @@ add_shaders(
 add_dependencies(${PROJECT_NAME} UI_SHADERS)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
-target_compile_definitions(${PROJECT_NAME} PRIVATE -DAPPLIB_BUILD)
+file(TO_CMAKE_PATH "${AUIK_SHADERS_OUTPUT_DIR}" AUIK_SHADERS_OUTPUT_DIR_CMAKE)
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+    -DAPPLIB_BUILD
+    AUIK_SHADERS_OUTPUT_DIR=\"${AUIK_SHADERS_OUTPUT_DIR_CMAKE}\"
+)
+target_include_directories(${PROJECT_NAME} PRIVATE
+    "${CMAKE_BINARY_DIR}/src/ui_shaders"
+)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE acul amal auik auik-v2 agrb)
 

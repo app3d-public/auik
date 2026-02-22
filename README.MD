@@ -1,28 +1,10 @@
-# App3D UI Kit
+# AUIK
 
 **Auik** is a GPU-oriented, event-driven UI runtime.
 It combines Retained and Immediate execution models inside a deterministic, pipeline-oriented architecture fully controlled by the host application.
 
 Auik is not a windowing framework and does not own your main loop.
 It is a rendering and state runtime that integrates into existing engines and toolchains.
-
-## Core Principles
-
-- **Event-Driven Execution**  
-  UI state changes only in response to injected events. No implicit polling or hidden frame logic.
-- **App-In-Control Philosophy**  
-  The host owns:
-  - the window
-  - the event loop
-  - synchronization
-  - GPU submission timing
-- **Deterministic Data Flow**  
-  UI processing is structured as a directed pipeline:  
-  control -> state -> draw streams -> GPU execution.
-- **Explicit Resource Ownership**  
-  UI state, cached geometry, and GPU buffers have clear, non-overlapping lifetimes.
-- **Backend Agnosticism**  
-  Backend-specific rendering state is encapsulated inside `DrawPipeline`, allowing the UI runtime to remain independent of the underlying graphics API.
 
 ## Features
 
@@ -41,7 +23,7 @@ It is a rendering and state runtime that integrates into existing engines and to
 
 ## Architecture Overview
 
-Auik v2 implements a decoupled, pipeline-oriented architecture separating:
+Auik implements a decoupled, pipeline-oriented architecture separating:
 
 - **Control Flow** (events, interaction, widget state)
 - **Data Preparation** (draw streams, layout, style resolution)
@@ -51,72 +33,15 @@ The system avoids implicit redraw models and instead prepares structured GPU-rea
 
 ![Architecture Flow](./images/arch.png)
 
-### Retained Streams
+### Execution model
+1. Host injects events.
+2. UI updates state.
+3. Layout/style/command recording runs on demand.
+4. Draw streams are submitted by the selected GPU backend.
 
-Used for persistent UI elements.
-
-- Widget state is stored explicitly.
-- Draw commands are regenerated only when relevant state changes occur.
-
-### Immediate Streams
-
-Allows frame-local UI declaration.
-Unlike traditional immediate-mode UI systems:
-
-- Auik does not blindly recompute everything each frame.
-- Layout, geometry, and style resolution are internally cached.
-- Immediate usage does not imply linear performance penalties.
-
-Both execution paths share the same `DrawStream` and GPU pipeline infrastructure.
-
-### Host Integration
-
-Auik follows a strict **App-In-Control** philosophy.
-
-The library does not:
-
-- create or manage windows
-- own the event loop
-- perform implicit frame synchronization
-
-Instead:
-1. The host injects raw events into Auik.
-2. Auik mutates widget state.
-3. The host explicitly triggers command update.
-4. Draw streams are submitted through the active GPU backend.
-
-This design allows tight integration into existing engines.
-
-### Hardware Abstraction Layer (HAL)
-The HAL defines a clean boundary between UI logic and the graphics backend.
-
-### Draw Streams
-Typed GPU-friendly buffers containing:
-
-- geometry
-- instance parameters
-- draw command metadata
-
-They act as the primary contract between UI logic and rendering.
-
-### Draw Pipeline
-Encapsulates backend-specific state:
-
-- shader bindings
-- descriptor layouts
-- pipeline configuration
-
-UI logic remains identical regardless of the graphics API.
-
-### GPU Caching Strategy
-
-To minimize host-to-device traffic:
-
-- Geometry and instance data are cached.
-- Buffers are reused across frames.
-- Updates are localized to mutated regions.
-
-The render queue collects tasks from draw layers and dispatches them to the active draw pipeline.
+### Supported stream modes
+- Retained: persistent recorded data, updated on state changes.
+- Immediate: frame-local command generation with internal caches.
 
 ## Theme and styling
 Auik provides a declarative theme system inspired by CSS-like cascading, resolved explicitly during build/update stages.
@@ -196,38 +121,32 @@ The following dependencies are included as git submodules and must be checked ou
 - [umbf](https://github.com/app3d-public/umbf)
 
 ## Minimal Initialization Example
-To build the demo module, enable the following CMake option:
-```cmake
-set(AUIK_DEMO_ENABLE ON)
-```
-`AUIK_DEMO_ENABLE` builds the optional demo module and is not required for production integration.
+
 ```cpp
-   auik::v2::init_agrb_dispatcher();
-   // auik::v2::init_awin_dispatcher();
-   auik::v2::CreateInfo create_info;
-   create_info.set_ed(&env::get_event_dispatcher())
-      .set_disposal_queue(&env::get_disposal_queue())
-      .set_gpu_backend(&env::get_device())
-      .set_frames_in_flight(FRAMES_IN_FLIGHT);
-   auik::v2::init_library(create_info);
-   auik::v2::DrawLayer *layers = acul::alloc_n<auik::v2::DrawLayer>(1);
-   layers[0].subpass = 1;
-   layers[0].stream_count = 1;
-   layers[0].streams = acul::alloc_n<auik::v2::DrawStream>(1);
-   auik::v2::create_quads_stream_retained(layers[0].streams[0]);
-   auik::v2::set_default_quad_stream(&layers[0].streams[0]);
-   // agrb::graphics_pipeline_batch batch;
-   // // todo: pipeline cache
-   // // todo: add ui pipeline artifacts/commits
-   // if (!batch.allocate_pipelines(env::get_device(), 1))
-   //     throw acul::runtime_error("Failed to allocate ui pipelines");
-   auik::v2::set_theme(auik::v2::create_default_theme());
-   auik::v2::add_demo_window();
-   // todo: record primary commands, update layout, update styles
+auik::v2::init_agrb_dispatcher();
+
+auik::v2::CreateInfo create_info;
+create_info.set_ed(&dispatcher)
+    .set_disposal_queue(&disposal_queue)
+    .set_gpu_backend(&device)
+    .set_frames_in_flight(FRAMES_IN_FLIGHT);
+auik::v2::init_library(create_info);
+
+auto *layers = acul::alloc_n<auik::v2::DrawLayer>(1);
+layers[0].subpass = 1;
+layers[0].stream_count = 1;
+layers[0].streams = acul::alloc_n<auik::v2::DrawStream>(1);
+
+auik::v2::create_quads_stream_retained(layers[0].streams[0]);
+auik::v2::set_default_quad_stream(&layers[0].streams[0]);
+
+auik::v2::set_theme(auik::v2::create_default_theme());
+// build widget tree...
+// run initial style/layout/record pass...
 ```
 
 ## License
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the  [MIT License](LICENSE).
 
 ## Contacts
 For any questions or feedback, you can reach out via [email](mailto:wusikijeronii@gmail.com) or open a new issue.

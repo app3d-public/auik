@@ -2,7 +2,6 @@
 
 #include <acul/disposal_queue.hpp>
 #include <acul/event.hpp>
-#include "detail/context.hpp"
 
 namespace auik::v2
 {
