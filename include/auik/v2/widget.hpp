@@ -1,6 +1,7 @@
 #pragma once
 
 #include <acul/enum.hpp>
+#include "draw.hpp"
 #include "theme.hpp"
 
 namespace auik::v2
@@ -20,6 +21,10 @@ namespace auik::v2
 
     using WidgetFlags = acul::flags<WidgetFlagBits>;
 
+    constexpr inline WidgetFlags get_default_widget_flags() { return WidgetFlagBits::visible; }
+
+    using u31 = u32;
+
     class Widget
     {
     public:
@@ -30,17 +35,38 @@ namespace auik::v2
             u32 type_id = 0;
         } style;
 
-        Widget(u32 id, WidgetFlags flags, Widget *parent = nullptr) : widget_flags(flags), _id(id), _parent(parent) {}
+        Widget(u31 id, WidgetFlags flags, Widget *parent = nullptr) : widget_flags(flags), _id(id), _parent(parent) {}
         virtual ~Widget() = default;
 
-        u32 id() const { return _id; }
+        inline u31 id() const { return _id; }
+        inline Widget *parent() const { return _parent; }
 
-        virtual void record_commands() {}
-        virtual void update_immediate_commands() {}
+        void record_draw_commands()
+        {
+            DrawCtx ctx{};
+            ctx.emit = &emit_draw_record;
+            draw(ctx);
+        }
+
+        void update_draw_commands()
+        {
+            DrawCtx ctx{};
+            ctx.emit = &emit_draw_update;
+            draw(ctx);
+        }
+
+        virtual void update_layout() {}
 
     protected:
-        u32 _id;
+        virtual void draw(DrawCtx &) = 0;
+
+        u31 _id;
         Widget *_parent = nullptr;
         f32 _z_order = 0.0f;
     };
+
+    APPLIB_API void record_all_commands();
+    APPLIB_API void record_all_commands_force();
+    APPLIB_API void update_widget_style(Widget *widget);
+    APPLIB_API void add_widget_to_root(Widget *widget);
 } // namespace auik::v2

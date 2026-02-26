@@ -6,6 +6,7 @@
 #include <acul/hash/utils.hpp>
 #include <acul/scalars.hpp>
 #include <acul/vector.hpp>
+#include <amal/color.hpp>
 #include <amal/vector.hpp>
 
 #define AUIK_STYLE_ID_GLOBAL 0x00000000u
@@ -209,10 +210,4 @@ namespace auik::v2
     };
 
     APPLIB_API Theme *create_default_theme();
-
-    inline constexpr amal::vec4 color_rgba8(u8 r, u8 g, u8 b, u8 a)
-    {
-        return amal::vec4{static_cast<f32>(r) / 255.0f, static_cast<f32>(g) / 255.0f, static_cast<f32>(b) / 255.0f,
-                          static_cast<f32>(a) / 255.0f};
-    }
 } // namespace auik::v2

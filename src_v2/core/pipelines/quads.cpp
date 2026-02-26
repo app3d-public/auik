@@ -1,5 +1,5 @@
 #include <auik/v2/detail/context.hpp>
-#include <auik/v2/detail/gpu_dispatch.hpp>
+#include <auik/v2/detail/gpu_context.hpp>
 #include <auik/v2/detail/quads_dispatch.hpp>
 #include <auik/v2/pipelines.hpp>
 #include <auik/v2/widget.hpp>
@@ -7,52 +7,93 @@
 
 namespace auik::v2::detail
 {
-    static void push_data_quads_stream_retained(DrawStream *stream, void *data)
+    static DrawDataID push_data_to_stream_cached(DrawStream *stream, const void *data)
     {
-        push_data_to_quads_stream(stream, data, g_gpu_dispatch.quads);
-        auto *write_id = static_cast<RetainedStreamData *>(stream->runtime_data);
-        *write_id = get_context().frame_id;
+        auto &ctx = get_context();
+        const u32 frame_id = ctx.frame_id;
+        auto *state = static_cast<CachedStreamData *>(stream->runtime_data);
+        auto *gpu_ctx = ctx.gpu_ctx;
+
+        const DrawDataID draw_data_id = gpu_ctx->quads.push_data_to_stream(stream, data, frame_id);
+        state->write_id = static_cast<i32>(frame_id);
+        return draw_data_id;
     }
 
-    static void push_widget_quads_stream_immediate(DrawStream *stream, Widget *widget)
+    static void update_data_quads_stream_cached(DrawStream *stream, DrawDataID draw_data_id, const void *data)
     {
-        auto &widgets_cache = static_cast<ImStreamData *>(stream->runtime_data)[get_context().frame_id];
-        widgets_cache.push_back(widget);
+        auto &ctx = get_context();
+        auto *state = static_cast<CachedStreamData *>(stream->runtime_data);
+        if (state->write_id < 0) return;
+        ctx.gpu_ctx->quads.update_quads_stream_data(stream, draw_data_id, data, static_cast<u32>(state->write_id));
     }
 
-    static void render_quads_stream_retained(DrawStream *stream, void *render_ctx, void *gpu_backend)
+    static void push_widget_quads_stream_transient(DrawStream *stream, Widget *widget)
     {
-        u32 write_id = *static_cast<RetainedStreamData *>(stream->runtime_data);
+        auto *state = static_cast<TransientStreamData *>(stream->runtime_data);
+        state->widgets_cache.push_back(widget);
+    }
+
+    static DrawDataID push_data_to_stream_transient(DrawStream *stream, const void *data)
+    {
+        auto &ctx = get_context();
+        return ctx.gpu_ctx->quads.push_data_to_stream(stream, data, ctx.frame_id);
+    }
+
+    static void update_data_quads_stream_transient(DrawStream *stream, DrawDataID draw_data_id, const void *data)
+    {
+        auto &ctx = get_context();
+        ctx.gpu_ctx->quads.update_quads_stream_data(stream, draw_data_id, data, ctx.frame_id);
+    }
+
+    static void render_quads_stream_cached(DrawStream *stream, void *render_ctx, GPUContext *gpu_context)
+    {
+        auto *state = static_cast<CachedStreamData *>(stream->runtime_data);
+        if (state->write_id < 0) return;
+
+        const u32 write_id = static_cast<u32>(state->write_id);
         if (stream->draw_sizes[write_id] == 0) return;
-        render_quads_stream(stream, render_ctx, gpu_backend, write_id, g_gpu_dispatch.quads);
+        gpu_context->quads.render_quads_stream(stream, render_ctx, gpu_context, write_id);
     }
 
-    static void render_quads_stream_immediate(DrawStream *stream, void *render_ctx, void *gpu_backend)
+    static void render_quads_stream_transient(DrawStream *stream, void *render_ctx, GPUContext *gpu_context)
     {
-        u32 frame_id = get_context().frame_id;
-        auto &widgets_cache = static_cast<ImStreamData *>(stream->runtime_data)[frame_id];
+        auto *state = static_cast<TransientStreamData *>(stream->runtime_data);
+        auto &widgets_cache = state->widgets_cache;
         if (widgets_cache.size() == 0) return;
+        // Transient stream is expected to refresh every frame while it has active widgets.
+        auto &global_ctx = get_context();
+        global_ctx.dirty_flags |= DirtyFlagBits::render;
+        for (auto &widget : widgets_cache) widget->update_draw_commands();
 
-        clear_quads_stream(stream, frame_id, g_gpu_dispatch.quads);
-        for (auto &widget : widgets_cache) widget->update_immediate_commands();
-        render_quads_stream(stream, render_ctx, gpu_backend, frame_id, g_gpu_dispatch.quads);
+        const u32 frame_id = global_ctx.frame_id;
+        gpu_context->quads.render_quads_stream(stream, render_ctx, gpu_context, frame_id);
     }
 
-    static void destroy_quads_stream_retained(DrawStream *stream)
+    static void clear_quads_stream_cached(DrawStream *stream, u32 frame_id)
     {
-        destroy_quads_stream_gpu_data(stream, g_gpu_dispatch.quads);
-        if (stream->runtime_data) acul::release(static_cast<RetainedStreamData *>(stream->runtime_data));
+        auto &ctx = get_context();
+        auto *state = static_cast<CachedStreamData *>(stream->runtime_data);
+        ctx.gpu_ctx->quads.clear_quads_stream(stream, frame_id);
+        stream->draw_sizes[frame_id] = 0;
+        state->write_id = -1;
+    }
+
+    static void destroy_quads_stream_cached(DrawStream *stream)
+    {
+        auto *gpu_ctx = get_context().gpu_ctx;
+        gpu_ctx->quads.destroy_quads_stream_gpu_data(stream);
+        if (stream->runtime_data) acul::release(static_cast<CachedStreamData *>(stream->runtime_data));
         if (stream->draw_sizes) acul::release(stream->draw_sizes, get_context().frames_in_flight);
         stream->runtime_data = nullptr;
         stream->stream_instances = nullptr;
         stream->draw_sizes = nullptr;
     }
 
-    static void destroy_quads_stream_immediate(DrawStream *stream)
+    static void destroy_quads_stream_transient(DrawStream *stream)
     {
-        destroy_quads_stream_gpu_data(stream, g_gpu_dispatch.quads);
-        auto *widgets_cache = static_cast<ImStreamData *>(stream->runtime_data);
-        acul::release(widgets_cache, get_context().frames_in_flight);
+        auto *gpu_ctx = get_context().gpu_ctx;
+        gpu_ctx->quads.destroy_quads_stream_gpu_data(stream);
+        if (stream->runtime_data) acul::release(static_cast<TransientStreamData *>(stream->runtime_data));
         if (stream->draw_sizes) acul::release(stream->draw_sizes, get_context().frames_in_flight);
         stream->runtime_data = nullptr;
         stream->stream_instances = nullptr;
@@ -68,28 +109,33 @@ namespace auik::v2::detail
 
 namespace auik::v2
 {
-    void create_quads_stream_retained(DrawStream &stream)
+    void create_quads_stream_cached(DrawStream &stream)
     {
         detail::setup_quads_stream(stream);
-        stream.push_data_to_stream = detail::push_data_quads_stream_retained;
-        stream.destroy = detail::destroy_quads_stream_retained;
+        stream.push_data_to_stream = &detail::push_data_to_stream_cached;
+        stream.update_data_in_stream = &detail::update_data_quads_stream_cached;
+        stream.clear = &detail::clear_quads_stream_cached;
+        stream.destroy = &detail::destroy_quads_stream_cached;
+
         auto &ctx = detail::get_context();
-        stream.stream_instances =
-            detail::create_quads_stream_gpu_data(ctx.frames_in_flight, ctx.gpu_backend, detail::g_gpu_dispatch.quads);
-        stream.runtime_data = acul::alloc<detail::RetainedStreamData>();
-        stream.render = detail::render_quads_stream_retained;
+        auto *gpu_ctx = ctx.gpu_ctx;
+        stream.stream_instances = gpu_ctx->quads.create_quads_stream_gpu_data(ctx.frames_in_flight, gpu_ctx);
+        stream.runtime_data = acul::alloc<detail::CachedStreamData>(-1);
+        stream.render = &detail::render_quads_stream_cached;
     }
 
-    void create_quads_stream_immediate(DrawPipeline *pipeline, DrawStream &stream)
+    void create_quads_stream_transient(DrawStream &stream)
     {
         detail::setup_quads_stream(stream);
-        stream.push_data_to_stream = detail::g_gpu_dispatch.quads.push_data_to_quads_stream;
-        stream.push_widget_to_cache = detail::push_widget_quads_stream_immediate;
-        stream.destroy = detail::destroy_quads_stream_immediate;
         auto &ctx = detail::get_context();
-        stream.runtime_data = acul::alloc_n<detail::ImStreamData>(ctx.frames_in_flight);
-        stream.stream_instances =
-            detail::create_quads_stream_gpu_data(ctx.frames_in_flight, ctx.gpu_backend, detail::g_gpu_dispatch.quads);
-        stream.render = detail::render_quads_stream_immediate;
+        auto *gpu_ctx = ctx.gpu_ctx;
+        stream.push_data_to_stream = &detail::push_data_to_stream_transient;
+        stream.update_data_in_stream = &detail::update_data_quads_stream_transient;
+        stream.push_widget_to_cache = &detail::push_widget_quads_stream_transient;
+        stream.clear = gpu_ctx->quads.clear_quads_stream;
+        stream.destroy = &detail::destroy_quads_stream_transient;
+        stream.runtime_data = acul::alloc<detail::TransientStreamData>();
+        stream.stream_instances = gpu_ctx->quads.create_quads_stream_gpu_data(ctx.frames_in_flight, gpu_ctx);
+        stream.render = &detail::render_quads_stream_transient;
     }
 } // namespace auik::v2

@@ -3,6 +3,12 @@
 
 namespace auik::v2::detail
 {
-    using ImStreamData = acul::vector<Widget *>;
-    using RetainedStreamData = u32;
+    struct TransientStreamData
+    {
+        acul::vector<Widget *> widgets_cache;
+    };
+    struct CachedStreamData
+    {
+        i32 write_id = -1;
+    };
 } // namespace auik::v2::detail

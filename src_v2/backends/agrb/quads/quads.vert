@@ -9,7 +9,7 @@ struct QuadsInstanceData
     float border_radius;
     float border_thickness;
     float z_order;
-    uint corner_mask;
+    uint mask;
 };
 
 layout(std430, set = 0, binding = 0) readonly buffer QuadsBuffer { QuadsInstanceData instances[]; };
@@ -23,6 +23,7 @@ layout(location = 3) flat out vec4 out_border_color;
 layout(location = 4) flat out float out_border_radius;
 layout(location = 5) flat out float out_border_thickness;
 layout(location = 6) flat out uint out_corner_mask;
+layout(location = 7) flat out uint out_flags;
 
 vec2 get_quad_uv(uint vertex_index)
 {
@@ -48,5 +49,6 @@ void main()
     out_border_color = instance.border_color;
     out_border_radius = instance.border_radius;
     out_border_thickness = instance.border_thickness;
-    out_corner_mask = instance.corner_mask;
+    out_corner_mask = instance.mask & 0xFu;
+    out_flags = instance.mask >> 20u;
 }

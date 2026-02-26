@@ -6,7 +6,7 @@
 #include "pipelines.hpp"
 #include "widget.hpp"
 
-#define AUIK_STYLE_ID_WINDOW_TYPE 0xB4382179
+#define AUIK_STYLE_ID_WINDOW_TYPE        0xB4382179
 #define AUIK_STYLE_ID_WINDOW_HEADER_TYPE 0x663566BE
 
 namespace auik::v2
@@ -29,34 +29,39 @@ namespace auik::v2
 
     using WindowFlags = acul::flags<WindowFlagBits>;
 
+    constexpr inline WindowFlags get_default_window_flags()
+    {
+        return WindowFlagBits::resizable | WindowFlagBits::movable | WindowFlagBits::decorated;
+    }
+
     class Window : public Widget
     {
     public:
         WindowFlags window_flags;
 
-        Window(u32 id, WindowFlags window_flags, WidgetFlags widget_flags, Widget *parent = nullptr,
-               amal::vec2 pos = amal::vec2(0.0f), amal::vec2 size = amal::vec2(0.0f))
-            : Widget(id, widget_flags, parent),
-              window_flags(window_flags),
-              _pos(pos),
-              _size(size)
+        Window(u32 id, amal::vec2 pos = amal::vec2(0.0f), amal::vec2 size = amal::vec2(0.0f),
+               WindowFlags window_flags = get_default_window_flags(),
+               WidgetFlags widget_flags = get_default_widget_flags(), Widget *parent = nullptr)
+            : Widget(id, widget_flags, parent), window_flags(window_flags), _pos(pos), _size(size)
         {
-        }
-
-        virtual void record_commands() override
-        {
-            auto &style = get_theme()->get_style(Widget::style.id);
-
-            QuadsInstanceData background_data;
-            background_data.position = _pos;
-            background_data.size = _size;
-            background_data.z_order = _z_order;
-            fill_quads_instance_by_style(style, background_data);
-            push_data_to_stream(get_default_quad_stream(), &background_data);
+            style.type_id = AUIK_STYLE_ID_WINDOW_TYPE;
         }
 
     private:
+        DrawDataID _bg;
         amal::vec2 _pos;
         amal::vec2 _size;
+
+        virtual void draw(DrawCtx &ctx) override
+        {
+            auto &style = get_theme()->get_style(Widget::style.id);
+
+            QuadsInstanceData bg_data{};
+            bg_data.position = _pos;
+            bg_data.size = _size;
+            bg_data.z_order = _z_order;
+            fill_quads_instance_by_style(style, bg_data);
+            ctx.emit(get_primary_quad_stream(), _bg, &bg_data);
+        }
     };
 } // namespace auik::v2

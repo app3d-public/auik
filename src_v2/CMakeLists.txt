@@ -45,3 +45,5 @@ if(AUIK_GPU_BACKEND STREQUAL "VULKAN")
 else()
     message(FATAL_ERROR "Unknown AUIK_GPU_BACKEND='${AUIK_GPU_BACKEND}'")
 endif()
+
+add_subdirectory(backends/awin)

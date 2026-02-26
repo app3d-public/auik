@@ -1,5 +1,9 @@
 #version 460
 
+#define AUIK_CLIP_RECT_BIT  0x1u
+#define AUIK_HAS_BORDER_BIT 0x2u
+#define AUIK_HAS_RADIUS_BIT 0x4u
+
 layout(location = 0) in vec2 in_local_pos;
 layout(location = 1) flat in vec2 in_size;
 layout(location = 2) flat in vec4 in_background_color;
@@ -7,6 +11,7 @@ layout(location = 3) flat in vec4 in_border_color;
 layout(location = 4) flat in float in_border_radius;
 layout(location = 5) flat in float in_border_thickness;
 layout(location = 6) flat in uint in_corner_mask;
+layout(location = 7) flat in uint in_flags;
 
 layout(location = 0) out vec4 out_color;
 
@@ -34,20 +39,40 @@ float sd_rounded_rect(vec2 p, vec2 half_size, float radius)
 void main()
 {
     vec2 half_size = 0.5 * in_size;
+    bool has_border = (in_flags & AUIK_HAS_BORDER_BIT) != 0u;
+    bool has_radius = (in_flags & AUIK_HAS_RADIUS_BIT) != 0u;
+
+    // Fast path: plain rect (no radius).
+    if (!has_radius)
+    {
+        vec2 d = abs(in_local_pos) - half_size;
+        if (d.x > 0.0 || d.y > 0.0) discard;
+
+        vec4 color = in_background_color;
+        if (has_border)
+        {
+            float thickness = max(in_border_thickness, 0.0);
+            vec2 inner_half = max(half_size - vec2(thickness), vec2(0.0));
+            bool inside_inner = abs(in_local_pos.x) <= inner_half.x && abs(in_local_pos.y) <= inner_half.y;
+            color = inside_inner ? in_background_color : in_border_color;
+        }
+
+        out_color = color;
+        return;
+    }
+
     float radius = clamp(in_border_radius, 0.0, min(half_size.x, half_size.y));
     float corner_radius = get_corner_radius(in_local_pos, radius, in_corner_mask);
 
     float dist_outer = sd_rounded_rect(in_local_pos, half_size, corner_radius);
     float aa_outer = max(fwidth(dist_outer), 1e-4);
     float fill_outer = 1.0 - smoothstep(0.0, aa_outer, dist_outer);
-
     if (fill_outer <= 0.0) discard;
 
-    float thickness = max(in_border_thickness, 0.0);
     vec4 color = in_background_color;
-
-    if (thickness > 0.0)
+    if (has_border)
     {
+        float thickness = max(in_border_thickness, 0.0);
         vec2 inner_half = max(half_size - vec2(thickness), vec2(0.0));
         float inner_radius = max(corner_radius - thickness, 0.0);
         float dist_inner = sd_rounded_rect(in_local_pos, inner_half, inner_radius);

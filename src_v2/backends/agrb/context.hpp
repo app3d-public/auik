@@ -4,10 +4,11 @@
 #include <agrb/descriptors.hpp>
 #include <agrb/device.hpp>
 #include <agrb/pipeline.hpp>
+#include <auik/v2/detail/gpu_context.hpp>
 
 namespace auik::v2::detail
 {
-    struct AgrbContext
+    struct AgrbContext final : GPUContext
     {
         agrb::device &device;
         agrb::descriptor_pool *descriptor_pool = nullptr;
@@ -19,13 +20,13 @@ namespace auik::v2::detail
         }
     };
 
-    inline AgrbContext *get_agrb_context(void *gpu_backend)
+    inline AgrbContext *get_agrb_context(GPUContext *gpu_ctx)
     {
-        assert(gpu_backend && "gpu_backend is null");
-        return static_cast<AgrbContext *>(gpu_backend);
+        assert(gpu_ctx && "gpu_backend is null");
+        return static_cast<AgrbContext *>(gpu_ctx);
     }
 
-    inline agrb::device &get_agrb_device(void *gpu_backend) { return get_agrb_context(gpu_backend)->device; }
+    inline agrb::device &get_agrb_device(GPUContext *gpu_backend) { return get_agrb_context(gpu_backend)->device; }
 
     inline const acul::path &get_shader_library_path()
     {

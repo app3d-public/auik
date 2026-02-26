@@ -1,47 +1,43 @@
-# AUIK
+# App3D UI Kit Library
 
-**Auik** is a GPU-oriented, event-driven UI runtime.
-It combines Retained and Immediate execution models inside a deterministic, pipeline-oriented architecture fully controlled by the host application.
-
-Auik is not a windowing framework and does not own your main loop.
-It is a rendering and state runtime that integrates into existing engines and toolchains.
+**Auik** is a GPU-oriented, event-driven UI runtime designed for high-performance applications.
+It is not a windowing framework and does not own your main loop. Instead, it provides a rendering and state runtime designed to integrate into existing engines and toolchains.
 
 ## Features
 
-- **Hybrid Retained + Immediate Runtime**  
-  Both execution models coexist and share the same rendering and caching infrastructure.
+- **Retained UI Architecture**  
+  Persistent widget tree owned by the library with explicit lifecycle and state management.
 - **GPU-Centric Rendering Pipeline**  
-  Draw data is prepared as structured GPU streams designed for minimal state changes.
+  Draw commands are encoded into structured GPU streams designed for minimal CPU overhead and predictable memory layout.
 - **SDI (Single Draw Instancing)**  
-  Optimized to reduce draw calls and pipeline switches across complex UI hierarchies.
-- **Hierarchical Draw Layers**  
-  Explicit multi-layer composition with deterministic ordering and subpass control.
+  Batches UI primitives into unified instance streams to reduce draw calls and pipeline switches.
+- **Bindless Texture Model**  
+  Texture sampling is handled via bindless descriptors, eliminating per-draw descriptor rebinding and reducing CPU overhead.
 - **SDF-Based Rendering**  
-  Resolution-independent rendering for shapes and borders.
-- **Professional Typography**  
-  True text shaping and layout powered by HarfBuzz.
+  Resolution-independent vector shapes, borders, and effects using signed distance fields.
+- **Advanced Typography**  
+  Full Unicode-aware text shaping and layout.
 
-## Architecture Overview
+## Core Abstractions
 
-Auik implements a decoupled, pipeline-oriented architecture separating:
+Auik separates UI logic from GPU execution through the following entities:
+- **Draw Pipeline**: An abstraction over a Graphics Pipeline (PSO), specialized for specific data types and operations.
+- **Draw Stream**: The primary data channel between CPU and GPU.
+Auik supports two stream recording models:
 
-- **Control Flow** (events, interaction, widget state)
-- **Data Preparation** (draw streams, layout, style resolution)
-- **Execution** (GPU pipelines, render queue submission)
+  **Cached**: Event-driven recording model. GPU data remains stable between frames and is updated only when widget state changes.
+  
+  **Transient**: Frame-driven recording model. GPU data is refreshed every frame from the widget cache regardless of state changes.  
+- **Draw Context**: A strategic abstraction layer passed to widget methods. It decouples the widget's intent to render from the specific implementation of GPU buffer writing.
 
-The system avoids implicit redraw models and instead prepares structured GPU-ready data.
+## Dirty State & Invalidation
+Auik uses a two-level invalidation system:
+- `is_dirty_render()`: Returns `true` if the current frame needs to be re-rendered.
+- `is_dirty_layout()`: Returns `true` if the widget layout or cached draw data has changed.
+- `is_dirty()`: Returns `true` if either render or layout invalidation is active.
 
-![Architecture Flow](./images/arch.png)
-
-### Execution model
-1. Host injects events.
-2. UI updates state.
-3. Layout/style/command recording runs on demand.
-4. Draw streams are submitted by the selected GPU backend.
-
-### Supported stream modes
-- Retained: persistent recorded data, updated on state changes.
-- Immediate: frame-local command generation with internal caches.
+> [!NOTE] 
+> When the dirty layout bit is set, the host must call `auik::v2::record_all_commands()` before rendering.
 
 ## Theme and styling
 Auik provides a declarative theme system inspired by CSS-like cascading, resolved explicitly during build/update stages.
@@ -121,28 +117,55 @@ The following dependencies are included as git submodules and must be checked ou
 - [umbf](https://github.com/app3d-public/umbf)
 
 ## Minimal Initialization Example
-
+### Initializating auik resources
 ```cpp
-auik::v2::init_agrb_dispatcher();
+acul::vector<auik::v2::DrawPipeline> pipelines(1);
+acul::vector<auik::v2::DrawStream> streams(1);
+
+auto pool = agrb::descriptor_pool::builder()
+                .set_max_sets(100)
+                .add_pool_size(vk::DescriptorType::eStorageBuffer, 10)
+                .build(device);
 
 auik::v2::CreateInfo create_info;
-create_info.set_ed(&dispatcher)
-    .set_disposal_queue(&disposal_queue)
-    .set_gpu_backend(&device)
-    .set_frames_in_flight(FRAMES_IN_FLIGHT);
+create_info.set_ed(&env::get_event_dispatcher())
+    .set_disposal_queue(&env::get_disposal_queue())
+    .set_drawstreams(streams.data(), static_cast<u32>(streams.size()))
+    .set_gpu_backend(auik::v2::create_agrb_backend(device, pool.get()))
+    .set_window_backend(auik::v2::create_awin_backend(env::get_main_window(), env::get_event_dispatcher()))
+    .set_frames_in_flight(FRAMES_IN_FLIGHT)
+    .set_window_size(env::get_main_window().dimensions());
 auik::v2::init_library(create_info);
 
-auto *layers = acul::alloc_n<auik::v2::DrawLayer>(1);
-layers[0].subpass = 1;
-layers[0].stream_count = 1;
-layers[0].streams = acul::alloc_n<auik::v2::DrawStream>(1);
+auto &cquads_stream = streams[0];
+auik::v2::create_quads_stream_cached(cquads_stream);
+auik::v2::set_primary_quad_stream(&cquads_stream);
+auto &quads_pipeline = pipelines[0];
+auik::v2::construct_quads_pipeline(quads_pipeline, device);
+cquads_stream.pipeline = &quads_pipeline;
 
-auik::v2::create_quads_stream_retained(layers[0].streams[0]);
-auik::v2::set_default_quad_stream(&layers[0].streams[0]);
+agrb::graphics_pipeline_batch batch;
+auto &cquads_artifact = batch.artifacts.emplace_back();
 
+auik::v2::construct_pipeline_artifact(cquads_artifact, 0, &quads_pipeline);
+auik::v2::configure_quads_pipeline(cquads_artifact, _fb.get_rp(), quads_pipeline, device);
+if (!batch.allocate_pipelines(env::get_device(), 1))
+    throw acul::runtime_error("Failed to allocate ui pipelines");
+auik::v2::clear_shader_cache(device);
+```
+
+### Adding widgets
+```cpp
 auik::v2::set_theme(auik::v2::create_default_theme());
-// build widget tree...
-// run initial style/layout/record pass...
+auto* demo_window = auik::v2::create_demo_window();
+auik::v2::add_widget_to_root(demo_window);
+```
+
+### Render loop
+```cpp
+if (auik::v2::is_dirty_layout()) auik::v2::record_all_commands();
+for (auto &stream : _streams) auik::v2::render_stream(stream, &secondary);
+auik::v2::next_frame();
 ```
 
 ## License

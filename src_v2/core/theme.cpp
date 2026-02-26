@@ -1,4 +1,5 @@
 #include <acul/memory/alloc.hpp>
+#include <amal/color.hpp>
 #include <auik/v2/theme.hpp>
 #include <auik/v2/window.hpp>
 
@@ -129,10 +130,11 @@ namespace auik::v2
         auto *theme = acul::alloc<Theme>();
 
         // Base palette
-        const auto c_surface = color_rgba8(41, 41, 43, 255);       // ~0.16
-        const auto c_surface_light = color_rgba8(74, 74, 75, 255); // ~0.29
-        const auto c_hover = color_rgba8(97, 97, 97, 255);         // ~0.38
-        const auto c_active = color_rgba8(107, 107, 108, 255);     // ~0.42
+        constexpr auto c_surface = amal::srgb8_to_linear(amal::vec4{41, 41, 43, 255});       // ~0.16
+        constexpr auto c_surface_light = amal::srgb8_to_linear(amal::vec4{74, 74, 75, 255}); // ~0.29
+        constexpr auto c_hover = amal::srgb8_to_linear(amal::vec4{97, 97, 97, 255});         // ~0.38
+        constexpr auto c_active = amal::srgb8_to_linear(amal::vec4{107, 107, 108, 255});     // ~0.42
+        constexpr auto c_border = amal::srgb8_to_linear(amal::vec4{51, 51, 51, 255});
 
         // Global settings.
         theme->add_style(AUIK_STYLE_ID_GLOBAL, make_style().text_color({1.0f}).margin(amal::vec2{8.0f, 8.0f}));
@@ -141,7 +143,7 @@ namespace auik::v2
         theme->add_style(AUIK_STYLE_ID_WINDOW_TYPE, make_style()
                                                         .padding(amal::vec2{10.0f, 8.0f})
                                                         .background_color(c_surface)
-                                                        .border_color({0.2f, 0.2f, 0.2f, 1.0f})
+                                                        .border_color(c_border)
                                                         .border_radius(4.0f)
                                                         .border_thickness(1.0f));
         theme->add_style(AUIK_STYLE_ID_WINDOW_TYPE, make_style().background_color(c_hover), StyleState::hover);

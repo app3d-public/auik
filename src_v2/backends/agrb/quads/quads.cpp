@@ -14,14 +14,23 @@ namespace auik::v2::detail
     {
         agrb::vector<auik::v2::QuadsInstanceData> draw_instances;
         vk::DescriptorSet descriptor_set;
+        vk::Buffer descriptor_buffer = nullptr;
     };
 
-    void push_data_to_quads_stream(DrawStream *stream, void *data)
+    DrawDataID push_data_to_stream(DrawStream *stream, const void *data, u32 frame_id)
     {
-        u32 frame_id = get_context().frame_id;
         auto &gpu_data = static_cast<QuadsStream *>(stream->stream_instances)[frame_id];
-        gpu_data.draw_instances.push_back(*static_cast<QuadsInstanceData *>(data));
+        const DrawDataID draw_data_id = static_cast<DrawDataID>(gpu_data.draw_instances.size());
+        gpu_data.draw_instances.push_back(*static_cast<const QuadsInstanceData *>(data));
         ++stream->draw_sizes[frame_id];
+        return draw_data_id;
+    }
+
+    void update_quads_stream_data(DrawStream *stream, DrawDataID draw_data_id, const void *data, u32 frame_id)
+    {
+        auto &gpu_data = static_cast<QuadsStream *>(stream->stream_instances)[frame_id];
+        if (draw_data_id >= gpu_data.draw_instances.size()) return;
+        gpu_data.draw_instances[draw_data_id] = *static_cast<const QuadsInstanceData *>(data);
     }
 
     void clear_quads_stream(DrawStream *stream, u32 frame_id)
@@ -41,42 +50,51 @@ namespace auik::v2::detail
         acul::release(static_cast<QuadsStream *>(stream->stream_instances), count);
     }
 
-    void *create_quads_stream_gpu_data(u32 instance_count, void *gpu_backend)
+    void *create_quads_stream_gpu_data(u32 instance_count, GPUContext *gpu_context)
     {
         auto *data = acul::alloc_n<QuadsStream>(instance_count);
-        auto &device = get_agrb_device(gpu_backend);
+        auto &device = get_agrb_device(gpu_context);
         agrb::managed_buffer buf{.required_flags = vk::MemoryPropertyFlagBits::eHostVisible |
                                                    vk::MemoryPropertyFlagBits::eHostCoherent,
                                  .buffer_usage = vk::BufferUsageFlagBits::eStorageBuffer,
                                  .vma_usage = VMA_MEMORY_USAGE_CPU_TO_GPU};
-        for (u32 i = 0; i < instance_count; i++)
-        {
-            data[i].draw_instances.init(device, buf);
-        }
+        for (u32 i = 0; i < instance_count; i++) { data[i].draw_instances.init(device, buf); }
         return data;
     }
 
-    static bool update_quads_descriptor_set(DrawStream *stream, QuadsStream &gpu_data, void *gpu_backend)
+    static bool update_quads_descriptor_set(DrawStream *stream, QuadsStream &gpu_data, GPUContext *gpu_context)
     {
         auto *pipeline = stream->pipeline;
-        auto *ctx = get_agrb_context(gpu_backend);
-        if (!pipeline || !pipeline->descriptor_set_layout || !ctx || !ctx->descriptor_pool) return false;
+        auto *ctx = get_agrb_context(gpu_context);
+        assert(pipeline && pipeline->descriptor_set_layout);
 
-        vk::DescriptorBufferInfo buffer_info{gpu_data.draw_instances.data().vk_buffer, 0, VK_WHOLE_SIZE};
+        const vk::Buffer current_buffer = gpu_data.draw_instances.data().vk_buffer;
+        if (!current_buffer) return false;
+
+        // Fast path: descriptor set already points to current buffer.
+        if (gpu_data.descriptor_set && gpu_data.descriptor_buffer == current_buffer) return true;
+
+        vk::DescriptorBufferInfo buffer_info{current_buffer, 0, VK_WHOLE_SIZE};
         agrb::descriptor_writer writer(*pipeline->descriptor_set_layout, *ctx->descriptor_pool);
         writer.write_buffer(0, &buffer_info);
-        if (!gpu_data.descriptor_set) return writer.build(gpu_data.descriptor_set);
-        writer.overwrite(gpu_data.descriptor_set);
+        if (!gpu_data.descriptor_set)
+        {
+            if (!writer.build(gpu_data.descriptor_set)) return false;
+        }
+        else
+            writer.overwrite(gpu_data.descriptor_set);
+
+        gpu_data.descriptor_buffer = current_buffer;
         return true;
     }
 
-    void render_quads_stream(DrawStream *stream, void *render_ctx, void *gpu_backend, u32 frame_id)
+    void render_quads_stream(DrawStream *stream, void *render_ctx, GPUContext *gpu_context, u32 frame_id)
     {
         if (stream->draw_sizes[frame_id] == 0) return;
         auto &gpu_data = static_cast<QuadsStream *>(stream->stream_instances)[frame_id];
-        if (!update_quads_descriptor_set(stream, gpu_data, gpu_backend)) return;
+        if (!update_quads_descriptor_set(stream, gpu_data, gpu_context)) return;
         auto *pipeline = stream->pipeline;
-        auto &device = get_agrb_device(gpu_backend);
+        auto &device = get_agrb_device(gpu_context);
         auto &cmd = *static_cast<vk::CommandBuffer *>(render_ctx);
         auto &loader = device.loader;
         cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline->handle, loader);
@@ -89,7 +107,8 @@ namespace auik::v2::detail
 
     void init_quads_pipeline_calls(QuadsGPUDispatch &dispatch)
     {
-        dispatch.push_data_to_quads_stream = &push_data_to_quads_stream;
+        dispatch.push_data_to_stream = &push_data_to_stream;
+        dispatch.update_quads_stream_data = &update_quads_stream_data;
         dispatch.clear_quads_stream = &clear_quads_stream;
         dispatch.render_quads_stream = &render_quads_stream;
         dispatch.create_quads_stream_gpu_data = &create_quads_stream_gpu_data;
@@ -131,7 +150,7 @@ namespace auik::v2
         artifact.config.pipeline_layout = pipeline.layout;
         artifact.config.subpass = tmp->value;
 
-        auto *ctx = detail::get_agrb_context(detail::get_context().gpu_backend);
+        auto *ctx = detail::get_agrb_context(detail::get_context().gpu_ctx);
         if (!ctx) return false;
 
         const auto &path = detail::get_shader_library_path();

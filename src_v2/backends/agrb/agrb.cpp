@@ -1,6 +1,6 @@
 #include <auik/v2/backends/agrb/agrb.hpp>
 #include <auik/v2/detail/context.hpp>
-#include <auik/v2/detail/gpu_dispatch.hpp>
+#include <auik/v2/detail/gpu_context.hpp>
 #include "context.hpp"
 
 namespace auik::v2
@@ -8,20 +8,26 @@ namespace auik::v2
     namespace detail
     {
         void init_quads_pipeline_calls(QuadsGPUDispatch &dispatch);
-
-        static void init_agrb_dispatcher() { detail::init_quads_pipeline_calls(detail::g_gpu_dispatch.quads); }
     } // namespace detail
 
-    APPLIB_API void *create_agrb_backend(agrb::device &device, agrb::descriptor_pool *descriptor_pool)
+    static void destroy_agrb_backend(detail::GPUContext *gpu_context)
     {
-        detail::init_agrb_dispatcher();
+        detail::AgrbContext *agrb_ctx = static_cast<detail::AgrbContext *>(gpu_context);
+        clear_shader_cache(agrb_ctx->device);
+        acul::release(agrb_ctx);
+    }
+
+    APPLIB_API detail::GPUContext *create_agrb_backend(agrb::device &device, agrb::descriptor_pool *descriptor_pool)
+    {
         auto *agrb_ctx = acul::alloc<detail::AgrbContext>(device, descriptor_pool);
+        agrb_ctx->destroy_context = &destroy_agrb_backend;
+        detail::init_quads_pipeline_calls(agrb_ctx->quads);
         return agrb_ctx;
     }
 
     APPLIB_API void clear_shader_cache(agrb::device &device)
     {
-        void *gpu_backend = detail::get_context().gpu_backend;
+        detail::GPUContext *gpu_backend = detail::get_context().gpu_ctx;
         agrb::clear_shader_cache(device, detail::get_agrb_context(gpu_backend)->shader_cache);
     }
 
