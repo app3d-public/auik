@@ -16,6 +16,7 @@ namespace auik::v2
         if (take & StylePropertiesBits::border_radius) out.border_radius(d.border_radius());
         if (take & StylePropertiesBits::border_thickness) out.border_thickness(d.border_thickness());
         if (take & StylePropertiesBits::corner_mask) out.corner_mask(d.corner_mask());
+        if (take & StylePropertiesBits::text_size) out.text_size(d.text_size());
     }
 
     StyleID Theme::get_resolved_style(u32 type, u32 id, u32 parent, StyleState state)
@@ -30,14 +31,14 @@ namespace auik::v2
             if (!desc) return;
 
             const auto take_non_inh = desc->mask() & need_non_inh;
-            if (static_cast<u8>(take_non_inh) != 0)
+            if (static_cast<u16>(take_non_inh) != 0)
             {
                 apply_desc_masked(out, *desc, take_non_inh);
                 need_non_inh &= ~take_non_inh;
             }
 
             const auto take_inh = desc->mask() & need_inh;
-            if (static_cast<u8>(take_inh) != 0)
+            if (static_cast<u16>(take_inh) != 0)
             {
                 apply_desc_masked(out, *desc, take_inh);
                 need_inh &= ~take_inh;
@@ -47,7 +48,7 @@ namespace auik::v2
         const auto apply_inheritable_only_desc = [&](const Style *desc) {
             if (!desc) return;
             const auto take_inh = desc->mask() & need_inh;
-            if (static_cast<u8>(take_inh) != 0)
+            if (static_cast<u16>(take_inh) != 0)
             {
                 apply_desc_masked(out, *desc, take_inh);
                 need_inh &= ~take_inh;
@@ -75,12 +76,12 @@ namespace auik::v2
                 const auto used_non_inh = prev_non_inh & ~need_non_inh;
                 const auto used_inh = prev_inh & ~need_inh;
                 const auto used = used_non_inh | used_inh;
-                if (static_cast<u8>(used) == 0) return;
+                if (static_cast<u16>(used) == 0) return;
 
                 acul::hash_combine(resolve_seed, source_id);
                 acul::hash_combine(resolve_seed, key);
                 acul::hash_combine(resolve_seed, static_cast<u8>(source_state));
-                acul::hash_combine(resolve_seed, static_cast<u8>(used));
+                acul::hash_combine(resolve_seed, static_cast<u16>(used));
             };
 
             const Style *desc_state = get_desc(key, state);
@@ -125,7 +126,7 @@ namespace auik::v2
         return id;
     }
 
-    Theme *create_default_theme()
+    Theme *create_default_theme(f32 dpi)
     {
         auto *theme = acul::alloc<Theme>();
 
@@ -137,22 +138,26 @@ namespace auik::v2
         constexpr auto c_border = amal::srgb8_to_linear(amal::vec4{51, 51, 51, 255});
 
         // Global settings.
-        theme->add_style(AUIK_STYLE_ID_GLOBAL, make_style().text_color({1.0f}).margin(amal::vec2{8.0f, 8.0f}));
+        theme->add_style(AUIK_STYLE_ID_GLOBAL,
+                         make_style().text_color({1.0f}).text_size(12.5f * dpi).margin(amal::vec2{8.0f, 8.0f}));
 
         // Window body.
         theme->add_style(AUIK_STYLE_ID_WINDOW_TYPE, make_style()
                                                         .padding(amal::vec2{10.0f, 8.0f})
                                                         .background_color(c_surface)
                                                         .border_color(c_border)
-                                                        .border_radius(4.0f)
+                                                        .border_radius(6.0f)
                                                         .border_thickness(1.0f));
         theme->add_style(AUIK_STYLE_ID_WINDOW_TYPE, make_style().background_color(c_hover), StyleState::hover);
         theme->add_style(AUIK_STYLE_ID_WINDOW_TYPE, make_style().background_color(c_active), StyleState::active);
 
         // Window header.
-        theme->add_style(
-            AUIK_STYLE_ID_WINDOW_HEADER_TYPE,
-            make_style().padding(amal::vec2{10.0f, 8.0f}).background_color(c_surface_light).border_radius(4.0f));
+        theme->add_style(AUIK_STYLE_ID_WINDOW_HEADER_TYPE, make_style()
+                                                               .padding(amal::vec2{4.0f, 4.0f})
+                                                               .background_color(c_surface_light)
+                                                               .border_radius(6.0f)
+                                                               .corner_mask(0x3u)
+);
         theme->add_style(AUIK_STYLE_ID_WINDOW_HEADER_TYPE, make_style().background_color(c_hover), StyleState::hover);
         theme->add_style(AUIK_STYLE_ID_WINDOW_HEADER_TYPE, make_style().background_color(c_active), StyleState::active);
 

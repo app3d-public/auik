@@ -1,9 +1,6 @@
 #pragma once
 
-#include <amal/vector.hpp>
-#include "detail/context.hpp"
-#include "draw.hpp"
-#include "pipelines.hpp"
+#include "theme.hpp"
 #include "widget.hpp"
 
 #define AUIK_STYLE_ID_WINDOW_TYPE        0xB4382179
@@ -34,34 +31,50 @@ namespace auik::v2
         return WindowFlagBits::resizable | WindowFlagBits::movable | WindowFlagBits::decorated;
     }
 
-    class Window : public Widget
+    class APPLIB_API Window : public Widget
     {
     public:
         WindowFlags window_flags;
+        acul::vector<Widget *> children;
 
         Window(u32 id, amal::vec2 pos = amal::vec2(0.0f), amal::vec2 size = amal::vec2(0.0f),
                WindowFlags window_flags = get_default_window_flags(),
                WidgetFlags widget_flags = get_default_widget_flags(), Widget *parent = nullptr)
-            : Widget(id, widget_flags, parent), window_flags(window_flags), _pos(pos), _size(size)
+            : Widget(id, widget_flags, parent),
+              window_flags(window_flags),
+              _pos(pos),
+              _size(size),
+              _styles({0, AUIK_STYLE_ID_WINDOW_TYPE}, {0, AUIK_STYLE_ID_WINDOW_HEADER_TYPE})
         {
-            style.type_id = AUIK_STYLE_ID_WINDOW_TYPE;
         }
+
+        inline void add_child(Widget *child)
+        {
+            assert(child && "child is null");
+            child->set_parent(this);
+            children.push_back(child);
+        }
+
+        inline void add_children(const acul::vector<Widget *> &new_children)
+        {
+            for (auto *child : new_children)
+            {
+                if (!child) continue;
+                add_child(child);
+            }
+        }
+
+        virtual void update_style() override;
 
     private:
         DrawDataID _bg;
         amal::vec2 _pos;
         amal::vec2 _size;
+        f32 _header_height = 0.0f;
+        StyleSelector _styles[2];
 
-        virtual void draw(DrawCtx &ctx) override
-        {
-            auto &style = get_theme()->get_style(Widget::style.id);
+        virtual void update_depth(const amal::vec2 &depth_range) override;
 
-            QuadsInstanceData bg_data{};
-            bg_data.position = _pos;
-            bg_data.size = _size;
-            bg_data.z_order = _z_order;
-            fill_quads_instance_by_style(style, bg_data);
-            ctx.emit(get_primary_quad_stream(), _bg, &bg_data);
-        }
+        virtual void draw(DrawCtx &ctx) override;
     };
 } // namespace auik::v2

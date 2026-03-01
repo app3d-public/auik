@@ -29,6 +29,7 @@ namespace auik::v2
             acul::events::dispatcher *ed = nullptr;
             acul::disposal_queue *disposal_queue = nullptr;
             acul::vector<auik::v2::Widget *> widget_tree;
+            int root_depth_counts[4] = {};
             GPUContext *gpu_ctx = nullptr;
             WindowContext *window_ctx = nullptr;
             acul::point2D<i32> window_size;

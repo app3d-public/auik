@@ -13,10 +13,8 @@ namespace auik::v2::detail
         const u32 frame_id = ctx.frame_id;
         auto *state = static_cast<CachedStreamData *>(stream->runtime_data);
         auto *gpu_ctx = ctx.gpu_ctx;
-
-        const DrawDataID draw_data_id = gpu_ctx->quads.push_data_to_stream(stream, data, frame_id);
         state->write_id = static_cast<i32>(frame_id);
-        return draw_data_id;
+        return gpu_ctx->quads.push_data_to_stream(stream, data, frame_id);
     }
 
     static void update_data_quads_stream_cached(DrawStream *stream, DrawDataID draw_data_id, const void *data)

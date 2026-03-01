@@ -39,7 +39,7 @@ void main()
 
     vec2 pixel_pos = instance.position + uv * instance.size;
     vec2 window = vec2(window_size);
-    vec2 ndc = vec2((pixel_pos.x / window.x) * 2.0 - 1.0, 1.0 - (pixel_pos.y / window.y) * 2.0);
+    vec2 ndc = vec2((pixel_pos.x / window.x) * 2.0 - 1.0, (pixel_pos.y / window.y) * 2.0 - 1.0);
 
     gl_Position = vec4(ndc, instance.z_order, 1.0);
 

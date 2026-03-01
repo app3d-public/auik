@@ -14,6 +14,7 @@ if(NOT DEFINED ACBT_LOADED)
 endif()
 
 add_files(${PROJECT_NAME} RECURSE "${CMAKE_CURRENT_SOURCE_DIR}/core")
+add_files(${PROJECT_NAME} RECURSE "${CMAKE_CURRENT_SOURCE_DIR}/widgets")
 
 add_library(${PROJECT_NAME} SHARED ${AUIK_V2_SRC})
 
@@ -46,4 +47,8 @@ else()
     message(FATAL_ERROR "Unknown AUIK_GPU_BACKEND='${AUIK_GPU_BACKEND}'")
 endif()
 
-add_subdirectory(backends/awin)
+if(AUIK_WINDOW_BACKEND STREQUAL "AWIN")
+    add_subdirectory(backends/awin)
+else()
+    message(FATAL_ERROR "Unknown AUIK_WINDOW_BACKEND='${AUIK_WINDOW_BACKEND}'")
+endif()

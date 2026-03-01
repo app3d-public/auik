@@ -17,7 +17,7 @@ namespace auik::v2
     {
         struct StylePropertiesBits
         {
-            enum enum_type : u8
+            enum enum_type : u16
             {
                 none = 0x0,
                 padding = 0x1,
@@ -27,7 +27,8 @@ namespace auik::v2
                 border_color = 0x10,
                 border_radius = 0x20,
                 border_thickness = 0x40,
-                corner_mask = 0x80
+                corner_mask = 0x80,
+                text_size = 0x100
             };
 
             using flag_bitmask = std::true_type;
@@ -35,7 +36,8 @@ namespace auik::v2
 
         using StylePropertyFlags = acul::flags<StylePropertiesBits>;
 
-        static constexpr StylePropertyFlags g_inheritable_mask = StylePropertiesBits::text_color;
+        static constexpr StylePropertyFlags g_inheritable_mask =
+            StylePropertiesBits::text_color | StylePropertiesBits::text_size;
         static constexpr StylePropertyFlags g_all_mask = acul::flag_traits<StylePropertiesBits>::all_flags;
         static constexpr StylePropertyFlags g_non_inheritable_mask = g_all_mask & ~g_inheritable_mask;
 
@@ -98,6 +100,14 @@ namespace auik::v2
             return *this;
         }
 
+        [[nodiscard]] f32 text_size() const { return _text_size; }
+        Style &text_size(f32 value)
+        {
+            _text_size = value;
+            _mask |= detail::StylePropertiesBits::text_size;
+            return *this;
+        }
+
         [[nodiscard]] const amal::vec4 &border_color() const { return _border_color; }
         Style &border_color(const amal::vec4 &value)
         {
@@ -111,6 +121,17 @@ namespace auik::v2
         {
             _border_radius = value;
             _mask |= detail::StylePropertiesBits::border_radius;
+            if (value <= 0.0f)
+            {
+                _corner_mask = 0u;
+                _mask |= detail::StylePropertiesBits::corner_mask;
+            }
+            else if (!(_mask & detail::StylePropertiesBits::corner_mask))
+            {
+                // Apply default rounding to all corners only when corner_mask was not set explicitly.
+                _corner_mask = 0xFu;
+                _mask |= detail::StylePropertiesBits::corner_mask;
+            }
             return *this;
         }
 
@@ -140,6 +161,7 @@ namespace auik::v2
         amal::vec4 _border_color{0.0f};
         f32 _border_radius{0.0f};
         f32 _border_thickness{0.0f};
+        f32 _text_size{12.5f};
         u32 _corner_mask{0};
         detail::StylePropertyFlags _mask{0};
     };
@@ -209,5 +231,11 @@ namespace auik::v2
         }
     };
 
-    APPLIB_API Theme *create_default_theme();
+    struct StyleSelector
+    {
+        StyleID id = 0;
+        u32 tag_id = 0;
+    };
+
+    APPLIB_API Theme *create_default_theme(f32 dpi = 1.0f);
 } // namespace auik::v2
