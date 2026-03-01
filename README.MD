@@ -142,7 +142,7 @@ auik::v2::add_widget_to_root(demo_window);
 ### Render loop
 ```cpp
 if (auik::v2::is_dirty_layout()) auik::v2::record_all_commands();
-for (auto &stream : streams) auik::v2::render_stream(stream, &secondary);
+for (auto &stream : streams) auik::v2::render_stream(stream, &cmd);
 auik::v2::next_frame();
 ```
 

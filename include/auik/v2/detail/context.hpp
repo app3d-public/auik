@@ -5,7 +5,9 @@
 #include <acul/enum.hpp>
 #include <acul/event.hpp>
 #include <acul/pair.hpp>
+#include <amal/vector.hpp>
 #include "fwd.hpp"
+#include "gpu_context.hpp"
 
 namespace auik::v2
 {
@@ -35,6 +37,7 @@ namespace auik::v2
             acul::point2D<i32> window_size;
             u32 frame_id = 0;
             u32 frames_in_flight = 0;
+            amal::vec2 screen_cursor{0.0f, 0.0f};
             DirtyFlags dirty_flags = DirtyFlagBits::none;
             Theme *theme = nullptr;
             struct
@@ -84,5 +87,28 @@ namespace auik::v2
     inline void set_overlay_quad_stream(DrawStream *stream)
     {
         detail::get_context().streams.overlay_quad_stream = stream;
+    }
+
+    inline u16 push_clip_rect(const amal::vec4 &rect)
+    {
+        auto *gpu = detail::get_context().gpu_ctx;
+        assert(gpu && gpu->push_clip_rect && "GPU clip rect dispatch is not initialized");
+        return gpu->push_clip_rect(gpu, rect);
+    }
+
+    inline void update_clip_rect(u16 clip_rect_id, const amal::vec4 &rect)
+    {
+        auto *gpu = detail::get_context().gpu_ctx;
+        assert(gpu && gpu->update_clip_rect && "GPU clip rect dispatch is not initialized");
+        gpu->update_clip_rect(gpu, clip_rect_id, rect);
+    }
+
+    inline amal::vec4 &get_clip_rect(u16 clip_rect_id)
+    {
+        auto *gpu = detail::get_context().gpu_ctx;
+        assert(gpu && gpu->get_clip_rect && "GPU clip rect dispatch is not initialized");
+        auto *rect = gpu->get_clip_rect(gpu, clip_rect_id);
+        assert(rect && "Invalid clip rect id");
+        return *rect;
     }
 } // namespace auik::v2

@@ -46,13 +46,18 @@ namespace auik::v2
 
         static inline amal::vec2 depth_zone_range(const amal::vec2 &base, DepthZone::enum_type zone)
         {
-            constexpr f32 k = 0.25f;
-
-            const f32 t0 = k * static_cast<f32>(zone);
-            const f32 t1 = t0 + k;
-
             const f32 span = base.y - base.x;
-            return {base.x + span * t0, base.x + span * t1};
+            switch (zone)
+            {
+                // With GreaterOrEqual depth testing: higher Z is closer.
+                // Keep semantic order:
+                // background (farthest) -> work -> hitbox -> foreground (closest)
+                case DepthZone::background: return {base.x + span * 0.00f, base.x + span * 0.25f};
+                case DepthZone::work: return {base.x + span * 0.25f, base.x + span * 0.50f};
+                case DepthZone::hitbox: return {base.x + span * 0.50f, base.x + span * 0.75f};
+                case DepthZone::foreground: return {base.x + span * 0.75f, base.x + span * 1.00f};
+                default: return {base.x + span * 0.25f, base.x + span * 0.50f};
+            }
         }
 
         APPLIB_API amal::vec2 get_depth_workzone_range(const amal::vec2 &r)
@@ -106,21 +111,23 @@ namespace auik::v2
     {
         detail::build_depth_data(depth_range, _depth);
 
+        amal::vec2 active_range = _depth.range;
         if (widget_flags & WidgetFlagBits::foreground)
         {
-            const amal::vec2 overlay = detail::depth_zone_range(_depth.range, detail::DepthZone::foreground);
-            _depth.z_order = amal::mid(overlay.x, overlay.y);
+            active_range = detail::depth_zone_range(_depth.range, detail::DepthZone::foreground);
         }
         else if (widget_flags & WidgetFlagBits::background)
         {
-            const amal::vec2 bg = detail::depth_zone_range(_depth.range, detail::DepthZone::background);
-            _depth.z_order = amal::mid(bg.x, bg.y);
+            active_range = detail::depth_zone_range(_depth.range, detail::DepthZone::background);
         }
         else
         {
-            const amal::vec2 work = detail::depth_zone_range(_depth.range, detail::DepthZone::work);
-            _depth.z_order = amal::mid(work.x, work.y);
+            active_range = detail::depth_zone_range(_depth.range, detail::DepthZone::work);
         }
+
+        // Keep widget-local active range so next_depth() can allocate within this widget,
+        // regardless of where this widget sits in ancestors.
+        detail::build_depth_data(active_range, _depth);
     }
 
     APPLIB_API void assign_next_depth(const detail::DepthData &parent, detail::DepthData &dst)
@@ -135,8 +142,8 @@ namespace auik::v2
         }
 
         const f32 step = amal::max(span / (f32)AUIK_CHILD_DEPTH_ATOMS_COUNT, AUIK_DEPTH_MIN_STEP);
-        const f32 r0 = w.x;
-        const f32 r1 = (r0 + step <= w.y) ? (r0 + step) : w.y;
+        const f32 r1 = w.y;
+        const f32 r0 = (r1 - step >= w.x) ? (r1 - step) : w.x;
 
         detail::build_depth_data({r0, r1}, dst);
     }
@@ -153,6 +160,7 @@ namespace auik::v2
         ctx.gpu_ctx = create_info.gpu_ctx;
         ctx.frames_in_flight = create_info.frames_in_flight;
         ctx.window_size = create_info.window_size;
+        ctx.screen_cursor = {0.0f, 0.0f};
         ctx.window_ctx = create_info.window_ctx;
         ctx.dirty_flags = DirtyFlagBits::render | DirtyFlagBits::layout;
     }

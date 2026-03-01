@@ -12,8 +12,12 @@ layout(location = 4) flat in float in_border_radius;
 layout(location = 5) flat in float in_border_thickness;
 layout(location = 6) flat in uint in_corner_mask;
 layout(location = 7) flat in uint in_flags;
+layout(location = 8) flat in uint in_clip_rect_id;
+layout(location = 9) in vec2 in_pixel_pos;
 
 layout(location = 0) out vec4 out_color;
+
+layout(std430, set = 0, binding = 1) readonly buffer ClipRectsBuffer { vec4 clip_rects[]; };
 
 float get_corner_radius(vec2 p, float radius, uint corner_mask)
 {
@@ -38,6 +42,16 @@ float sd_rounded_rect(vec2 p, vec2 half_size, float radius)
 
 void main()
 {
+    if ((in_flags & AUIK_CLIP_RECT_BIT) != 0u)
+    {
+        vec4 clip_rect = clip_rects[in_clip_rect_id];
+        vec2 clip_min = clip_rect.xy;
+        vec2 clip_max = clip_rect.xy + clip_rect.zw;
+        if (in_pixel_pos.x < clip_min.x || in_pixel_pos.y < clip_min.y || in_pixel_pos.x >= clip_max.x ||
+            in_pixel_pos.y >= clip_max.y)
+            discard;
+    }
+
     vec2 half_size = 0.5 * in_size;
     bool has_border = (in_flags & AUIK_HAS_BORDER_BIT) != 0u;
     bool has_radius = (in_flags & AUIK_HAS_RADIUS_BIT) != 0u;
@@ -61,7 +75,9 @@ void main()
         return;
     }
 
-    float radius = clamp(in_border_radius, 0.0, min(half_size.x, half_size.y));
+    // Allow stronger roundness than classic rounded-rect clamp.
+    // Keep a finite upper bound for stability on tiny quads.
+    float radius = clamp(in_border_radius, 0.0, max(half_size.x, half_size.y));
     float corner_radius = get_corner_radius(in_local_pos, radius, in_corner_mask);
 
     float dist_outer = sd_rounded_rect(in_local_pos, half_size, corner_radius);

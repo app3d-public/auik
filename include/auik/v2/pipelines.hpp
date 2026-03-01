@@ -44,6 +44,12 @@ namespace auik::v2
         if (data.border_radius > 0.0f) data.mask.flags |= AUIK_HAS_RADIUS_BIT;
     }
 
+    inline void set_quads_clip_rect(QuadsInstanceData &data, u16 clip_rect_id)
+    {
+        data.mask.clip_rect_id = clip_rect_id;
+        data.mask.flags |= AUIK_CLIP_RECT_BIT;
+    }
+
     struct TexturesInstanceData
     {
         amal::vec2 position;

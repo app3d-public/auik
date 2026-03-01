@@ -1,5 +1,6 @@
 #pragma once
 
+#include "scrollbar.hpp"
 #include "theme.hpp"
 #include "widget.hpp"
 
@@ -39,41 +40,23 @@ namespace auik::v2
 
         Window(u32 id, amal::vec2 pos = amal::vec2(0.0f), amal::vec2 size = amal::vec2(0.0f),
                WindowFlags window_flags = get_default_window_flags(),
-               WidgetFlags widget_flags = get_default_widget_flags(), Widget *parent = nullptr)
-            : Widget(id, widget_flags, parent),
-              window_flags(window_flags),
-              _pos(pos),
-              _size(size),
-              _styles({0, AUIK_STYLE_ID_WINDOW_TYPE}, {0, AUIK_STYLE_ID_WINDOW_HEADER_TYPE})
-        {
-        }
+               WidgetFlags widget_flags = get_default_widget_flags(), Widget *parent = nullptr);
+        ~Window() override;
 
-        inline void add_child(Widget *child)
-        {
-            assert(child && "child is null");
-            child->set_parent(this);
-            children.push_back(child);
-        }
-
-        inline void add_children(const acul::vector<Widget *> &new_children)
-        {
-            for (auto *child : new_children)
-            {
-                if (!child) continue;
-                add_child(child);
-            }
-        }
+        void add_child(Widget *child);
+        void add_children(const acul::vector<Widget *> &new_children);
 
         virtual void update_style() override;
 
     private:
         DrawDataID _bg;
-        amal::vec2 _pos;
-        amal::vec2 _size;
         f32 _header_height = 0.0f;
-        StyleSelector _styles[2];
+        StyleSelector _window_style{0, AUIK_STYLE_ID_WINDOW_TYPE};
+        class WindowHeader *_header = nullptr;
+        Scrollbar *_scrollbar = nullptr;
 
         virtual void update_depth(const amal::vec2 &depth_range) override;
+        virtual void update_layout() override;
 
         virtual void draw(DrawCtx &ctx) override;
     };

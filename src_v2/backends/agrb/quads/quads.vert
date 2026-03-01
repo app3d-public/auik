@@ -24,6 +24,8 @@ layout(location = 4) flat out float out_border_radius;
 layout(location = 5) flat out float out_border_thickness;
 layout(location = 6) flat out uint out_corner_mask;
 layout(location = 7) flat out uint out_flags;
+layout(location = 8) flat out uint out_clip_rect_id;
+layout(location = 9) out vec2 out_pixel_pos;
 
 vec2 get_quad_uv(uint vertex_index)
 {
@@ -44,11 +46,13 @@ void main()
     gl_Position = vec4(ndc, instance.z_order, 1.0);
 
     out_local_pos = (uv - 0.5) * instance.size;
+    out_pixel_pos = pixel_pos;
     out_size = instance.size;
     out_background_color = instance.background_color;
     out_border_color = instance.border_color;
     out_border_radius = instance.border_radius;
     out_border_thickness = instance.border_thickness;
     out_corner_mask = instance.mask & 0xFu;
+    out_clip_rect_id = (instance.mask >> 4u) & 0xFFFFu;
     out_flags = instance.mask >> 20u;
 }

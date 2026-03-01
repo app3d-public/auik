@@ -14,7 +14,8 @@ namespace auik::v2::detail
     {
         agrb::vector<auik::v2::QuadsInstanceData> draw_instances;
         vk::DescriptorSet descriptor_set;
-        vk::Buffer descriptor_buffer = nullptr;
+        vk::Buffer descriptor_buffer_instances = nullptr;
+        vk::Buffer descriptor_buffer_clip_rects = nullptr;
     };
 
     DrawDataID push_data_to_stream(DrawStream *stream, const void *data, u32 frame_id)
@@ -68,15 +69,20 @@ namespace auik::v2::detail
         auto *ctx = get_agrb_context(gpu_context);
         assert(pipeline && pipeline->descriptor_set_layout);
 
-        const vk::Buffer current_buffer = gpu_data.draw_instances.data().vk_buffer;
-        if (!current_buffer) return false;
+        const vk::Buffer instance_buffer = gpu_data.draw_instances.data().vk_buffer;
+        const vk::Buffer clip_rects_buffer = ctx->clip_rects.data().vk_buffer;
+        if (!instance_buffer || !clip_rects_buffer) return false;
 
         // Fast path: descriptor set already points to current buffer.
-        if (gpu_data.descriptor_set && gpu_data.descriptor_buffer == current_buffer) return true;
+        if (gpu_data.descriptor_set && gpu_data.descriptor_buffer_instances == instance_buffer &&
+            gpu_data.descriptor_buffer_clip_rects == clip_rects_buffer)
+            return true;
 
-        vk::DescriptorBufferInfo buffer_info{current_buffer, 0, VK_WHOLE_SIZE};
+        vk::DescriptorBufferInfo instance_info{instance_buffer, 0, VK_WHOLE_SIZE};
+        vk::DescriptorBufferInfo clip_rects_info{clip_rects_buffer, 0, VK_WHOLE_SIZE};
         agrb::descriptor_writer writer(*pipeline->descriptor_set_layout, *ctx->descriptor_pool);
-        writer.write_buffer(0, &buffer_info);
+        writer.write_buffer(0, &instance_info);
+        writer.write_buffer(1, &clip_rects_info);
         if (!gpu_data.descriptor_set)
         {
             if (!writer.build(gpu_data.descriptor_set)) return false;
@@ -84,7 +90,8 @@ namespace auik::v2::detail
         else
             writer.overwrite(gpu_data.descriptor_set);
 
-        gpu_data.descriptor_buffer = current_buffer;
+        gpu_data.descriptor_buffer_instances = instance_buffer;
+        gpu_data.descriptor_buffer_clip_rects = clip_rects_buffer;
         return true;
     }
 
@@ -124,6 +131,7 @@ namespace auik::v2
         pipeline.descriptor_set_layout =
             agrb::descriptor_set_layout::builder()
                 .add_binding(0, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eVertex)
+                .add_binding(1, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eFragment)
                 .build(device);
         if (!pipeline.descriptor_set_layout) return false;
 
@@ -145,7 +153,17 @@ namespace auik::v2
         if (!tmp) return false;
 
         artifact.config.load_defaults().enable_alpha_blending();
-        artifact.config.depth_stencil_info.setDepthTestEnable(true).setDepthWriteEnable(true);
+        auto &blend = artifact.config.color_blend_attachment;
+        blend.srcColorBlendFactor = vk::BlendFactor::eSrcAlpha;
+        blend.dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha;
+        blend.colorBlendOp = vk::BlendOp::eAdd;
+        blend.srcAlphaBlendFactor = vk::BlendFactor::eOne;
+        blend.dstAlphaBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha;
+        blend.alphaBlendOp = vk::BlendOp::eAdd;
+        artifact.config.depth_stencil_info
+            .setDepthTestEnable(true)
+            .setDepthWriteEnable(true)
+            .setDepthCompareOp(vk::CompareOp::eGreaterOrEqual);
         artifact.config.render_pass = render_pass;
         artifact.config.pipeline_layout = pipeline.layout;
         artifact.config.subpass = tmp->value;
