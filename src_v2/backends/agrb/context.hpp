@@ -1,12 +1,13 @@
 #pragma once
 
 #include <acul/io/path.hpp>
-#include <agrb/vector.hpp>
 #include <agrb/descriptors.hpp>
 #include <agrb/device.hpp>
 #include <agrb/pipeline.hpp>
+#include <agrb/vector.hpp>
 #include <amal/vector.hpp>
 #include <auik/v2/detail/gpu_context.hpp>
+#include "picker/picker.hpp"
 
 namespace auik::v2::detail
 {
@@ -16,6 +17,7 @@ namespace auik::v2::detail
         agrb::descriptor_pool *descriptor_pool = nullptr;
         agrb::shader_cache shader_cache;
         agrb::vector<amal::vec4> clip_rects;
+        acul::unique_ptr<class GPUPicker> picker;
 
         AgrbContext(agrb::device &device, agrb::descriptor_pool *descriptor_pool)
             : device(device), descriptor_pool(descriptor_pool)

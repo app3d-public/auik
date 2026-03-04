@@ -64,21 +64,36 @@ namespace auik::v2
 
     struct DrawCtx
     {
-        DrawDataID (*emit)(DrawStream *, DrawDataID &, const void *) = nullptr;
+        DrawDataID (*emit)(DrawStream *, DrawDataID &, const void *, const detail::RectData &) = nullptr;
     };
 
-    inline DrawDataID emit_draw_record(DrawStream *stream, DrawDataID &draw_id, const void *data)
+    inline void update_hit_rect(u32 &hit_id, const detail::RectData &rect, bool force_update)
+    {
+        auto *gpu = detail::get_context().gpu_ctx;
+        assert(gpu && gpu->push_hover_rect && "GPU hover rect dispatch is not initialized");
+        if (hit_id == AUIK_INVALID_DRAW_DATA_ID)
+            hit_id = detail::push_hover_rect(gpu, rect);
+        else if (force_update)
+            detail::update_hover_rect(gpu, hit_id, rect);
+    }
+
+    inline DrawDataID emit_draw_record(DrawStream *stream, DrawDataID &draw_id, const void *data,
+                                       const detail::RectData &rect)
     {
         assert(stream);
-        draw_id = stream->push_data_to_stream(stream, data);
+        const DrawDataID stream_id = stream->push_data_to_stream(stream, data);
+        draw_id.render_id = stream_id.render_id;
+        update_hit_rect(draw_id.hit_id, rect, true);
         return draw_id;
     }
 
-    inline DrawDataID emit_draw_update(DrawStream *stream, DrawDataID &draw_id, const void *data)
+    inline DrawDataID emit_draw_update(DrawStream *stream, DrawDataID &draw_id, const void *data,
+                                       const detail::RectData &rect)
     {
         assert(stream);
-        assert(draw_id != AUIK_INVALID_DRAW_DATA_ID && "Update called before record");
+        assert(draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID && "Update called before record");
         stream->update_data_in_stream(stream, draw_id, data);
+        update_hit_rect(draw_id.hit_id, rect, false);
         return draw_id;
     }
 } // namespace auik::v2

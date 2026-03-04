@@ -9,7 +9,8 @@ namespace auik::v2
 {
     APPLIB_API detail::GPUContext *create_agrb_backend(agrb::device &device, agrb::descriptor_pool *descriptor_pool);
     APPLIB_API void clear_shader_cache(agrb::device &device);
-
+    APPLIB_API u32 get_service_pipelines_count();
+    APPLIB_API bool configure_service_pipelines(agrb::graphics_pipeline_batch &batch, DrawPipeline *pipelines);
     struct DrawPipeline
     {
         vk::Pipeline handle = nullptr;

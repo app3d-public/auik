@@ -51,6 +51,12 @@ namespace auik::v2
         detail::get_context().screen_cursor = {cursor.x, pos.y + button_size.y + margin.w};
     }
 
+    void TextButton::rebuild_clip_rects()
+    {
+        Widget::rebuild_clip_rects();
+        _bg.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+    }
+
     void TextButton::draw(DrawCtx &ctx)
     {
         auto *theme = get_theme();
@@ -60,8 +66,7 @@ namespace auik::v2
         bg_data.position = position();
         bg_data.size = size();
         bg_data.z_order = get_z_order();
-        fill_quads_instance_by_style(theme->get_style(_style.id), bg_data);
-        set_quads_clip_rect(bg_data, clip_rect_id());
-        ctx.emit(quads_stream, _bg, &bg_data);
+        fill_quads_instance_by_style(theme->get_style(_style.id), clip_rect_id(), bg_data);
+        ctx.emit(quads_stream, _bg, &bg_data, get_rect());
     }
 } // namespace auik::v2

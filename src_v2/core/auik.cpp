@@ -33,12 +33,24 @@ namespace auik::v2
             mark_layout_dirty();
         }
 
+        APPLIB_API void on_mouse_move_event(const acul::point2D<i32> &pos)
+        {
+            auto &ctx = get_context();
+            ctx.mouse_position = pos;
+        }
+
+        APPLIB_API void on_scroll_event(const amal::vec2 &pos)
+        {
+            auto &ctx = get_context();
+            auto it = ctx.id_map.find(ctx.hover_widget_id);
+            if (it != ctx.id_map.end()) it->second->on_scroll(ctx.hover_tag_id, pos);
+        }
+
         struct DepthZone
         {
             enum enum_type
             {
                 foreground,
-                hitbox,
                 work,
                 background
             };
@@ -51,12 +63,15 @@ namespace auik::v2
             {
                 // With GreaterOrEqual depth testing: higher Z is closer.
                 // Keep semantic order:
-                // background (farthest) -> work -> hitbox -> foreground (closest)
-                case DepthZone::background: return {base.x + span * 0.00f, base.x + span * 0.25f};
-                case DepthZone::work: return {base.x + span * 0.25f, base.x + span * 0.50f};
-                case DepthZone::hitbox: return {base.x + span * 0.50f, base.x + span * 0.75f};
-                case DepthZone::foreground: return {base.x + span * 0.75f, base.x + span * 1.00f};
-                default: return {base.x + span * 0.25f, base.x + span * 0.50f};
+                // background (farthest) -> work -> foreground (closest)
+                case DepthZone::background:
+                    return {base.x + span * 0.00f, base.x + span * (1.0f / 3.0f)};
+                case DepthZone::work:
+                    return {base.x + span * (1.0f / 3.0f), base.x + span * (2.0f / 3.0f)};
+                case DepthZone::foreground:
+                    return {base.x + span * (2.0f / 3.0f), base.x + span * 1.00f};
+                default:
+                    return {base.x + span * (1.0f / 3.0f), base.x + span * (2.0f / 3.0f)};
             }
         }
 
@@ -65,7 +80,7 @@ namespace auik::v2
             return depth_zone_range(r, DepthZone::work);
         }
 
-        static void build_depth_data(const amal::vec2 &src, detail::DepthData &out)
+        static inline amal::vec2 normalize_depth_range(const amal::vec2 &src)
         {
             f32 z_min = src.x;
             f32 z_max = src.y;
@@ -75,14 +90,7 @@ namespace auik::v2
                 z_min = z_max;
                 z_max = t;
             }
-
-            out.range = {z_min, z_max};
-
-            const amal::vec2 hit = depth_zone_range(out.range, DepthZone::hitbox);
-            const amal::vec2 work = depth_zone_range(out.range, DepthZone::work);
-
-            out.z_order = amal::mid(work.x, work.y);
-            out.hitbox = amal::mid(hit.x, hit.y);
+            return {z_min, z_max};
         }
 
         static inline DepthZone::enum_type get_depth_zone_by_flags(WidgetFlags flags)
@@ -109,46 +117,46 @@ namespace auik::v2
 
     void Widget::update_depth(const amal::vec2 &depth_range)
     {
-        detail::build_depth_data(depth_range, _depth);
-
-        amal::vec2 active_range = _depth.range;
+        _depth_range = detail::normalize_depth_range(depth_range);
+        amal::vec2 active_range = _depth_range;
         if (widget_flags & WidgetFlagBits::foreground)
         {
-            active_range = detail::depth_zone_range(_depth.range, detail::DepthZone::foreground);
+            active_range = detail::depth_zone_range(_depth_range, detail::DepthZone::foreground);
         }
         else if (widget_flags & WidgetFlagBits::background)
         {
-            active_range = detail::depth_zone_range(_depth.range, detail::DepthZone::background);
+            active_range = detail::depth_zone_range(_depth_range, detail::DepthZone::background);
         }
         else
         {
-            active_range = detail::depth_zone_range(_depth.range, detail::DepthZone::work);
+            active_range = detail::depth_zone_range(_depth_range, detail::DepthZone::work);
         }
-
-        // Keep widget-local active range so next_depth() can allocate within this widget,
-        // regardless of where this widget sits in ancestors.
-        detail::build_depth_data(active_range, _depth);
+        _depth_range = detail::normalize_depth_range(active_range);
+        _rect.depth = (_depth_range.x + _depth_range.y) * 0.5f;
     }
 
-    APPLIB_API void assign_next_depth(const detail::DepthData &parent, detail::DepthData &dst)
+    void Widget::on_attach() { detail::get_context().id_map.emplace(id(), this); }
+
+    void Widget::on_detach() { detail::get_context().id_map.erase(id()); }
+
+    APPLIB_API void assign_next_depth(const amal::vec2 &parent_range, amal::vec2 &dst_range)
     {
-        const amal::vec2 w = detail::get_depth_workzone_range(parent.range);
+        const amal::vec2 w = detail::normalize_depth_range(parent_range);
 
         const f32 span = w.y - w.x;
         if (span <= 0.0f)
         {
-            detail::build_depth_data({w.x, w.x}, dst);
+            dst_range = {w.x, w.x};
             return;
         }
 
         const f32 step = amal::max(span / (f32)AUIK_CHILD_DEPTH_ATOMS_COUNT, AUIK_DEPTH_MIN_STEP);
         const f32 r1 = w.y;
         const f32 r0 = (r1 - step >= w.x) ? (r1 - step) : w.x;
-
-        detail::build_depth_data({r0, r1}, dst);
+        dst_range = {r0, r1};
     }
 
-    void init_library(const CreateInfo &create_info)
+    bool init_library(const CreateInfo &create_info)
     {
         if (detail::g_context) destroy_library();
         detail::g_context = acul::alloc<detail::Context>();
@@ -160,9 +168,11 @@ namespace auik::v2
         ctx.gpu_ctx = create_info.gpu_ctx;
         ctx.frames_in_flight = create_info.frames_in_flight;
         ctx.window_size = create_info.window_size;
+        ctx.mouse_position = {0, 0};
         ctx.screen_cursor = {0.0f, 0.0f};
         ctx.window_ctx = create_info.window_ctx;
         ctx.dirty_flags = DirtyFlagBits::render | DirtyFlagBits::layout;
+        return detail::create_gpu_resources(ctx.gpu_ctx);
     }
 
     void destroy_library()
@@ -179,6 +189,7 @@ namespace auik::v2
     {
         auto &ctx = detail::get_context();
         if (ctx.dirty_flags == DirtyFlagBits::none) return;
+        if (ctx.dirty_flags & DirtyFlagBits::layout) reset_clip_rects();
         clear_all_streams(ctx);
         for (Widget *widget : ctx.widget_tree)
         {
@@ -194,17 +205,16 @@ namespace auik::v2
         ctx.dirty_flags = DirtyFlagBits::none;
     }
 
-    APPLIB_API void record_all_commands_force()
+    APPLIB_API void reset_clip_rects()
     {
         auto &ctx = detail::get_context();
-        clear_all_streams(ctx);
+        reset_gpu_clip_rects();
+        clear_hover_rects();
         for (Widget *widget : ctx.widget_tree)
         {
             if (!widget) continue;
-            widget->update_layout();
-            widget->record_draw_commands();
+            widget->rebuild_clip_rects();
         }
-        ctx.dirty_flags = DirtyFlagBits::none;
     }
 
     APPLIB_API void add_widget_to_root(Widget *widget)
@@ -213,6 +223,7 @@ namespace auik::v2
         assert(widget->parent() == nullptr && "Root widget must not have a parent");
         auto &ctx = detail::get_context();
         ctx.widget_tree.push_back(widget);
+        widget->on_attach();
         const auto zone = detail::get_depth_zone_by_flags(widget->widget_flags);
         const int lane_index = ctx.root_depth_counts[zone];
         assert(lane_index < AUIK_ROOT_DEPTH_ATOMS_COUNT && "Max depth zone exceeded");

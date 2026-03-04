@@ -99,7 +99,7 @@ namespace auik::v2
         apply_from_key(id, false, 1);
         apply_from_key(type, false, 2);
         apply_from_key(parent, true, 3);
-        apply_from_key(AUIK_STYLE_ID_GLOBAL, false, 4);
+        apply_from_key(AUIK_TAG_GLOBAL, false, 4);
 
         const u64 cache_key = static_cast<u64>(resolve_seed);
         auto it_cache = _resolved.find(cache_key);
@@ -141,54 +141,54 @@ namespace auik::v2
         constexpr amal::vec2 empty_vec2{0.0f};
 
         // Global settings.
-        theme->add_style(AUIK_STYLE_ID_GLOBAL,
+        theme->add_style(AUIK_TAG_GLOBAL,
                          make_style().text_color({1.0f}).text_size(12.5f * dpi).margin(amal::vec2{8.0f, 8.0f}));
 
         // Window body.
-        theme->add_style(AUIK_STYLE_ID_WINDOW_TYPE, make_style()
-                                                        .padding(amal::vec2{10.0f, 8.0f})
-                                                        .background_color(c_surface)
-                                                        .border_color(c_border)
-                                                        .border_radius(6.0f)
-                                                        .border_thickness(1.0f));
-        theme->add_style(AUIK_STYLE_ID_WINDOW_TYPE, make_style().background_color(c_hover), StyleState::hover);
-        theme->add_style(AUIK_STYLE_ID_WINDOW_TYPE, make_style().background_color(c_active), StyleState::active);
+        theme->add_style(AUIK_TAG_WINDOW, make_style()
+                                              .padding(amal::vec2{10.0f, 8.0f})
+                                              .margin(amal::vec2{2.0f})
+                                              .background_color(c_surface)
+                                              .border_color(c_border)
+                                              .border_radius(6.0f)
+                                              .border_thickness(1.0f));
+        theme->add_style(AUIK_TAG_WINDOW, make_style().background_color(c_hover), StyleState::hover);
+        theme->add_style(AUIK_TAG_WINDOW, make_style().background_color(c_active), StyleState::active);
 
         // Window header.
-        theme->add_style(AUIK_STYLE_ID_WINDOW_HEADER_TYPE, make_style()
-                                                               .padding(amal::vec2{4.0f, 4.0f})
-                                                               .background_color(c_surface_light)
-                                                               .border_radius(6.0f)
-                                                               .corner_mask(0x3u));
-        theme->add_style(AUIK_STYLE_ID_WINDOW_HEADER_TYPE, make_style().background_color(c_hover), StyleState::hover);
-        theme->add_style(AUIK_STYLE_ID_WINDOW_HEADER_TYPE, make_style().background_color(c_active), StyleState::active);
+        theme->add_style(AUIK_TAG_WINDOW_HEADER, make_style()
+                                                     .padding(amal::vec2{4.0f, 4.0f})
+                                                     .background_color(c_surface_light)
+                                                     .border_radius(6.0f)
+                                                     .corner_mask(0x3u));
+        theme->add_style(AUIK_TAG_WINDOW_HEADER, make_style().background_color(c_hover), StyleState::hover);
+        theme->add_style(AUIK_TAG_WINDOW_HEADER, make_style().background_color(c_active), StyleState::active);
 
         // Rounded button body (text rendering will be added later).
-        theme->add_style(AUIK_STYLE_ID_TEXT_BUTTON_TYPE, make_style()
-                                                             .padding(amal::vec2{10.0f, 6.0f})
-                                                             .margin(amal::vec2{0.0f, 4.0f})
-                                                             .background_color(c_surface_light)
-                                                             .border_radius(6.0f)
-                                                             .border_color(c_border)
-                                                             .border_thickness(1.0f));
-        theme->add_style(AUIK_STYLE_ID_TEXT_BUTTON_TYPE, make_style().background_color(c_hover), StyleState::hover);
-        theme->add_style(AUIK_STYLE_ID_TEXT_BUTTON_TYPE, make_style().background_color(c_active), StyleState::active);
+        theme->add_style(AUIK_TAG_TEXT_BUTTON, make_style()
+                                                   .padding(amal::vec2{10.0f, 6.0f})
+                                                   .margin(amal::vec2{0.0f, 4.0f})
+                                                   .background_color(c_surface_light)
+                                                   .border_radius(6.0f)
+                                                   .border_color(c_border)
+                                                   .border_thickness(1.0f));
+        theme->add_style(AUIK_TAG_TEXT_BUTTON, make_style().background_color(c_hover), StyleState::hover);
+        theme->add_style(AUIK_TAG_TEXT_BUTTON, make_style().background_color(c_active), StyleState::active);
 
         // Scrollbar overlay in window space.
-        theme->add_style(AUIK_STYLE_ID_SCROLLBAR_TRACK_TYPE, make_style()
-                                                                 .background_color(amal::vec4{0.0f, 0.0f, 0.0f, 0.55f})
-                                                                 .margin(empty_vec2)
-                                                                 .padding(amal::vec2{2.0f}));
-        theme->add_style(AUIK_STYLE_ID_SCROLLBAR_THUMB_TYPE,
-                         make_style()
-                             .background_color(amal::vec4{0.15f, 0.15f, 0.15f, 1.0f})
-                             .margin(empty_vec2)
-                             .padding(amal::vec2{5.0f, 0.0f})
-                             .border_radius(4.5f));
-        theme->add_style(AUIK_STYLE_ID_SCROLLBAR_THUMB_TYPE,
+        theme->add_style(AUIK_TAG_SCROLLBAR_TRACK, make_style()
+                                                       .background_color(amal::vec4{0.0f, 0.0f, 0.0f, 0.55f})
+                                                       .margin(empty_vec2)
+                                                       .padding(amal::vec2{2.0f}));
+        theme->add_style(AUIK_TAG_SCROLLBAR_THUMB, make_style()
+                                                       .background_color(amal::vec4{0.15f, 0.15f, 0.15f, 1.0f})
+                                                       .margin(empty_vec2)
+                                                       .padding(amal::vec2{5.0f, 0.0f})
+                                                       .border_radius(4.5f));
+        theme->add_style(AUIK_TAG_SCROLLBAR_THUMB,
                          make_style().background_color(amal::vec4{0.64f, 0.64f, 0.65f, 0.96f}), StyleState::hover);
-        theme->add_style(AUIK_STYLE_ID_SCROLLBAR_THUMB_TYPE,
-                         make_style().background_color(amal::vec4{0.72f, 0.72f, 0.73f, 1.0f}), StyleState::active);
+        theme->add_style(AUIK_TAG_SCROLLBAR_THUMB, make_style().background_color(amal::vec4{0.72f, 0.72f, 0.73f, 1.0f}),
+                         StyleState::active);
 
         return theme;
     }

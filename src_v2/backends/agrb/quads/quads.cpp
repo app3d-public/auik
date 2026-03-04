@@ -21,7 +21,8 @@ namespace auik::v2::detail
     DrawDataID push_data_to_stream(DrawStream *stream, const void *data, u32 frame_id)
     {
         auto &gpu_data = static_cast<QuadsStream *>(stream->stream_instances)[frame_id];
-        const DrawDataID draw_data_id = static_cast<DrawDataID>(gpu_data.draw_instances.size());
+        DrawDataID draw_data_id{};
+        draw_data_id.render_id = static_cast<u32>(gpu_data.draw_instances.size());
         gpu_data.draw_instances.push_back(*static_cast<const QuadsInstanceData *>(data));
         ++stream->draw_sizes[frame_id];
         return draw_data_id;
@@ -30,8 +31,8 @@ namespace auik::v2::detail
     void update_quads_stream_data(DrawStream *stream, DrawDataID draw_data_id, const void *data, u32 frame_id)
     {
         auto &gpu_data = static_cast<QuadsStream *>(stream->stream_instances)[frame_id];
-        if (draw_data_id >= gpu_data.draw_instances.size()) return;
-        gpu_data.draw_instances[draw_data_id] = *static_cast<const QuadsInstanceData *>(data);
+        if (draw_data_id.render_id >= gpu_data.draw_instances.size()) return;
+        gpu_data.draw_instances[draw_data_id.render_id] = *static_cast<const QuadsInstanceData *>(data);
     }
 
     void clear_quads_stream(DrawStream *stream, u32 frame_id)

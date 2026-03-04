@@ -9,7 +9,7 @@
 #include <amal/color.hpp>
 #include <amal/vector.hpp>
 
-#define AUIK_STYLE_ID_GLOBAL 0x00000000u
+#define AUIK_TAG_GLOBAL 0x00000000u
 
 namespace auik::v2
 {

@@ -3,9 +3,8 @@
 #include "draw.hpp"
 #include "theme.hpp"
 
-#define AUIK_CLIP_RECT_BIT  0x1
-#define AUIK_HAS_BORDER_BIT 0x2
-#define AUIK_HAS_RADIUS_BIT 0x4
+#define AUIK_HAS_BORDER_BIT 0x1
+#define AUIK_HAS_RADIUS_BIT 0x2
 
 namespace auik::v2
 {
@@ -31,7 +30,7 @@ namespace auik::v2
     APPLIB_API void create_quads_stream_cached(DrawStream &stream);
     APPLIB_API void create_quads_stream_transient(DrawStream &stream);
 
-    inline void fill_quads_instance_by_style(const Style &style, QuadsInstanceData &data)
+    inline void fill_quads_instance_by_style(const Style &style, u16 clip_rect_id, QuadsInstanceData &data)
     {
         data.background_color = style.background_color();
         data.border_color = style.border_color();
@@ -42,12 +41,7 @@ namespace auik::v2
         data.mask.flags = 0;
         if (data.border_thickness > 0.0f) data.mask.flags |= AUIK_HAS_BORDER_BIT;
         if (data.border_radius > 0.0f) data.mask.flags |= AUIK_HAS_RADIUS_BIT;
-    }
-
-    inline void set_quads_clip_rect(QuadsInstanceData &data, u16 clip_rect_id)
-    {
         data.mask.clip_rect_id = clip_rect_id;
-        data.mask.flags |= AUIK_CLIP_RECT_BIT;
     }
 
     struct TexturesInstanceData

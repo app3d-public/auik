@@ -4,3 +4,8 @@ auik:
     stages:
       - vs: "quads/quads.vert"
       - fs: "quads/quads.frag"
+  picker:
+    id: 0xE6B1C4A2
+    stages:
+      - vs: "picker/picker.vert"
+      - fs: "picker/picker.frag"

@@ -28,6 +28,10 @@ namespace auik::v2
             if (event.window != &window) return;
             detail::on_resize_event(event.position);
         });
+        ed.bind_event(backend, awin::event_id::mouse_move, [&window](const awin::PosEvent &event) {
+            if (event.window != &window) return;
+            detail::on_mouse_move_event(event.position);
+        });
         ed.bind_event(backend, awin::event_id::focus,
                       [](const awin::FocusEvent &) { std::printf("[auik::v2::awin] focus event\n"); });
         ed.bind_event(backend, awin::event_id::char_input,
@@ -35,7 +39,7 @@ namespace auik::v2
         ed.bind_event(backend, awin::event_id::key_input,
                       [](const awin::KeyInputEvent &) { std::printf("[auik::v2::awin] key_input event\n"); });
         ed.bind_event(backend, awin::event_id::scroll,
-                      [](const awin::ScrollEvent &) { std::printf("[auik::v2::awin] scroll event\n"); });
+                      [](const awin::ScrollEvent &e) { detail::on_scroll_event({e.h, e.v}); });
         ed.bind_event(backend, awin::event_id::dpi_changed,
                       [](const awin::DpiChangedEvent &) { std::printf("[auik::v2::awin] dpi_changed event\n"); });
         ed.bind_event(backend, awin::event_id::minimize,

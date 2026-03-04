@@ -1,8 +1,7 @@
 #version 460
 
-#define AUIK_CLIP_RECT_BIT  0x1u
-#define AUIK_HAS_BORDER_BIT 0x2u
-#define AUIK_HAS_RADIUS_BIT 0x4u
+#define AUIK_HAS_BORDER_BIT 0x1u
+#define AUIK_HAS_RADIUS_BIT 0x2u
 
 layout(location = 0) in vec2 in_local_pos;
 layout(location = 1) flat in vec2 in_size;
@@ -42,15 +41,12 @@ float sd_rounded_rect(vec2 p, vec2 half_size, float radius)
 
 void main()
 {
-    if ((in_flags & AUIK_CLIP_RECT_BIT) != 0u)
-    {
-        vec4 clip_rect = clip_rects[in_clip_rect_id];
-        vec2 clip_min = clip_rect.xy;
-        vec2 clip_max = clip_rect.xy + clip_rect.zw;
-        if (in_pixel_pos.x < clip_min.x || in_pixel_pos.y < clip_min.y || in_pixel_pos.x >= clip_max.x ||
-            in_pixel_pos.y >= clip_max.y)
-            discard;
-    }
+    vec4 clip_rect = clip_rects[in_clip_rect_id];
+    vec2 clip_min = clip_rect.xy;
+    vec2 clip_max = clip_rect.xy + clip_rect.zw;
+    if (in_pixel_pos.x < clip_min.x || in_pixel_pos.y < clip_min.y || in_pixel_pos.x >= clip_max.x ||
+        in_pixel_pos.y >= clip_max.y)
+        discard;
 
     vec2 half_size = 0.5 * in_size;
     bool has_border = (in_flags & AUIK_HAS_BORDER_BIT) != 0u;

@@ -30,11 +30,15 @@ namespace auik::v2
         {
             acul::events::dispatcher *ed = nullptr;
             acul::disposal_queue *disposal_queue = nullptr;
-            acul::vector<auik::v2::Widget *> widget_tree;
-            int root_depth_counts[4] = {};
+            acul::vector<Widget *> widget_tree;
+            acul::hashmap<u32, Widget *> id_map;
+            u32 hover_widget_id = 0;
+            u32 hover_tag_id = 0;
+            int root_depth_counts[3] = {};
             GPUContext *gpu_ctx = nullptr;
             WindowContext *window_ctx = nullptr;
             acul::point2D<i32> window_size;
+            acul::point2D<i32> mouse_position{0, 0};
             u32 frame_id = 0;
             u32 frames_in_flight = 0;
             amal::vec2 screen_cursor{0.0f, 0.0f};
@@ -103,6 +107,20 @@ namespace auik::v2
         gpu->update_clip_rect(gpu, clip_rect_id, rect);
     }
 
+    inline void reset_gpu_clip_rects()
+    {
+        auto *gpu = detail::get_context().gpu_ctx;
+        assert(gpu && gpu->reset_clip_rects && "GPU clip rect dispatch is not initialized");
+        gpu->reset_clip_rects(gpu);
+    }
+
+    inline void clear_hover_rects()
+    {
+        auto *gpu = detail::get_context().gpu_ctx;
+        assert(gpu && gpu->clear_hover_rects && "GPU hover rect dispatch is not initialized");
+        gpu->clear_hover_rects(gpu);
+    }
+
     inline amal::vec4 &get_clip_rect(u16 clip_rect_id)
     {
         auto *gpu = detail::get_context().gpu_ctx;
@@ -111,4 +129,5 @@ namespace auik::v2
         assert(rect && "Invalid clip rect id");
         return *rect;
     }
+
 } // namespace auik::v2

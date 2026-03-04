@@ -62,7 +62,7 @@ namespace auik::v2
         }
     };
 
-    APPLIB_API void init_library(const CreateInfo &create_info);
+    APPLIB_API bool init_library(const CreateInfo &create_info);
     APPLIB_API void destroy_library();
 
     inline void set_window_size(acul::point2D<i32> size) { detail::get_context().window_size = size; }
@@ -71,6 +71,7 @@ namespace auik::v2
     {
         auto &ctx = detail::get_context();
         detail::new_window_frame(ctx.window_ctx);
+        detail::update_hover_id(ctx.gpu_ctx);
         ctx.screen_cursor = {0.0f, 0.0f};
         ctx.frame_id = (ctx.frame_id + 1) % ctx.frames_in_flight;
     }
@@ -90,4 +91,6 @@ namespace auik::v2
         auto &ctx = detail::get_context();
         ctx.dirty_flags = DirtyFlagBits::none;
     }
+
+    APPLIB_API void reset_clip_rects();
 } // namespace auik::v2
