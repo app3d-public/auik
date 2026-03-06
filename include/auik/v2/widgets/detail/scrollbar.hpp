@@ -1,16 +1,33 @@
 #pragma once
 
 #include <amal/geometric.hpp>
-#include "theme.hpp"
-#include "widget.hpp"
+#include "../../theme.hpp"
+#include "../widget.hpp"
 
 #define AUIK_TAG_SCROLLBAR_TRACK 0x5E57D9C1
 #define AUIK_TAG_SCROLLBAR_THUMB 0x0DA3B8EE
 #define AUIK_ID_SCROLLBAR        0x2F8B5D22
 #define AUIK_SCROLL_STEP         24
 
-namespace auik::v2
+namespace auik::v2::detail
 {
+    struct APPLIB_API ScrollBehavior
+    {
+        explicit ScrollBehavior(amal::axis axis = amal::axis::y) : axis(axis) {}
+
+        amal::axis axis = amal::axis::y;
+        f32 normalized = 0.0f;
+        f32 max_scroll_px = 0.0f;
+
+        void set_axis(amal::axis axis_value) { axis = axis_value; }
+        void set_scroll_normalized(f32 value) { normalized = amal::clamp(value, 0.0f, 1.0f); }
+        void set_metrics(f32 content_size, f32 view_size);
+        f32 max_scroll() const { return max_scroll_px; }
+        f32 scroll_offset() const { return normalized * max_scroll_px; }
+        void set_scroll_offset(f32 offset_px);
+        bool scroll_by_pixels(f32 delta_px);
+    };
+
     class APPLIB_API Scrollbar : public Widget
     {
     public:
@@ -20,7 +37,7 @@ namespace auik::v2
               _track_style({0, AUIK_TAG_SCROLLBAR_TRACK}),
               _thumb_style({0, AUIK_TAG_SCROLLBAR_THUMB}),
               _thumb_rect(detail::make_rect_data(0, AUIK_TAG_SCROLLBAR_THUMB)),
-              _axis(axis)
+              _behavior(axis)
         {
             assert(parent);
             u32 owner_id = parent->id();
@@ -40,13 +57,14 @@ namespace auik::v2
         bool is_visible() const { return (widget_flags & WidgetFlagBits::visible); }
         amal::vec4 get_track_margin() const;
         f32 get_min_track_thickness() const;
-        void set_axis(amal::axis axis) { _axis = axis; }
-        void set_scroll_normalized(f32 value) { _scroll = amal::clamp(value, 0.0f, 1.0f); }
-        void set_metrics(f32 content_size, f32 view_size);
-        f32 max_scroll() const { return _max_scroll; }
-        f32 scroll_offset() const { return _scroll * _max_scroll; }
-        void set_scroll_offset(f32 offset_px);
-        bool scroll_by_pixels(f32 delta_px);
+        void set_axis(amal::axis axis) { _behavior.set_axis(axis); }
+        void set_scroll_normalized(f32 value) { _behavior.set_scroll_normalized(value); }
+        void set_metrics(f32 content_size, f32 view_size) { _behavior.set_metrics(content_size, view_size); }
+        f32 max_scroll() const { return _behavior.max_scroll(); }
+        f32 scroll_offset() const { return _behavior.scroll_offset(); }
+        void set_scroll_offset(f32 offset_px) { _behavior.set_scroll_offset(offset_px); }
+        bool scroll_by_pixels(f32 delta_px) { return _behavior.scroll_by_pixels(delta_px); }
+        const ScrollBehavior &behavior() const { return _behavior; }
 
         void configure(const amal::vec2 &track_pos, const amal::vec2 &track_size, f32 content_size, f32 view_size);
 
@@ -61,14 +79,12 @@ namespace auik::v2
         StyleSelector _track_style;
         StyleSelector _thumb_style;
         detail::RectData _thumb_rect;
-        amal::axis _axis = amal::axis::y;
-        f32 _scroll = 0.0f;
-        f32 _max_scroll = 0.0f;
+        ScrollBehavior _behavior;
     };
 
-    static inline void ensure_scrollbar(Scrollbar *&scrollbar, Widget *parent, amal::axis axis)
+    inline void ensure_scrollbar(Scrollbar *&scrollbar, Widget *parent, amal::axis axis)
     {
         if (scrollbar) return;
         scrollbar = acul::alloc<Scrollbar>(parent, axis);
     }
-} // namespace auik::v2
+} // namespace auik::v2::detail

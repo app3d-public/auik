@@ -14,7 +14,7 @@ struct QuadsInstanceData
 
 layout(std430, set = 0, binding = 0) readonly buffer QuadsBuffer { QuadsInstanceData instances[]; };
 
-layout(push_constant) uniform Push { uvec2 window_size; };
+layout(push_constant) uniform Push { vec2 window_size; };
 
 layout(location = 0) out vec2 out_local_pos;
 layout(location = 1) flat out vec2 out_size;
@@ -40,8 +40,7 @@ void main()
     vec2 uv = get_quad_uv(uint(gl_VertexIndex));
 
     vec2 pixel_pos = instance.position + uv * instance.size;
-    vec2 window = vec2(window_size);
-    vec2 ndc = vec2((pixel_pos.x / window.x) * 2.0 - 1.0, (pixel_pos.y / window.y) * 2.0 - 1.0);
+    vec2 ndc = vec2((pixel_pos.x / window_size.x) * 2.0 - 1.0, (pixel_pos.y / window_size.y) * 2.0 - 1.0);
 
     gl_Position = vec4(ndc, instance.z_order, 1.0);
 
@@ -52,7 +51,8 @@ void main()
     out_border_color = instance.border_color;
     out_border_radius = instance.border_radius;
     out_border_thickness = instance.border_thickness;
-    out_corner_mask = instance.mask & 0xFu;
-    out_clip_rect_id = (instance.mask >> 4u) & 0xFFFFu;
-    out_flags = instance.mask >> 20u;
+    const uint style_mask = instance.mask >> 16u;
+    out_clip_rect_id = instance.mask & 0xFFFFu;
+    out_corner_mask = style_mask & 0xFu;
+    out_flags = style_mask >> 4u;
 }

@@ -4,7 +4,6 @@
 #include <acul/disposal_queue.hpp>
 #include <acul/enum.hpp>
 #include <acul/event.hpp>
-#include <acul/pair.hpp>
 #include <amal/common.hpp>
 #include <amal/vector.hpp>
 #include "fwd.hpp"
@@ -59,6 +58,12 @@ namespace auik::v2
             state.buffer_versions = nullptr;
         }
 
+        struct IO
+        {
+            amal::vec2 mouse_pos;
+            amal::vec2 display_size;
+        };
+
         extern APPLIB_API struct Context
         {
             acul::events::dispatcher *ed = nullptr;
@@ -70,8 +75,7 @@ namespace auik::v2
             int root_depth_counts[3] = {};
             GPUContext *gpu_ctx = nullptr;
             WindowContext *window_ctx = nullptr;
-            acul::point2D<i32> window_size;
-            acul::point2D<i32> mouse_position{0, 0};
+            IO io;
             u32 frame_id = 0;
             u32 frames_in_flight = 0;
             SharedBufferSyncState shared_sync_state[2];
@@ -141,6 +145,7 @@ namespace auik::v2
             return ctx;
         }
 
+        inline IO &get_io() { return get_context().io; }
     } // namespace detail
 
     inline Theme *get_theme() { return detail::get_context().theme; }
@@ -206,4 +211,8 @@ namespace auik::v2
         assert(rect && "Invalid clip rect id");
         return *rect;
     }
+
+    inline const amal::vec2& get_mouse_pos() { return detail::get_io().mouse_pos; }
+
+    inline const amal::vec2& get_display_size() { return detail::get_io().display_size; }
 } // namespace auik::v2

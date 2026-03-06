@@ -12,7 +12,7 @@ struct PickerInstanceData
 
 layout(std430, set = 0, binding = 0) readonly buffer PickerBuffer { PickerInstanceData instances[]; };
 
-layout(push_constant) uniform Push { uvec2 window_size; };
+layout(push_constant) uniform Push { vec2 window_size; };
 
 layout(location = 0) flat out uint out_widget_id;
 layout(location = 1) flat out uint out_tag_id;
@@ -44,8 +44,7 @@ void main()
     }
 
     vec2 pixel_pos = draw_pos + uv * draw_size;
-    vec2 window = vec2(window_size);
-    vec2 ndc = vec2((pixel_pos.x / window.x) * 2.0 - 1.0, (pixel_pos.y / window.y) * 2.0 - 1.0);
+    vec2 ndc = vec2((pixel_pos.x / window_size.x) * 2.0 - 1.0, (pixel_pos.y / window_size.y) * 2.0 - 1.0);
 
     gl_Position = vec4(ndc, instance.depth, 1.0);
     out_widget_id = instance.widget_id;

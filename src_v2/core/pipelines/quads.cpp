@@ -1,7 +1,7 @@
 #include <auik/v2/detail/context.hpp>
 #include <auik/v2/detail/gpu_context.hpp>
 #include <auik/v2/pipelines.hpp>
-#include <auik/v2/widget.hpp>
+#include <auik/v2/widgets/widget.hpp>
 #include "stream_data.hpp"
 
 namespace auik::v2::detail

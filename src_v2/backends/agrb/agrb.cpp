@@ -1,6 +1,9 @@
 #include <auik/v2/backends/agrb/agrb.hpp>
+#include <auik/v2/backends/agrb/quads_pipeline.hpp>
 #include <auik/v2/detail/context.hpp>
 #include <auik/v2/detail/gpu_context.hpp>
+#include <auik/v2/draw.hpp>
+#include <auik/v2/pipelines.hpp>
 #include "context.hpp"
 #include "picker/picker.hpp"
 
@@ -164,5 +167,26 @@ namespace auik::v2
         auto &picker = gpu_ctx->picker;
         if (!picker->construct_pipeline(gpu_ctx->device, pipelines[0])) return false;
         return picker->configure_pipeline(gpu_ctx, picker_artifact, pipelines[0]);
+    }
+
+    APPLIB_API u32 get_default_streams_pipelines_count() { return 1; }
+
+    APPLIB_API u32 get_default_streams_count() { return 1; }
+
+    bool configure_default_streams(agrb::graphics_pipeline_batch &batch, DrawPipeline *pipelines, DrawStream *streams,
+                                   u32 subpass, vk::RenderPass render_pass)
+    {
+        auto &global_ctx = detail::get_context();
+        auto &device = detail::get_agrb_context(global_ctx.gpu_ctx)->device;
+
+        auto &cquads_stream = streams[0];
+        auik::v2::create_quads_stream_cached(cquads_stream);
+        auik::v2::set_primary_quad_stream(&cquads_stream);
+        auto &quads_pipeline = pipelines[0];
+        if (!auik::v2::construct_quads_pipeline(quads_pipeline, device)) return false;
+        cquads_stream.pipeline = &quads_pipeline;
+        auto &cquads_artifact = batch.artifacts.emplace_back();
+        auik::v2::construct_pipeline_artifact(cquads_artifact, subpass, &quads_pipeline);
+        return auik::v2::configure_quads_pipeline(cquads_artifact, render_pass, quads_pipeline, device);
     }
 } // namespace auik::v2

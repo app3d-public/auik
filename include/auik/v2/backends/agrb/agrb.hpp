@@ -3,7 +3,7 @@
 #include <agrb/descriptors.hpp>
 #include <agrb/device.hpp>
 #include <agrb/pipeline.hpp>
-#include "../../draw.hpp"
+#include "../../detail/fwd.hpp"
 
 namespace auik::v2
 {
@@ -11,6 +11,11 @@ namespace auik::v2
     APPLIB_API void clear_shader_cache(agrb::device &device);
     APPLIB_API u32 get_service_pipelines_count();
     APPLIB_API bool configure_service_pipelines(agrb::graphics_pipeline_batch &batch, DrawPipeline *pipelines);
+    APPLIB_API u32 get_default_streams_pipelines_count();
+    APPLIB_API u32 get_default_streams_count();
+    APPLIB_API bool configure_default_streams(agrb::graphics_pipeline_batch &batch, DrawPipeline *pipelines,
+                                              DrawStream *streams, u32 subpass, vk::RenderPass render_pass);
+
     struct DrawPipeline
     {
         vk::Pipeline handle = nullptr;

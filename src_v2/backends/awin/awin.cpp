@@ -26,11 +26,11 @@ namespace auik::v2
     {
         ed.bind_event(backend, awin::event_id::resize, [&window](const awin::PosEvent &event) {
             if (event.window != &window) return;
-            detail::on_resize_event(event.position);
+            detail::on_resize_event({event.position.x, event.position.y});
         });
         ed.bind_event(backend, awin::event_id::mouse_move, [&window](const awin::PosEvent &event) {
             if (event.window != &window) return;
-            detail::on_mouse_move_event(event.position);
+            detail::on_mouse_move_event({event.position.x, event.position.y});
         });
         ed.bind_event(backend, awin::event_id::focus,
                       [](const awin::FocusEvent &) { std::printf("[auik::v2::awin] focus event\n"); });

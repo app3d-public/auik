@@ -1,6 +1,6 @@
 #pragma once
 
-#include "theme.hpp"
+#include "../theme.hpp"
 #include "widget.hpp"
 
 #define AUIK_TAG_TEXT_BUTTON 0x6544FF93

@@ -96,14 +96,20 @@ The following dependencies are included as git submodules and must be checked ou
 ## Minimal Initialization Example
 ### Initializating auik resources
 ```cpp
-acul::vector<auik::v2::DrawPipeline> pipelines(1);
-acul::vector<auik::v2::DrawStream> streams(1);
+acul::vector<auik::v2::DrawPipeline> pipelines;
+acul::vector<auik::v2::DrawStream> streams;
+
+u32 service_pipelines_count = auik::v2::get_service_pipelines_count();
+u32 stream_pipelines_count = auik::v2::get_default_streams_pipelines_count();
+pipelines.resize(service_pipelines_count + stream_pipelines_count);
+streams.resize(auik::v2::get_default_streams_count());
 
 auto pool = agrb::descriptor_pool::builder()
                 .set_max_sets(100)
                 .add_pool_size(vk::DescriptorType::eStorageBuffer, 10)
                 .build(device);
 
+auto window_size = env::get_main_window().dimensions();
 auik::v2::CreateInfo create_info;
 create_info.set_ed(&env::get_event_dispatcher())
     .set_disposal_queue(&env::get_disposal_queue())
@@ -111,22 +117,14 @@ create_info.set_ed(&env::get_event_dispatcher())
     .set_gpu_backend(auik::v2::create_agrb_backend(device, pool.get()))
     .set_window_backend(auik::v2::create_awin_backend(env::get_main_window(), env::get_event_dispatcher()))
     .set_frames_in_flight(FRAMES_IN_FLIGHT)
-    .set_window_size(env::get_main_window().dimensions());
+    .set_window_size({window_size.x, window_size.y});
 auik::v2::init_library(create_info);
 
-auto &cquads_stream = streams[0];
-auik::v2::create_quads_stream_cached(cquads_stream);
-auik::v2::set_primary_quad_stream(&cquads_stream);
-auto &quads_pipeline = pipelines[0];
-auik::v2::construct_quads_pipeline(quads_pipeline, device);
-cquads_stream.pipeline = &quads_pipeline;
-
 agrb::graphics_pipeline_batch batch;
-auto &cquads_artifact = batch.artifacts.emplace_back();
-
-auik::v2::construct_pipeline_artifact(cquads_artifact, 0, &quads_pipeline);
-auik::v2::configure_quads_pipeline(cquads_artifact, render_pass, quads_pipeline, device);
-if (!batch.allocate_pipelines(env::get_device(), 1))
+auik::v2::configure_service_pipelines(batch, pipelines.data());
+auto *streams_pipelines = pipelines.data() + service_pipelines_count;
+auik::v2::configure_default_streams(batch, streams_pipelines, streams.data(), 0, render_pass);
+if (!batch.allocate_pipelines(env::get_device(), pipelines.size()))
     throw acul::runtime_error("Failed to allocate ui pipelines");
 auik::v2::clear_shader_cache(device);
 ```

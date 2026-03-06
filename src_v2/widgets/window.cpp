@@ -1,6 +1,7 @@
 #include <acul/memory/alloc.hpp>
+#include <auik/v2/auik.hpp>
 #include <auik/v2/pipelines.hpp>
-#include <auik/v2/window.hpp>
+#include <auik/v2/widgets/window.hpp>
 #include <cassert>
 
 namespace auik::v2
@@ -396,13 +397,13 @@ namespace auik::v2
 
     void Window::on_scroll(const amal::vec2 &delta)
     {
-        if (!(window_flags & WindowFlagBits::scrollable))
+        if (!_scrollbar_x && !_scrollbar_y)
         {
-            if (parent()) parent()->on_scroll(delta);
+            Widget::on_scroll(delta);
             return;
         }
 
-        const amal::vec2 step = -delta * float(AUIK_SCROLL_STEP);
+        const amal::vec2 step = -delta * f32(AUIK_SCROLL_STEP);
         const amal::vec2 old_offset = _content_offset;
 
         if (_scrollbar_y && _scrollbar_y->is_visible())

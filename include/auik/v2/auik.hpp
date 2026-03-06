@@ -5,7 +5,7 @@
 #include "detail/context.hpp"
 #include "detail/events.hpp"
 #include "draw.hpp"
-#include "widget.hpp"
+#include "widgets/widget.hpp"
 
 namespace auik::v2
 {
@@ -18,7 +18,7 @@ namespace auik::v2
         detail::GPUContext *gpu_ctx = nullptr;
         detail::WindowContext *window_ctx = nullptr;
         u32 frames_in_flight = 0;
-        acul::point2D<i32> window_size{0, 0};
+        amal::vec2 window_size{0.0f};
 
         CreateInfo &set_ed(acul::events::dispatcher *ed)
         {
@@ -57,7 +57,7 @@ namespace auik::v2
             return *this;
         }
 
-        CreateInfo &set_window_size(acul::point2D<i32> window_size)
+        CreateInfo &set_window_size(const amal::vec2 &window_size)
         {
             this->window_size = window_size;
             return *this;
@@ -66,8 +66,13 @@ namespace auik::v2
 
     APPLIB_API bool init_library(const CreateInfo &create_info);
     APPLIB_API void destroy_library();
+    APPLIB_API void record_all_commands();
+    APPLIB_API void add_widget_to_root(Widget *widget);
+    APPLIB_API void sync_draw_streams();
+    APPLIB_API void sync_clip_rect_cache();
+    APPLIB_API void sync_hit_rect_cache();
 
-    inline void set_window_size(acul::point2D<i32> size) { detail::get_context().window_size = size; }
+    inline void set_window_size(const amal::vec2 &size) { detail::get_io().display_size = size; }
 
     inline void next_frame(void *sync_ctx)
     {

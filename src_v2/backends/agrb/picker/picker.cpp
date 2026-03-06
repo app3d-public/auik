@@ -2,11 +2,9 @@
 #include <agrb/defaults.hpp>
 #include <agrb/utils/buffer.hpp>
 #include <agrb/utils/image.hpp>
-#include <array>
 #include <auik/shaders.h>
 #include <auik/v2/backends/agrb/agrb.hpp>
 #include <auik/v2/detail/context.hpp>
-#include <cstring>
 #include "../context.hpp"
 
 namespace auik::v2::detail
@@ -347,9 +345,8 @@ namespace auik::v2::detail
         return true;
     }
 
-    static inline bool check_mouse_bounds(const acul::point2D<i32> &mouse_pos)
+    static inline bool check_mouse_bounds(const amal::vec2 &mouse_pos, const amal::vec2 &dimensions)
     {
-        const auto &dimensions = get_context().window_size;
         return mouse_pos.x >= 0 && mouse_pos.y >= 0 && mouse_pos.x < dimensions.x && mouse_pos.y < dimensions.y;
     }
 
@@ -372,10 +369,11 @@ namespace auik::v2::detail
         auto &loader = ctx->device.loader;
 
         begin_render_pass(*this, frame_id, *cmd, loader);
-        vk::Viewport viewport = {-static_cast<f32>(global_ctx.mouse_position.x),
-                                 -static_cast<f32>(global_ctx.mouse_position.y),
-                                 static_cast<f32>(global_ctx.window_size.x),
-                                 static_cast<f32>(global_ctx.window_size.y),
+        const auto &io = global_ctx.io;
+        vk::Viewport viewport = {-static_cast<f32>(io.mouse_pos.x),
+                                 -static_cast<f32>(io.mouse_pos.y),
+                                 static_cast<f32>(io.display_size.x),
+                                 static_cast<f32>(io.display_size.y),
                                  0.0f,
                                  1.0f};
         vk::Rect2D scissor = {{0, 0}, {1, 1}};
@@ -388,8 +386,8 @@ namespace auik::v2::detail
             cmd->bindPipeline(vk::PipelineBindPoint::eGraphics, _pipeline->handle, loader);
             cmd->bindDescriptorSets(vk::PipelineBindPoint::eGraphics, _pipeline->layout, 0, 1,
                                     &_descriptor_sets[frame_id], 0, nullptr, loader);
-            cmd->pushConstants(_pipeline->layout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(acul::point2D<u32>),
-                               &global_ctx.window_size, loader);
+            cmd->pushConstants(_pipeline->layout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(amal::vec2),
+                               &io.display_size, loader);
             cmd->draw(6, rects.size(), 0, 0, loader);
         }
         cmd->endRenderPass(loader);
@@ -449,7 +447,7 @@ namespace auik::v2::detail
     void update_hover_id_impl(GPUContext *gpu_context, void *sync_ctx)
     {
         auto &global_ctx = get_context();
-        if (!check_mouse_bounds(global_ctx.mouse_position)) return;
+        if (!check_mouse_bounds(global_ctx.io.mouse_pos, global_ctx.io.display_size)) return;
         auto *agrb_ctx = get_agrb_context(gpu_context);
         auto &picker = agrb_ctx->picker;
         assert(picker->attachments);

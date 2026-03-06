@@ -9,10 +9,6 @@
 
 namespace auik::v2
 {
-    class Widget;
-
-    struct DrawPipeline;
-
     struct StreamFlagBits
     {
         enum enum_type : u8
@@ -77,8 +73,6 @@ namespace auik::v2
         stream->destroy(stream);
     }
 
-    APPLIB_API void sync_draw_streams();
-
     struct DrawCtx
     {
         DrawDataID (*emit)(DrawStream *, DrawDataID &, const void *, const detail::RectData &) = nullptr;
@@ -120,6 +114,4 @@ namespace auik::v2
         return draw_id;
     }
 
-    APPLIB_API void sync_clip_rect_cache();
-    APPLIB_API void sync_hit_rect_cache();
 } // namespace auik::v2

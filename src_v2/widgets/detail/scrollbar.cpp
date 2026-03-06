@@ -1,35 +1,35 @@
 #include <auik/v2/pipelines.hpp>
-#include <auik/v2/scrollbar.hpp>
+#include <auik/v2/widgets/detail/scrollbar.hpp>
 
-namespace auik::v2
+namespace auik::v2::detail
 {
-    void Scrollbar::set_metrics(f32 content_size, f32 view_size)
+    void ScrollBehavior::set_metrics(f32 content_size, f32 view_size)
     {
         const f32 safe_view = amal::max(view_size, 0.0f);
-        _max_scroll = amal::max(content_size - safe_view, 0.0f);
-        if (_max_scroll <= 0.0f)
+        max_scroll_px = amal::max(content_size - safe_view, 0.0f);
+        if (max_scroll_px <= 0.0f)
         {
-            _scroll = 0.0f;
+            normalized = 0.0f;
             return;
         }
-        _scroll = amal::clamp(_scroll, 0.0f, 1.0f);
+        normalized = amal::clamp(normalized, 0.0f, 1.0f);
     }
 
-    void Scrollbar::set_scroll_offset(f32 offset_px)
+    void ScrollBehavior::set_scroll_offset(f32 offset_px)
     {
-        if (_max_scroll <= 0.0f)
+        if (max_scroll_px <= 0.0f)
         {
-            _scroll = 0.0f;
+            normalized = 0.0f;
             return;
         }
-        _scroll = amal::clamp(offset_px / _max_scroll, 0.0f, 1.0f);
+        normalized = amal::clamp(offset_px / max_scroll_px, 0.0f, 1.0f);
     }
 
-    bool Scrollbar::scroll_by_pixels(f32 delta_px)
+    bool ScrollBehavior::scroll_by_pixels(f32 delta_px)
     {
-        if (_max_scroll <= 0.0f || delta_px == 0.0f) return false;
+        if (max_scroll_px <= 0.0f || delta_px == 0.0f) return false;
         const f32 old = scroll_offset();
-        const f32 next = amal::clamp(old + delta_px, 0.0f, _max_scroll);
+        const f32 next = amal::clamp(old + delta_px, 0.0f, max_scroll_px);
         if (next == old) return false;
         set_scroll_offset(next);
         return true;
@@ -49,7 +49,7 @@ namespace auik::v2
         const amal::vec4 track_padding = track_style.padding();
         const amal::vec4 thumb_margin = thumb_style.margin();
         const amal::vec4 thumb_padding = thumb_style.padding();
-        if (_axis == amal::axis::y)
+        if (_behavior.axis == amal::axis::y)
         {
             const f32 desired_thumb_w = amal::max(thumb_padding.x + thumb_padding.z, 1.0f);
             return amal::max(desired_thumb_w + track_padding.x + track_padding.z + thumb_margin.x + thumb_margin.z,
@@ -60,7 +60,8 @@ namespace auik::v2
         return amal::max(desired_thumb_h + track_padding.y + track_padding.w + thumb_margin.y + thumb_margin.w, 1.0f);
     }
 
-    void Scrollbar::configure(const amal::vec2 &track_pos, const amal::vec2 &track_size, f32 content_size, f32 view_size)
+    void Scrollbar::configure(const amal::vec2 &track_pos, const amal::vec2 &track_size, f32 content_size,
+                              f32 view_size)
     {
         set_position(track_pos);
         set_size(track_size);
@@ -75,9 +76,9 @@ namespace auik::v2
         const f32 safe_content = amal::max(content_size, 1.0f);
         const f32 safe_view = amal::max(view_size, 0.0f);
         const f32 ratio = amal::clamp(safe_view / safe_content, 0.0f, 1.0f);
-        const f32 scroll_norm = amal::clamp(_scroll, 0.0f, 1.0f);
+        const f32 scroll_norm = amal::clamp(_behavior.normalized, 0.0f, 1.0f);
 
-        if (_axis == amal::axis::y)
+        if (_behavior.axis == amal::axis::y)
         {
             const amal::vec2 lane_pos = {track_pos.x + track_padding.x + thumb_margin.x,
                                          track_pos.y + track_padding.y + thumb_margin.y};
@@ -119,7 +120,8 @@ namespace auik::v2
         const f32 thumb_h = amal::min(desired_thumb_h, lane_size.y);
         const f32 thumb_offset_y = amal::max((lane_size.y - thumb_h) * 0.5f, 0.0f);
 
-        _thumb_rect.position = {lane_pos.x + thumb_range * scroll_norm + thumb_offset_left, lane_pos.y + thumb_offset_y};
+        _thumb_rect.position = {lane_pos.x + thumb_range * scroll_norm + thumb_offset_left,
+                                lane_pos.y + thumb_offset_y};
         _thumb_rect.size = {thumb_w, thumb_h};
     }
 
@@ -159,4 +161,4 @@ namespace auik::v2
         fill_quads_instance_by_style(theme->get_style(_thumb_style.id), clip_rect_id(), thumb);
         ctx.emit(quads_stream, _thumb_draw_id, &thumb, _thumb_rect);
     }
-} // namespace auik::v2
+} // namespace auik::v2::detail

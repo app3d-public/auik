@@ -1,9 +1,8 @@
 #include <acul/memory/alloc.hpp>
 #include <amal/color.hpp>
-#include <auik/v2/scrollbar.hpp>
-#include <auik/v2/text_button.hpp>
 #include <auik/v2/theme.hpp>
-#include <auik/v2/window.hpp>
+#include <auik/v2/widgets/text_button.hpp>
+#include <auik/v2/widgets/window.hpp>
 
 namespace auik::v2
 {

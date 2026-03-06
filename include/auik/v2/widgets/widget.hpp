@@ -3,7 +3,7 @@
 #include <acul/enum.hpp>
 #include <acul/vector.hpp>
 #include <amal/vector.hpp>
-#include "draw.hpp"
+#include "../draw.hpp"
 
 namespace auik::v2
 {
@@ -116,6 +116,4 @@ namespace auik::v2
         return (next_range.x + next_range.y) * 0.5f;
     }
 
-    APPLIB_API void record_all_commands();
-    APPLIB_API void add_widget_to_root(Widget *widget);
 } // namespace auik::v2

@@ -2,8 +2,8 @@
 #include <auik/v2/detail/context.hpp>
 #include <auik/v2/detail/events.hpp>
 #include <auik/v2/detail/gpu_context.hpp>
-#include <auik/v2/widget.hpp>
-#include <auik/v2/window.hpp>
+#include <auik/v2/widgets/widget.hpp>
+#include <auik/v2/widgets/window.hpp>
 
 #define AUIK_ROOT_DEPTH_ATOMS_COUNT  32
 #define AUIK_CHILD_DEPTH_ATOMS_COUNT 16
@@ -26,18 +26,13 @@ namespace auik::v2
     {
         Context *g_context = nullptr;
 
-        APPLIB_API void on_resize_event(const acul::point2D<i32> &size)
+        APPLIB_API void on_resize_event(const amal::vec2 &size)
         {
-            auto &ctx = get_context();
-            ctx.window_size = size;
-            ctx.dirty_flags |= DirtyFlagBits::layout;
+            set_window_size(size);
+            get_context().dirty_flags |= DirtyFlagBits::layout;
         }
 
-        APPLIB_API void on_mouse_move_event(const acul::point2D<i32> &pos)
-        {
-            auto &ctx = get_context();
-            ctx.mouse_position = pos;
-        }
+        APPLIB_API void on_mouse_move_event(const amal::vec2 &pos) { get_io().mouse_pos = pos; }
 
         APPLIB_API void on_scroll_event(const amal::vec2 &pos)
         {
@@ -167,8 +162,9 @@ namespace auik::v2
         ctx.streams.stream_count = create_info.streams_count;
         ctx.gpu_ctx = create_info.gpu_ctx;
         ctx.frames_in_flight = create_info.frames_in_flight;
-        ctx.window_size = create_info.window_size;
-        ctx.mouse_position = {0, 0};
+        auto &io = ctx.io;
+        io.display_size = create_info.window_size;
+        io.mouse_pos = {0.0f, 0.0f};
         ctx.screen_cursor = {0.0f, 0.0f};
         ctx.window_ctx = create_info.window_ctx;
         ctx.dirty_flags = DirtyFlagBits::redraw | DirtyFlagBits::layout;

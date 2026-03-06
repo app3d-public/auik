@@ -1,7 +1,7 @@
 #pragma once
 
-#include "scrollbar.hpp"
-#include "theme.hpp"
+#include "../theme.hpp"
+#include "detail/scrollbar.hpp"
 #include "widget.hpp"
 
 #define AUIK_TAG_WINDOW        0xB4382179
@@ -60,8 +60,8 @@ namespace auik::v2
         amal::vec4 _children_clip_rect{0.0f, 0.0f, 0.0f, 0.0f};
         StyleSelector _window_style{0, AUIK_TAG_WINDOW};
         class WindowHeader *_header = nullptr;
-        Scrollbar *_scrollbar_x = nullptr;
-        Scrollbar *_scrollbar_y = nullptr;
+        detail::Scrollbar *_scrollbar_x = nullptr;
+        detail::Scrollbar *_scrollbar_y = nullptr;
 
         virtual void update_depth(const amal::vec2 &depth_range) override;
         virtual void update_layout() override;
@@ -74,7 +74,7 @@ namespace auik::v2
             map.emplace(id(), this);
             for (auto *child : children) map.emplace(child->id(), child);
         }
-        
+
         virtual void on_detach() override
         {
             auto &map = detail::get_context().id_map;

@@ -46,8 +46,8 @@ namespace auik::v2::detail
         PFN_window_new_frame new_frame = nullptr;
     };
 
-    APPLIB_API void on_resize_event(const acul::point2D<i32> &size);
-    APPLIB_API void on_mouse_move_event(const acul::point2D<i32> &pos);
+    APPLIB_API void on_resize_event(const amal::vec2 &size);
+    APPLIB_API void on_mouse_move_event(const amal::vec2 &pos);
     APPLIB_API void on_scroll_event(const amal::vec2 &pos);
 
     inline void set_window_cursor(CursorID::enum_type id, WindowContext *window_ctx)

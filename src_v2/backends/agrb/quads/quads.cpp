@@ -147,8 +147,8 @@ namespace auik::v2::detail
         cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline->handle, loader);
         cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipeline->layout, 0, 1, &gpu_data.descriptor_set, 0,
                                nullptr, loader);
-        cmd.pushConstants(pipeline->layout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(acul::point2D<u32>),
-                          &get_context().window_size, loader);
+        cmd.pushConstants(pipeline->layout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(amal::vec2),
+                          &get_display_size(), loader);
         cmd.draw(6, stream->draw_sizes[frame_id], 0, 0, loader);
     }
 
@@ -178,7 +178,7 @@ namespace auik::v2
         if (!pipeline.descriptor_set_layout) return false;
 
         const vk::DescriptorSetLayout set_layouts[] = {pipeline.descriptor_set_layout->layout()};
-        const vk::PushConstantRange push_constant{vk::ShaderStageFlagBits::eVertex, 0, sizeof(acul::point2D<u32>)};
+        const vk::PushConstantRange push_constant{vk::ShaderStageFlagBits::eVertex, 0, sizeof(amal::vec2)};
         vk::PipelineLayoutCreateInfo pipeline_layout_info{};
         pipeline_layout_info.setLayoutCount = 1;
         pipeline_layout_info.pSetLayouts = set_layouts;
