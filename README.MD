@@ -141,9 +141,13 @@ auik::v2::add_widget_to_root(demo_window);
 
 ### Render loop
 ```cpp
-if (auik::v2::is_dirty_layout()) auik::v2::record_all_commands();
-for (auto &stream : streams) auik::v2::render_stream(stream, &cmd);
-auik::v2::next_frame();
+if (auik::v2::is_dirty_render())
+{
+   auik::v2::sync_gpu_cache();
+   for (auto &stream : streams) auik::v2::render_stream(stream, &cmd);
+}
+if (auik::v2::is_host_update_pending()) awin::push_empty_event();
+auik::v2::next_frame(&cmd);
 ```
 
 ## License

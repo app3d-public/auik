@@ -30,7 +30,7 @@ namespace auik::v2
         {
             auto &ctx = get_context();
             ctx.window_size = size;
-            mark_layout_dirty();
+            ctx.dirty_flags |= DirtyFlagBits::layout;
         }
 
         APPLIB_API void on_mouse_move_event(const acul::point2D<i32> &pos)
@@ -43,7 +43,7 @@ namespace auik::v2
         {
             auto &ctx = get_context();
             auto it = ctx.id_map.find(ctx.hover_widget_id);
-            if (it != ctx.id_map.end()) it->second->on_scroll(ctx.hover_tag_id, pos);
+            if (it != ctx.id_map.end()) it->second->on_scroll(pos);
         }
 
         struct DepthZone
@@ -171,7 +171,9 @@ namespace auik::v2
         ctx.mouse_position = {0, 0};
         ctx.screen_cursor = {0.0f, 0.0f};
         ctx.window_ctx = create_info.window_ctx;
-        ctx.dirty_flags = DirtyFlagBits::render | DirtyFlagBits::layout;
+        ctx.dirty_flags = DirtyFlagBits::redraw | DirtyFlagBits::layout;
+        detail::construct_shared_buffer_sync_state(ctx.shared_sync_state[AUIK_SYNC_CLIP_RECT], ctx.frames_in_flight);
+        detail::construct_shared_buffer_sync_state(ctx.shared_sync_state[AUIK_SYNC_HIT_RECT], ctx.frames_in_flight);
         return detail::create_gpu_resources(ctx.gpu_ctx);
     }
 
@@ -179,42 +181,94 @@ namespace auik::v2
     {
         if (!detail::g_context) return;
         for (auto *widget : detail::g_context->widget_tree) acul::release(widget);
+        detail::destroy_shared_buffer_sync_state(detail::g_context->shared_sync_state[AUIK_SYNC_CLIP_RECT]);
+        detail::destroy_shared_buffer_sync_state(detail::g_context->shared_sync_state[AUIK_SYNC_HIT_RECT]);
         detail::destroy_gpu_context(detail::g_context->gpu_ctx);
         detail::destroy_window_context(detail::g_context->window_ctx);
         acul::release(detail::g_context);
         detail::g_context = nullptr;
     }
 
-    void record_all_commands()
-    {
-        auto &ctx = detail::get_context();
-        if (ctx.dirty_flags == DirtyFlagBits::none) return;
-        if (ctx.dirty_flags & DirtyFlagBits::layout) reset_clip_rects();
-        clear_all_streams(ctx);
-        for (Widget *widget : ctx.widget_tree)
-        {
-            if (!widget) continue;
-            if (ctx.dirty_flags & DirtyFlagBits::layout)
-            {
-                widget->update_layout();
-                widget->record_draw_commands();
-            }
-            else
-                widget->update_draw_commands();
-        }
-        ctx.dirty_flags = DirtyFlagBits::none;
-    }
-
-    APPLIB_API void reset_clip_rects()
+    void reset_clip_rects()
     {
         auto &ctx = detail::get_context();
         reset_gpu_clip_rects();
-        clear_hover_rects();
+        clear_hit_rects();
         for (Widget *widget : ctx.widget_tree)
         {
             if (!widget) continue;
             widget->rebuild_clip_rects();
         }
+    }
+
+    void record_all_commands()
+    {
+        auto &ctx = detail::get_context();
+        if (ctx.dirty_flags & DirtyFlagBits::layout)
+        {
+            reset_clip_rects();
+            clear_all_streams(ctx);
+            for (Widget *widget : ctx.widget_tree)
+            {
+                widget->update_layout();
+                widget->record_draw_commands();
+            }
+        }
+        else // Render-only updates must not clear cached streams.
+            for (Widget *widget : ctx.widget_tree) widget->update_draw_commands();
+
+        ctx.dirty_flags &= ~(DirtyFlagBits::redraw | DirtyFlagBits::layout);
+    }
+
+    APPLIB_API void sync_clip_rect_cache()
+    {
+        auto &ctx = detail::get_context();
+        auto &state = detail::get_clip_rects_sync_state();
+        u32 frame_id = ctx.frame_id;
+        assert(state.buffer_versions);
+        if (state.buffer_versions[frame_id] == state.master_version)
+        {
+            if (state.invalidation_count == 0) ctx.dirty_flags &= ~DirtyFlagBits::clip_rect;
+            return;
+        }
+        copy_clip_rects_frame(ctx.gpu_ctx, frame_id, state.master_id);
+        state.buffer_versions[frame_id] = state.master_version;
+        if (state.invalidation_count > 0) --state.invalidation_count;
+        if (state.invalidation_count == 0) state.stage_version = state.master_version;
+        if (state.invalidation_count == 0) ctx.dirty_flags &= ~DirtyFlagBits::clip_rect;
+    }
+
+    APPLIB_API void sync_draw_streams()
+    {
+        auto &ctx = detail::get_context();
+        bool is_any_stream_invalidated = false;
+        for (u32 i = 0; i < ctx.streams.stream_count; ++i)
+        {
+            auto &stream = ctx.streams.attached_streams[i];
+            if (!(stream.flags & StreamFlagBits::invalidate)) continue;
+            if (stream.sync_stream) stream.sync_stream(&stream, ctx.frame_id);
+            is_any_stream_invalidated = is_any_stream_invalidated || stream.flags & StreamFlagBits::invalidate;
+        }
+        if (!is_any_stream_invalidated) ctx.dirty_flags &= ~DirtyFlagBits::streams;
+    }
+
+    APPLIB_API void sync_hit_rect_cache()
+    {
+        auto &ctx = detail::get_context();
+        auto *gpu = ctx.gpu_ctx;
+        assert(gpu && "GPU context is not initialized");
+        auto &state = detail::get_hit_rects_sync_state();
+        u32 frame_id = ctx.frame_id;
+        if (state.buffer_versions[frame_id] == state.master_version)
+        {
+            if (state.invalidation_count == 0) ctx.dirty_flags &= ~DirtyFlagBits::hit_rect;
+            return;
+        }
+        copy_hit_rects_frame(gpu, frame_id, state.master_id);
+        state.buffer_versions[frame_id] = state.master_version;
+        if (state.invalidation_count > 0) --state.invalidation_count;
+        if (state.invalidation_count == 0) state.stage_version = state.master_version;
+        if (state.invalidation_count == 0) ctx.dirty_flags &= ~DirtyFlagBits::hit_rect;
     }
 
     APPLIB_API void add_widget_to_root(Widget *widget)
@@ -232,6 +286,6 @@ namespace auik::v2
         widget->update_style();
         widget->update_layout();
         widget->record_draw_commands();
-        ctx.dirty_flags |= DirtyFlagBits::render;
+        ctx.dirty_flags |= DirtyFlagBits::redraw;
     }
 } // namespace auik::v2

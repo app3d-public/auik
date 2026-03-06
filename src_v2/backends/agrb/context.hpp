@@ -16,7 +16,7 @@ namespace auik::v2::detail
         agrb::device &device;
         agrb::descriptor_pool *descriptor_pool = nullptr;
         agrb::shader_cache shader_cache;
-        agrb::vector<amal::vec4> clip_rects;
+        agrb::vector<amal::vec4> *clip_rects = nullptr;
         acul::unique_ptr<class GPUPicker> picker;
 
         AgrbContext(agrb::device &device, agrb::descriptor_pool *descriptor_pool)

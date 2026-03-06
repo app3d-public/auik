@@ -4,6 +4,8 @@
 #include <acul/event.hpp>
 #include "detail/context.hpp"
 #include "detail/events.hpp"
+#include "draw.hpp"
+#include "widget.hpp"
 
 namespace auik::v2
 {
@@ -67,30 +69,39 @@ namespace auik::v2
 
     inline void set_window_size(acul::point2D<i32> size) { detail::get_context().window_size = size; }
 
-    inline void next_frame()
+    inline void next_frame(void *sync_ctx)
     {
         auto &ctx = detail::get_context();
+        if (ctx.dirty_flags & DirtyFlagBits::hit_rect) auik::v2::sync_hit_rect_cache();
+        detail::update_hover_id(ctx.gpu_ctx, sync_ctx);
         detail::new_window_frame(ctx.window_ctx);
-        detail::update_hover_id(ctx.gpu_ctx);
         ctx.screen_cursor = {0.0f, 0.0f};
         ctx.frame_id = (ctx.frame_id + 1) % ctx.frames_in_flight;
+        ctx.dirty_flags &= ~(DirtyFlagBits::redraw | DirtyFlagBits::host_update);
     }
 
-    inline void mark_dirty() { detail::get_context().dirty_flags |= DirtyFlagBits::render; }
+    inline void sync_gpu_cache()
+    {
+        auto &ctx = detail::get_context();
+        if (ctx.dirty_flags & DirtyFlagBits::layout)
+            record_all_commands();
+        else if (ctx.dirty_flags & DirtyFlagBits::clip_rect)
+            sync_clip_rect_cache();
+        if (ctx.dirty_flags & DirtyFlagBits::streams) sync_draw_streams();
+    }
 
-    inline void mark_layout_dirty() { detail::get_context().dirty_flags |= DirtyFlagBits::layout; }
-
-    inline bool is_dirty_render() { return detail::get_context().dirty_flags & DirtyFlagBits::render; }
+    inline bool is_dirty_render()
+    {
+        return detail::get_context().dirty_flags & (DirtyFlagBits::redraw | DirtyFlagBits::layout);
+    }
 
     inline bool is_dirty_layout() { return detail::get_context().dirty_flags & DirtyFlagBits::layout; }
 
-    inline bool is_dirty() { return detail::get_context().dirty_flags != DirtyFlagBits::none; }
+    inline bool is_dirty_stream() { return detail::get_context().dirty_flags & DirtyFlagBits::streams; }
 
-    inline void clear_dirty()
-    {
-        auto &ctx = detail::get_context();
-        ctx.dirty_flags = DirtyFlagBits::none;
-    }
+    inline bool is_dirty_hit_rect() { return detail::get_context().dirty_flags & DirtyFlagBits::hit_rect; }
 
-    APPLIB_API void reset_clip_rects();
+    inline bool is_dirty_clip_rect() { return detail::get_context().dirty_flags & DirtyFlagBits::clip_rect; }
+
+    inline bool is_host_update_pending() { return detail::get_context().dirty_flags & DirtyFlagBits::host_update; }
 } // namespace auik::v2

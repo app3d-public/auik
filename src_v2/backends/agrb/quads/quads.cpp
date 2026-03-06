@@ -4,8 +4,8 @@
 #include <auik/shaders.h>
 #include <auik/v2/backends/agrb/agrb.hpp>
 #include <auik/v2/backends/agrb/quads_pipeline.hpp>
-#include <auik/v2/detail/quads_dispatch.hpp>
 #include <auik/v2/pipelines.hpp>
+#include "../../../core/pipelines/stream_data.hpp"
 #include "../context.hpp"
 
 namespace auik::v2::detail
@@ -41,6 +41,43 @@ namespace auik::v2::detail
         gpu_data.draw_instances.clear();
     }
 
+    void copy_quads_stream_frame_data(DrawStream *stream, u32 dst_frame_id, u32 src_frame_id)
+    {
+        if (dst_frame_id == src_frame_id) return;
+        auto *frames = static_cast<QuadsStream *>(stream->stream_instances);
+        auto &dst = frames[dst_frame_id];
+        auto &src = frames[src_frame_id];
+        dst.draw_instances.clear();
+        dst.draw_instances.insert(dst.draw_instances.end(), src.draw_instances.begin(), src.draw_instances.end());
+        stream->draw_sizes[dst_frame_id] = stream->draw_sizes[src_frame_id];
+    }
+
+    static bool sync_quads_gpu_cache(DrawStream *stream, void *sync_ctx, u32 frame_id)
+    {
+        (void)sync_ctx;
+        // Transient streams are rebuilt every frame and don't use cached master synchronization.
+        if (stream->push_widget_to_cache) return false;
+        if (!stream->runtime_data) return false;
+
+        auto *state = static_cast<CachedStreamData *>(stream->runtime_data);
+        assert(state && state->buffer_versions);
+        if (state->buffer_versions[frame_id] != state->master_version)
+        {
+            copy_quads_stream_frame_data(stream, frame_id, state->master_id);
+            state->buffer_versions[frame_id] = state->master_version;
+            if (state->invalidation_count > 0) --state->invalidation_count;
+            if (state->invalidation_count == 0) state->stage_version = state->master_version;
+        }
+
+        return state->invalidation_count > 0;
+    }
+
+    static bool sync_quads_stream_cache(DrawStream *stream, void *sync_ctx, GPUContext *gpu_context, u32 frame_id)
+    {
+        (void)gpu_context;
+        return sync_quads_gpu_cache(stream, sync_ctx, frame_id);
+    }
+
     void destroy_quads_stream_gpu_data(DrawStream *stream)
     {
         u32 count = get_context().frames_in_flight;
@@ -64,14 +101,16 @@ namespace auik::v2::detail
         return data;
     }
 
-    static bool update_quads_descriptor_set(DrawStream *stream, QuadsStream &gpu_data, GPUContext *gpu_context)
+    static bool update_quads_descriptor_set(DrawStream *stream, QuadsStream &gpu_data, GPUContext *gpu_context,
+                                            u32 frame_id)
     {
         auto *pipeline = stream->pipeline;
         auto *ctx = get_agrb_context(gpu_context);
         assert(pipeline && pipeline->descriptor_set_layout);
+        assert(ctx->clip_rects);
 
         const vk::Buffer instance_buffer = gpu_data.draw_instances.data().vk_buffer;
-        const vk::Buffer clip_rects_buffer = ctx->clip_rects.data().vk_buffer;
+        const vk::Buffer clip_rects_buffer = ctx->clip_rects[frame_id].data().vk_buffer;
         if (!instance_buffer || !clip_rects_buffer) return false;
 
         // Fast path: descriptor set already points to current buffer.
@@ -100,7 +139,7 @@ namespace auik::v2::detail
     {
         if (stream->draw_sizes[frame_id] == 0) return;
         auto &gpu_data = static_cast<QuadsStream *>(stream->stream_instances)[frame_id];
-        if (!update_quads_descriptor_set(stream, gpu_data, gpu_context)) return;
+        if (!update_quads_descriptor_set(stream, gpu_data, gpu_context, frame_id)) return;
         auto *pipeline = stream->pipeline;
         auto &device = get_agrb_device(gpu_context);
         auto &cmd = *static_cast<vk::CommandBuffer *>(render_ctx);
@@ -113,14 +152,16 @@ namespace auik::v2::detail
         cmd.draw(6, stream->draw_sizes[frame_id], 0, 0, loader);
     }
 
-    void init_quads_pipeline_calls(QuadsGPUDispatch &dispatch)
+    void init_quads_pipeline_calls(StreamGPUDispatch &dispatch)
     {
         dispatch.push_data_to_stream = &push_data_to_stream;
-        dispatch.update_quads_stream_data = &update_quads_stream_data;
-        dispatch.clear_quads_stream = &clear_quads_stream;
-        dispatch.render_quads_stream = &render_quads_stream;
-        dispatch.create_quads_stream_gpu_data = &create_quads_stream_gpu_data;
-        dispatch.destroy_quads_stream_gpu_data = &destroy_quads_stream_gpu_data;
+        dispatch.update_stream_data = &update_quads_stream_data;
+        dispatch.clear_stream = &clear_quads_stream;
+        dispatch.copy_stream_frame_data = &copy_quads_stream_frame_data;
+        dispatch.sync_stream_cache = &sync_quads_stream_cache;
+        dispatch.render_stream = &render_quads_stream;
+        dispatch.create_stream_gpu_data = &create_quads_stream_gpu_data;
+        dispatch.destroy_stream_gpu_data = &destroy_quads_stream_gpu_data;
     }
 
 } // namespace auik::v2::detail
@@ -161,10 +202,8 @@ namespace auik::v2
         blend.srcAlphaBlendFactor = vk::BlendFactor::eOne;
         blend.dstAlphaBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha;
         blend.alphaBlendOp = vk::BlendOp::eAdd;
-        artifact.config.depth_stencil_info
-            .setDepthTestEnable(true)
-            .setDepthWriteEnable(true)
-            .setDepthCompareOp(vk::CompareOp::eGreaterOrEqual);
+        artifact.config.depth_stencil_info.setDepthTestEnable(true).setDepthWriteEnable(true).setDepthCompareOp(
+            vk::CompareOp::eGreaterOrEqual);
         artifact.config.render_pass = render_pass;
         artifact.config.pipeline_layout = pipeline.layout;
         artifact.config.subpass = tmp->value;

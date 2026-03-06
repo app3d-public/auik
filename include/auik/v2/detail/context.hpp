@@ -5,9 +5,13 @@
 #include <acul/enum.hpp>
 #include <acul/event.hpp>
 #include <acul/pair.hpp>
+#include <amal/common.hpp>
 #include <amal/vector.hpp>
 #include "fwd.hpp"
 #include "gpu_context.hpp"
+
+#define AUIK_SYNC_CLIP_RECT 0
+#define AUIK_SYNC_HIT_RECT  1
 
 namespace auik::v2
 {
@@ -16,8 +20,12 @@ namespace auik::v2
         enum enum_type
         {
             none = 0x0,
-            render = 0x1,
-            layout = 0x2
+            redraw = 0x1,
+            layout = 0x2,
+            streams = 0x4,
+            hit_rect = 0x8,
+            clip_rect = 0x10,
+            host_update = 0x20
         };
         using flag_bitmask = std::true_type;
     };
@@ -26,6 +34,31 @@ namespace auik::v2
 
     namespace detail
     {
+        struct SharedBufferSyncState
+        {
+            u32 master_id = 0;
+            u32 master_version = 0;
+            u32 stage_version = 0;
+            u32 invalidation_count = 0;
+            u32 *buffer_versions = nullptr;
+        };
+
+        inline void construct_shared_buffer_sync_state(SharedBufferSyncState &state, u32 frame_count)
+        {
+            state.master_id = 0;
+            state.master_version = 0;
+            state.stage_version = 0;
+            state.invalidation_count = 0;
+            state.buffer_versions = acul::alloc_n<u32>(frame_count);
+            for (u32 i = 0; i < frame_count; ++i) state.buffer_versions[i] = 0;
+        }
+
+        inline void destroy_shared_buffer_sync_state(SharedBufferSyncState &state)
+        {
+            acul::release(state.buffer_versions);
+            state.buffer_versions = nullptr;
+        }
+
         extern APPLIB_API struct Context
         {
             acul::events::dispatcher *ed = nullptr;
@@ -41,6 +74,7 @@ namespace auik::v2
             acul::point2D<i32> mouse_position{0, 0};
             u32 frame_id = 0;
             u32 frames_in_flight = 0;
+            SharedBufferSyncState shared_sync_state[2];
             amal::vec2 screen_cursor{0.0f, 0.0f};
             DirtyFlags dirty_flags = DirtyFlagBits::none;
             Theme *theme = nullptr;
@@ -58,6 +92,44 @@ namespace auik::v2
         {
             assert(g_context && "auik context is not initialized");
             return *g_context;
+        }
+
+        inline SharedBufferSyncState &get_clip_rects_sync_state()
+        {
+            return get_context().shared_sync_state[AUIK_SYNC_CLIP_RECT];
+        }
+        inline SharedBufferSyncState &get_hit_rects_sync_state()
+        {
+            return get_context().shared_sync_state[AUIK_SYNC_HIT_RECT];
+        }
+
+        inline void mark_shared_buffer_mutation(SharedBufferSyncState &state, u32 frame_id, u32 frames_in_flight)
+        {
+            const bool already_mutating_same_frame = (state.master_id == frame_id) &&
+                                                     (state.master_version != state.stage_version) &&
+                                                     (state.buffer_versions[frame_id] == state.master_version);
+            if (already_mutating_same_frame) return;
+            // Version must be strictly monotonic across mutations.
+            // Buffers can carry different content with the same version.
+            state.master_version = amal::max(state.master_version, state.stage_version) + 1;
+            state.master_id = frame_id;
+            assert(state.buffer_versions);
+            state.buffer_versions[frame_id] = state.master_version;
+            state.invalidation_count = (frames_in_flight > 0) ? (frames_in_flight - 1) : 0;
+        }
+
+        inline void mark_clip_rects_mutation()
+        {
+            auto &ctx = get_context();
+            mark_shared_buffer_mutation(get_clip_rects_sync_state(), ctx.frame_id, ctx.frames_in_flight);
+            ctx.dirty_flags |= DirtyFlagBits::clip_rect;
+        }
+
+        inline void mark_hit_rects_mutation()
+        {
+            auto &ctx = get_context();
+            mark_shared_buffer_mutation(get_hit_rects_sync_state(), ctx.frame_id, ctx.frames_in_flight);
+            ctx.dirty_flags |= DirtyFlagBits::hit_rect;
         }
 
         APPLIB_API WindowContext *create_window_context();
@@ -97,7 +169,9 @@ namespace auik::v2
     {
         auto *gpu = detail::get_context().gpu_ctx;
         assert(gpu && gpu->push_clip_rect && "GPU clip rect dispatch is not initialized");
-        return gpu->push_clip_rect(gpu, rect);
+        const u16 id = gpu->push_clip_rect(gpu, rect);
+        detail::mark_clip_rects_mutation();
+        return id;
     }
 
     inline void update_clip_rect(u16 clip_rect_id, const amal::vec4 &rect)
@@ -105,6 +179,7 @@ namespace auik::v2
         auto *gpu = detail::get_context().gpu_ctx;
         assert(gpu && gpu->update_clip_rect && "GPU clip rect dispatch is not initialized");
         gpu->update_clip_rect(gpu, clip_rect_id, rect);
+        detail::mark_clip_rects_mutation();
     }
 
     inline void reset_gpu_clip_rects()
@@ -112,13 +187,15 @@ namespace auik::v2
         auto *gpu = detail::get_context().gpu_ctx;
         assert(gpu && gpu->reset_clip_rects && "GPU clip rect dispatch is not initialized");
         gpu->reset_clip_rects(gpu);
+        detail::mark_clip_rects_mutation();
     }
 
-    inline void clear_hover_rects()
+    inline void clear_hit_rects()
     {
         auto *gpu = detail::get_context().gpu_ctx;
-        assert(gpu && gpu->clear_hover_rects && "GPU hover rect dispatch is not initialized");
-        gpu->clear_hover_rects(gpu);
+        assert(gpu && gpu->clear_hit_rects && "GPU hover rect dispatch is not initialized");
+        gpu->clear_hit_rects(gpu);
+        detail::mark_hit_rects_mutation();
     }
 
     inline amal::vec4 &get_clip_rect(u16 clip_rect_id)
@@ -129,5 +206,4 @@ namespace auik::v2
         assert(rect && "Invalid clip rect id");
         return *rect;
     }
-
 } // namespace auik::v2

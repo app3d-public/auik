@@ -29,13 +29,15 @@ namespace auik::v2::detail
         bool construct_pipeline(agrb::device &device, DrawPipeline &pipeline);
         bool configure_pipeline(AgrbContext *ctx, agrb::graphics_pipeline_batch::artifact &, DrawPipeline &);
 
-        void render(AgrbContext *ctx);
+        void render(AgrbContext *ctx, vk::CommandBuffer *cmd);
         void pick(AgrbContext *ctx, u32 read_frame_id);
-        u32 push_hover_rect(const RectData &rect);
-        void update_hover_rect(u32 id, const RectData &rect);
-        void clear_hover_rects();
+        u32 push_hit_rect(const RectData &rect);
+        void update_hit_rect(u32 id, const RectData &rect);
+        void clear_hit_rects();
+        void copy_frame_data(u32 dst_frame_id, u32 src_frame_id);
 
     private:
+        agrb::device *_device = nullptr;
         struct PickValue
         {
             u32 widget_id = 0;
@@ -44,21 +46,24 @@ namespace auik::v2::detail
 
         DrawPipeline *_pipeline = nullptr;
         vk::Format _depth_format = vk::Format::eUndefined;
-        agrb::vector<RectData> _rects;
+        agrb::vector<RectData> *_rects = nullptr;
         acul::shared_ptr<agrb::descriptor_set_layout> _descriptor_set_layout = nullptr;
         acul::vector<vk::DescriptorSet> _descriptor_sets;
-        vk::Buffer _descriptor_buffer_instances = nullptr;
-        vk::Buffer _descriptor_buffer_clip_rects = nullptr;
-        acul::vector<vk::CommandBuffer> _command_buffers;
+        acul::vector<vk::Buffer> _descriptor_buffer_instances;
+        acul::vector<vk::Buffer> _descriptor_buffer_clip_rects;
         acul::vector<agrb::managed_buffer> _readback_buffers;
-        acul::vector<vk::Fence> _submit_fences;
 
         void create_render_pass(agrb::device &device);
         bool create_attachments(agrb::device &device);
         bool create_descriptor_resources(agrb::device &device);
         bool create_readback_resources(agrb::device &device);
-        bool update_descriptors(AgrbContext *ctx);
+        bool update_descriptors(AgrbContext *ctx, u32 frame_id);
+        inline agrb::vector<RectData> &frame_rects(u32 frame_id)
+        {
+            assert(_rects);
+            return _rects[frame_id];
+        }
     };
 
-    void update_hover_id_impl(GPUContext *);
+    void update_hover_id_impl(GPUContext *, void *);
 } // namespace auik::v2::detail

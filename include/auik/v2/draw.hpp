@@ -1,8 +1,10 @@
 #pragma once
 
 #include <acul/api.hpp>
+#include <acul/enum.hpp>
 #include <acul/scalars.hpp>
 #include <cassert>
+#include <cstddef>
 #include "detail/context.hpp"
 
 namespace auik::v2
@@ -11,6 +13,17 @@ namespace auik::v2
 
     struct DrawPipeline;
 
+    struct StreamFlagBits
+    {
+        enum enum_type : u8
+        {
+            none = 0x0,
+            cached = 0x1,
+            transient = 0x2,
+            invalidate = 0x4
+        };
+    };
+
     struct DrawStream
     {
         DrawDataID (*push_data_to_stream)(DrawStream *, const void *) = nullptr;
@@ -18,12 +31,14 @@ namespace auik::v2
         void (*push_widget_to_cache)(DrawStream *, Widget *) = nullptr;
         void (*clear)(DrawStream *, u32) = nullptr;
         void (*render)(DrawStream *, void *, detail::GPUContext *) = nullptr;
+        void (*sync_stream)(DrawStream *, u32) = nullptr;
         void (*destroy)(DrawStream *) = nullptr;
 
         void *stream_instances = nullptr;
         void *runtime_data = nullptr;
         DrawPipeline *pipeline = nullptr;
         u32 *draw_sizes = nullptr;
+        u8 flags = StreamFlagBits::none;
     };
 
     inline DrawDataID push_data_to_stream(DrawStream *stream, void *data)
@@ -62,6 +77,8 @@ namespace auik::v2
         stream->destroy(stream);
     }
 
+    APPLIB_API void sync_draw_streams();
+
     struct DrawCtx
     {
         DrawDataID (*emit)(DrawStream *, DrawDataID &, const void *, const detail::RectData &) = nullptr;
@@ -70,11 +87,17 @@ namespace auik::v2
     inline void update_hit_rect(u32 &hit_id, const detail::RectData &rect, bool force_update)
     {
         auto *gpu = detail::get_context().gpu_ctx;
-        assert(gpu && gpu->push_hover_rect && "GPU hover rect dispatch is not initialized");
+        assert(gpu && gpu->push_hit_rect && "GPU hover rect dispatch is not initialized");
         if (hit_id == AUIK_INVALID_DRAW_DATA_ID)
-            hit_id = detail::push_hover_rect(gpu, rect);
+        {
+            hit_id = detail::push_hit_rect(gpu, rect);
+            detail::mark_hit_rects_mutation();
+        }
         else if (force_update)
-            detail::update_hover_rect(gpu, hit_id, rect);
+        {
+            detail::update_hit_rect(gpu, hit_id, rect);
+            detail::mark_hit_rects_mutation();
+        }
     }
 
     inline DrawDataID emit_draw_record(DrawStream *stream, DrawDataID &draw_id, const void *data,
@@ -96,4 +119,7 @@ namespace auik::v2
         update_hit_rect(draw_id.hit_id, rect, false);
         return draw_id;
     }
+
+    APPLIB_API void sync_clip_rect_cache();
+    APPLIB_API void sync_hit_rect_cache();
 } // namespace auik::v2

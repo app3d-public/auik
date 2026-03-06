@@ -57,6 +57,7 @@ namespace auik::v2
         DrawDataID _bg;
         f32 _header_height = 0.0f;
         amal::vec2 _content_offset{0.0f};
+        amal::vec4 _children_clip_rect{0.0f, 0.0f, 0.0f, 0.0f};
         StyleSelector _window_style{0, AUIK_TAG_WINDOW};
         class WindowHeader *_header = nullptr;
         Scrollbar *_scrollbar_x = nullptr;
@@ -66,6 +67,7 @@ namespace auik::v2
         virtual void update_layout() override;
 
         virtual void draw(DrawCtx &ctx) override;
+        virtual amal::vec4 get_children_clip_rect() const override { return _children_clip_rect; }
         virtual void on_attach() override
         {
             auto &map = detail::get_context().id_map;
@@ -80,6 +82,6 @@ namespace auik::v2
             for (auto *child : children) map.erase(child->id());
         }
 
-        virtual void on_scroll(u32 tag_id, const amal::vec2 &delta) override;
+        virtual void on_scroll(const amal::vec2 &delta) override;
     };
 } // namespace auik::v2

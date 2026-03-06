@@ -371,34 +371,34 @@ namespace auik::v2
 
         // Child content must be clipped to viewport area (header/padding/scroll fixed-margin safe area),
         // otherwise children can render under the header while scrolling.
-        const amal::vec2 content_inset = {
-            (_content_offset.x > 0.0f ? scroll_margin.x : padding.x),
-            (_content_offset.y > 0.0f ? scroll_margin.y : padding.y) + _header_height};
+        const amal::vec2 content_inset = {(_content_offset.x > 0.0f ? scroll_margin.x : padding.x),
+                                          (_content_offset.y > 0.0f ? scroll_margin.y : padding.y) + _header_height};
         const amal::vec2 content_size = {
             amal::max(size().x - content_inset.x - padding.z - (need_scroll_y ? bar_w : 0.0f), 0.0f),
             amal::max(size().y - content_inset.y - padding.w - (need_scroll_x ? bar_h : 0.0f), 0.0f)};
         const amal::vec4 content_clip = {position().x + content_inset.x, position().y + content_inset.y, content_size.x,
                                          content_size.y};
         const amal::vec4 parent_clip = get_clip_rect(clip_rect_id());
-        const amal::vec4 final_content_clip = intersect_rect(parent_clip, content_clip);
+        _children_clip_rect = intersect_rect(parent_clip, content_clip);
         for (auto *child : children)
         {
             if (!child) continue;
             const u16 clip_id = child->clip_rect_id();
             if (clip_id == 0xFFFFu) continue;
-            const amal::vec4 child_clip = get_clip_rect(clip_id);
-            get_clip_rect(clip_id) = intersect_rect(child_clip, final_content_clip);
+            const amal::vec2 child_pos = child->position();
+            const amal::vec2 child_size = child->size();
+            const amal::vec4 child_rect = {child_pos.x, child_pos.y, child_size.x, child_size.y};
+            update_clip_rect(clip_id, intersect_rect(child_rect, _children_clip_rect));
         }
 
         detail::get_context().screen_cursor = prev_cursor;
     }
 
-    void Window::on_scroll(u32 tag_id, const amal::vec2 &delta)
+    void Window::on_scroll(const amal::vec2 &delta)
     {
-        (void)tag_id;
         if (!(window_flags & WindowFlagBits::scrollable))
         {
-            if (parent()) parent()->on_scroll(tag_id, delta);
+            if (parent()) parent()->on_scroll(delta);
             return;
         }
 
@@ -419,11 +419,16 @@ namespace auik::v2
         }
         if (_content_offset != old_offset)
         {
-            detail::get_context().disposal_queue->emplace([this]() {
+            auto &ctx = detail::get_context();
+            ctx.disposal_queue->emplace([this]() {
+                // Queue flush can happen after next_frame(); ensure clip cache for current frame is valid
+                // before any layout code reads parent/child clip rects.
+                sync_clip_rect_cache();
                 update_layout();
                 update_draw_commands();
-                detail::get_context().dirty_flags |= DirtyFlagBits::render;
+                detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
             });
+            ctx.dirty_flags |= DirtyFlagBits::host_update;
         }
     }
 } // namespace auik::v2

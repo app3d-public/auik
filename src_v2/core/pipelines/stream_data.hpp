@@ -7,8 +7,6 @@ namespace auik::v2::detail
     {
         acul::vector<Widget *> widgets_cache;
     };
-    struct CachedStreamData
-    {
-        i32 write_id = -1;
-    };
+    
+    using CachedStreamData = SharedBufferSyncState;
 } // namespace auik::v2::detail

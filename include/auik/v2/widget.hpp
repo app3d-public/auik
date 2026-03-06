@@ -91,12 +91,12 @@ namespace auik::v2
         virtual void update_depth(const amal::vec2 &depth_range);
         virtual void update_style() = 0;
         virtual void draw(DrawCtx &) = 0;
+        virtual amal::vec4 get_children_clip_rect() const { return get_clip_rect(_rect.clip_rect_id); }
         virtual void on_attach();
         virtual void on_detach();
-        virtual void on_scroll(u32 tag_id, const amal::vec2 &delta)
+        virtual void on_scroll(const amal::vec2 &delta)
         {
-            (void)tag_id;
-            if (_parent) _parent->on_scroll(tag_id, delta);
+            if (_parent) _parent->on_scroll(delta);
         }
 
     protected:
@@ -118,5 +118,4 @@ namespace auik::v2
 
     APPLIB_API void record_all_commands();
     APPLIB_API void add_widget_to_root(Widget *widget);
-    APPLIB_API void reset_clip_rects();
 } // namespace auik::v2

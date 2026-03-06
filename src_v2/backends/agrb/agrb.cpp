@@ -8,53 +8,84 @@ namespace auik::v2
 {
     namespace detail
     {
-        void init_quads_pipeline_calls(QuadsGPUDispatch &dispatch);
+        void init_quads_pipeline_calls(StreamGPUDispatch &dispatch);
+
+        static inline agrb::vector<amal::vec4> &get_current_clip_rects(AgrbContext *ctx)
+        {
+            assert(ctx && ctx->clip_rects);
+            const u32 frame_id = get_context().frame_id;
+            assert(frame_id < get_context().frames_in_flight);
+            return ctx->clip_rects[frame_id];
+        }
 
         static u16 push_clip_rect(GPUContext *gpu_context, const amal::vec4 &rect)
         {
             auto *ctx = get_agrb_context(gpu_context);
-            const u32 id = static_cast<u32>(ctx->clip_rects.size());
+            auto &clip_rects = get_current_clip_rects(ctx);
+            const u32 id = static_cast<u32>(clip_rects.size());
             assert(id <= 0xFFFFu && "Clip rect limit exceeded (u16)");
-            ctx->clip_rects.push_back(rect);
+            clip_rects.push_back(rect);
             return static_cast<u16>(id);
         }
 
         static void update_clip_rect(GPUContext *gpu_context, u16 clip_rect_id, const amal::vec4 &rect)
         {
             auto *ctx = get_agrb_context(gpu_context);
-            if (clip_rect_id >= ctx->clip_rects.size()) return;
-            ctx->clip_rects[clip_rect_id] = rect;
+            auto &clip_rects = get_current_clip_rects(ctx);
+            if (clip_rect_id >= clip_rects.size()) return;
+            clip_rects[clip_rect_id] = rect;
         }
 
         static void reset_clip_rects(GPUContext *gpu_context)
         {
             auto *ctx = get_agrb_context(gpu_context);
-            ctx->clip_rects.clear();
+            get_current_clip_rects(ctx).clear();
         }
 
         static amal::vec4 *get_clip_rect(GPUContext *gpu_context, u16 clip_rect_id)
         {
             auto *ctx = get_agrb_context(gpu_context);
-            if (clip_rect_id >= ctx->clip_rects.size()) return nullptr;
-            return &ctx->clip_rects[clip_rect_id];
+            auto &clip_rects = get_current_clip_rects(ctx);
+            if (clip_rect_id >= clip_rects.size()) return nullptr;
+            return &clip_rects[clip_rect_id];
         }
 
-        static u32 push_hover_rect_impl(GPUContext *gpu_context, const RectData &rect)
+        static void copy_clip_rects_frame_impl(GPUContext *gpu_context, u32 dst_frame_id, u32 src_frame_id)
         {
             auto *ctx = get_agrb_context(gpu_context);
-            return ctx->picker->push_hover_rect(rect);
+            assert(ctx->clip_rects);
+            const u32 frames = get_context().frames_in_flight;
+            if (dst_frame_id >= frames || src_frame_id >= frames || dst_frame_id == src_frame_id) return;
+            auto &dst = ctx->clip_rects[dst_frame_id];
+            auto &src = ctx->clip_rects[src_frame_id];
+            const u32 src_size = static_cast<u32>(src.size());
+            if (src_size == 0) return;
+            dst.resize(src_size);
+            memcpy(dst.data().mapped, src.data().mapped, src_size * sizeof(amal::vec4));
         }
 
-        static void update_hover_rect_impl(GPUContext *gpu_context, u32 id, const RectData &rect)
+        static u32 push_hit_rect_impl(GPUContext *gpu_context, const RectData &rect)
         {
             auto *ctx = get_agrb_context(gpu_context);
-            ctx->picker->update_hover_rect(id, rect);
+            return ctx->picker->push_hit_rect(rect);
         }
 
-        static void clear_hover_rects_impl(GPUContext *gpu_context)
+        static void update_hit_rect_impl(GPUContext *gpu_context, u32 id, const RectData &rect)
         {
             auto *ctx = get_agrb_context(gpu_context);
-            ctx->picker->clear_hover_rects();
+            ctx->picker->update_hit_rect(id, rect);
+        }
+
+        static void clear_hit_rects_impl(GPUContext *gpu_context)
+        {
+            auto *ctx = get_agrb_context(gpu_context);
+            ctx->picker->clear_hit_rects();
+        }
+
+        static void copy_hit_rects_frame_impl(GPUContext *gpu_context, u32 dst_frame_id, u32 src_frame_id)
+        {
+            auto *ctx = get_agrb_context(gpu_context);
+            ctx->picker->copy_frame_data(dst_frame_id, src_frame_id);
         }
     } // namespace detail
 
@@ -63,7 +94,13 @@ namespace auik::v2
         detail::AgrbContext *agrb_ctx = static_cast<detail::AgrbContext *>(gpu_context);
         agrb_ctx->picker->destroy(agrb_ctx->device);
         agrb_ctx->picker.reset();
-        agrb_ctx->clip_rects.destroy();
+        if (agrb_ctx->clip_rects)
+        {
+            const u32 frames = detail::get_context().frames_in_flight;
+            for (u32 i = 0; i < frames; ++i) agrb_ctx->clip_rects[i].destroy();
+            acul::release(agrb_ctx->clip_rects, frames);
+            agrb_ctx->clip_rects = nullptr;
+        }
         clear_shader_cache(agrb_ctx->device);
         acul::release(agrb_ctx);
     }
@@ -71,12 +108,15 @@ namespace auik::v2
     static bool create_agrb_resources(detail::GPUContext *gpu_context)
     {
         auto *agrb_ctx = static_cast<detail::AgrbContext *>(gpu_context);
-        agrb::managed_buffer clip_buf{.required_flags = vk::MemoryPropertyFlagBits::eHostVisible |
-                                                        vk::MemoryPropertyFlagBits::eHostCoherent,
-                                      .buffer_usage = vk::BufferUsageFlagBits::eStorageBuffer,
-                                      .vma_usage = VMA_MEMORY_USAGE_CPU_TO_GPU};
+        agrb::managed_buffer clip_buf{
+            .required_flags = vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+            .buffer_usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferSrc |
+                            vk::BufferUsageFlagBits::eTransferDst,
+            .vma_usage = VMA_MEMORY_USAGE_CPU_TO_GPU};
         clip_buf.instance_count = 1;
-        agrb_ctx->clip_rects.init(agrb_ctx->device, clip_buf);
+        const u32 frames = detail::get_context().frames_in_flight;
+        agrb_ctx->clip_rects = acul::alloc_n<agrb::vector<amal::vec4>>(frames);
+        for (u32 i = 0; i < frames; ++i) agrb_ctx->clip_rects[i].init(agrb_ctx->device, clip_buf);
         agrb_ctx->picker = acul::make_unique<detail::GPUPicker>(agrb_ctx->device);
         return agrb_ctx->picker->prepare(agrb_ctx);
     }
@@ -90,9 +130,11 @@ namespace auik::v2
         agrb_ctx->reset_clip_rects = &detail::reset_clip_rects;
         agrb_ctx->update_clip_rect = &detail::update_clip_rect;
         agrb_ctx->get_clip_rect = &detail::get_clip_rect;
-        agrb_ctx->push_hover_rect = &detail::push_hover_rect_impl;
-        agrb_ctx->update_hover_rect = &detail::update_hover_rect_impl;
-        agrb_ctx->clear_hover_rects = &detail::clear_hover_rects_impl;
+        agrb_ctx->copy_clip_rects_frame = &detail::copy_clip_rects_frame_impl;
+        agrb_ctx->push_hit_rect = &detail::push_hit_rect_impl;
+        agrb_ctx->update_hit_rect = &detail::update_hit_rect_impl;
+        agrb_ctx->clear_hit_rects = &detail::clear_hit_rects_impl;
+        agrb_ctx->copy_hit_rects_frame = &detail::copy_hit_rects_frame_impl;
         agrb_ctx->update_hover_id = &detail::update_hover_id_impl;
         detail::init_quads_pipeline_calls(agrb_ctx->quads);
         return agrb_ctx;

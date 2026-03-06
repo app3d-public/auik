@@ -167,12 +167,15 @@ namespace auik::v2::detail
 
     bool GPUPicker::create_descriptor_resources(agrb::device &device)
     {
-        agrb::managed_buffer buf{.required_flags = vk::MemoryPropertyFlagBits::eHostVisible |
-                                                   vk::MemoryPropertyFlagBits::eHostCoherent,
-                                 .buffer_usage = vk::BufferUsageFlagBits::eStorageBuffer,
-                                 .vma_usage = VMA_MEMORY_USAGE_CPU_TO_GPU};
+        agrb::managed_buffer buf{
+            .required_flags = vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+            .buffer_usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferSrc |
+                            vk::BufferUsageFlagBits::eTransferDst,
+            .vma_usage = VMA_MEMORY_USAGE_CPU_TO_GPU};
         buf.instance_count = 1;
-        _rects.init(device, buf);
+        const u32 frames_in_flight = get_context().frames_in_flight;
+        _rects = acul::alloc_n<agrb::vector<RectData>>(frames_in_flight);
+        for (u32 i = 0; i < frames_in_flight; ++i) _rects[i].init(device, buf);
 
         _descriptor_set_layout =
             agrb::descriptor_set_layout::builder()
@@ -181,26 +184,26 @@ namespace auik::v2::detail
                 .build(device);
         if (!_descriptor_set_layout) return false;
         auto &global_ctx = get_context();
-        u32 frames_in_flight = global_ctx.frames_in_flight;
         _descriptor_sets.resize(frames_in_flight);
+        _descriptor_buffer_instances.resize(frames_in_flight);
+        _descriptor_buffer_clip_rects.resize(frames_in_flight);
 
-        const vk::Buffer instance_buffer = _rects.data().vk_buffer;
         auto *agrb_ctx = get_agrb_context(global_ctx.gpu_ctx);
-        const vk::Buffer clip_rects_buffer = agrb_ctx->clip_rects.data().vk_buffer;
-        if (!instance_buffer || !clip_rects_buffer) return false;
-
-        vk::DescriptorBufferInfo instance_info{instance_buffer, 0, VK_WHOLE_SIZE};
+        if (!agrb_ctx->clip_rects) return false;
         for (u32 i = 0; i < frames_in_flight; ++i)
         {
+            const vk::Buffer instance_buffer = _rects[i].data().vk_buffer;
+            const vk::Buffer clip_rects_buffer = agrb_ctx->clip_rects[i].data().vk_buffer;
+            if (!instance_buffer || !clip_rects_buffer) return false;
+            vk::DescriptorBufferInfo instance_info{instance_buffer, 0, VK_WHOLE_SIZE};
             vk::DescriptorBufferInfo clip_rects_info{clip_rects_buffer, 0, VK_WHOLE_SIZE};
             agrb::descriptor_writer writer(*_descriptor_set_layout, *agrb_ctx->descriptor_pool);
             writer.write_buffer(0, &instance_info);
             writer.write_buffer(1, &clip_rects_info);
             if (!writer.build(_descriptor_sets[i])) return false;
+            _descriptor_buffer_instances[i] = instance_buffer;
+            _descriptor_buffer_clip_rects[i] = clip_rects_buffer;
         }
-
-        _descriptor_buffer_instances = instance_buffer;
-        _descriptor_buffer_clip_rects = clip_rects_buffer;
         return true;
     }
 
@@ -208,8 +211,6 @@ namespace auik::v2::detail
     {
         const u32 frames_in_flight = get_context().frames_in_flight;
         _readback_buffers.resize(frames_in_flight);
-        _submit_fences.resize(frames_in_flight);
-        device.rd->fence_pool.request(_submit_fences.data(), _submit_fences.size());
 
         for (u32 i = 0; i < frames_in_flight; ++i)
         {
@@ -234,57 +235,57 @@ namespace auik::v2::detail
         return true;
     }
 
-    bool GPUPicker::update_descriptors(AgrbContext *ctx)
+    bool GPUPicker::update_descriptors(AgrbContext *ctx, u32 frame_id)
     {
         assert(!_descriptor_sets.empty());
+        assert(frame_id < _descriptor_sets.size());
+        assert(ctx->clip_rects);
 
-        const vk::Buffer instance_buffer = _rects.data().vk_buffer;
-        const vk::Buffer clip_rects_buffer = ctx->clip_rects.data().vk_buffer;
+        const vk::Buffer instance_buffer = _rects[frame_id].data().vk_buffer;
+        const vk::Buffer clip_rects_buffer = ctx->clip_rects[frame_id].data().vk_buffer;
         if (!instance_buffer || !clip_rects_buffer) return false;
-        if (_descriptor_buffer_instances == instance_buffer && _descriptor_buffer_clip_rects == clip_rects_buffer)
+        if (_descriptor_buffer_instances[frame_id] == instance_buffer &&
+            _descriptor_buffer_clip_rects[frame_id] == clip_rects_buffer)
             return true;
 
         vk::DescriptorBufferInfo instance_info{instance_buffer, 0, VK_WHOLE_SIZE};
-        for (u32 i = 0; i < _descriptor_sets.size(); ++i)
-        {
-            vk::DescriptorBufferInfo clip_rects_info{clip_rects_buffer, 0, VK_WHOLE_SIZE};
-            agrb::descriptor_writer writer(*_descriptor_set_layout, *ctx->descriptor_pool);
-            writer.write_buffer(0, &instance_info);
-            writer.write_buffer(1, &clip_rects_info);
-            writer.overwrite(_descriptor_sets[i]);
-        }
-
-        _descriptor_buffer_instances = instance_buffer;
-        _descriptor_buffer_clip_rects = clip_rects_buffer;
+        vk::DescriptorBufferInfo clip_rects_info{clip_rects_buffer, 0, VK_WHOLE_SIZE};
+        agrb::descriptor_writer writer(*_descriptor_set_layout, *ctx->descriptor_pool);
+        writer.write_buffer(0, &instance_info);
+        writer.write_buffer(1, &clip_rects_info);
+        writer.overwrite(_descriptor_sets[frame_id]);
+        _descriptor_buffer_instances[frame_id] = instance_buffer;
+        _descriptor_buffer_clip_rects[frame_id] = clip_rects_buffer;
         return true;
     }
 
     void GPUPicker::destroy(agrb::device &device)
     {
-        if (!_submit_fences.empty()) device.rd->fence_pool.release(_submit_fences.data(), _submit_fences.size());
-        _submit_fences.clear();
-
         for (auto &buffer : _readback_buffers)
             if (buffer.vk_buffer) agrb::destroy_buffer(buffer, device);
         _readback_buffers.clear();
 
-        device.rd->queues.graphics.pool.primary.release(_command_buffers.data(), _command_buffers.size());
         if (attachments) agrb::destroy_framebuffer(*this, device);
-        if (_rects.is_inited()) _rects.destroy();
+        if (_rects)
+        {
+            const u32 frames = get_context().frames_in_flight;
+            for (u32 i = 0; i < frames; ++i) _rects[i].destroy();
+            acul::release(_rects, frames);
+            _rects = nullptr;
+        }
         _descriptor_set_layout.reset();
         _descriptor_sets.clear();
-        _descriptor_buffer_instances = nullptr;
-        _descriptor_buffer_clip_rects = nullptr;
+        _descriptor_buffer_instances.clear();
+        _descriptor_buffer_clip_rects.clear();
         _pipeline = nullptr;
+        _device = nullptr;
         _depth_format = vk::Format::eUndefined;
     }
 
     bool GPUPicker::prepare(AgrbContext *context)
     {
-        u32 frames_in_flight = get_context().frames_in_flight;
-        _command_buffers.resize(frames_in_flight);
+        _device = &context->device;
         auto &device = context->device;
-        device.rd->queues.graphics.pool.primary.request(_command_buffers.data(), frames_in_flight);
         create_render_pass(device);
         if (!create_attachments(device)) goto err;
         if (!create_descriptor_resources(device)) goto err;
@@ -364,23 +365,13 @@ namespace auik::v2::detail
         cmd.beginRenderPass(&rp_info, vk::SubpassContents::eInline, loader);
     }
 
-    static bool begin_recording(vk::CommandBuffer cmd, const vk::DispatchLoaderDynamic &loader)
-    {
-        vk::CommandBufferBeginInfo begin_info;
-        begin_info.setFlags(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
-        cmd.begin(begin_info, loader);
-        return true;
-    }
-
-    void GPUPicker::render(AgrbContext *ctx)
+    void GPUPicker::render(AgrbContext *ctx, vk::CommandBuffer *cmd)
     {
         auto &global_ctx = get_context();
         u32 frame_id = global_ctx.frame_id;
-        auto &cmd = _command_buffers[frame_id];
         auto &loader = ctx->device.loader;
-        if (!begin_recording(cmd, loader)) return;
 
-        begin_render_pass(*this, frame_id, cmd, loader);
+        begin_render_pass(*this, frame_id, *cmd, loader);
         vk::Viewport viewport = {-static_cast<f32>(global_ctx.mouse_position.x),
                                  -static_cast<f32>(global_ctx.mouse_position.y),
                                  static_cast<f32>(global_ctx.window_size.x),
@@ -388,19 +379,20 @@ namespace auik::v2::detail
                                  0.0f,
                                  1.0f};
         vk::Rect2D scissor = {{0, 0}, {1, 1}};
-        cmd.setViewport(0, 1, &viewport, loader);
-        cmd.setScissor(0, 1, &scissor, loader);
+        cmd->setViewport(0, 1, &viewport, loader);
+        cmd->setScissor(0, 1, &scissor, loader);
 
-        if (!_rects.empty() && update_descriptors(ctx))
+        auto &rects = frame_rects(frame_id);
+        if (!rects.empty() && update_descriptors(ctx, frame_id))
         {
-            cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, _pipeline->handle, loader);
-            cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, _pipeline->layout, 0, 1,
-                                   &_descriptor_sets[frame_id], 0, nullptr, loader);
-            cmd.pushConstants(_pipeline->layout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(acul::point2D<u32>),
-                              &global_ctx.window_size, loader);
-            cmd.draw(6, _rects.size(), 0, 0, loader);
+            cmd->bindPipeline(vk::PipelineBindPoint::eGraphics, _pipeline->handle, loader);
+            cmd->bindDescriptorSets(vk::PipelineBindPoint::eGraphics, _pipeline->layout, 0, 1,
+                                    &_descriptor_sets[frame_id], 0, nullptr, loader);
+            cmd->pushConstants(_pipeline->layout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(acul::point2D<u32>),
+                               &global_ctx.window_size, loader);
+            cmd->draw(6, rects.size(), 0, 0, loader);
         }
-        cmd.endRenderPass(loader);
+        cmd->endRenderPass(loader);
         {
             vk::BufferImageCopy region{};
             region.setBufferOffset(0)
@@ -409,30 +401,14 @@ namespace auik::v2::detail
                 .setImageSubresource({vk::ImageAspectFlagBits::eColor, 0, 0, 1})
                 .setImageOffset({0, 0, 0})
                 .setImageExtent({1, 1, 1});
-            cmd.copyImageToBuffer(attachments->images[frame_id].attachments[0].image,
-                                  vk::ImageLayout::eTransferSrcOptimal, _readback_buffers[frame_id].vk_buffer, 1,
-                                  &region, loader);
+            cmd->copyImageToBuffer(attachments->images[frame_id].attachments[0].image,
+                                   vk::ImageLayout::eTransferSrcOptimal, _readback_buffers[frame_id].vk_buffer, 1,
+                                   &region, loader);
         }
-
-        cmd.end(loader);
-        const vk::Fence fence = _submit_fences[frame_id];
-        const vk::Result reset_result = ctx->device.vk_device.resetFences(1, &fence, ctx->device.loader);
-        if (reset_result != vk::Result::eSuccess) return;
-        vk::SubmitInfo submit_info;
-        submit_info.setCommandBufferCount(1).setPCommandBuffers(&cmd);
-        auto &queue = ctx->device.rd->queues.graphics.vk_queue;
-        const vk::Result submit_result = queue.submit(1, &submit_info, fence, ctx->device.loader);
-        if (submit_result != vk::Result::eSuccess) return;
     }
 
     void GPUPicker::pick(AgrbContext *ctx, u32 read_frame_id)
     {
-        if (read_frame_id >= _readback_buffers.size() || read_frame_id >= _submit_fences.size()) return;
-
-        const vk::Fence fence = _submit_fences[read_frame_id];
-        const vk::Result status = ctx->device.vk_device.getFenceStatus(fence, ctx->device.loader);
-        if (status != vk::Result::eSuccess) return;
-
         auto *data = static_cast<const PickValue *>(_readback_buffers[read_frame_id].mapped);
         if (!data) return;
         auto &global_ctx = get_context();
@@ -440,29 +416,44 @@ namespace auik::v2::detail
         global_ctx.hover_tag_id = data->tag_id;
     }
 
-    u32 GPUPicker::push_hover_rect(const RectData &rect)
+    u32 GPUPicker::push_hit_rect(const RectData &rect)
     {
-        const u32 id = static_cast<u32>(_rects.size());
-        _rects.push_back(rect);
+        const u32 frame_id = get_context().frame_id;
+        auto &rects = frame_rects(frame_id);
+        const u32 id = static_cast<u32>(rects.size());
+        rects.push_back(rect);
         return id;
     }
 
-    void GPUPicker::update_hover_rect(u32 id, const RectData &rect)
+    void GPUPicker::update_hit_rect(u32 id, const RectData &rect)
     {
-        if (id >= _rects.size()) return;
-        _rects[id] = rect;
+        const u32 frame_id = get_context().frame_id;
+        auto &rects = frame_rects(frame_id);
+        if (id >= rects.size()) return;
+        rects[id] = rect;
     }
 
-    void GPUPicker::clear_hover_rects() { _rects.clear(); }
+    void GPUPicker::clear_hit_rects() { frame_rects(get_context().frame_id).clear(); }
 
-    void update_hover_id_impl(GPUContext *gpu_context)
+    void GPUPicker::copy_frame_data(u32 dst_frame_id, u32 src_frame_id)
+    {
+        if (dst_frame_id == src_frame_id || !_rects) return;
+        auto &dst = frame_rects(dst_frame_id);
+        auto &src = frame_rects(src_frame_id);
+        const u32 src_size = static_cast<u32>(src.size());
+        dst.resize(src_size);
+        if (src_size == 0) return;
+        memcpy(dst.data().mapped, src.data().mapped, src_size * sizeof(RectData));
+    }
+
+    void update_hover_id_impl(GPUContext *gpu_context, void *sync_ctx)
     {
         auto &global_ctx = get_context();
         if (!check_mouse_bounds(global_ctx.mouse_position)) return;
         auto *agrb_ctx = get_agrb_context(gpu_context);
         auto &picker = agrb_ctx->picker;
         assert(picker->attachments);
-        picker->render(agrb_ctx);
+        picker->render(agrb_ctx, static_cast<vk::CommandBuffer *>(sync_ctx));
         const u32 frames_in_flight = global_ctx.frames_in_flight;
         assert(frames_in_flight > 0);
         const u32 read_frame_id = (global_ctx.frame_id + frames_in_flight - 1) % frames_in_flight;

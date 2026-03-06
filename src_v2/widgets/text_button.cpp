@@ -45,7 +45,7 @@ namespace auik::v2
         {
             const amal::vec4 parent_clip = get_clip_rect(parent()->clip_rect_id());
             const amal::vec4 self_clip = get_clip_rect(clip_rect_id());
-            get_clip_rect(clip_rect_id()) = intersect_rect(self_clip, parent_clip);
+            update_clip_rect(clip_rect_id(), intersect_rect(self_clip, parent_clip));
         }
 
         detail::get_context().screen_cursor = {cursor.x, pos.y + button_size.y + margin.w};
