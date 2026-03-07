@@ -5,7 +5,7 @@ AccessModifierOffset: -4
 NamespaceIndentation: All
 ContinuationIndentWidth: 4
 AlignConsecutiveMacros: true
-AllowShortIfStatementsOnASingleLine: true
+AllowShortIfStatementsOnASingleLine: AllIfsAndElse
 AllowShortLoopsOnASingleLine: true
 AllowShortBlocksOnASingleLine: true
 AlignEscapedNewlines: Left

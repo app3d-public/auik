@@ -5,6 +5,23 @@
 #include <acul/scalars.hpp>
 #include <amal/vector.hpp>
 
+namespace auik::v2
+{
+    enum class KeyPressState : i8
+    {
+        release,
+        press
+    };
+
+    enum class MouseKey
+    {
+        unknown = -1,
+        left = 0,
+        right = 1,
+        middle = 2
+    };
+} // namespace auik::v2
+
 namespace auik::v2::detail
 {
     constexpr u32 AUIK_TAG_HITBOX = 0xBF9B2277u;
@@ -36,19 +53,25 @@ namespace auik::v2::detail
 
     using PFN_set_window_cursor = void (*)(CursorID::enum_type, struct WindowContext *);
     using PFN_destroy_window_backend = void (*)(struct WindowContext *);
+    using PFN_update_window_time = void (*)(struct WindowContext *);
     using PFN_window_new_frame = void (*)(struct WindowContext *);
+    using PFN_construct_window_backend = void (*)(struct WindowContext *);
 
     struct WindowContext
     {
         f64 time = 0.0;
         PFN_set_window_cursor set_cursor = nullptr;
+        PFN_construct_window_backend construct_backend = nullptr;
         PFN_destroy_window_backend destroy_backend = nullptr;
+        PFN_update_window_time update_time = nullptr;
         PFN_window_new_frame new_frame = nullptr;
     };
 
     APPLIB_API void on_resize_event(const amal::vec2 &size);
     APPLIB_API void on_mouse_move_event(const amal::vec2 &pos);
+    APPLIB_API void on_drag_event();
     APPLIB_API void on_scroll_event(const amal::vec2 &pos);
+    APPLIB_API void on_mouse_click_event(MouseKey key, KeyPressState state);
 
     inline void set_window_cursor(CursorID::enum_type id, WindowContext *window_ctx)
     {
@@ -56,9 +79,18 @@ namespace auik::v2::detail
         window_ctx->set_cursor(id, window_ctx);
     }
 
+    inline void construct_window_backend(WindowContext *window_ctx) { window_ctx->construct_backend(window_ctx); }
+
     inline void destroy_window_context(WindowContext *window_ctx)
     {
-        if (window_ctx) window_ctx->destroy_backend(window_ctx);
+        assert(window_ctx && "auik window context is not initialized");
+        window_ctx->destroy_backend(window_ctx);
+    }
+
+    inline void update_window_time(WindowContext *window_ctx)
+    {
+        assert(window_ctx && "auik window context is not initialized");
+        if (window_ctx->update_time) window_ctx->update_time(window_ctx);
     }
 
     inline void new_window_frame(WindowContext *window_ctx) { window_ctx->new_frame(window_ctx); }

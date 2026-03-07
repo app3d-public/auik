@@ -35,6 +35,77 @@ namespace auik::v2::detail
         return true;
     }
 
+    bool Scrollbar::scroll_to_track_click(const amal::vec2 &mouse_pos)
+    {
+        const f32 max_scroll_px = _behavior.max_scroll();
+        if (max_scroll_px <= 0.0f) return false;
+
+        if (_behavior.axis == amal::axis::y)
+        {
+            const f32 track_min = position().y;
+            const f32 track_len = amal::max(size().y, 1e-6f);
+            const f32 t = amal::clamp((mouse_pos.y - track_min) / track_len, 0.0f, 1.0f);
+            const f32 old_offset = _behavior.scroll_offset();
+            _behavior.set_scroll_normalized(t);
+            return _behavior.scroll_offset() != old_offset;
+        }
+
+        const f32 track_min = position().x;
+        const f32 track_len = amal::max(size().x, 1e-6f);
+        const f32 t = amal::clamp((mouse_pos.x - track_min) / track_len, 0.0f, 1.0f);
+        const f32 old_offset = _behavior.scroll_offset();
+        _behavior.set_scroll_normalized(t);
+        return _behavior.scroll_offset() != old_offset;
+    }
+
+    bool Scrollbar::is_point_on_thumb(const amal::vec2 &mouse_pos) const
+    {
+        const auto &r = _thumb_rect;
+        return mouse_pos.x >= r.position.x && mouse_pos.y >= r.position.y && mouse_pos.x < (r.position.x + r.size.x) &&
+               mouse_pos.y < (r.position.y + r.size.y);
+    }
+
+    bool Scrollbar::scroll_thumb_by_drag_delta(const amal::vec2 &delta)
+    {
+        const f32 max_scroll_px = _behavior.max_scroll();
+        if (max_scroll_px <= 0.0f) return false;
+
+        auto *theme = get_theme();
+        const auto &track_style = theme->get_style(_track_style.id);
+        const auto &thumb_style = theme->get_style(_thumb_style.id);
+        const amal::vec4 track_padding = track_style.padding();
+        const amal::vec4 thumb_margin = thumb_style.margin();
+
+        const f32 safe_content = amal::max(_content_size, 1.0f);
+        const f32 safe_view = amal::max(_view_size, 0.0f);
+        const f32 ratio = amal::clamp(safe_view / safe_content, 0.0f, 1.0f);
+
+        f32 thumb_range = 0.0f;
+        f32 delta_axis = 0.0f;
+        if (_behavior.axis == amal::axis::y)
+        {
+            const f32 lane_h =
+                amal::max(size().y - track_padding.y - track_padding.w - thumb_margin.y - thumb_margin.w, 0.0f);
+            const f32 min_thumb_h = 18.0f;
+            const f32 base_thumb_h = amal::max(lane_h * ratio, amal::min(min_thumb_h, lane_h));
+            thumb_range = amal::max(lane_h - base_thumb_h, 0.0f);
+            delta_axis = delta.y;
+        }
+        else
+        {
+            const f32 lane_w =
+                amal::max(size().x - track_padding.x - track_padding.z - thumb_margin.x - thumb_margin.z, 0.0f);
+            const f32 min_thumb_w = 18.0f;
+            const f32 base_thumb_w = amal::max(lane_w * ratio, amal::min(min_thumb_w, lane_w));
+            thumb_range = amal::max(lane_w - base_thumb_w, 0.0f);
+            delta_axis = delta.x;
+        }
+
+        if (thumb_range <= 0.0f || delta_axis == 0.0f) return false;
+        const f32 scroll_delta_px = delta_axis * (max_scroll_px / thumb_range);
+        return _behavior.scroll_by_pixels(scroll_delta_px);
+    }
+
     amal::vec4 Scrollbar::get_track_margin() const
     {
         auto *theme = get_theme();
@@ -63,6 +134,8 @@ namespace auik::v2::detail
     void Scrollbar::configure(const amal::vec2 &track_pos, const amal::vec2 &track_size, f32 content_size,
                               f32 view_size)
     {
+        _content_size = content_size;
+        _view_size = view_size;
         set_position(track_pos);
         set_size(track_size);
 

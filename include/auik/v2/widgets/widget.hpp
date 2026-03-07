@@ -3,6 +3,7 @@
 #include <acul/enum.hpp>
 #include <acul/vector.hpp>
 #include <amal/vector.hpp>
+#include "../detail/events.hpp"
 #include "../draw.hpp"
 
 namespace auik::v2
@@ -18,17 +19,21 @@ namespace auik::v2
         {
             none = 0x0,
             visible = 0x1,
-            active = 0x2,
-            hovered = 0x4,
-            configurable = 0x8,
-            foreground = 0x10,
-            background = 0x20
+            configurable = 0x2,
+            attachable = 0x4,
+            foreground = 0x8,
+            background = 0x10,
+            active_from_child = 0x20,
+            active_to_child = 0x40
         };
         using flag_bitmask = std::true_type;
     };
 
     using WidgetFlags = acul::flags<WidgetFlagBits>;
-    constexpr inline WidgetFlags get_default_widget_flags() { return WidgetFlagBits::visible; }
+    constexpr inline WidgetFlags get_default_widget_flags()
+    {
+        return WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::configurable;
+    }
 
     class APPLIB_API Widget
     {
@@ -86,18 +91,30 @@ namespace auik::v2
             _required_size = _rect.size;
             if (_rect.clip_rect_id == 0xFFFFu) push_clip_rect();
             update_clip_rect(_rect.clip_rect_id, {_rect.position, _rect.size});
+            detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect;
         }
 
         virtual void update_depth(const amal::vec2 &depth_range);
         virtual void update_style() = 0;
         virtual void draw(DrawCtx &) = 0;
         virtual amal::vec4 get_children_clip_rect() const { return get_clip_rect(_rect.clip_rect_id); }
-        virtual void on_attach();
-        virtual void on_detach();
+        virtual void on_attach() { detail::get_context().id_map.emplace(id(), this); }
+        virtual void on_detach() { detail::get_context().id_map.erase(id()); }
         virtual void on_scroll(const amal::vec2 &delta)
         {
             if (_parent) _parent->on_scroll(delta);
         }
+
+        virtual void on_active()
+        {
+            auto &ctx = detail::get_context();
+            ctx.active_widget_id = id();
+            if (_parent && (_parent->widget_flags & WidgetFlagBits::active_from_child)) _parent->on_active();
+        }
+        virtual void on_parent_active() {}
+
+        virtual void on_click(MouseKey key, KeyPressState state, u32 click_count) {}
+        virtual void on_drag(const amal::vec2 &delta, bool is_dropped) {}
 
     protected:
         u32 _id;

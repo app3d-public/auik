@@ -62,6 +62,15 @@ namespace auik::v2
         {
             amal::vec2 mouse_pos;
             amal::vec2 display_size;
+            amal::vec2 last_click_pos{0.0f, 0.0f};
+            amal::vec2 last_drag_pos{0.0f, 0.0f};
+            amal::vec2 drag_delta{0.0f, 0.0f};
+            f64 last_click_time = -1.0;
+            u32 click_count = 0;
+            u32 click_streak = 0;
+            u32 clicked_widget_id = 0;
+            u32 drag_id = 0;
+            bool mouse_down = false;
         };
 
         extern APPLIB_API struct Context
@@ -72,6 +81,7 @@ namespace auik::v2
             acul::hashmap<u32, Widget *> id_map;
             u32 hover_widget_id = 0;
             u32 hover_tag_id = 0;
+            u32 active_widget_id = 0;
             int root_depth_counts[3] = {};
             GPUContext *gpu_ctx = nullptr;
             WindowContext *window_ctx = nullptr;
@@ -212,7 +222,7 @@ namespace auik::v2
         return *rect;
     }
 
-    inline const amal::vec2& get_mouse_pos() { return detail::get_io().mouse_pos; }
+    inline const amal::vec2 &get_mouse_pos() { return detail::get_io().mouse_pos; }
 
-    inline const amal::vec2& get_display_size() { return detail::get_io().display_size; }
+    inline const amal::vec2 &get_display_size() { return detail::get_io().display_size; }
 } // namespace auik::v2

@@ -135,7 +135,7 @@ namespace auik::v2
         constexpr auto c_surface = amal::srgb8_to_linear(amal::vec4{41, 41, 43, 255});       // ~0.16
         constexpr auto c_surface_light = amal::srgb8_to_linear(amal::vec4{74, 74, 75, 255}); // ~0.29
         constexpr auto c_hover = amal::srgb8_to_linear(amal::vec4{97, 97, 97, 255});         // ~0.38
-        constexpr auto c_active = amal::srgb8_to_linear(amal::vec4{107, 107, 108, 255});     // ~0.42
+        constexpr auto c_active = amal::srgb8_to_linear(amal::vec4{31, 31, 31, 255});     // ~0.42
         constexpr auto c_border = amal::srgb8_to_linear(amal::vec4{51, 51, 51, 255});
         constexpr amal::vec2 empty_vec2{0.0f};
 
@@ -152,16 +152,15 @@ namespace auik::v2
                                               .border_radius(6.0f)
                                               .border_thickness(1.0f));
         theme->add_style(AUIK_TAG_WINDOW, make_style().background_color(c_hover), StyleState::hover);
-        theme->add_style(AUIK_TAG_WINDOW, make_style().background_color(c_active), StyleState::active);
 
         // Window header.
         theme->add_style(AUIK_TAG_WINDOW_HEADER, make_style()
                                                      .padding(amal::vec2{4.0f, 4.0f})
-                                                     .background_color(c_surface_light)
+                                                     .background_color(c_active)
                                                      .border_radius(6.0f)
                                                      .corner_mask(0x3u));
         theme->add_style(AUIK_TAG_WINDOW_HEADER, make_style().background_color(c_hover), StyleState::hover);
-        theme->add_style(AUIK_TAG_WINDOW_HEADER, make_style().background_color(c_active), StyleState::active);
+        theme->add_style(AUIK_TAG_WINDOW_HEADER, make_style().background_color(c_surface_light), StyleState::active);
 
         // Rounded button body (text rendering will be added later).
         theme->add_style(AUIK_TAG_TEXT_BUTTON, make_style()

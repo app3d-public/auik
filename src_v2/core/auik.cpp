@@ -5,9 +5,11 @@
 #include <auik/v2/widgets/widget.hpp>
 #include <auik/v2/widgets/window.hpp>
 
-#define AUIK_ROOT_DEPTH_ATOMS_COUNT  32
-#define AUIK_CHILD_DEPTH_ATOMS_COUNT 16
-#define AUIK_DEPTH_MIN_STEP          1e-6f
+#define AUIK_ROOT_DEPTH_ATOMS_COUNT      32
+#define AUIK_CHILD_DEPTH_ATOMS_COUNT     16
+#define AUIK_DEPTH_MIN_STEP              1e-6f
+#define AUIK_MOUSE_DOUBLE_CLICK_TIME     0.45
+#define AUIK_MOUSE_DOUBLE_CLICK_MAX_DIST 8.0
 
 namespace auik::v2
 {
@@ -34,11 +36,133 @@ namespace auik::v2
 
         APPLIB_API void on_mouse_move_event(const amal::vec2 &pos) { get_io().mouse_pos = pos; }
 
+        APPLIB_API void on_drag_event()
+        {
+            auto &ctx = get_context();
+            auto &io = ctx.io;
+            if (!io.mouse_down || io.drag_id == 0) return;
+
+            const amal::vec2 drag_delta = io.mouse_pos - io.last_drag_pos;
+            if (drag_delta.x == 0.0f && drag_delta.y == 0.0f) return;
+
+            io.drag_delta = drag_delta;
+            io.last_drag_pos = io.mouse_pos;
+            auto it = ctx.id_map.find(io.drag_id);
+            if (it != ctx.id_map.end()) it->second->on_drag(drag_delta, false);
+        }
+
         APPLIB_API void on_scroll_event(const amal::vec2 &pos)
         {
             auto &ctx = get_context();
             auto it = ctx.id_map.find(ctx.hover_widget_id);
-            if (it != ctx.id_map.end()) it->second->on_scroll(pos);
+            if (it == ctx.id_map.end()) return;
+
+            const u32 prev_active_id = ctx.active_widget_id;
+            it->second->on_active();
+            if (prev_active_id != ctx.active_widget_id)
+            {
+                auto refresh_active_visual = [&](u32 widget_id) {
+                    auto wid_it = ctx.id_map.find(widget_id);
+                    if (wid_it == ctx.id_map.end()) return;
+                    wid_it->second->update_style();
+                    wid_it->second->update_draw_commands();
+                };
+                refresh_active_visual(prev_active_id);
+                refresh_active_visual(ctx.active_widget_id);
+                ctx.dirty_flags |= DirtyFlagBits::redraw;
+            }
+
+            it->second->on_scroll(pos);
+        }
+
+        APPLIB_API void on_mouse_click_event(MouseKey key, KeyPressState state)
+        {
+            auto &ctx = get_context();
+            auto &io = ctx.io;
+            update_window_time(ctx.window_ctx);
+
+            if (key != MouseKey::left)
+            {
+                const u32 target_id = ctx.hover_widget_id;
+                auto it = ctx.id_map.find(target_id);
+                if (it != ctx.id_map.end()) it->second->on_click(key, state, 1);
+                return;
+            }
+
+            if (state == KeyPressState::press)
+            {
+                io.mouse_down = true;
+                const f64 now = ctx.window_ctx->time;
+                const f64 multi_click_time = AUIK_MOUSE_DOUBLE_CLICK_TIME;
+                const f32 multi_click_dist = AUIK_MOUSE_DOUBLE_CLICK_MAX_DIST;
+                const f64 elapsed = now - io.last_click_time;
+                const amal::vec2 click_delta = io.mouse_pos - io.last_click_pos;
+                const f32 click_dist_sqr = click_delta.x * click_delta.x + click_delta.y * click_delta.y;
+                const f32 click_eps_sqr = multi_click_dist * multi_click_dist;
+                const bool is_multi_click =
+                    io.last_click_time >= 0.0 && elapsed <= multi_click_time && click_dist_sqr <= click_eps_sqr;
+
+                io.click_streak = is_multi_click ? (io.click_streak + 1) : 1;
+                io.click_count = io.click_streak;
+                io.last_click_time = now;
+                io.last_click_pos = io.mouse_pos;
+                io.last_drag_pos = io.mouse_pos;
+
+                io.clicked_widget_id = ctx.hover_widget_id;
+                const bool is_drag_origin = ctx.hover_tag_id == AUIK_TAG_WINDOW_HEADER ||
+                                            ctx.hover_tag_id == AUIK_TAG_SCROLLBAR_TRACK ||
+                                            ctx.hover_tag_id == AUIK_TAG_SCROLLBAR_THUMB;
+                io.drag_id = is_drag_origin ? ctx.hover_widget_id : 0;
+
+                auto it = ctx.id_map.find(ctx.hover_widget_id);
+                if (it != ctx.id_map.end())
+                {
+                    const u32 prev_active_id = ctx.active_widget_id;
+                    it->second->on_active();
+                    if (prev_active_id != ctx.active_widget_id)
+                    {
+                        auto refresh_active_visual = [&](u32 widget_id) {
+                            auto wid_it = ctx.id_map.find(widget_id);
+                            if (wid_it == ctx.id_map.end()) return;
+                            wid_it->second->update_style();
+                            wid_it->second->update_draw_commands();
+                        };
+                        refresh_active_visual(prev_active_id);
+                        refresh_active_visual(ctx.active_widget_id);
+                        ctx.dirty_flags |= DirtyFlagBits::redraw;
+                    }
+                    it->second->on_click(key, state, io.click_count);
+                }
+                return;
+            }
+
+            io.mouse_down = false;
+            if (state == KeyPressState::release)
+            {
+                auto it = ctx.id_map.find(io.clicked_widget_id);
+                if (it != ctx.id_map.end()) it->second->on_click(key, state, io.click_count);
+
+                it = ctx.id_map.find(io.drag_id);
+                if (it != ctx.id_map.end()) it->second->on_drag({0.0f, 0.0f}, true);
+
+                // Click/release on empty space should clear active widget.
+                if (io.clicked_widget_id == 0 && ctx.hover_widget_id == 0 && ctx.active_widget_id != 0)
+                {
+                    const u32 prev_active_id = ctx.active_widget_id;
+                    ctx.active_widget_id = 0;
+                    auto prev_it = ctx.id_map.find(prev_active_id);
+                    if (prev_it != ctx.id_map.end())
+                    {
+                        prev_it->second->update_style();
+                        prev_it->second->update_layout();
+                        prev_it->second->update_draw_commands();
+                    }
+                    ctx.dirty_flags |= DirtyFlagBits::redraw;
+                }
+
+                io.clicked_widget_id = 0;
+                io.drag_id = 0;
+            }
         }
 
         struct DepthZone
@@ -130,10 +254,6 @@ namespace auik::v2
         _rect.depth = (_depth_range.x + _depth_range.y) * 0.5f;
     }
 
-    void Widget::on_attach() { detail::get_context().id_map.emplace(id(), this); }
-
-    void Widget::on_detach() { detail::get_context().id_map.erase(id()); }
-
     APPLIB_API void assign_next_depth(const amal::vec2 &parent_range, amal::vec2 &dst_range)
     {
         const amal::vec2 w = detail::normalize_depth_range(parent_range);
@@ -163,10 +283,21 @@ namespace auik::v2
         ctx.gpu_ctx = create_info.gpu_ctx;
         ctx.frames_in_flight = create_info.frames_in_flight;
         auto &io = ctx.io;
-        io.display_size = create_info.window_size;
+        io.display_size = {0.0f, 0.0f};
         io.mouse_pos = {0.0f, 0.0f};
+        io.last_click_pos = {0.0f, 0.0f};
+        io.last_drag_pos = {0.0f, 0.0f};
+        io.drag_delta = {0.0f, 0.0f};
+        io.last_click_time = -1.0;
+        io.click_count = 0;
+        io.click_streak = 0;
+        io.clicked_widget_id = 0;
+        io.drag_id = 0;
+        io.mouse_down = false;
+        ctx.active_widget_id = 0;
         ctx.screen_cursor = {0.0f, 0.0f};
         ctx.window_ctx = create_info.window_ctx;
+        detail::construct_window_backend(ctx.window_ctx);
         ctx.dirty_flags = DirtyFlagBits::redraw | DirtyFlagBits::layout;
         detail::construct_shared_buffer_sync_state(ctx.shared_sync_state[AUIK_SYNC_CLIP_RECT], ctx.frames_in_flight);
         detail::construct_shared_buffer_sync_state(ctx.shared_sync_state[AUIK_SYNC_HIT_RECT], ctx.frames_in_flight);
@@ -273,7 +404,7 @@ namespace auik::v2
         assert(widget->parent() == nullptr && "Root widget must not have a parent");
         auto &ctx = detail::get_context();
         ctx.widget_tree.push_back(widget);
-        widget->on_attach();
+        if (widget->widget_flags & WidgetFlagBits::attachable) widget->on_attach();
         const auto zone = detail::get_depth_zone_by_flags(widget->widget_flags);
         const int lane_index = ctx.root_depth_counts[zone];
         assert(lane_index < AUIK_ROOT_DEPTH_ATOMS_COUNT && "Max depth zone exceeded");

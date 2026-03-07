@@ -18,5 +18,5 @@ namespace auik::v2
         };
     } // namespace detail
 
-    APPLIB_API detail::WindowContext *create_awin_backend(awin::Window &window, acul::events::dispatcher &ed);
+    APPLIB_API detail::WindowContext *create_awin_backend(awin::Window &window);
 } // namespace auik::v2

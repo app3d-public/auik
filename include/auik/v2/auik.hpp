@@ -18,9 +18,8 @@ namespace auik::v2
         detail::GPUContext *gpu_ctx = nullptr;
         detail::WindowContext *window_ctx = nullptr;
         u32 frames_in_flight = 0;
-        amal::vec2 window_size{0.0f};
 
-        CreateInfo &set_ed(acul::events::dispatcher *ed)
+        CreateInfo &set_event_dispatcher(acul::events::dispatcher *ed)
         {
             this->ed = ed;
             return *this;
@@ -56,12 +55,6 @@ namespace auik::v2
             this->frames_in_flight = frames_in_flight;
             return *this;
         }
-
-        CreateInfo &set_window_size(const amal::vec2 &window_size)
-        {
-            this->window_size = window_size;
-            return *this;
-        }
     };
 
     APPLIB_API bool init_library(const CreateInfo &create_info);
@@ -77,9 +70,11 @@ namespace auik::v2
     inline void next_frame(void *sync_ctx)
     {
         auto &ctx = detail::get_context();
+        auto &io = detail::get_io();
         if (ctx.dirty_flags & DirtyFlagBits::hit_rect) auik::v2::sync_hit_rect_cache();
         detail::update_hover_id(ctx.gpu_ctx, sync_ctx);
         detail::new_window_frame(ctx.window_ctx);
+        io.drag_delta = {0.0f, 0.0f};
         ctx.screen_cursor = {0.0f, 0.0f};
         ctx.frame_id = (ctx.frame_id + 1) % ctx.frames_in_flight;
         ctx.dirty_flags &= ~(DirtyFlagBits::redraw | DirtyFlagBits::host_update);

@@ -32,6 +32,12 @@ namespace auik::v2
             if (event.window != &window) return;
             detail::on_mouse_move_event({event.position.x, event.position.y});
         });
+        ed.bind_event(backend, awin::event_id::mouse_move_delta, [&window](const awin::PosEvent &event) {
+            if (event.window != &window) return;
+            const auto pos = window.cursor_position();
+            detail::on_mouse_move_event({static_cast<f32>(pos.x), static_cast<f32>(pos.y)});
+            detail::on_drag_event();
+        });
         ed.bind_event(backend, awin::event_id::focus,
                       [](const awin::FocusEvent &) { std::printf("[auik::v2::awin] focus event\n"); });
         ed.bind_event(backend, awin::event_id::char_input,
@@ -48,22 +54,37 @@ namespace auik::v2
                       [](const awin::StateEvent &) { std::printf("[auik::v2::awin] maximize event\n"); });
         ed.bind_event(backend, awin::event_id::move,
                       [](const awin::PosEvent &) { std::printf("[auik::v2::awin] move event\n"); });
+        ed.bind_event(backend, awin::event_id::mouse_click, [&window](const awin::MouseClickEvent &event) {
+            if (event.window != &window) return;
+            detail::on_mouse_click_event(static_cast<MouseKey>(event.button), static_cast<KeyPressState>(event.action));
+        });
     }
 
-    detail::WindowContext *create_awin_backend(awin::Window &window, acul::events::dispatcher &ed)
+    static void construct_window_backend(detail::WindowContext *window_ctx)
     {
-        detail::AwinBackend *ctx = acul::alloc<detail::AwinBackend>(window);
-        auto *cursors = ctx->cursors;
+        auto *awin_ctx = static_cast<detail::AwinBackend *>(window_ctx);
+        auto *cursors = awin_ctx->cursors;
         cursors[detail::CursorID::arrow] = awin::Cursor::create(awin::Cursor::Type::arrow);
         cursors[detail::CursorID::ibeam] = awin::Cursor::create(awin::Cursor::Type::ibeam);
         cursors[detail::CursorID::resize_ew] = awin::Cursor::create(awin::Cursor::Type::resize_ew);
         cursors[detail::CursorID::resize_ns] = awin::Cursor::create(awin::Cursor::Type::resize_ns);
         cursors[detail::CursorID::resize_nwse] = awin::Cursor::create(awin::Cursor::Type::resize_nwse);
         cursors[detail::CursorID::resize_nesw] = awin::Cursor::create(awin::Cursor::Type::resize_nesw);
+        auto &global_ctx = detail::get_context();
+        bind_window_events(awin_ctx->window, *global_ctx.ed, awin_ctx);
+        auto dimensions = awin_ctx->window.dimensions();
+        global_ctx.io.display_size.x = dimensions.x;
+        global_ctx.io.display_size.y = dimensions.y;
+    }
+
+    APPLIB_API detail::WindowContext *create_awin_backend(awin::Window &window)
+    {
+        detail::AwinBackend *ctx = acul::alloc<detail::AwinBackend>(window);
         ctx->set_cursor = &set_window_cursor;
+        ctx->update_time = &window_new_frame;
         ctx->new_frame = &window_new_frame;
+        ctx->construct_backend = &construct_window_backend;
         ctx->destroy_backend = &destroy_window_backend;
-        bind_window_events(window, ed, ctx);
         return ctx;
     }
 } // namespace auik::v2

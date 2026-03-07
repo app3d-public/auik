@@ -19,6 +19,67 @@ namespace auik::v2
         return {out_min, out_size};
     }
 
+    static constexpr detail::StylePropertyFlags AUIK_LAYOUT_STYLE_MASK =
+        detail::StylePropertiesBits::padding | detail::StylePropertiesBits::margin |
+        detail::StylePropertiesBits::text_size | detail::StylePropertiesBits::border_thickness |
+        detail::StylePropertiesBits::border_radius;
+
+    static inline bool has_layout_style_delta(const Style &normal, const Style &active)
+    {
+        const auto vec4_diff = [](const amal::vec4 &a, const amal::vec4 &b) {
+            return a.x != b.x || a.y != b.y || a.z != b.z || a.w != b.w;
+        };
+        const auto normal_mask = normal.mask() & AUIK_LAYOUT_STYLE_MASK;
+        const auto active_mask = active.mask() & AUIK_LAYOUT_STYLE_MASK;
+        const auto used_mask = normal_mask | active_mask;
+        if (static_cast<u16>(used_mask) == 0) return false;
+
+        if ((used_mask & detail::StylePropertiesBits::padding) && vec4_diff(normal.padding(), active.padding()))
+            return true;
+        if ((used_mask & detail::StylePropertiesBits::margin) && vec4_diff(normal.margin(), active.margin()))
+            return true;
+        if ((used_mask & detail::StylePropertiesBits::text_size) && normal.text_size() != active.text_size())
+            return true;
+        if ((used_mask & detail::StylePropertiesBits::border_thickness) &&
+            normal.border_thickness() != active.border_thickness())
+            return true;
+        if ((used_mask & detail::StylePropertiesBits::border_radius) &&
+            normal.border_radius() != active.border_radius())
+            return true;
+        return false;
+    }
+
+    static inline bool needs_layout_on_active(Window &window)
+    {
+        auto *theme = get_theme();
+        const Style &window_normal =
+            theme->get_style(theme->get_resolved_style(AUIK_TAG_WINDOW, window.id(), 0, StyleState::normal));
+        const Style &window_active =
+            theme->get_style(theme->get_resolved_style(AUIK_TAG_WINDOW, window.id(), 0, StyleState::active));
+        if (has_layout_style_delta(window_normal, window_active)) return true;
+
+        if (!(window.window_flags & WindowFlagBits::decorated)) return false;
+        const Style &header_normal = theme->get_style(
+            theme->get_resolved_style(AUIK_TAG_WINDOW_HEADER, AUIK_TAG_WINDOW_HEADER, window.id(), StyleState::normal));
+        const Style &header_active = theme->get_style(
+            theme->get_resolved_style(AUIK_TAG_WINDOW_HEADER, AUIK_TAG_WINDOW_HEADER, window.id(), StyleState::active));
+        return has_layout_style_delta(header_normal, header_active);
+    }
+
+    static inline Window *as_root_window(Widget *widget)
+    {
+        if (!widget) return nullptr;
+        if (widget->parent()) return nullptr;
+        if (widget->get_rect().tag_id != AUIK_TAG_WINDOW) return nullptr;
+        return static_cast<Window *>(widget);
+    }
+
+    static inline bool point_in_rect(const amal::vec2 &p, const detail::RectData &r)
+    {
+        return p.x >= r.position.x && p.y >= r.position.y && p.x < (r.position.x + r.size.x) &&
+               p.y < (r.position.y + r.size.y);
+    }
+
     class WindowHeader final : public Widget
     {
     public:
@@ -43,7 +104,9 @@ namespace auik::v2
         {
             auto *theme = get_theme();
             const u32 parent_id = parent() ? parent()->id() : 0u;
-            _style.id = theme->get_resolved_style(_style.tag_id, id(), parent_id);
+            const StyleState state =
+                (detail::get_context().active_widget_id == parent_id) ? StyleState::active : StyleState::normal;
+            _style.id = theme->get_resolved_style(_style.tag_id, id(), parent_id, state);
         }
 
         void rebuild_clip_rects() override
@@ -74,6 +137,7 @@ namespace auik::v2
                    Widget *parent)
         : Widget(id, in_widget_flags, parent, pos, size, AUIK_TAG_WINDOW), window_flags(in_window_flags)
     {
+        widget_flags |= WidgetFlagBits::active_from_child;
         if (window_flags & WindowFlagBits::resizable) _rect.flags |= detail::RectBits::hitbox;
         if (window_flags & WindowFlagBits::decorated) _header = acul::alloc<WindowHeader>(this);
     }
@@ -166,7 +230,9 @@ namespace auik::v2
     void Window::update_style()
     {
         auto *theme = get_theme();
-        _window_style.id = theme->get_resolved_style(_window_style.tag_id, id(), 0);
+        const StyleState state =
+            (detail::get_context().active_widget_id == id()) ? StyleState::active : StyleState::normal;
+        _window_style.id = theme->get_resolved_style(_window_style.tag_id, id(), 0, state);
 
         if ((window_flags & WindowFlagBits::decorated) && !_header) _header = acul::alloc<WindowHeader>(this);
         if (window_flags & WindowFlagBits::decorated)
@@ -344,8 +410,7 @@ namespace auik::v2
             _content_offset.y = _scrollbar_y->scroll_offset();
             _scrollbar_y->set_clip_rect_id(clip_rect_id());
         }
-        else if (_scrollbar_y)
-            _scrollbar_y->set_visible(false);
+        else if (_scrollbar_y) _scrollbar_y->set_visible(false);
 
         if (need_scroll_x && _scrollbar_x)
         {
@@ -367,8 +432,7 @@ namespace auik::v2
             _content_offset.x = _scrollbar_x->scroll_offset();
             _scrollbar_x->set_clip_rect_id(clip_rect_id());
         }
-        else if (_scrollbar_x)
-            _scrollbar_x->set_visible(false);
+        else if (_scrollbar_x) _scrollbar_x->set_visible(false);
 
         // Child content must be clipped to viewport area (header/padding/scroll fixed-margin safe area),
         // otherwise children can render under the header while scrolling.
@@ -431,5 +495,163 @@ namespace auik::v2
             });
             ctx.dirty_flags |= DirtyFlagBits::host_update;
         }
+    }
+
+    void Window::on_click(MouseKey key, KeyPressState state, u32 click_count)
+    {
+        if (key != MouseKey::left) return;
+        if (state != KeyPressState::press) return;
+        if (!_scrollbar_x && !_scrollbar_y) return;
+        (void)click_count;
+
+        auto &ctx = detail::get_context();
+        if (ctx.hover_tag_id != AUIK_TAG_SCROLLBAR_TRACK && ctx.hover_tag_id != AUIK_TAG_SCROLLBAR_THUMB) return;
+
+        const amal::vec2 mouse_pos = ctx.io.mouse_pos;
+        bool is_offset_changed = false;
+        _drag_scrollbar = nullptr;
+
+        if (_scrollbar_y && _scrollbar_y->is_visible() && point_in_rect(mouse_pos, _scrollbar_y->get_rect()))
+        {
+            _scrollbar_y->set_scroll_offset(_content_offset.y);
+            if (ctx.hover_tag_id == AUIK_TAG_SCROLLBAR_THUMB && _scrollbar_y->is_point_on_thumb(mouse_pos))
+                _drag_scrollbar = _scrollbar_y;
+            else
+            {
+                is_offset_changed = _scrollbar_y->scroll_to_track_click(mouse_pos) || is_offset_changed;
+                _drag_scrollbar = _scrollbar_y;
+            }
+            _content_offset.y = _scrollbar_y->scroll_offset();
+        }
+
+        if (_scrollbar_x && _scrollbar_x->is_visible() && point_in_rect(mouse_pos, _scrollbar_x->get_rect()))
+        {
+            _scrollbar_x->set_scroll_offset(_content_offset.x);
+            if (ctx.hover_tag_id == AUIK_TAG_SCROLLBAR_THUMB && _scrollbar_x->is_point_on_thumb(mouse_pos))
+                _drag_scrollbar = _scrollbar_x;
+            else
+            {
+                is_offset_changed = _scrollbar_x->scroll_to_track_click(mouse_pos) || is_offset_changed;
+                _drag_scrollbar = _scrollbar_x;
+            }
+            _content_offset.x = _scrollbar_x->scroll_offset();
+        }
+
+        if (!is_offset_changed) return;
+        ctx.disposal_queue->emplace([this]() {
+            sync_clip_rect_cache();
+            update_layout();
+            update_draw_commands();
+            detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
+        });
+        ctx.dirty_flags |= DirtyFlagBits::host_update;
+    }
+
+    void Window::on_drag(const amal::vec2 &delta, bool is_dropped)
+    {
+        if (is_dropped)
+        {
+            _drag_scrollbar = nullptr;
+            return;
+        }
+
+        if (_drag_scrollbar)
+        {
+            bool is_offset_changed = false;
+            if (_drag_scrollbar == _scrollbar_y)
+            {
+                _scrollbar_y->set_scroll_offset(_content_offset.y);
+                is_offset_changed = _scrollbar_y->scroll_thumb_by_drag_delta(delta);
+                _content_offset.y = _scrollbar_y->scroll_offset();
+            }
+            else if (_drag_scrollbar == _scrollbar_x)
+            {
+                _scrollbar_x->set_scroll_offset(_content_offset.x);
+                is_offset_changed = _scrollbar_x->scroll_thumb_by_drag_delta(delta);
+                _content_offset.x = _scrollbar_x->scroll_offset();
+            }
+
+            if (!is_offset_changed) return;
+            auto &ctx = detail::get_context();
+            ctx.disposal_queue->emplace([this]() {
+                sync_clip_rect_cache();
+                update_layout();
+                update_draw_commands();
+                detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
+            });
+            ctx.dirty_flags |= DirtyFlagBits::host_update;
+            return;
+        }
+
+        if (!(window_flags & WindowFlagBits::movable)) return;
+        if (window_flags & WindowFlagBits::docked) return;
+        if (delta.x == 0.0f && delta.y == 0.0f) return;
+
+        set_position(position() + delta);
+        auto &ctx = detail::get_context();
+        ctx.disposal_queue->emplace([this]() {
+            sync_clip_rect_cache();
+            update_layout();
+            update_draw_commands();
+            detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
+        });
+        ctx.dirty_flags |= DirtyFlagBits::host_update;
+    }
+
+    void Window::on_active()
+    {
+        Widget::on_active();
+
+        if (widget_flags & WidgetFlagBits::active_to_child)
+        {
+            for (auto *child : children)
+            {
+                if (!child) continue;
+                child->on_parent_active();
+            }
+        }
+
+        if ((window_flags & WindowFlagBits::docked) || parent()) return;
+
+        auto &ctx = detail::get_context();
+        auto &tree = ctx.widget_tree;
+        const u32 count = static_cast<u32>(tree.size());
+        if (count <= 1) return;
+
+        u32 index = count;
+        for (u32 i = 0; i < count; ++i)
+        {
+            if (tree[i] == this)
+            {
+                index = i;
+                break;
+            }
+        }
+        if (index >= count || index == count - 1) return;
+
+        Widget *top = tree[count - 1];
+        Window *top_window = as_root_window(top);
+        const amal::vec2 self_range = depth_range();
+        const amal::vec2 top_range = top->depth_range();
+
+        top->update_depth(self_range);
+        this->update_depth(top_range);
+        tree[index] = top;
+        tree[count - 1] = this;
+
+        const bool this_needs_layout = needs_layout_on_active(*this);
+        update_style();
+        if (this_needs_layout) update_layout();
+        update_draw_commands();
+
+        if (top_window)
+        {
+            const bool top_needs_layout = needs_layout_on_active(*top_window);
+            top_window->update_style();
+            if (top_needs_layout) top_window->update_layout();
+            top_window->update_draw_commands();
+        }
+        else top->update_draw_commands();
+        ctx.dirty_flags |= DirtyFlagBits::redraw;
     }
 } // namespace auik::v2

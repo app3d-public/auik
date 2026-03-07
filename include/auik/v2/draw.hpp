@@ -110,7 +110,8 @@ namespace auik::v2
         assert(stream);
         assert(draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID && "Update called before record");
         stream->update_data_in_stream(stream, draw_id, data);
-        update_hit_rect(draw_id.hit_id, rect, false);
+        const bool is_dirty_hit_rect = detail::get_context().dirty_flags & DirtyFlagBits::hit_rect;
+        update_hit_rect(draw_id.hit_id, rect, is_dirty_hit_rect);
         return draw_id;
     }
 

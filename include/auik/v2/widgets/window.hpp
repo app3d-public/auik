@@ -62,6 +62,7 @@ namespace auik::v2
         class WindowHeader *_header = nullptr;
         detail::Scrollbar *_scrollbar_x = nullptr;
         detail::Scrollbar *_scrollbar_y = nullptr;
+        detail::Scrollbar *_drag_scrollbar = nullptr;
 
         virtual void update_depth(const amal::vec2 &depth_range) override;
         virtual void update_layout() override;
@@ -72,7 +73,10 @@ namespace auik::v2
         {
             auto &map = detail::get_context().id_map;
             map.emplace(id(), this);
-            for (auto *child : children) map.emplace(child->id(), child);
+            for (auto *child : children)
+            {
+                if (child->widget_flags & WidgetFlagBits::attachable) child->on_attach();
+            }
         }
 
         virtual void on_detach() override
@@ -83,5 +87,9 @@ namespace auik::v2
         }
 
         virtual void on_scroll(const amal::vec2 &delta) override;
+        virtual void on_drag(const amal::vec2 &delta, bool is_dropped) override;
+        virtual void on_active() override;
+
+        virtual void on_click(MouseKey key, KeyPressState state, u32 click_count) override;
     };
 } // namespace auik::v2
