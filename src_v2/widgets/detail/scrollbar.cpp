@@ -3,6 +3,12 @@
 
 namespace auik::v2::detail
 {
+    static inline amal::vec4 axis_reverse_offsets(const amal::vec4 &v, amal::axis axis)
+    {
+        if (axis == amal::axis::x) return {v.y, v.x, v.w, v.z};
+        return v;
+    }
+
     void ScrollBehavior::set_metrics(f32 content_size, f32 view_size)
     {
         const f32 safe_view = amal::max(view_size, 0.0f);
@@ -73,8 +79,8 @@ namespace auik::v2::detail
         auto *theme = get_theme();
         const auto &track_style = theme->get_style(_track_style.id);
         const auto &thumb_style = theme->get_style(_thumb_style.id);
-        const amal::vec4 track_padding = track_style.padding();
-        const amal::vec4 thumb_margin = thumb_style.margin();
+        const amal::vec4 track_padding = axis_reverse_offsets(track_style.padding(), _behavior.axis);
+        const amal::vec4 thumb_margin = axis_reverse_offsets(thumb_style.margin(), _behavior.axis);
 
         const f32 safe_content = amal::max(_content_size, 1.0f);
         const f32 safe_view = amal::max(_view_size, 0.0f);
@@ -109,7 +115,7 @@ namespace auik::v2::detail
     amal::vec4 Scrollbar::get_track_margin() const
     {
         auto *theme = get_theme();
-        return theme->get_style(_track_style.id).margin();
+        return axis_reverse_offsets(theme->get_style(_track_style.id).margin(), _behavior.axis);
     }
 
     f32 Scrollbar::get_min_track_thickness() const
@@ -117,9 +123,9 @@ namespace auik::v2::detail
         auto *theme = get_theme();
         const auto &track_style = theme->get_style(_track_style.id);
         const auto &thumb_style = theme->get_style(_thumb_style.id);
-        const amal::vec4 track_padding = track_style.padding();
-        const amal::vec4 thumb_margin = thumb_style.margin();
-        const amal::vec4 thumb_padding = thumb_style.padding();
+        const amal::vec4 track_padding = axis_reverse_offsets(track_style.padding(), _behavior.axis);
+        const amal::vec4 thumb_margin = axis_reverse_offsets(thumb_style.margin(), _behavior.axis);
+        const amal::vec4 thumb_padding = axis_reverse_offsets(thumb_style.padding(), _behavior.axis);
         if (_behavior.axis == amal::axis::y)
         {
             const f32 desired_thumb_w = amal::max(thumb_padding.x + thumb_padding.z, 1.0f);
@@ -142,9 +148,9 @@ namespace auik::v2::detail
         auto *theme = get_theme();
         const auto &track_style = theme->get_style(_track_style.id);
         const auto &thumb_style = theme->get_style(_thumb_style.id);
-        const amal::vec4 track_padding = track_style.padding();
-        const amal::vec4 thumb_margin = thumb_style.margin();
-        const amal::vec4 thumb_padding = thumb_style.padding();
+        const amal::vec4 track_padding = axis_reverse_offsets(track_style.padding(), _behavior.axis);
+        const amal::vec4 thumb_margin = axis_reverse_offsets(thumb_style.margin(), _behavior.axis);
+        const amal::vec4 thumb_padding = axis_reverse_offsets(thumb_style.padding(), _behavior.axis);
 
         const f32 safe_content = amal::max(content_size, 1.0f);
         const f32 safe_view = amal::max(view_size, 0.0f);
@@ -203,7 +209,7 @@ namespace auik::v2::detail
         auto *theme = get_theme();
         const u32 parent_id = parent() ? parent()->id() : 0u;
         _track_style.id = theme->get_resolved_style(_track_style.tag_id, id(), parent_id);
-        _thumb_style.id = theme->get_resolved_style(_thumb_style.tag_id, id(), parent_id);
+        _thumb_style.id = theme->get_resolved_style(_thumb_style.tag_id, id(), parent_id, style_state());
     }
 
     void Scrollbar::rebuild_clip_rects()

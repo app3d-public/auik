@@ -83,10 +83,8 @@ namespace auik::v2
     inline void sync_gpu_cache()
     {
         auto &ctx = detail::get_context();
-        if (ctx.dirty_flags & DirtyFlagBits::layout)
-            record_all_commands();
-        else if (ctx.dirty_flags & DirtyFlagBits::clip_rect)
-            sync_clip_rect_cache();
+        if (ctx.dirty_flags & DirtyFlagBits::layout) record_all_commands();
+        else if (ctx.dirty_flags & DirtyFlagBits::clip_rect) sync_clip_rect_cache();
         if (ctx.dirty_flags & DirtyFlagBits::streams) sync_draw_streams();
     }
 

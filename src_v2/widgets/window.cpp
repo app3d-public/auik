@@ -26,27 +26,9 @@ namespace auik::v2
 
     static inline bool has_layout_style_delta(const Style &normal, const Style &active)
     {
-        const auto vec4_diff = [](const amal::vec4 &a, const amal::vec4 &b) {
-            return a.x != b.x || a.y != b.y || a.z != b.z || a.w != b.w;
-        };
         const auto normal_mask = normal.mask() & AUIK_LAYOUT_STYLE_MASK;
         const auto active_mask = active.mask() & AUIK_LAYOUT_STYLE_MASK;
-        const auto used_mask = normal_mask | active_mask;
-        if (static_cast<u16>(used_mask) == 0) return false;
-
-        if ((used_mask & detail::StylePropertiesBits::padding) && vec4_diff(normal.padding(), active.padding()))
-            return true;
-        if ((used_mask & detail::StylePropertiesBits::margin) && vec4_diff(normal.margin(), active.margin()))
-            return true;
-        if ((used_mask & detail::StylePropertiesBits::text_size) && normal.text_size() != active.text_size())
-            return true;
-        if ((used_mask & detail::StylePropertiesBits::border_thickness) &&
-            normal.border_thickness() != active.border_thickness())
-            return true;
-        if ((used_mask & detail::StylePropertiesBits::border_radius) &&
-            normal.border_radius() != active.border_radius())
-            return true;
-        return false;
+        return normal_mask != active_mask;
     }
 
     static inline bool needs_layout_on_active(Window &window)
@@ -106,7 +88,8 @@ namespace auik::v2
             const u32 parent_id = parent() ? parent()->id() : 0u;
             const StyleState state =
                 (detail::get_context().active_widget_id == parent_id) ? StyleState::active : StyleState::normal;
-            _style.id = theme->get_resolved_style(_style.tag_id, id(), parent_id, state);
+            set_style_state(state);
+            _style.id = theme->get_resolved_style(_style.tag_id, id(), parent_id, style_state());
         }
 
         void rebuild_clip_rects() override
@@ -232,7 +215,8 @@ namespace auik::v2
         auto *theme = get_theme();
         const StyleState state =
             (detail::get_context().active_widget_id == id()) ? StyleState::active : StyleState::normal;
-        _window_style.id = theme->get_resolved_style(_window_style.tag_id, id(), 0, state);
+        set_style_state(state);
+        _window_style.id = theme->get_resolved_style(_window_style.tag_id, id(), 0, style_state());
 
         if ((window_flags & WindowFlagBits::decorated) && !_header) _header = acul::alloc<WindowHeader>(this);
         if (window_flags & WindowFlagBits::decorated)
@@ -390,6 +374,9 @@ namespace auik::v2
             _header->set_clip_rect_id(clip_rect_id());
         }
 
+        const bool was_scrollbar_y_visible = _scrollbar_y && _scrollbar_y->is_visible();
+        const bool was_scrollbar_x_visible = _scrollbar_x && _scrollbar_x->is_visible();
+
         if (need_scroll_y && _scrollbar_y)
         {
             const amal::vec4 track_margin = _scrollbar_y->get_track_margin();
@@ -433,6 +420,18 @@ namespace auik::v2
             _scrollbar_x->set_clip_rect_id(clip_rect_id());
         }
         else if (_scrollbar_x) _scrollbar_x->set_visible(false);
+
+        const bool is_scrollbar_y_visible = _scrollbar_y && _scrollbar_y->is_visible();
+        const bool is_scrollbar_x_visible = _scrollbar_x && _scrollbar_x->is_visible();
+        if (was_scrollbar_y_visible != is_scrollbar_y_visible || was_scrollbar_x_visible != is_scrollbar_x_visible)
+        {
+            auto &ctx = detail::get_context();
+            ctx.disposal_queue->emplace([]() {
+                record_all_commands();
+                detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
+            });
+            ctx.dirty_flags |= DirtyFlagBits::host_update;
+        }
 
         // Child content must be clipped to viewport area (header/padding/scroll fixed-margin safe area),
         // otherwise children can render under the header while scrolling.
@@ -497,25 +496,101 @@ namespace auik::v2
         }
     }
 
+    void Window::on_hover(HoverState state, u32 prev_tag_id)
+    {
+        if (!_scrollbar_x && !_scrollbar_y) return;
+        auto &ctx = detail::get_context();
+        const amal::vec2 mouse_pos = ctx.io.mouse_pos;
+
+        auto update_thumb_hover = [&](detail::Scrollbar *scrollbar, bool hovered) {
+            if (!scrollbar) return false;
+            return scrollbar->set_thumb_hovered(hovered);
+        };
+
+        const bool now_thumb = (ctx.hover_widget_id == id()) && (ctx.hover_tag_id == AUIK_TAG_SCROLLBAR_THUMB);
+        const bool was_thumb = (prev_tag_id == AUIK_TAG_SCROLLBAR_THUMB);
+        if (!now_thumb && !was_thumb) return;
+
+        bool changed = false;
+        bool hover_y = false;
+        bool hover_x = false;
+        if (now_thumb)
+        {
+            if (_scrollbar_y && _scrollbar_y->is_visible())
+                hover_y =
+                    point_in_rect(mouse_pos, _scrollbar_y->get_rect()) && _scrollbar_y->is_point_on_thumb(mouse_pos);
+            if (_scrollbar_x && _scrollbar_x->is_visible())
+                hover_x =
+                    point_in_rect(mouse_pos, _scrollbar_x->get_rect()) && _scrollbar_x->is_point_on_thumb(mouse_pos);
+
+            // Picker tag and local geometry can be out of sync by one frame.
+            // Don't force-drop hover in this transient case.
+            if (!hover_x && !hover_y)
+            {
+                hover_y = _scrollbar_y && _scrollbar_y->is_thumb_hovered();
+                hover_x = _scrollbar_x && _scrollbar_x->is_thumb_hovered();
+            }
+        }
+
+        changed = update_thumb_hover(_scrollbar_y, hover_y) || changed;
+        changed = update_thumb_hover(_scrollbar_x, hover_x) || changed;
+
+        if (changed)
+        {
+            ctx.disposal_queue->emplace([this]() {
+                if (_scrollbar_y)
+                {
+                    _scrollbar_y->update_style();
+                    if (_scrollbar_y->has_draw_record()) _scrollbar_y->update_draw_commands();
+                    else _scrollbar_y->record_draw_commands();
+                }
+                if (_scrollbar_x)
+                {
+                    _scrollbar_x->update_style();
+                    if (_scrollbar_x->has_draw_record()) _scrollbar_x->update_draw_commands();
+                    else _scrollbar_x->record_draw_commands();
+                }
+                detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
+            });
+            ctx.dirty_flags |= DirtyFlagBits::host_update;
+        }
+        apply_hover_style_state(*this, state);
+    }
+
     void Window::on_click(MouseKey key, KeyPressState state, u32 click_count)
     {
         if (key != MouseKey::left) return;
         if (state != KeyPressState::press) return;
-        if (!_scrollbar_x && !_scrollbar_y) return;
         (void)click_count;
 
         auto &ctx = detail::get_context();
+        _resize_zone = detail::HitboxZoneBits::none;
+        if ((window_flags & WindowFlagBits::resizable) && !(window_flags & WindowFlagBits::docked) &&
+            ctx.hover_tag_id == AUIK_TAG_HITBOX)
+        {
+            // Capture exact zone at press time from current geometry/mouse.
+            // This prevents losing diagonal resize on tiny hover-zone jitter.
+            _resize_zone = detail::get_hitbox_zone(get_rect(), ctx.io.mouse_pos);
+            if (_resize_zone != detail::HitboxZoneBits::none)
+                detail::set_window_cursor(detail::get_cursor_for_hitbox_zone(_resize_zone), ctx.window_ctx);
+        }
+
+        if (!_scrollbar_x && !_scrollbar_y) return;
         if (ctx.hover_tag_id != AUIK_TAG_SCROLLBAR_TRACK && ctx.hover_tag_id != AUIK_TAG_SCROLLBAR_THUMB) return;
 
         const amal::vec2 mouse_pos = ctx.io.mouse_pos;
         bool is_offset_changed = false;
+        bool is_thumb_drag_started = false;
         _drag_scrollbar = nullptr;
 
         if (_scrollbar_y && _scrollbar_y->is_visible() && point_in_rect(mouse_pos, _scrollbar_y->get_rect()))
         {
             _scrollbar_y->set_scroll_offset(_content_offset.y);
             if (ctx.hover_tag_id == AUIK_TAG_SCROLLBAR_THUMB && _scrollbar_y->is_point_on_thumb(mouse_pos))
+            {
                 _drag_scrollbar = _scrollbar_y;
+                is_thumb_drag_started = true;
+            }
             else
             {
                 is_offset_changed = _scrollbar_y->scroll_to_track_click(mouse_pos) || is_offset_changed;
@@ -528,7 +603,10 @@ namespace auik::v2
         {
             _scrollbar_x->set_scroll_offset(_content_offset.x);
             if (ctx.hover_tag_id == AUIK_TAG_SCROLLBAR_THUMB && _scrollbar_x->is_point_on_thumb(mouse_pos))
+            {
                 _drag_scrollbar = _scrollbar_x;
+                is_thumb_drag_started = true;
+            }
             else
             {
                 is_offset_changed = _scrollbar_x->scroll_to_track_click(mouse_pos) || is_offset_changed;
@@ -537,26 +615,94 @@ namespace auik::v2
             _content_offset.x = _scrollbar_x->scroll_offset();
         }
 
-        if (!is_offset_changed) return;
-        ctx.disposal_queue->emplace([this]() {
-            sync_clip_rect_cache();
-            update_layout();
-            update_draw_commands();
-            detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
-        });
-        ctx.dirty_flags |= DirtyFlagBits::host_update;
+        bool active_state_changed = false;
+        if (is_thumb_drag_started)
+        {
+            active_state_changed = (_scrollbar_y && _scrollbar_y->set_thumb_active(_drag_scrollbar == _scrollbar_y)) ||
+                                   (_scrollbar_x && _scrollbar_x->set_thumb_active(_drag_scrollbar == _scrollbar_x));
+        }
+        else
+        {
+            active_state_changed = (_scrollbar_y && _scrollbar_y->set_thumb_active(false)) ||
+                                   (_scrollbar_x && _scrollbar_x->set_thumb_active(false));
+        }
+
+        if (is_offset_changed)
+        {
+            ctx.disposal_queue->emplace([this]() {
+                sync_clip_rect_cache();
+                update_layout();
+                update_draw_commands();
+                detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
+            });
+            ctx.dirty_flags |= DirtyFlagBits::host_update;
+            return;
+        }
+
+        if (active_state_changed)
+        {
+            ctx.disposal_queue->emplace([this]() {
+                if (_scrollbar_y)
+                {
+                    _scrollbar_y->update_style();
+                    if (_scrollbar_y->has_draw_record()) _scrollbar_y->update_draw_commands();
+                    else _scrollbar_y->record_draw_commands();
+                }
+                if (_scrollbar_x)
+                {
+                    _scrollbar_x->update_style();
+                    if (_scrollbar_x->has_draw_record()) _scrollbar_x->update_draw_commands();
+                    else _scrollbar_x->record_draw_commands();
+                }
+                detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
+            });
+            ctx.dirty_flags |= DirtyFlagBits::host_update;
+        }
     }
 
-    void Window::on_drag(const amal::vec2 &delta, bool is_dropped)
+    void Window::on_drag(const amal::vec2 &delta, KeyPressState state)
     {
-        if (is_dropped)
+        if (state == KeyPressState::release)
         {
+            auto &ctx = detail::get_context();
+            bool active_state_changed = false;
+            active_state_changed = (_scrollbar_y && _scrollbar_y->set_thumb_active(false)) || active_state_changed;
+            active_state_changed = (_scrollbar_x && _scrollbar_x->set_thumb_active(false)) || active_state_changed;
+            if (active_state_changed)
+            {
+                ctx.disposal_queue->emplace([this]() {
+                    if (_scrollbar_y)
+                    {
+                        _scrollbar_y->update_style();
+                        if (_scrollbar_y->has_draw_record()) _scrollbar_y->update_draw_commands();
+                        else _scrollbar_y->record_draw_commands();
+                    }
+                    if (_scrollbar_x)
+                    {
+                        _scrollbar_x->update_style();
+                        if (_scrollbar_x->has_draw_record()) _scrollbar_x->update_draw_commands();
+                        else _scrollbar_x->record_draw_commands();
+                    }
+                    detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
+                });
+                ctx.dirty_flags |= DirtyFlagBits::host_update;
+            }
+            if (ctx.hover_tag_id == AUIK_TAG_HITBOX)
+                detail::set_window_cursor(detail::get_cursor_for_hitbox_zone(ctx.hover_hitbox_zone), ctx.window_ctx);
+            else detail::set_window_cursor(detail::CursorID::arrow, ctx.window_ctx);
             _drag_scrollbar = nullptr;
+            _resize_zone = detail::HitboxZoneBits::none;
             return;
         }
 
         if (_drag_scrollbar)
         {
+            bool active_state_changed = false;
+            active_state_changed = (_scrollbar_y && _scrollbar_y->set_thumb_active(_drag_scrollbar == _scrollbar_y)) ||
+                                   active_state_changed;
+            active_state_changed = (_scrollbar_x && _scrollbar_x->set_thumb_active(_drag_scrollbar == _scrollbar_x)) ||
+                                   active_state_changed;
+
             bool is_offset_changed = false;
             if (_drag_scrollbar == _scrollbar_y)
             {
@@ -571,15 +717,102 @@ namespace auik::v2
                 _content_offset.x = _scrollbar_x->scroll_offset();
             }
 
-            if (!is_offset_changed) return;
             auto &ctx = detail::get_context();
-            ctx.disposal_queue->emplace([this]() {
-                sync_clip_rect_cache();
-                update_layout();
-                update_draw_commands();
-                detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
-            });
-            ctx.dirty_flags |= DirtyFlagBits::host_update;
+            if (is_offset_changed)
+            {
+                ctx.disposal_queue->emplace([this]() {
+                    sync_clip_rect_cache();
+                    update_layout();
+                    update_draw_commands();
+                    detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
+                });
+                ctx.dirty_flags |= DirtyFlagBits::host_update;
+                return;
+            }
+
+            if (active_state_changed)
+            {
+                ctx.disposal_queue->emplace([this]() {
+                    if (_scrollbar_y)
+                    {
+                        _scrollbar_y->update_style();
+                        if (_scrollbar_y->has_draw_record()) _scrollbar_y->update_draw_commands();
+                        else _scrollbar_y->record_draw_commands();
+                    }
+                    if (_scrollbar_x)
+                    {
+                        _scrollbar_x->update_style();
+                        if (_scrollbar_x->has_draw_record()) _scrollbar_x->update_draw_commands();
+                        else _scrollbar_x->record_draw_commands();
+                    }
+                    detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
+                });
+                ctx.dirty_flags |= DirtyFlagBits::host_update;
+            }
+            return;
+        }
+
+        if (_resize_zone != detail::HitboxZoneBits::none)
+        {
+            auto &ctx = detail::get_context();
+            detail::set_window_cursor(detail::get_cursor_for_hitbox_zone(_resize_zone), ctx.window_ctx);
+            if (!(window_flags & WindowFlagBits::resizable)) return;
+            if (window_flags & WindowFlagBits::docked) return;
+            if (delta.x == 0.0f && delta.y == 0.0f) return;
+
+            const amal::vec2 old_pos = position();
+            const amal::vec2 old_size = size();
+            amal::vec2 new_pos = old_pos;
+            amal::vec2 new_size = old_size;
+
+            const bool hit_left = _resize_zone & detail::HitboxZoneBits::left;
+            const bool hit_right = _resize_zone & detail::HitboxZoneBits::right;
+            const bool hit_top = _resize_zone & detail::HitboxZoneBits::top;
+            const bool hit_bottom = _resize_zone & detail::HitboxZoneBits::bottom;
+
+            if (hit_left)
+            {
+                new_pos.x += delta.x;
+                new_size.x -= delta.x;
+            }
+            else if (hit_right) new_size.x += delta.x;
+
+            if (hit_top)
+            {
+                new_pos.y += delta.y;
+                new_size.y -= delta.y;
+            }
+            else if (hit_bottom) new_size.y += delta.y;
+
+            const amal::vec2 min_size = {32.0f, 32.0f};
+            if (new_size.x < min_size.x)
+            {
+                if (hit_left) new_pos.x -= (min_size.x - new_size.x);
+                new_size.x = min_size.x;
+            }
+            if (new_size.y < min_size.y)
+            {
+                if (hit_top) new_pos.y -= (min_size.y - new_size.y);
+                new_size.y = min_size.y;
+            }
+
+            if (new_pos == old_pos && new_size == old_size) return;
+            set_position(new_pos);
+            set_size(new_size);
+            const bool was_scrollbar_x_visible = _scrollbar_x && _scrollbar_x->is_visible();
+            const bool was_scrollbar_y_visible = _scrollbar_y && _scrollbar_y->is_visible();
+            sync_clip_rect_cache();
+            update_layout();
+            const bool is_scrollbar_x_visible = _scrollbar_x && _scrollbar_x->is_visible();
+            const bool is_scrollbar_y_visible = _scrollbar_y && _scrollbar_y->is_visible();
+            const bool need_record_for_scrollbar_x = is_scrollbar_x_visible && !_scrollbar_x->has_draw_record();
+            const bool need_record_for_scrollbar_y = is_scrollbar_y_visible && !_scrollbar_y->has_draw_record();
+            const bool is_scrollbar_visibility_changed = (was_scrollbar_x_visible != is_scrollbar_x_visible) ||
+                                                         (was_scrollbar_y_visible != is_scrollbar_y_visible);
+            if (is_scrollbar_visibility_changed || need_record_for_scrollbar_x || need_record_for_scrollbar_y)
+                record_draw_commands();
+            else update_draw_commands();
+            ctx.dirty_flags |= (DirtyFlagBits::host_update | DirtyFlagBits::redraw);
             return;
         }
 

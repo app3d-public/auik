@@ -10,7 +10,7 @@ layout(location = 0) out uvec2 out_id;
 
 layout(std430, set = 0, binding = 1) readonly buffer ClipRectsBuffer { vec4 clip_rects[]; };
 
-const float AUIK_HITBOX_PAD = 2.0;
+#define AUIK_HITBOX_PAD 4.0
 
 float sd_box(vec2 p, vec2 half_size)
 {

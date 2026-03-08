@@ -410,8 +410,11 @@ namespace auik::v2::detail
         auto *data = static_cast<const PickValue *>(_readback_buffers[read_frame_id].mapped);
         if (!data) return;
         auto &global_ctx = get_context();
+        const u32 prev_hover_widget_id = global_ctx.hover_widget_id;
+        const u32 prev_hover_tag_id = global_ctx.hover_tag_id;
         global_ctx.hover_widget_id = data->widget_id;
         global_ctx.hover_tag_id = data->tag_id;
+        on_hover_id_updated(prev_hover_widget_id, prev_hover_tag_id, global_ctx.hover_widget_id, global_ctx.hover_tag_id);
     }
 
     u32 GPUPicker::push_hit_rect(const RectData &rect)
@@ -447,7 +450,15 @@ namespace auik::v2::detail
     void update_hover_id_impl(GPUContext *gpu_context, void *sync_ctx)
     {
         auto &global_ctx = get_context();
-        if (!check_mouse_bounds(global_ctx.io.mouse_pos, global_ctx.io.display_size)) return;
+        if (!check_mouse_bounds(global_ctx.io.mouse_pos, global_ctx.io.display_size))
+        {
+            const u32 prev_hover_widget_id = global_ctx.hover_widget_id;
+            const u32 prev_hover_tag_id = global_ctx.hover_tag_id;
+            global_ctx.hover_widget_id = 0;
+            global_ctx.hover_tag_id = 0;
+            on_hover_id_updated(prev_hover_widget_id, prev_hover_tag_id, 0, 0);
+            return;
+        }
         auto *agrb_ctx = get_agrb_context(gpu_context);
         auto &picker = agrb_ctx->picker;
         assert(picker->attachments);

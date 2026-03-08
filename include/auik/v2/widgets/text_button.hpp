@@ -20,6 +20,8 @@ namespace auik::v2
         void update_style() override;
         void update_layout() override;
         void rebuild_clip_rects() override;
+        void on_hover(HoverState state, u32 prev_tag_id) override;
+        void on_click(MouseKey key, KeyPressState state, u32 click_count) override;
 
         void draw(DrawCtx &ctx) override;
 

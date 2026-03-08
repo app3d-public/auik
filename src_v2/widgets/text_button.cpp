@@ -20,7 +20,7 @@ namespace auik::v2
     {
         auto *theme = get_theme();
         const u32 parent_id = parent() ? parent()->id() : 0u;
-        _style.id = theme->get_resolved_style(_style.tag_id, id(), parent_id);
+        _style.id = theme->get_resolved_style(_style.tag_id, id(), parent_id, style_state());
     }
 
     void TextButton::update_layout()
@@ -55,6 +55,49 @@ namespace auik::v2
     {
         Widget::rebuild_clip_rects();
         _bg.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+    }
+
+    void TextButton::on_hover(HoverState state, u32 prev_tag_id)
+    {
+        (void)prev_tag_id;
+        if (!apply_hover_style_state(*this, state)) return;
+
+        auto &ctx = detail::get_context();
+        ctx.disposal_queue->emplace([this]() {
+            update_style();
+            if (_bg.render_id != AUIK_INVALID_DRAW_DATA_ID)
+                update_draw_commands();
+            else
+                record_draw_commands();
+            detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
+        });
+        ctx.dirty_flags |= DirtyFlagBits::host_update;
+    }
+
+    void TextButton::on_click(MouseKey key, KeyPressState state, u32 click_count)
+    {
+        (void)click_count;
+        if (key != MouseKey::left) return;
+
+        const StyleState prev_state = style_state();
+        if (state == KeyPressState::press)
+            set_style_state(StyleState::active);
+        else if (state == KeyPressState::release)
+            set_style_state(StyleState::normal);
+        else
+            return;
+
+        if (style_state() == prev_state) return;
+        auto &ctx = detail::get_context();
+        ctx.disposal_queue->emplace([this]() {
+            update_style();
+            if (_bg.render_id != AUIK_INVALID_DRAW_DATA_ID)
+                update_draw_commands();
+            else
+                record_draw_commands();
+            detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
+        });
+        ctx.dirty_flags |= DirtyFlagBits::host_update;
     }
 
     void TextButton::draw(DrawCtx &ctx)

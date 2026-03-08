@@ -10,6 +10,7 @@
 #define AUIK_DEPTH_MIN_STEP              1e-6f
 #define AUIK_MOUSE_DOUBLE_CLICK_TIME     0.45
 #define AUIK_MOUSE_DOUBLE_CLICK_MAX_DIST 8.0
+#define AUIK_HITBOX_PAD                  4.0f
 
 namespace auik::v2
 {
@@ -36,19 +37,102 @@ namespace auik::v2
 
         APPLIB_API void on_mouse_move_event(const amal::vec2 &pos) { get_io().mouse_pos = pos; }
 
-        APPLIB_API void on_drag_event()
+        APPLIB_API HitboxZone get_hitbox_zone(const RectData &rect, const amal::vec2 &mouse_pos)
+        {
+            HitboxZone zone = HitboxZoneBits::none;
+            if (!(rect.flags & RectBits::hitbox)) return zone;
+            const auto absf = [](f32 x) { return x < 0.0f ? -x : x; };
+
+            const f32 left = rect.position.x;
+            const f32 right = rect.position.x + rect.size.x;
+            const f32 top = rect.position.y;
+            const f32 bottom = rect.position.y + rect.size.y;
+
+            if (absf(mouse_pos.x - left) <= AUIK_HITBOX_PAD) zone |= HitboxZoneBits::left;
+            if (absf(mouse_pos.x - right) <= AUIK_HITBOX_PAD) zone |= HitboxZoneBits::right;
+            if (absf(mouse_pos.y - top) <= AUIK_HITBOX_PAD) zone |= HitboxZoneBits::top;
+            if (absf(mouse_pos.y - bottom) <= AUIK_HITBOX_PAD) zone |= HitboxZoneBits::bottom;
+            return zone;
+        }
+
+        APPLIB_API CursorID::enum_type get_cursor_for_hitbox_zone(HitboxZone zone)
+        {
+            const bool has_left = zone & HitboxZoneBits::left;
+            const bool has_right = zone & HitboxZoneBits::right;
+            const bool has_top = zone & HitboxZoneBits::top;
+            const bool has_bottom = zone & HitboxZoneBits::bottom;
+
+            if ((has_left && has_top) || (has_right && has_bottom)) return CursorID::resize_nwse;
+            if ((has_right && has_top) || (has_left && has_bottom)) return CursorID::resize_nesw;
+            if (has_left || has_right) return CursorID::resize_ew;
+            if (has_top || has_bottom) return CursorID::resize_ns;
+            return CursorID::arrow;
+        }
+
+        APPLIB_API void on_hover_id_updated(u32 prev_widget_id, u32 prev_tag_id, u32 widget_id, u32 tag_id)
+        {
+            auto &ctx = get_context();
+            const bool is_dragging = ctx.io.mouse_down && ctx.io.drag_id != 0;
+            auto dispatch_hover = [&](u32 id, HoverState state, u32 last_tag_id) {
+                if (id == 0) return;
+                auto it = ctx.id_map.find(id);
+                if (it == ctx.id_map.end()) return;
+                it->second->on_hover(state, last_tag_id);
+            };
+
+            if (prev_widget_id != widget_id)
+            {
+                dispatch_hover(prev_widget_id, HoverState::leave, prev_tag_id);
+                dispatch_hover(widget_id, HoverState::enter, prev_tag_id);
+            }
+            else dispatch_hover(widget_id, HoverState::active, prev_tag_id);
+
+            ctx.hover_hitbox_zone = HitboxZoneBits::none;
+            if (tag_id == AUIK_TAG_HITBOX && widget_id != 0)
+            {
+                auto it = ctx.id_map.find(widget_id);
+                if (it != ctx.id_map.end())
+                {
+                    const auto &rect = it->second->get_rect();
+                    ctx.hover_hitbox_zone = get_hitbox_zone(rect, ctx.io.mouse_pos);
+                    if (!is_dragging)
+                        set_window_cursor(get_cursor_for_hitbox_zone(ctx.hover_hitbox_zone), ctx.window_ctx);
+                    return;
+                }
+            }
+
+            if (prev_tag_id == AUIK_TAG_HITBOX && tag_id != AUIK_TAG_HITBOX)
+            {
+                if (!is_dragging) set_window_cursor(CursorID::arrow, ctx.window_ctx);
+            }
+        }
+
+        APPLIB_API void reset_event_state()
+        {
+            auto &ctx = get_context();
+            const u32 prev_hover_widget_id = ctx.hover_widget_id;
+            const u32 prev_hover_tag_id = ctx.hover_tag_id;
+            ctx.hover_widget_id = 0;
+            ctx.hover_tag_id = 0;
+            ctx.hover_hitbox_zone = HitboxZoneBits::none;
+            on_hover_id_updated(prev_hover_widget_id, prev_hover_tag_id, 0, 0);
+            set_window_cursor(CursorID::arrow, ctx.window_ctx);
+        }
+
+        APPLIB_API void on_drag_event(const amal::vec2 &delta)
         {
             auto &ctx = get_context();
             auto &io = ctx.io;
             if (!io.mouse_down || io.drag_id == 0) return;
 
-            const amal::vec2 drag_delta = io.mouse_pos - io.last_drag_pos;
-            if (drag_delta.x == 0.0f && drag_delta.y == 0.0f) return;
+            amal::vec2 drag_delta = delta != amal::vec2{0.0f} ? delta : io.mouse_pos - io.last_drag_pos;
+            if (drag_delta == amal::vec2{0.0f}) return;
 
             io.drag_delta = drag_delta;
-            io.last_drag_pos = io.mouse_pos;
+            if (io.mouse_pos != io.last_drag_pos) io.last_drag_pos = io.mouse_pos;
+            else io.last_drag_pos += drag_delta;
             auto it = ctx.id_map.find(io.drag_id);
-            if (it != ctx.id_map.end()) it->second->on_drag(drag_delta, false);
+            if (it != ctx.id_map.end()) it->second->on_drag(drag_delta, KeyPressState::repeat);
         }
 
         APPLIB_API void on_scroll_event(const amal::vec2 &pos)
@@ -58,16 +142,21 @@ namespace auik::v2
             if (it == ctx.id_map.end()) return;
 
             const u32 prev_active_id = ctx.active_widget_id;
+            const StyleState prev_style_state = it->second->style_state();
             it->second->on_active();
-            if (prev_active_id != ctx.active_widget_id)
+            const bool active_changed = prev_active_id != ctx.active_widget_id;
+            const bool style_changed = it->second->style_state() != prev_style_state;
+            if (active_changed || style_changed)
             {
                 auto refresh_active_visual = [&](u32 widget_id) {
                     auto wid_it = ctx.id_map.find(widget_id);
                     if (wid_it == ctx.id_map.end()) return;
+                    if (widget_id != 0 && widget_id != ctx.active_widget_id)
+                        wid_it->second->set_style_state(StyleState::normal);
                     wid_it->second->update_style();
                     wid_it->second->update_draw_commands();
                 };
-                refresh_active_visual(prev_active_id);
+                if (active_changed) refresh_active_visual(prev_active_id);
                 refresh_active_visual(ctx.active_widget_id);
                 ctx.dirty_flags |= DirtyFlagBits::redraw;
             }
@@ -109,25 +198,35 @@ namespace auik::v2
                 io.last_drag_pos = io.mouse_pos;
 
                 io.clicked_widget_id = ctx.hover_widget_id;
-                const bool is_drag_origin = ctx.hover_tag_id == AUIK_TAG_WINDOW_HEADER ||
-                                            ctx.hover_tag_id == AUIK_TAG_SCROLLBAR_TRACK ||
-                                            ctx.hover_tag_id == AUIK_TAG_SCROLLBAR_THUMB;
+                const bool is_drag_origin =
+                    ctx.hover_tag_id == AUIK_TAG_WINDOW_HEADER || ctx.hover_tag_id == AUIK_TAG_SCROLLBAR_TRACK ||
+                    ctx.hover_tag_id == AUIK_TAG_SCROLLBAR_THUMB || ctx.hover_tag_id == AUIK_TAG_HITBOX;
                 io.drag_id = is_drag_origin ? ctx.hover_widget_id : 0;
+                if (io.drag_id != 0)
+                {
+                    auto drag_it = ctx.id_map.find(io.drag_id);
+                    if (drag_it != ctx.id_map.end()) drag_it->second->on_drag({0.0f, 0.0f}, KeyPressState::press);
+                }
 
                 auto it = ctx.id_map.find(ctx.hover_widget_id);
                 if (it != ctx.id_map.end())
                 {
                     const u32 prev_active_id = ctx.active_widget_id;
+                    const StyleState prev_style_state = it->second->style_state();
                     it->second->on_active();
-                    if (prev_active_id != ctx.active_widget_id)
+                    const bool active_changed = prev_active_id != ctx.active_widget_id;
+                    const bool style_changed = it->second->style_state() != prev_style_state;
+                    if (active_changed || style_changed)
                     {
                         auto refresh_active_visual = [&](u32 widget_id) {
                             auto wid_it = ctx.id_map.find(widget_id);
                             if (wid_it == ctx.id_map.end()) return;
+                            if (widget_id != 0 && widget_id != ctx.active_widget_id)
+                                wid_it->second->set_style_state(StyleState::normal);
                             wid_it->second->update_style();
                             wid_it->second->update_draw_commands();
                         };
-                        refresh_active_visual(prev_active_id);
+                        if (active_changed) refresh_active_visual(prev_active_id);
                         refresh_active_visual(ctx.active_widget_id);
                         ctx.dirty_flags |= DirtyFlagBits::redraw;
                     }
@@ -143,7 +242,7 @@ namespace auik::v2
                 if (it != ctx.id_map.end()) it->second->on_click(key, state, io.click_count);
 
                 it = ctx.id_map.find(io.drag_id);
-                if (it != ctx.id_map.end()) it->second->on_drag({0.0f, 0.0f}, true);
+                if (it != ctx.id_map.end()) it->second->on_drag({0.0f, 0.0f}, KeyPressState::release);
 
                 // Click/release on empty space should clear active widget.
                 if (io.clicked_widget_id == 0 && ctx.hover_widget_id == 0 && ctx.active_widget_id != 0)
@@ -153,6 +252,7 @@ namespace auik::v2
                     auto prev_it = ctx.id_map.find(prev_active_id);
                     if (prev_it != ctx.id_map.end())
                     {
+                        prev_it->second->set_style_state(StyleState::normal);
                         prev_it->second->update_style();
                         prev_it->second->update_layout();
                         prev_it->second->update_draw_commands();
@@ -294,6 +394,7 @@ namespace auik::v2
         io.clicked_widget_id = 0;
         io.drag_id = 0;
         io.mouse_down = false;
+        ctx.hover_hitbox_zone = detail::HitboxZoneBits::none;
         ctx.active_widget_id = 0;
         ctx.screen_cursor = {0.0f, 0.0f};
         ctx.window_ctx = create_info.window_ctx;
@@ -340,11 +441,13 @@ namespace auik::v2
                 widget->update_layout();
                 widget->record_draw_commands();
             }
+            ctx.dirty_flags &= ~DirtyFlagBits::layout;
         }
-        else // Render-only updates must not clear cached streams.
-            for (Widget *widget : ctx.widget_tree) widget->update_draw_commands();
-
-        ctx.dirty_flags &= ~(DirtyFlagBits::redraw | DirtyFlagBits::layout);
+        else
+        {
+            clear_all_streams(ctx);
+            for (Widget *widget : ctx.widget_tree) widget->record_draw_commands();
+        }
     }
 
     APPLIB_API void sync_clip_rect_cache()

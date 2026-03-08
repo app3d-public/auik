@@ -81,6 +81,7 @@ namespace auik::v2
             acul::hashmap<u32, Widget *> id_map;
             u32 hover_widget_id = 0;
             u32 hover_tag_id = 0;
+            detail::HitboxZone hover_hitbox_zone = detail::HitboxZoneBits::none;
             u32 active_widget_id = 0;
             int root_depth_counts[3] = {};
             GPUContext *gpu_ctx = nullptr;

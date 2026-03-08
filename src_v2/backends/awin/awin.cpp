@@ -31,15 +31,17 @@ namespace auik::v2
         ed.bind_event(backend, awin::event_id::mouse_move, [&window](const awin::PosEvent &event) {
             if (event.window != &window) return;
             detail::on_mouse_move_event({event.position.x, event.position.y});
+            if (!window.is_cursor_hidden()) detail::on_drag_event({0.0f, 0.0f});
         });
         ed.bind_event(backend, awin::event_id::mouse_move_delta, [&window](const awin::PosEvent &event) {
             if (event.window != &window) return;
-            const auto pos = window.cursor_position();
-            detail::on_mouse_move_event({static_cast<f32>(pos.x), static_cast<f32>(pos.y)});
-            detail::on_drag_event();
+            if (window.is_cursor_hidden())
+                detail::on_drag_event({static_cast<f32>(event.position.x), static_cast<f32>(event.position.y)});
         });
-        ed.bind_event(backend, awin::event_id::focus,
-                      [](const awin::FocusEvent &) { std::printf("[auik::v2::awin] focus event\n"); });
+        ed.bind_event(backend, awin::event_id::focus, [&window](const awin::FocusEvent &event) {
+            if (event.window != &window) return;
+            if (!event.focused) detail::reset_event_state();
+        });
         ed.bind_event(backend, awin::event_id::char_input,
                       [](const awin::CharInputEvent &) { std::printf("[auik::v2::awin] char_input event\n"); });
         ed.bind_event(backend, awin::event_id::key_input,

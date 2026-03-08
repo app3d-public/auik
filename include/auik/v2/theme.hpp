@@ -48,7 +48,6 @@ namespace auik::v2
         normal,
         hover,
         active,
-        focus,
         max
     };
     using StyleID = u32;

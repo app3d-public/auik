@@ -137,6 +137,7 @@ auik::v2::add_widget_to_root(demo_window);
 
 ### Render loop
 ```cpp
+env::get_disposal_queue().flush();
 if (auik::v2::is_dirty_render())
 {
    auik::v2::sync_gpu_cache();

@@ -21,7 +21,7 @@ layout(location = 3) out vec2 out_pixel_pos;
 layout(location = 4) out vec2 out_local_pos;
 layout(location = 5) flat out vec2 out_rect_size;
 
-const float AUIK_HITBOX_PAD = 2.0;
+#define AUIK_HITBOX_PAD 4.0
 
 vec2 get_quad_uv(uint vertex_index)
 {

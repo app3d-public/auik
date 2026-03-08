@@ -49,12 +49,9 @@ namespace auik::v2::detail
 
         void set_visible(bool value)
         {
-            if (value)
-                widget_flags |= WidgetFlagBits::visible;
-            else
-                widget_flags &= ~WidgetFlagBits::visible;
+            Widget::set_visible(value);
         }
-        bool is_visible() const { return (widget_flags & WidgetFlagBits::visible); }
+        bool is_visible() const { return Widget::is_visible(); }
         amal::vec4 get_track_margin() const;
         f32 get_min_track_thickness() const;
         void set_axis(amal::axis axis) { _behavior.set_axis(axis); }
@@ -67,6 +64,29 @@ namespace auik::v2::detail
         bool scroll_to_track_click(const amal::vec2 &mouse_pos);
         bool scroll_thumb_by_drag_delta(const amal::vec2 &delta);
         bool is_point_on_thumb(const amal::vec2 &mouse_pos) const;
+        bool set_thumb_hovered(bool value)
+        {
+            if (value)
+            {
+                if (is_thumb_active()) return false;
+                return set_style_state(StyleState::hover);
+            }
+            if (style_state() == StyleState::hover) return set_style_state(StyleState::normal);
+            return false;
+        }
+        bool is_thumb_hovered() const { return style_state() == StyleState::hover; }
+        bool set_thumb_active(bool value)
+        {
+            if (value) return set_style_state(StyleState::active);
+            if (style_state() == StyleState::active) return set_style_state(StyleState::normal);
+            return false;
+        }
+        bool is_thumb_active() const { return style_state() == StyleState::active; }
+        bool has_draw_record() const
+        {
+            return _track_draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID &&
+                   _thumb_draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID;
+        }
         const ScrollBehavior &behavior() const { return _behavior; }
 
         void configure(const amal::vec2 &track_pos, const amal::vec2 &track_size, f32 content_size, f32 view_size);

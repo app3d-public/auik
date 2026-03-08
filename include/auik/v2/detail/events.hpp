@@ -1,16 +1,20 @@
 #pragma once
 
 #include <acul/api.hpp>
+#include <acul/enum.hpp>
 #include <acul/pair.hpp>
 #include <acul/scalars.hpp>
 #include <amal/vector.hpp>
+
+#define AUIK_TAG_HITBOX 0xBF9B2277u
 
 namespace auik::v2
 {
     enum class KeyPressState : i8
     {
         release,
-        press
+        press,
+        repeat
     };
 
     enum class MouseKey
@@ -20,12 +24,18 @@ namespace auik::v2
         right = 1,
         middle = 2
     };
+
+    enum class HoverState : i8
+    {
+        leave = 0,
+        enter = 1,
+        active = 2
+    };
 } // namespace auik::v2
 
 namespace auik::v2::detail
 {
-    constexpr u32 AUIK_TAG_HITBOX = 0xBF9B2277u;
-
+    struct RectData;
     struct RectBits
     {
         enum enum_type : u16
@@ -34,6 +44,20 @@ namespace auik::v2::detail
             hitbox = 0x1
         };
     };
+
+    struct HitboxZoneBits
+    {
+        enum enum_type : u8
+        {
+            none = 0x0,
+            left = 0x1,
+            right = 0x2,
+            top = 0x4,
+            bottom = 0x8
+        };
+        using flag_bitmask = std::true_type;
+    };
+    using HitboxZone = acul::flags<HitboxZoneBits>;
 
     struct CursorID
     {
@@ -69,9 +93,13 @@ namespace auik::v2::detail
 
     APPLIB_API void on_resize_event(const amal::vec2 &size);
     APPLIB_API void on_mouse_move_event(const amal::vec2 &pos);
-    APPLIB_API void on_drag_event();
+    APPLIB_API void on_drag_event(const amal::vec2 &delta);
     APPLIB_API void on_scroll_event(const amal::vec2 &pos);
     APPLIB_API void on_mouse_click_event(MouseKey key, KeyPressState state);
+    APPLIB_API void reset_event_state();
+    APPLIB_API void on_hover_id_updated(u32 prev_widget_id, u32 prev_tag_id, u32 widget_id, u32 tag_id);
+    APPLIB_API HitboxZone get_hitbox_zone(const RectData &rect, const amal::vec2 &mouse_pos);
+    APPLIB_API CursorID::enum_type get_cursor_for_hitbox_zone(HitboxZone zone);
 
     inline void set_window_cursor(CursorID::enum_type id, WindowContext *window_ctx)
     {

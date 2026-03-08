@@ -19,10 +19,9 @@ namespace auik::v2
             decorated = 0x4,
             docked = 0x8,
             dockable = 0x10,
-            fixed = 0x20,
-            scrollable = 0x40,
-            no_scrollbar_x = 0x80,
-            no_scrollbar_y = 0x100
+            scrollable = 0x20,
+            no_scrollbar_x = 0x40,
+            no_scrollbar_y = 0x80
         };
 
         using flag_bitmask = std::true_type;
@@ -63,6 +62,7 @@ namespace auik::v2
         detail::Scrollbar *_scrollbar_x = nullptr;
         detail::Scrollbar *_scrollbar_y = nullptr;
         detail::Scrollbar *_drag_scrollbar = nullptr;
+        detail::HitboxZone _resize_zone = detail::HitboxZoneBits::none;
 
         virtual void update_depth(const amal::vec2 &depth_range) override;
         virtual void update_layout() override;
@@ -87,8 +87,9 @@ namespace auik::v2
         }
 
         virtual void on_scroll(const amal::vec2 &delta) override;
-        virtual void on_drag(const amal::vec2 &delta, bool is_dropped) override;
+        virtual void on_drag(const amal::vec2 &delta, KeyPressState state) override;
         virtual void on_active() override;
+        virtual void on_hover(HoverState state, u32 prev_tag_id) override;
 
         virtual void on_click(MouseKey key, KeyPressState state, u32 click_count) override;
     };
