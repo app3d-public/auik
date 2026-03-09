@@ -12,7 +12,6 @@ namespace auik::v2
     struct CreateInfo
     {
         acul::events::dispatcher *ed = nullptr;
-        acul::disposal_queue *disposal_queue = nullptr;
         DrawStream *streams = nullptr;
         u32 streams_count = 0;
         detail::GPUContext *gpu_ctx = nullptr;
@@ -22,12 +21,6 @@ namespace auik::v2
         CreateInfo &set_event_dispatcher(acul::events::dispatcher *ed)
         {
             this->ed = ed;
-            return *this;
-        }
-
-        CreateInfo &set_disposal_queue(acul::disposal_queue *disposal_queue)
-        {
-            this->disposal_queue = disposal_queue;
             return *this;
         }
 
@@ -64,20 +57,27 @@ namespace auik::v2
     APPLIB_API void sync_draw_streams();
     APPLIB_API void sync_clip_rect_cache();
     APPLIB_API void sync_hit_rect_cache();
+    inline void sync_gpu_cache();
 
     inline void set_window_size(const amal::vec2 &size) { detail::get_io().display_size = size; }
+
+    inline void sync_frame()
+    {
+        auto &ctx = detail::get_context();
+        if (ctx.dirty_flags & DirtyFlagBits::hit_rect_sync) auik::v2::sync_hit_rect_cache();
+        if (!ctx.disposal_queue.empty()) ctx.disposal_queue.flush();
+    }
 
     inline void next_frame(void *sync_ctx)
     {
         auto &ctx = detail::get_context();
         auto &io = detail::get_io();
-        if (ctx.dirty_flags & DirtyFlagBits::hit_rect) auik::v2::sync_hit_rect_cache();
         detail::update_hover_id(ctx.gpu_ctx, sync_ctx);
         detail::new_window_frame(ctx.window_ctx);
         io.drag_delta = {0.0f, 0.0f};
         ctx.screen_cursor = {0.0f, 0.0f};
         ctx.frame_id = (ctx.frame_id + 1) % ctx.frames_in_flight;
-        ctx.dirty_flags &= ~(DirtyFlagBits::redraw | DirtyFlagBits::host_update);
+        ctx.dirty_flags &= ~(DirtyFlagBits::redraw | DirtyFlagBits::host_update | DirtyFlagBits::hit_rect_update);
     }
 
     inline void sync_gpu_cache()
@@ -97,7 +97,7 @@ namespace auik::v2
 
     inline bool is_dirty_stream() { return detail::get_context().dirty_flags & DirtyFlagBits::streams; }
 
-    inline bool is_dirty_hit_rect() { return detail::get_context().dirty_flags & DirtyFlagBits::hit_rect; }
+    inline bool is_dirty_hit_rect() { return detail::get_context().dirty_flags & DirtyFlagBits::hit_rect_sync; }
 
     inline bool is_dirty_clip_rect() { return detail::get_context().dirty_flags & DirtyFlagBits::clip_rect; }
 

@@ -22,9 +22,11 @@ namespace auik::v2
             redraw = 0x1,
             layout = 0x2,
             streams = 0x4,
-            hit_rect = 0x8,
+            hit_rect_sync = 0x8,
             clip_rect = 0x10,
-            host_update = 0x20
+            host_update = 0x20,
+            hit_rect_draw = 0x40,
+            hit_rect_update = 0x80
         };
         using flag_bitmask = std::true_type;
     };
@@ -68,21 +70,20 @@ namespace auik::v2
             f64 last_click_time = -1.0;
             u32 click_count = 0;
             u32 click_streak = 0;
-            u32 clicked_widget_id = 0;
-            u32 drag_id = 0;
+            ElementID clicked_id{};
+            ElementID drag_id{};
             bool mouse_down = false;
         };
 
         extern APPLIB_API struct Context
         {
             acul::events::dispatcher *ed = nullptr;
-            acul::disposal_queue *disposal_queue = nullptr;
+            acul::disposal_queue disposal_queue;
             acul::vector<Widget *> widget_tree;
             acul::hashmap<u32, Widget *> id_map;
-            u32 hover_widget_id = 0;
-            u32 hover_tag_id = 0;
+            ElementID hover_id{};
             detail::HitboxZone hover_hitbox_zone = detail::HitboxZoneBits::none;
-            u32 active_widget_id = 0;
+            u32 active_id = 0;
             int root_depth_counts[3] = {};
             GPUContext *gpu_ctx = nullptr;
             WindowContext *window_ctx = nullptr;
@@ -144,8 +145,21 @@ namespace auik::v2
         {
             auto &ctx = get_context();
             mark_shared_buffer_mutation(get_hit_rects_sync_state(), ctx.frame_id, ctx.frames_in_flight);
-            ctx.dirty_flags |= DirtyFlagBits::hit_rect;
+            ctx.dirty_flags |= DirtyFlagBits::hit_rect_sync;
         }
+
+#ifndef NDEBUG
+        inline bool is_shared_buffer_frame_synced(const SharedBufferSyncState &state, u32 frame_id)
+        {
+            assert(state.buffer_versions);
+            return state.buffer_versions[frame_id] == state.master_version;
+        }
+
+        inline bool is_hit_rects_frame_synced(u32 frame_id)
+        {
+            return is_shared_buffer_frame_synced(get_hit_rects_sync_state(), frame_id);
+        }
+#endif
 
         APPLIB_API WindowContext *create_window_context();
 

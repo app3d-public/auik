@@ -3,9 +3,10 @@
 #include <acul/enum.hpp>
 #include <acul/vector.hpp>
 #include <amal/vector.hpp>
-#include "../theme.hpp"
 #include "../detail/events.hpp"
 #include "../draw.hpp"
+#include "../theme.hpp"
+
 
 namespace auik::v2
 {
@@ -61,10 +62,8 @@ namespace auik::v2
         {
             const bool visible = is_visible();
             if (visible == value) return;
-            if (value)
-                widget_flags |= WidgetFlagBits::visible;
-            else
-                widget_flags &= ~WidgetFlagBits::visible;
+            if (value) widget_flags |= WidgetFlagBits::visible;
+            else widget_flags &= ~WidgetFlagBits::visible;
             auto &ctx = detail::get_context();
             ctx.dirty_flags |= DirtyFlagBits::redraw;
         }
@@ -99,16 +98,16 @@ namespace auik::v2
 
         void record_draw_commands()
         {
-            DrawCtx ctx{};
-            ctx.emit = &emit_draw_record;
-            draw(ctx);
+            DrawCtx draw_ctx{};
+            draw_ctx.emit = &emit_draw_record;
+            draw(draw_ctx);
         }
 
         void update_draw_commands()
         {
-            DrawCtx ctx{};
-            ctx.emit = &emit_draw_update;
-            draw(ctx);
+            DrawCtx draw_ctx{};
+            draw_ctx.emit = &emit_draw_update;
+            draw(draw_ctx);
         }
 
         virtual void update_layout()
@@ -116,7 +115,7 @@ namespace auik::v2
             _required_size = _rect.size;
             if (_rect.clip_rect_id == 0xFFFFu) push_clip_rect();
             update_clip_rect(_rect.clip_rect_id, {_rect.position, _rect.size});
-            detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect;
+            detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
         }
 
         virtual void update_depth(const amal::vec2 &depth_range);
@@ -133,7 +132,7 @@ namespace auik::v2
         virtual void on_active()
         {
             auto &ctx = detail::get_context();
-            ctx.active_widget_id = id();
+            ctx.active_id = id();
             set_style_state(StyleState::active);
             if (_parent && (_parent->widget_flags & WidgetFlagBits::active_from_child)) _parent->on_active();
         }
@@ -169,8 +168,7 @@ namespace auik::v2
     inline bool apply_hover_style_state(Widget &widget, HoverState state)
     {
         if (widget.style_state() == StyleState::active) return false;
-        if (state == HoverState::leave)
-            return widget.restore_prev_style_state();
+        if (state == HoverState::leave) return widget.restore_prev_style_state();
         return widget.set_style_state(StyleState::hover);
     }
 

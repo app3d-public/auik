@@ -111,7 +111,6 @@ auto pool = agrb::descriptor_pool::builder()
 
 auik::v2::CreateInfo create_info;
 create_info.set_event_dispatcher(&env::get_event_dispatcher())
-    .set_disposal_queue(&env::get_disposal_queue())
     .set_draw_streams(streams.data(), static_cast<u32>(streams.size()))
     .set_gpu_backend(auik::v2::create_agrb_backend(device, pool.get()))
     .set_window_backend(auik::v2::create_awin_backend(env::get_main_window()))
@@ -137,7 +136,7 @@ auik::v2::add_widget_to_root(demo_window);
 
 ### Render loop
 ```cpp
-env::get_disposal_queue().flush();
+auik::v2::sync_frame();
 if (auik::v2::is_dirty_render())
 {
    auik::v2::sync_gpu_cache();

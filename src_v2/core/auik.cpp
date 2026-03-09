@@ -2,8 +2,6 @@
 #include <auik/v2/detail/context.hpp>
 #include <auik/v2/detail/events.hpp>
 #include <auik/v2/detail/gpu_context.hpp>
-#include <auik/v2/widgets/widget.hpp>
-#include <auik/v2/widgets/window.hpp>
 
 #define AUIK_ROOT_DEPTH_ATOMS_COUNT      32
 #define AUIK_CHILD_DEPTH_ATOMS_COUNT     16
@@ -72,7 +70,7 @@ namespace auik::v2
         APPLIB_API void on_hover_id_updated(u32 prev_widget_id, u32 prev_tag_id, u32 widget_id, u32 tag_id)
         {
             auto &ctx = get_context();
-            const bool is_dragging = ctx.io.mouse_down && ctx.io.drag_id != 0;
+            const bool is_dragging = ctx.io.mouse_down && ctx.io.drag_id;
             auto dispatch_hover = [&](u32 id, HoverState state, u32 last_tag_id) {
                 if (id == 0) return;
                 auto it = ctx.id_map.find(id);
@@ -110,12 +108,10 @@ namespace auik::v2
         APPLIB_API void reset_event_state()
         {
             auto &ctx = get_context();
-            const u32 prev_hover_widget_id = ctx.hover_widget_id;
-            const u32 prev_hover_tag_id = ctx.hover_tag_id;
-            ctx.hover_widget_id = 0;
-            ctx.hover_tag_id = 0;
+            const auto prev_hover = ctx.hover_id;
+            ctx.hover_id = {};
             ctx.hover_hitbox_zone = HitboxZoneBits::none;
-            on_hover_id_updated(prev_hover_widget_id, prev_hover_tag_id, 0, 0);
+            on_hover_id_updated(prev_hover.widget_id, prev_hover.tag_id, 0, 0);
             set_window_cursor(CursorID::arrow, ctx.window_ctx);
         }
 
@@ -123,7 +119,7 @@ namespace auik::v2
         {
             auto &ctx = get_context();
             auto &io = ctx.io;
-            if (!io.mouse_down || io.drag_id == 0) return;
+            if (!io.mouse_down || !io.drag_id) return;
 
             amal::vec2 drag_delta = delta != amal::vec2{0.0f} ? delta : io.mouse_pos - io.last_drag_pos;
             if (drag_delta == amal::vec2{0.0f}) return;
@@ -131,35 +127,15 @@ namespace auik::v2
             io.drag_delta = drag_delta;
             if (io.mouse_pos != io.last_drag_pos) io.last_drag_pos = io.mouse_pos;
             else io.last_drag_pos += drag_delta;
-            auto it = ctx.id_map.find(io.drag_id);
+            auto it = ctx.id_map.find(io.drag_id.widget_id);
             if (it != ctx.id_map.end()) it->second->on_drag(drag_delta, KeyPressState::repeat);
         }
 
         APPLIB_API void on_scroll_event(const amal::vec2 &pos)
         {
             auto &ctx = get_context();
-            auto it = ctx.id_map.find(ctx.hover_widget_id);
+            auto it = ctx.id_map.find(ctx.hover_id.widget_id);
             if (it == ctx.id_map.end()) return;
-
-            const u32 prev_active_id = ctx.active_widget_id;
-            const StyleState prev_style_state = it->second->style_state();
-            it->second->on_active();
-            const bool active_changed = prev_active_id != ctx.active_widget_id;
-            const bool style_changed = it->second->style_state() != prev_style_state;
-            if (active_changed || style_changed)
-            {
-                auto refresh_active_visual = [&](u32 widget_id) {
-                    auto wid_it = ctx.id_map.find(widget_id);
-                    if (wid_it == ctx.id_map.end()) return;
-                    if (widget_id != 0 && widget_id != ctx.active_widget_id)
-                        wid_it->second->set_style_state(StyleState::normal);
-                    wid_it->second->update_style();
-                    wid_it->second->update_draw_commands();
-                };
-                if (active_changed) refresh_active_visual(prev_active_id);
-                refresh_active_visual(ctx.active_widget_id);
-                ctx.dirty_flags |= DirtyFlagBits::redraw;
-            }
 
             it->second->on_scroll(pos);
         }
@@ -172,7 +148,7 @@ namespace auik::v2
 
             if (key != MouseKey::left)
             {
-                const u32 target_id = ctx.hover_widget_id;
+                const u32 target_id = ctx.hover_id.widget_id;
                 auto it = ctx.id_map.find(target_id);
                 if (it != ctx.id_map.end()) it->second->on_click(key, state, 1);
                 return;
@@ -197,38 +173,39 @@ namespace auik::v2
                 io.last_click_pos = io.mouse_pos;
                 io.last_drag_pos = io.mouse_pos;
 
-                io.clicked_widget_id = ctx.hover_widget_id;
-                const bool is_drag_origin =
-                    ctx.hover_tag_id == AUIK_TAG_WINDOW_HEADER || ctx.hover_tag_id == AUIK_TAG_SCROLLBAR_TRACK ||
-                    ctx.hover_tag_id == AUIK_TAG_SCROLLBAR_THUMB || ctx.hover_tag_id == AUIK_TAG_HITBOX;
-                io.drag_id = is_drag_origin ? ctx.hover_widget_id : 0;
-                if (io.drag_id != 0)
+                io.clicked_id = ctx.hover_id;
+                io.drag_id = ctx.hover_id;
+                if (io.drag_id)
                 {
-                    auto drag_it = ctx.id_map.find(io.drag_id);
+                    auto drag_it = ctx.id_map.find(io.drag_id.widget_id);
                     if (drag_it != ctx.id_map.end()) drag_it->second->on_drag({0.0f, 0.0f}, KeyPressState::press);
                 }
 
-                auto it = ctx.id_map.find(ctx.hover_widget_id);
+                auto it = ctx.id_map.find(ctx.hover_id.widget_id);
                 if (it != ctx.id_map.end())
                 {
-                    const u32 prev_active_id = ctx.active_widget_id;
+                    const u32 prev_active_id = ctx.active_id;
                     const StyleState prev_style_state = it->second->style_state();
                     it->second->on_active();
-                    const bool active_changed = prev_active_id != ctx.active_widget_id;
+                    const bool active_changed = prev_active_id != ctx.active_id;
                     const bool style_changed = it->second->style_state() != prev_style_state;
                     if (active_changed || style_changed)
                     {
-                        auto refresh_active_visual = [&](u32 widget_id) {
-                            auto wid_it = ctx.id_map.find(widget_id);
-                            if (wid_it == ctx.id_map.end()) return;
-                            if (widget_id != 0 && widget_id != ctx.active_widget_id)
-                                wid_it->second->set_style_state(StyleState::normal);
-                            wid_it->second->update_style();
-                            wid_it->second->update_draw_commands();
-                        };
-                        if (active_changed) refresh_active_visual(prev_active_id);
-                        refresh_active_visual(ctx.active_widget_id);
-                        ctx.dirty_flags |= DirtyFlagBits::redraw;
+                        ctx.disposal_queue.emplace([prev_active_id]() {
+                            auto &ctx = detail::get_context();
+                            auto refresh_active_visual = [&](u32 widget_id) {
+                                auto wid_it = ctx.id_map.find(widget_id);
+                                if (wid_it == ctx.id_map.end()) return;
+                                if (widget_id != 0 && widget_id != ctx.active_id)
+                                    wid_it->second->set_style_state(StyleState::normal);
+                                wid_it->second->update_style();
+                                wid_it->second->update_draw_commands();
+                            };
+                            if (prev_active_id != ctx.active_id) refresh_active_visual(prev_active_id);
+                            refresh_active_visual(ctx.active_id);
+                            ctx.dirty_flags |= DirtyFlagBits::redraw;
+                        });
+                        ctx.dirty_flags |= DirtyFlagBits::host_update;
                     }
                     it->second->on_click(key, state, io.click_count);
                 }
@@ -238,30 +215,32 @@ namespace auik::v2
             io.mouse_down = false;
             if (state == KeyPressState::release)
             {
-                auto it = ctx.id_map.find(io.clicked_widget_id);
+                auto it = ctx.id_map.find(io.clicked_id.widget_id);
                 if (it != ctx.id_map.end()) it->second->on_click(key, state, io.click_count);
 
-                it = ctx.id_map.find(io.drag_id);
+                it = ctx.id_map.find(io.drag_id.widget_id);
                 if (it != ctx.id_map.end()) it->second->on_drag({0.0f, 0.0f}, KeyPressState::release);
 
                 // Click/release on empty space should clear active widget.
-                if (io.clicked_widget_id == 0 && ctx.hover_widget_id == 0 && ctx.active_widget_id != 0)
+                if (!io.clicked_id && !ctx.hover_id && ctx.active_id != 0)
                 {
-                    const u32 prev_active_id = ctx.active_widget_id;
-                    ctx.active_widget_id = 0;
-                    auto prev_it = ctx.id_map.find(prev_active_id);
-                    if (prev_it != ctx.id_map.end())
-                    {
+                    const u32 prev_active_id = ctx.active_id;
+                    ctx.active_id = 0;
+                    ctx.disposal_queue.emplace([prev_active_id]() {
+                        auto &ctx = detail::get_context();
+                        auto prev_it = ctx.id_map.find(prev_active_id);
+                        if (prev_it == ctx.id_map.end()) return;
                         prev_it->second->set_style_state(StyleState::normal);
                         prev_it->second->update_style();
                         prev_it->second->update_layout();
                         prev_it->second->update_draw_commands();
-                    }
-                    ctx.dirty_flags |= DirtyFlagBits::redraw;
+                        ctx.dirty_flags |= DirtyFlagBits::redraw;
+                    });
+                    ctx.dirty_flags |= DirtyFlagBits::host_update;
                 }
 
-                io.clicked_widget_id = 0;
-                io.drag_id = 0;
+                io.clicked_id = {};
+                io.drag_id = {};
             }
         }
 
@@ -377,7 +356,6 @@ namespace auik::v2
         detail::g_context = acul::alloc<detail::Context>();
         auto &ctx = detail::get_context();
         ctx.ed = create_info.ed;
-        ctx.disposal_queue = create_info.disposal_queue;
         ctx.streams.attached_streams = create_info.streams;
         ctx.streams.stream_count = create_info.streams_count;
         ctx.gpu_ctx = create_info.gpu_ctx;
@@ -391,11 +369,12 @@ namespace auik::v2
         io.last_click_time = -1.0;
         io.click_count = 0;
         io.click_streak = 0;
-        io.clicked_widget_id = 0;
-        io.drag_id = 0;
+        io.clicked_id = {};
+        io.drag_id = {};
         io.mouse_down = false;
+        ctx.hover_id = {};
         ctx.hover_hitbox_zone = detail::HitboxZoneBits::none;
-        ctx.active_widget_id = 0;
+        ctx.active_id = 0;
         ctx.screen_cursor = {0.0f, 0.0f};
         ctx.window_ctx = create_info.window_ctx;
         detail::construct_window_backend(ctx.window_ctx);
@@ -432,9 +411,14 @@ namespace auik::v2
     void record_all_commands()
     {
         auto &ctx = detail::get_context();
+        if (!(ctx.dirty_flags & DirtyFlagBits::layout)) ctx.dirty_flags |= DirtyFlagBits::hit_rect_draw;
+        const bool need_hit_rect_draw = ctx.dirty_flags & DirtyFlagBits::hit_rect_draw;
+        assert(detail::is_hit_rects_frame_synced(ctx.frame_id) &&
+               "record_all_commands() started with stale current-frame hit rect cache");
         if (ctx.dirty_flags & DirtyFlagBits::layout)
         {
             reset_clip_rects();
+            if (need_hit_rect_draw) clear_hit_rects();
             clear_all_streams(ctx);
             for (Widget *widget : ctx.widget_tree)
             {
@@ -445,8 +429,14 @@ namespace auik::v2
         }
         else
         {
+            if (need_hit_rect_draw) clear_hit_rects();
             clear_all_streams(ctx);
             for (Widget *widget : ctx.widget_tree) widget->record_draw_commands();
+        }
+        if (need_hit_rect_draw)
+        {
+            ctx.dirty_flags &= ~DirtyFlagBits::hit_rect_draw;
+            ctx.dirty_flags |= DirtyFlagBits::hit_rect_sync;
         }
     }
 
@@ -491,14 +481,14 @@ namespace auik::v2
         u32 frame_id = ctx.frame_id;
         if (state.buffer_versions[frame_id] == state.master_version)
         {
-            if (state.invalidation_count == 0) ctx.dirty_flags &= ~DirtyFlagBits::hit_rect;
+            if (state.invalidation_count == 0) ctx.dirty_flags &= ~DirtyFlagBits::hit_rect_sync;
             return;
         }
         copy_hit_rects_frame(gpu, frame_id, state.master_id);
         state.buffer_versions[frame_id] = state.master_version;
         if (state.invalidation_count > 0) --state.invalidation_count;
         if (state.invalidation_count == 0) state.stage_version = state.master_version;
-        if (state.invalidation_count == 0) ctx.dirty_flags &= ~DirtyFlagBits::hit_rect;
+        if (state.invalidation_count == 0) ctx.dirty_flags &= ~DirtyFlagBits::hit_rect_sync;
     }
 
     APPLIB_API void add_widget_to_root(Widget *widget)

@@ -81,6 +81,17 @@ namespace auik::v2::detail
     using PFN_window_new_frame = void (*)(struct WindowContext *);
     using PFN_construct_window_backend = void (*)(struct WindowContext *);
 
+    struct ElementID
+    {
+        u32 widget_id = 0;
+        u32 tag_id = 0;
+
+        constexpr bool is_valid() const { return widget_id != 0; }
+        constexpr explicit operator bool() const { return is_valid(); }
+    };
+
+    inline constexpr ElementID make_element_id(u32 widget_id = 0, u32 tag_id = 0) { return {widget_id, tag_id}; }
+
     struct WindowContext
     {
         f64 time = 0.0;

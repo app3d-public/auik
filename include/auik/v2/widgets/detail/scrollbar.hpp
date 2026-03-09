@@ -4,10 +4,15 @@
 #include "../../theme.hpp"
 #include "../widget.hpp"
 
-#define AUIK_TAG_SCROLLBAR_TRACK 0x5E57D9C1
-#define AUIK_TAG_SCROLLBAR_THUMB 0x0DA3B8EE
-#define AUIK_ID_SCROLLBAR        0x2F8B5D22
-#define AUIK_SCROLL_STEP         24
+#define AUIK_TAG_SCROLLBAR_TRACK   0x5E57D9C1
+#define AUIK_TAG_SCROLLBAR_THUMB   0x0DA3B8EE
+#define AUIK_ID_SCROLLBAR_X        0x2F8B5D23u
+#define AUIK_ID_SCROLLBAR_Y        0x2F8B5D24u
+#define AUIK_TAG_SCROLLBAR_TRACK_X 0x05548502u
+#define AUIK_TAG_SCROLLBAR_THUMB_X 0x7EA30FD2u
+#define AUIK_TAG_SCROLLBAR_TRACK_Y 0x2D8A351Cu
+#define AUIK_TAG_SCROLLBAR_THUMB_Y 0x06058F64u
+#define AUIK_SCROLL_STEP           24
 
 namespace auik::v2::detail
 {
@@ -31,26 +36,24 @@ namespace auik::v2::detail
     class APPLIB_API Scrollbar : public Widget
     {
     public:
-        Scrollbar(Widget *parent = nullptr, amal::axis axis = amal::axis::y)
-            : Widget(AUIK_ID_SCROLLBAR, WidgetFlagBits::visible | WidgetFlagBits::foreground, parent, {0.0f, 0.0f},
-                     {0.0f, 0.0f}, AUIK_TAG_SCROLLBAR_TRACK),
+        Scrollbar(u32 id, u32 track_tag_id, u32 thumb_tag_id, Widget *parent = nullptr, amal::axis axis = amal::axis::y)
+            : Widget(id, WidgetFlagBits::visible | WidgetFlagBits::foreground, parent, {0.0f, 0.0f}, {0.0f, 0.0f},
+                     track_tag_id),
               _track_style({0, AUIK_TAG_SCROLLBAR_TRACK}),
               _thumb_style({0, AUIK_TAG_SCROLLBAR_THUMB}),
-              _thumb_rect(detail::make_rect_data(0, AUIK_TAG_SCROLLBAR_THUMB)),
+              _thumb_rect(detail::make_rect_data(0, thumb_tag_id)),
               _behavior(axis)
         {
             assert(parent);
             u32 owner_id = parent->id();
             _rect.widget_id = owner_id;
             _thumb_rect.widget_id = owner_id;
-            _thumb_rect.tag_id = AUIK_TAG_SCROLLBAR_THUMB;
+            _rect.tag_id = track_tag_id;
+            _thumb_rect.tag_id = thumb_tag_id;
             _thumb_rect.clip_rect_id = parent->clip_rect_id();
         }
 
-        void set_visible(bool value)
-        {
-            Widget::set_visible(value);
-        }
+        void set_visible(bool value) { Widget::set_visible(value); }
         bool is_visible() const { return Widget::is_visible(); }
         amal::vec4 get_track_margin() const;
         f32 get_min_track_thickness() const;
@@ -107,9 +110,42 @@ namespace auik::v2::detail
         f32 _view_size = 0.0f;
     };
 
-    inline void ensure_scrollbar(Scrollbar *&scrollbar, Widget *parent, amal::axis axis)
+    inline bool is_scrollbar_track_tag(u32 tag_id)
+    {
+        return tag_id == AUIK_TAG_SCROLLBAR_TRACK_X || tag_id == AUIK_TAG_SCROLLBAR_TRACK_Y;
+    }
+
+    inline bool is_scrollbar_thumb_tag(u32 tag_id)
+    {
+        return tag_id == AUIK_TAG_SCROLLBAR_THUMB_X || tag_id == AUIK_TAG_SCROLLBAR_THUMB_Y;
+    }
+
+    inline bool is_scrollbar_tag(u32 tag_id)
+    {
+        return is_scrollbar_track_tag(tag_id) || is_scrollbar_thumb_tag(tag_id);
+    }
+
+    inline Scrollbar *make_x_scrollbar(Widget *parent)
+    {
+        return acul::alloc<Scrollbar>(AUIK_ID_SCROLLBAR_X, AUIK_TAG_SCROLLBAR_TRACK_X, AUIK_TAG_SCROLLBAR_THUMB_X,
+                                      parent, amal::axis::x);
+    }
+
+    inline Scrollbar *make_y_scrollbar(Widget *parent)
+    {
+        return acul::alloc<Scrollbar>(AUIK_ID_SCROLLBAR_Y, AUIK_TAG_SCROLLBAR_TRACK_Y, AUIK_TAG_SCROLLBAR_THUMB_Y,
+                                      parent, amal::axis::y);
+    }
+
+    inline void ensure_x_scrollbar(Scrollbar *&scrollbar, Widget *parent)
     {
         if (scrollbar) return;
-        scrollbar = acul::alloc<Scrollbar>(parent, axis);
+        scrollbar = make_x_scrollbar(parent);
+    }
+
+    inline void ensure_y_scrollbar(Scrollbar *&scrollbar, Widget *parent)
+    {
+        if (scrollbar) return;
+        scrollbar = make_y_scrollbar(parent);
     }
 } // namespace auik::v2::detail

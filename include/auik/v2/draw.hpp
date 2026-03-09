@@ -80,9 +80,11 @@ namespace auik::v2
 
     inline void update_hit_rect(u32 &hit_id, const detail::RectData &rect, bool force_update)
     {
-        auto *gpu = detail::get_context().gpu_ctx;
+        auto &ctx = detail::get_context();
+        auto *gpu = ctx.gpu_ctx;
         assert(gpu && gpu->push_hit_rect && "GPU hover rect dispatch is not initialized");
-        if (hit_id == AUIK_INVALID_DRAW_DATA_ID)
+        const bool force_draw_recreate = ctx.dirty_flags & DirtyFlagBits::hit_rect_draw;
+        if (hit_id == AUIK_INVALID_DRAW_DATA_ID || force_draw_recreate)
         {
             hit_id = detail::push_hit_rect(gpu, rect);
             detail::mark_hit_rects_mutation();
@@ -110,8 +112,8 @@ namespace auik::v2
         assert(stream);
         assert(draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID && "Update called before record");
         stream->update_data_in_stream(stream, draw_id, data);
-        const bool is_dirty_hit_rect = detail::get_context().dirty_flags & DirtyFlagBits::hit_rect;
-        update_hit_rect(draw_id.hit_id, rect, is_dirty_hit_rect);
+        const bool is_dirty_hit_rect_update = detail::get_context().dirty_flags & DirtyFlagBits::hit_rect_update;
+        update_hit_rect(draw_id.hit_id, rect, is_dirty_hit_rect_update);
         return draw_id;
     }
 
