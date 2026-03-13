@@ -31,12 +31,12 @@ namespace auik::v2
             return static_cast<u16>(id);
         }
 
-        static void update_clip_rect(GPUContext *gpu_context, u16 clip_rect_id, const amal::vec4 &rect)
+        static void update_clip_rect(GPUContext *gpu_context, u16 clip_id, const amal::vec4 &rect)
         {
             auto *ctx = get_agrb_context(gpu_context);
             auto &clip_rects = get_current_clip_rects(ctx);
-            if (clip_rect_id >= clip_rects.size()) return;
-            clip_rects[clip_rect_id] = rect;
+            if (clip_id >= clip_rects.size()) return;
+            clip_rects[clip_id] = rect;
         }
 
         static void reset_clip_rects(GPUContext *gpu_context)
@@ -45,12 +45,12 @@ namespace auik::v2
             get_current_clip_rects(ctx).clear();
         }
 
-        static amal::vec4 *get_clip_rect(GPUContext *gpu_context, u16 clip_rect_id)
+        static amal::vec4 *get_clip_rect(GPUContext *gpu_context, u16 clip_id)
         {
             auto *ctx = get_agrb_context(gpu_context);
             auto &clip_rects = get_current_clip_rects(ctx);
-            if (clip_rect_id >= clip_rects.size()) return nullptr;
-            return &clip_rects[clip_rect_id];
+            if (clip_id >= clip_rects.size()) return nullptr;
+            return &clip_rects[clip_id];
         }
 
         static void copy_clip_rects_frame_impl(GPUContext *gpu_context, u32 dst_frame_id, u32 src_frame_id)

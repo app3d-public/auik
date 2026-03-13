@@ -17,7 +17,7 @@ namespace auik::v2
         f32 border_radius;
         f32 border_thickness;
         f32 z_order;
-        u16 clip_rect_id;
+        u16 clip_id;
         struct
         {
             u16 boder_corner_mask : 4;
@@ -30,13 +30,13 @@ namespace auik::v2
     APPLIB_API void create_quads_stream_cached(DrawStream &stream);
     APPLIB_API void create_quads_stream_transient(DrawStream &stream);
 
-    inline void fill_quads_instance_by_style(const Style &style, u16 clip_rect_id, QuadsInstanceData &data)
+    inline void fill_quads_instance_by_style(const Style &style, u16 clip_id, QuadsInstanceData &data)
     {
         data.background_color = style.background_color();
         data.border_color = style.border_color();
         data.border_radius = style.border_radius();
         data.border_thickness = style.border_thickness();
-        data.clip_rect_id = clip_rect_id;
+        data.clip_id = clip_id;
         data.mask.boder_corner_mask = style.corner_mask();
         data.mask.flags = 0;
         if (data.border_thickness > 0.0f) data.mask.flags |= AUIK_HAS_BORDER_BIT;

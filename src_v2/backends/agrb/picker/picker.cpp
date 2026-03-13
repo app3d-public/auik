@@ -410,7 +410,6 @@ namespace auik::v2::detail
         auto *data = static_cast<const PickValue *>(_readback_buffers[read_frame_id].mapped);
         if (!data) return;
         auto &global_ctx = get_context();
-        if (global_ctx.io.mouse_down && global_ctx.io.drag_id) return;
         const auto prev_hover = global_ctx.hover_id;
         global_ctx.hover_id = make_element_id(data->widget_id, data->tag_id);
         on_hover_id_updated(prev_hover.widget_id, prev_hover.tag_id, global_ctx.hover_id.widget_id,
@@ -450,7 +449,6 @@ namespace auik::v2::detail
     void update_hover_id_impl(GPUContext *gpu_context, void *sync_ctx)
     {
         auto &global_ctx = get_context();
-        if (global_ctx.io.mouse_down && global_ctx.io.drag_id) return;
         if (!check_mouse_bounds(global_ctx.io.mouse_pos, global_ctx.io.display_size))
         {
             const auto prev_hover = global_ctx.hover_id;

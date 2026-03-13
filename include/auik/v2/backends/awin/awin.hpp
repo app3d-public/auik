@@ -2,7 +2,7 @@
 
 #include <acul/api.hpp>
 #include <acul/scalars.hpp>
-#include <awin/window.hpp>
+#include <awin/awin.hpp>
 #include "../../detail/events.hpp"
 
 namespace auik::v2

@@ -4,7 +4,7 @@
 #include <acul/api.hpp>
 #include <acul/lut_table.hpp>
 #include <awin/types.hpp>
-#include <awin/window.hpp>
+#include <awin/awin.hpp>
 #include <imgui/imgui.h>
 
 namespace auik

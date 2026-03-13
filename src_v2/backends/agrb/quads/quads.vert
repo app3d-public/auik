@@ -24,7 +24,7 @@ layout(location = 4) flat out float out_border_radius;
 layout(location = 5) flat out float out_border_thickness;
 layout(location = 6) flat out uint out_corner_mask;
 layout(location = 7) flat out uint out_flags;
-layout(location = 8) flat out uint out_clip_rect_id;
+layout(location = 8) flat out uint out_clip_id;
 layout(location = 9) out vec2 out_pixel_pos;
 
 vec2 get_quad_uv(uint vertex_index)
@@ -52,7 +52,7 @@ void main()
     out_border_radius = instance.border_radius;
     out_border_thickness = instance.border_thickness;
     const uint style_mask = instance.mask >> 16u;
-    out_clip_rect_id = instance.mask & 0xFFFFu;
+    out_clip_id = instance.mask & 0xFFFFu;
     out_corner_mask = style_mask & 0xFu;
     out_flags = style_mask >> 4u;
 }

@@ -1,5 +1,5 @@
 #include <auik/menu/menu.hpp>
-#include <awin/window.hpp>
+#include <awin/awin.hpp>
 
 namespace auik
 {

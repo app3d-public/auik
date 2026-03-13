@@ -4,7 +4,7 @@
 #include <acul/task.hpp>
 #include <algorithm>
 #include <auik/dock/space.hpp>
-#include <awin/window.hpp>
+#include <awin/awin.hpp>
 
 namespace auik
 {

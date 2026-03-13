@@ -6,6 +6,8 @@
 #include <acul/event.hpp>
 #include <amal/common.hpp>
 #include <amal/vector.hpp>
+#include <cstring>
+#include "../pending_filter.hpp"
 #include "fwd.hpp"
 #include "gpu_context.hpp"
 
@@ -25,8 +27,9 @@ namespace auik::v2
             hit_rect_sync = 0x8,
             clip_rect = 0x10,
             host_update = 0x20,
-            hit_rect_draw = 0x40,
-            hit_rect_update = 0x80
+            hover_update = 0x40,
+            hit_rect_draw = 0x80,
+            hit_rect_update = 0x100
         };
         using flag_bitmask = std::true_type;
     };
@@ -94,6 +97,11 @@ namespace auik::v2
             amal::vec2 screen_cursor{0.0f, 0.0f};
             DirtyFlags dirty_flags = DirtyFlagBits::none;
             Theme *theme = nullptr;
+            std::atomic_bool *host_refresh_request = nullptr;
+            PendingFilter *pending_filter = nullptr;
+            acul::vector<u64> pending_task_bits;
+            acul::vector<u32> free_render_slot_ids;
+            u32 pending_task_count = 0;
             struct
             {
                 DrawStream *attached_streams = nullptr;
@@ -161,6 +169,13 @@ namespace auik::v2
         }
 #endif
 
+        inline void mark_host_refresh_request()
+        {
+            auto &ctx = get_context();
+            if (ctx.host_refresh_request) ctx.host_refresh_request->store(true, std::memory_order_release);
+            ctx.dirty_flags |= DirtyFlagBits::host_update;
+        }
+
         APPLIB_API WindowContext *create_window_context();
 
         inline WindowContext *get_window_context()
@@ -171,6 +186,13 @@ namespace auik::v2
         }
 
         inline IO &get_io() { return get_context().io; }
+
+        inline void clear_widget_pending_bits()
+        {
+            auto &bits = get_context().pending_task_bits;
+            if (bits.empty()) return;
+            std::memset(bits.data(), 0, bits.size() * sizeof(u64));
+        }
     } // namespace detail
 
     inline Theme *get_theme() { return detail::get_context().theme; }
@@ -204,11 +226,11 @@ namespace auik::v2
         return id;
     }
 
-    inline void update_clip_rect(u16 clip_rect_id, const amal::vec4 &rect)
+    inline void update_clip_rect(u16 clip_id, const amal::vec4 &rect)
     {
         auto *gpu = detail::get_context().gpu_ctx;
         assert(gpu && gpu->update_clip_rect && "GPU clip rect dispatch is not initialized");
-        gpu->update_clip_rect(gpu, clip_rect_id, rect);
+        gpu->update_clip_rect(gpu, clip_id, rect);
         detail::mark_clip_rects_mutation();
     }
 
@@ -228,11 +250,11 @@ namespace auik::v2
         detail::mark_hit_rects_mutation();
     }
 
-    inline amal::vec4 &get_clip_rect(u16 clip_rect_id)
+    inline amal::vec4 &get_clip_rect(u16 clip_id)
     {
         auto *gpu = detail::get_context().gpu_ctx;
         assert(gpu && gpu->get_clip_rect && "GPU clip rect dispatch is not initialized");
-        auto *rect = gpu->get_clip_rect(gpu, clip_rect_id);
+        auto *rect = gpu->get_clip_rect(gpu, clip_id);
         assert(rect && "Invalid clip rect id");
         return *rect;
     }

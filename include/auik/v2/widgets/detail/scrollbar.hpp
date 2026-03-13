@@ -37,8 +37,8 @@ namespace auik::v2::detail
     {
     public:
         Scrollbar(u32 id, u32 track_tag_id, u32 thumb_tag_id, Widget *parent = nullptr, amal::axis axis = amal::axis::y)
-            : Widget(id, WidgetFlagBits::visible | WidgetFlagBits::foreground, parent, {0.0f, 0.0f}, {0.0f, 0.0f},
-                     track_tag_id),
+            : Widget(id, WidgetFlagBits::visible | WidgetFlagBits::foreground | WidgetFlagBits::hittable, parent,
+                     {0.0f, 0.0f}, {0.0f, 0.0f}, track_tag_id),
               _track_style({0, AUIK_TAG_SCROLLBAR_TRACK}),
               _thumb_style({0, AUIK_TAG_SCROLLBAR_THUMB}),
               _thumb_rect(detail::make_rect_data(0, thumb_tag_id)),
@@ -50,7 +50,7 @@ namespace auik::v2::detail
             _thumb_rect.widget_id = owner_id;
             _rect.tag_id = track_tag_id;
             _thumb_rect.tag_id = thumb_tag_id;
-            _thumb_rect.clip_rect_id = parent->clip_rect_id();
+            _thumb_rect.clip_id = parent->clip_id();
         }
 
         void set_visible(bool value) { Widget::set_visible(value); }

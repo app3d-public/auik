@@ -1,6 +1,7 @@
 #include <auik/v2/auik.hpp>
 #include <auik/v2/backends/awin/awin.hpp>
 #include <auik/v2/detail/context.hpp>
+#include <cstdio>
 
 namespace auik::v2
 {
@@ -26,17 +27,28 @@ namespace auik::v2
     {
         ed.bind_event(backend, awin::event_id::resize, [&window](const awin::PosEvent &event) {
             if (event.window != &window) return;
-            detail::on_resize_event({event.position.x, event.position.y});
+            auto &ctx = detail::get_context();
+            ctx.io.display_size = {event.position.x, event.position.y};
+            auto *pf = ctx.pending_filter;
+            if (pf && !pf->allow()) pf->set(PendingMaskBits::resize);
+            else ctx.dirty_flags |= DirtyFlagBits::layout;
         });
         ed.bind_event(backend, awin::event_id::mouse_move, [&window](const awin::PosEvent &event) {
             if (event.window != &window) return;
-            detail::on_mouse_move_event({event.position.x, event.position.y});
-            if (!window.is_cursor_hidden()) detail::on_drag_event({0.0f, 0.0f});
+            auto &ctx = detail::get_context();
+            ctx.io.mouse_pos = {event.position.x, event.position.y};
+            ctx.dirty_flags |= DirtyFlagBits::hover_update;
+            auto *pending_filter = ctx.pending_filter;
+            if (pending_filter && !pending_filter->allow())
+            {
+                pending_filter->set(PendingMaskBits::mouse_move);
+            }
+            else if (!window.is_cursor_hidden()) detail::on_mouse_move({0.0f, 0.0f});
         });
         ed.bind_event(backend, awin::event_id::mouse_move_delta, [&window](const awin::PosEvent &event) {
             if (event.window != &window) return;
             if (window.is_cursor_hidden())
-                detail::on_drag_event({static_cast<f32>(event.position.x), static_cast<f32>(event.position.y)});
+                detail::on_mouse_move({static_cast<f32>(event.position.x), static_cast<f32>(event.position.y)});
         });
         ed.bind_event(backend, awin::event_id::focus, [&window](const awin::FocusEvent &event) {
             if (event.window != &window) return;
@@ -54,8 +66,6 @@ namespace auik::v2
                       [](const awin::StateEvent &) { std::printf("[auik::v2::awin] minimize event\n"); });
         ed.bind_event(backend, awin::event_id::maximize,
                       [](const awin::StateEvent &) { std::printf("[auik::v2::awin] maximize event\n"); });
-        ed.bind_event(backend, awin::event_id::move,
-                      [](const awin::PosEvent &) { std::printf("[auik::v2::awin] move event\n"); });
         ed.bind_event(backend, awin::event_id::mouse_click, [&window](const awin::MouseClickEvent &event) {
             if (event.window != &window) return;
             detail::on_mouse_click_event(static_cast<MouseKey>(event.button), static_cast<KeyPressState>(event.action));

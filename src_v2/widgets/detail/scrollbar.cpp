@@ -214,7 +214,7 @@ namespace auik::v2::detail
 
     void Scrollbar::rebuild_clip_rects()
     {
-        _thumb_rect.clip_rect_id = clip_rect_id();
+        _thumb_rect.clip_id = clip_id();
         _track_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
         _thumb_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
     }
@@ -229,15 +229,15 @@ namespace auik::v2::detail
         track.position = position();
         track.size = size();
         track.z_order = get_z_order();
-        fill_quads_instance_by_style(theme->get_style(_track_style.id), clip_rect_id(), track);
-        ctx.emit(quads_stream, _track_draw_id, &track, get_rect());
+        fill_quads_instance_by_style(theme->get_style(_track_style.id), clip_id(), track);
+        ctx.emit(quads_stream, _track_draw_id, &track, get_rect(), ctx.emit_hit_rect);
 
         QuadsInstanceData thumb{};
         thumb.position = _thumb_rect.position;
         thumb.size = _thumb_rect.size;
         thumb.z_order = next_depth(depth_range());
         _thumb_rect.depth = thumb.z_order;
-        fill_quads_instance_by_style(theme->get_style(_thumb_style.id), clip_rect_id(), thumb);
-        ctx.emit(quads_stream, _thumb_draw_id, &thumb, _thumb_rect);
+        fill_quads_instance_by_style(theme->get_style(_thumb_style.id), clip_id(), thumb);
+        ctx.emit(quads_stream, _thumb_draw_id, &thumb, _thumb_rect, ctx.emit_hit_rect);
     }
 } // namespace auik::v2::detail

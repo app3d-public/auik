@@ -27,14 +27,6 @@ namespace auik::v2
     {
         Context *g_context = nullptr;
 
-        APPLIB_API void on_resize_event(const amal::vec2 &size)
-        {
-            set_window_size(size);
-            get_context().dirty_flags |= DirtyFlagBits::layout;
-        }
-
-        APPLIB_API void on_mouse_move_event(const amal::vec2 &pos) { get_io().mouse_pos = pos; }
-
         APPLIB_API HitboxZone get_hitbox_zone(const RectData &rect, const amal::vec2 &mouse_pos)
         {
             HitboxZone zone = HitboxZoneBits::none;
@@ -78,12 +70,12 @@ namespace auik::v2
                 it->second->on_hover(state, last_tag_id);
             };
 
-            if (prev_widget_id != widget_id)
+            if (!is_dragging && prev_widget_id != widget_id)
             {
                 dispatch_hover(prev_widget_id, HoverState::leave, prev_tag_id);
                 dispatch_hover(widget_id, HoverState::enter, prev_tag_id);
             }
-            else dispatch_hover(widget_id, HoverState::active, prev_tag_id);
+            else if (!is_dragging) dispatch_hover(widget_id, HoverState::active, prev_tag_id);
 
             ctx.hover_hitbox_zone = HitboxZoneBits::none;
             if (tag_id == AUIK_TAG_HITBOX && widget_id != 0)
@@ -115,7 +107,7 @@ namespace auik::v2
             set_window_cursor(CursorID::arrow, ctx.window_ctx);
         }
 
-        APPLIB_API void on_drag_event(const amal::vec2 &delta)
+        APPLIB_API void on_mouse_move(const amal::vec2 &delta)
         {
             auto &ctx = get_context();
             auto &io = ctx.io;
@@ -191,7 +183,7 @@ namespace auik::v2
                     const bool style_changed = it->second->style_state() != prev_style_state;
                     if (active_changed || style_changed)
                     {
-                        ctx.disposal_queue.emplace([prev_active_id]() {
+                        add_render_command(it->second, [prev_active_id]() {
                             auto &ctx = detail::get_context();
                             auto refresh_active_visual = [&](u32 widget_id) {
                                 auto wid_it = ctx.id_map.find(widget_id);
@@ -205,7 +197,7 @@ namespace auik::v2
                             refresh_active_visual(ctx.active_id);
                             ctx.dirty_flags |= DirtyFlagBits::redraw;
                         });
-                        ctx.dirty_flags |= DirtyFlagBits::host_update;
+                        detail::mark_host_refresh_request();
                     }
                     it->second->on_click(key, state, io.click_count);
                 }
@@ -226,18 +218,24 @@ namespace auik::v2
                 {
                     const u32 prev_active_id = ctx.active_id;
                     ctx.active_id = 0;
-                    ctx.disposal_queue.emplace([prev_active_id]() {
-                        auto &ctx = detail::get_context();
-                        auto prev_it = ctx.id_map.find(prev_active_id);
-                        if (prev_it == ctx.id_map.end()) return;
-                        prev_it->second->set_style_state(StyleState::normal);
-                        prev_it->second->update_style();
-                        prev_it->second->update_layout();
-                        prev_it->second->update_draw_commands();
-                        ctx.dirty_flags |= DirtyFlagBits::redraw;
-                    });
-                    ctx.dirty_flags |= DirtyFlagBits::host_update;
+                    auto prev_it = ctx.id_map.find(prev_active_id);
+                    if (prev_it != ctx.id_map.end())
+                    {
+                        add_render_command(prev_it->second, [prev_active_id]() {
+                            auto &ctx = detail::get_context();
+                            auto prev_it = ctx.id_map.find(prev_active_id);
+                            if (prev_it == ctx.id_map.end()) return;
+                            prev_it->second->set_style_state(StyleState::normal);
+                            prev_it->second->update_style();
+                            prev_it->second->update_layout();
+                            prev_it->second->update_draw_commands();
+                            ctx.dirty_flags |= DirtyFlagBits::redraw;
+                        });
+                    }
+                    detail::mark_host_refresh_request();
                 }
+
+                if (ctx.hover_id) on_hover_id_updated(0, 0, ctx.hover_id.widget_id, ctx.hover_id.tag_id);
 
                 io.clicked_id = {};
                 io.drag_id = {};
@@ -359,6 +357,8 @@ namespace auik::v2
         ctx.streams.attached_streams = create_info.streams;
         ctx.streams.stream_count = create_info.streams_count;
         ctx.gpu_ctx = create_info.gpu_ctx;
+        ctx.host_refresh_request = create_info.host_refresh_request;
+        ctx.pending_filter = create_info.pending_filter;
         ctx.frames_in_flight = create_info.frames_in_flight;
         auto &io = ctx.io;
         io.display_size = {0.0f, 0.0f};

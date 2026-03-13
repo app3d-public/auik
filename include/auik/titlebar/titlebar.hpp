@@ -1,6 +1,6 @@
 #pragma once
 
-#include <awin/window.hpp>
+#include <awin/awin.hpp>
 #include "../menu/menu.hpp"
 #include "../tab/tab.hpp"
 

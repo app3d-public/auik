@@ -1,7 +1,7 @@
 #pragma once
 
 #include <acul/api.hpp>
-#include <awin/window.hpp>
+#include <awin/awin.hpp>
 #include "../widget.hpp"
 
 namespace auik

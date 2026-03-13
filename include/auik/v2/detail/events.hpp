@@ -102,9 +102,7 @@ namespace auik::v2::detail
         PFN_window_new_frame new_frame = nullptr;
     };
 
-    APPLIB_API void on_resize_event(const amal::vec2 &size);
-    APPLIB_API void on_mouse_move_event(const amal::vec2 &pos);
-    APPLIB_API void on_drag_event(const amal::vec2 &delta);
+    APPLIB_API void on_mouse_move(const amal::vec2 &delta);
     APPLIB_API void on_scroll_event(const amal::vec2 &pos);
     APPLIB_API void on_mouse_click_event(MouseKey key, KeyPressState state);
     APPLIB_API void reset_event_state();
@@ -141,13 +139,13 @@ namespace auik::v2::detail
         amal::vec2 position{0.0f, 0.0f};
         amal::vec2 size{0.0f, 0.0f};
         f32 depth = 0.0f;
-        u16 clip_rect_id = 0xFFFFu;
+        u16 clip_id = 0xFFFFu;
         u16 flags = 0;
     };
     static_assert(sizeof(RectData) == 32, "RectData must match picker std430 layout");
 
     inline RectData make_rect_data(u32 widget_id, u32 tag_id, amal::vec2 position = {0.0f, 0.0f},
-                                   amal::vec2 size = {0.0f, 0.0f}, u16 clip_rect_id = 0xFFFFu, f32 depth = 0.0f,
+                                   amal::vec2 size = {0.0f, 0.0f}, u16 clip_id = 0xFFFFu, f32 depth = 0.0f,
                                    u16 flags = 0)
     {
         RectData rect{};
@@ -156,7 +154,7 @@ namespace auik::v2::detail
         rect.position = position;
         rect.size = size;
         rect.depth = depth;
-        rect.clip_rect_id = clip_rect_id;
+        rect.clip_id = clip_id;
         rect.flags = flags;
         return rect;
     }

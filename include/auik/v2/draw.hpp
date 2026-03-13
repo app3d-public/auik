@@ -75,7 +75,8 @@ namespace auik::v2
 
     struct DrawCtx
     {
-        DrawDataID (*emit)(DrawStream *, DrawDataID &, const void *, const detail::RectData &) = nullptr;
+        DrawDataID (*emit)(DrawStream *, DrawDataID &, const void *, const detail::RectData &, bool) = nullptr;
+        bool emit_hit_rect = true;
     };
 
     inline void update_hit_rect(u32 &hit_id, const detail::RectData &rect, bool force_update)
@@ -97,23 +98,26 @@ namespace auik::v2
     }
 
     inline DrawDataID emit_draw_record(DrawStream *stream, DrawDataID &draw_id, const void *data,
-                                       const detail::RectData &rect)
+                                       const detail::RectData &rect, bool emit_hit_rect)
     {
         assert(stream);
         const DrawDataID stream_id = stream->push_data_to_stream(stream, data);
         draw_id.render_id = stream_id.render_id;
-        update_hit_rect(draw_id.hit_id, rect, true);
+        if (emit_hit_rect) update_hit_rect(draw_id.hit_id, rect, true);
         return draw_id;
     }
 
     inline DrawDataID emit_draw_update(DrawStream *stream, DrawDataID &draw_id, const void *data,
-                                       const detail::RectData &rect)
+                                       const detail::RectData &rect, bool emit_hit_rect)
     {
         assert(stream);
         assert(draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID && "Update called before record");
         stream->update_data_in_stream(stream, draw_id, data);
-        const bool is_dirty_hit_rect_update = detail::get_context().dirty_flags & DirtyFlagBits::hit_rect_update;
-        update_hit_rect(draw_id.hit_id, rect, is_dirty_hit_rect_update);
+        if (emit_hit_rect)
+        {
+            const bool is_dirty_hit_rect_update = detail::get_context().dirty_flags & DirtyFlagBits::hit_rect_update;
+            update_hit_rect(draw_id.hit_id, rect, is_dirty_hit_rect_update);
+        }
         return draw_id;
     }
 

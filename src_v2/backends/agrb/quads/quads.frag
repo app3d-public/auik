@@ -11,7 +11,7 @@ layout(location = 4) flat in float in_border_radius;
 layout(location = 5) flat in float in_border_thickness;
 layout(location = 6) flat in uint in_corner_mask;
 layout(location = 7) flat in uint in_flags;
-layout(location = 8) flat in uint in_clip_rect_id;
+layout(location = 8) flat in uint in_clip_id;
 layout(location = 9) in vec2 in_pixel_pos;
 
 layout(location = 0) out vec4 out_color;
@@ -41,7 +41,7 @@ float sd_rounded_rect(vec2 p, vec2 half_size, float radius)
 
 void main()
 {
-    vec4 clip_rect = clip_rects[in_clip_rect_id];
+    vec4 clip_rect = clip_rects[in_clip_id];
     vec2 clip_min = clip_rect.xy;
     vec2 clip_max = clip_rect.xy + clip_rect.zw;
     if (in_pixel_pos.x < clip_min.x || in_pixel_pos.y < clip_min.y || in_pixel_pos.x >= clip_max.x ||
