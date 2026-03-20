@@ -35,22 +35,22 @@ namespace auik::v2
                WindowFlagBits::scrollable;
     }
 
-    class APPLIB_API Window : public Widget
+    class Window : public Widget
     {
     public:
         WindowFlags window_flags;
         acul::vector<Widget *> children;
 
-        Window(u32 id, amal::vec2 pos = amal::vec2(0.0f), amal::vec2 size = amal::vec2(0.0f),
-               WindowFlags window_flags = get_default_window_flags(),
-               WidgetFlags widget_flags = get_default_widget_flags() | WidgetFlagBits::hittable,
-               Widget *parent = nullptr);
-        ~Window() override;
+        APPLIB_API Window(u32 id, amal::vec2 pos = amal::vec2(0.0f), amal::vec2 size = amal::vec2(0.0f),
+                          WindowFlags window_flags = get_default_window_flags(),
+                          WidgetFlags widget_flags = get_default_widget_flags() | WidgetFlagBits::hittable,
+                          Widget *parent = nullptr);
+        APPLIB_API ~Window() override;
 
-        void add_child(Widget *child);
-        void add_children(const acul::vector<Widget *> &new_children);
+        APPLIB_API void add_child(Widget *child);
+        APPLIB_API void add_children(const acul::vector<Widget *> &new_children);
 
-        virtual void update_style() override;
+        virtual StyleUpdateFlags update_style() override;
         void rebuild_clip_rects() override;
 
     private:
@@ -59,7 +59,7 @@ namespace auik::v2
         amal::vec2 _content_offset{0.0f};
         u16 _content_clip_id = 0xFFFFu;
         amal::vec4 _content_clip_rect{0.0f, 0.0f, 0.0f, 0.0f};
-        StyleSelector _window_style{0, AUIK_TAG_WINDOW};
+        StyleSelector _window_style{Theme::STYLE_ID_INVALID, AUIK_TAG_WINDOW};
         class WindowHeader *_header = nullptr;
         detail::Scrollbar *_scrollbar_x = nullptr;
         detail::Scrollbar *_scrollbar_y = nullptr;
@@ -67,7 +67,8 @@ namespace auik::v2
         detail::HitboxZone _resize_zone = detail::HitboxZoneBits::none;
 
         virtual void update_depth(const amal::vec2 &depth_range) override;
-        virtual void update_layout() override;
+        virtual void update_layout_min_size() override;
+        virtual void update_layout(bool min_size_known) override;
 
         virtual void draw(DrawCtx &ctx) override;
         virtual u16 content_clip_id() const override { return _content_clip_id; }
@@ -91,9 +92,9 @@ namespace auik::v2
 
         virtual void on_scroll(const amal::vec2 &delta) override;
         virtual void on_drag(const amal::vec2 &delta, KeyPressState state) override;
-        virtual void on_active() override;
+        virtual void on_focus(bool focused) override;
         virtual void on_hover(HoverState state, u32 prev_tag_id) override;
-
         virtual void on_click(MouseKey key, KeyPressState state, u32 click_count) override;
+        void relayout_children(f32 available_width, const amal::vec2 &content_inset);
     };
 } // namespace auik::v2

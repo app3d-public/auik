@@ -38,28 +38,33 @@ namespace auik::v2
             auto &ctx = detail::get_context();
             ctx.io.mouse_pos = {event.position.x, event.position.y};
             ctx.dirty_flags |= DirtyFlagBits::hover_update;
+            if (ctx.raw_mouse_mode) return;
             auto *pending_filter = ctx.pending_filter;
-            if (pending_filter && !pending_filter->allow())
-            {
-                pending_filter->set(PendingMaskBits::mouse_move);
-            }
-            else if (!window.is_cursor_hidden()) detail::on_mouse_move({0.0f, 0.0f});
+            if (pending_filter && !pending_filter->allow()) pending_filter->set(PendingMaskBits::mouse_move);
+            detail::on_mouse_move({0.0f, 0.0f});
         });
         ed.bind_event(backend, awin::event_id::mouse_move_delta, [&window](const awin::PosEvent &event) {
             if (event.window != &window) return;
-            if (window.is_cursor_hidden())
-                detail::on_mouse_move({static_cast<f32>(event.position.x), static_cast<f32>(event.position.y)});
+            auto &ctx = detail::get_context();
+            if (ctx.raw_mouse_mode) detail::on_mouse_move({event.position.x, event.position.y});
         });
         ed.bind_event(backend, awin::event_id::focus, [&window](const awin::FocusEvent &event) {
             if (event.window != &window) return;
             if (!event.focused) detail::reset_event_state();
         });
-        ed.bind_event(backend, awin::event_id::char_input,
-                      [](const awin::CharInputEvent &) { std::printf("[auik::v2::awin] char_input event\n"); });
-        ed.bind_event(backend, awin::event_id::key_input,
-                      [](const awin::KeyInputEvent &) { std::printf("[auik::v2::awin] key_input event\n"); });
-        ed.bind_event(backend, awin::event_id::scroll,
-                      [](const awin::ScrollEvent &e) { detail::on_scroll_event({e.h, e.v}); });
+        ed.bind_event(backend, awin::event_id::char_input, [&window](const awin::CharInputEvent &e) {
+            if (e.window != &window) return;
+            detail::on_char_event(e.char_code);
+        });
+        ed.bind_event(backend, awin::event_id::key_input, [&window](const awin::KeyInputEvent &e) {
+            if (e.window != &window) return;
+            detail::on_key_event(static_cast<u32>(e.key), static_cast<KeyPressState>(e.action),
+                                 static_cast<u32>(e.mods));
+        });
+        ed.bind_event(backend, awin::event_id::scroll, [&window](const awin::ScrollEvent &e) {
+            if (e.window != &window) return;
+            detail::on_scroll_event({e.h, e.v});
+        });
         ed.bind_event(backend, awin::event_id::dpi_changed,
                       [](const awin::DpiChangedEvent &) { std::printf("[auik::v2::awin] dpi_changed event\n"); });
         ed.bind_event(backend, awin::event_id::minimize,

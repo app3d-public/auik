@@ -48,6 +48,7 @@ namespace auik::v2
         normal,
         hover,
         active,
+        focus,
         max
     };
     using StyleID = u32;
@@ -232,7 +233,7 @@ namespace auik::v2
 
     struct StyleSelector
     {
-        StyleID id = 0;
+        StyleID id = Theme::STYLE_ID_INVALID;
         u32 tag_id = 0;
     };
 

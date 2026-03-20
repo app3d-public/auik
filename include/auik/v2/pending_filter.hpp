@@ -48,6 +48,15 @@ namespace auik::v2
 
         inline void set_frame_rate(f64 frame_rate) { _min_interval = 1.0 / frame_rate; }
 
+        inline f64 remaining(f64 now) const
+        {
+            if (_min_interval <= 0.0) return 0.0;
+            if (_last_sync_time < 0.0) return 0.0;
+            const f64 elapsed = now - _last_sync_time;
+            if (elapsed >= _min_interval) return 0.0;
+            return _min_interval - elapsed;
+        }
+
     private:
         f64 _last_sync_time = -1.0;
         f64 _min_interval = 60.0;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <acul/enum.hpp>
+#include <acul/string/string.hpp>
 #include <acul/vector.hpp>
 #include <amal/vector.hpp>
 #include "../detail/events.hpp"
@@ -9,8 +10,6 @@
 
 namespace auik::v2
 {
-    constexpr inline u32 AUIK_INVALID_RENDER_SLOT_ID = ~0u;
-
     namespace detail
     {
         APPLIB_API amal::vec2 get_depth_workzone_range(const amal::vec2 &r);
@@ -26,15 +25,30 @@ namespace auik::v2
             attachable = 0x4,
             foreground = 0x8,
             background = 0x10,
-            active_from_child = 0x20,
-            active_to_child = 0x40,
-            fixed = 0x80,
-            hittable = 0x100
+            fixed = 0x20,
+            hittable = 0x40
         };
         using flag_bitmask = std::true_type;
     };
 
     using WidgetFlags = acul::flags<WidgetFlagBits>;
+    struct StyleUpdateFlagBits
+    {
+        enum enum_type
+        {
+            none = 0x0,
+            redraw = 0x1,
+            layout = 0x2,
+            parent_layout = 0x4
+        };
+        using flag_bitmask = std::true_type;
+    };
+    using StyleUpdateFlags = acul::flags<StyleUpdateFlagBits>;
+    constexpr inline detail::StylePropertyFlags g_style_layout_mask =
+        detail::StylePropertiesBits::padding | detail::StylePropertiesBits::text_size |
+        detail::StylePropertiesBits::border_thickness | detail::StylePropertiesBits::border_radius;
+    constexpr inline detail::StylePropertyFlags g_style_parent_layout_mask = detail::StylePropertiesBits::margin;
+
     constexpr inline WidgetFlags get_default_widget_flags()
     {
         return WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::configurable;
@@ -49,32 +63,15 @@ namespace auik::v2
                amal::vec2 size = {0.0f, 0.0f}, u32 tag_id = 0)
             : widget_flags(flags), _id(id), _parent(parent), _rect(detail::make_rect_data(id, tag_id, pos, size))
         {
-            auto *ctx = detail::g_context;
-            if (!ctx) return;
-            if (!ctx->free_render_slot_ids.empty())
-            {
-                _render_slot_id = ctx->free_render_slot_ids.back();
-                ctx->free_render_slot_ids.pop_back();
-                return;
-            }
-            _render_slot_id = ctx->pending_task_count++;
         }
 
-        virtual ~Widget()
-        {
-            auto *ctx = detail::g_context;
-            if (!ctx) return;
-            if (_render_slot_id == AUIK_INVALID_RENDER_SLOT_ID) return;
-            const u32 word_id = _render_slot_id >> 6;
-            if (word_id < ctx->pending_task_bits.size())
-                ctx->pending_task_bits[word_id] &= ~(1ull << (_render_slot_id & 63));
-            ctx->free_render_slot_ids.push_back(_render_slot_id);
-            _render_slot_id = AUIK_INVALID_RENDER_SLOT_ID;
-        }
+        virtual ~Widget() = default;
 
         inline u32 id() const { return _id; }
         inline Widget *parent() const { return _parent; }
         inline void set_parent(Widget *parent) { _parent = parent; }
+        inline Widget *focus_parent() const { return _focus_parent; }
+        inline void set_focus_parent(Widget *parent) { _focus_parent = parent; }
         inline detail::RectData &get_rect() { return _rect; }
         inline const detail::RectData &get_rect() const { return _rect; }
         inline void set_rect_tag_id(u32 tag_id) { _rect.tag_id = tag_id; }
@@ -110,14 +107,9 @@ namespace auik::v2
         inline void set_required_size(const amal::vec2 &size) { _required_size = size; }
         inline bool is_fixed() const { return widget_flags & WidgetFlagBits::fixed; }
         inline bool is_hittable() const { return widget_flags & WidgetFlagBits::hittable; }
-        inline u32 render_slot_id() const { return _render_slot_id; }
-        inline void set_render_slot_id(u32 slot_id) { _render_slot_id = slot_id; }
         inline u16 clip_id() const { return _rect.clip_id; }
         inline void set_clip_id(u16 id) { _rect.clip_id = id; }
-        inline void inherit_parent_clip_rect()
-        {
-            _rect.clip_id = _parent ? _parent->clip_id() : 0xFFFFu;
-        }
+        inline void inherit_parent_clip_rect() { _rect.clip_id = _parent ? _parent->clip_id() : 0xFFFFu; }
         inline void inherit_parent_content_clip_rect()
         {
             _rect.clip_id = _parent ? _parent->content_clip_id() : 0xFFFFu;
@@ -146,13 +138,15 @@ namespace auik::v2
             draw(draw_ctx);
         }
 
-        virtual void update_layout()
+        virtual void update_layout_min_size() { set_required_size(size()); }
+        virtual void update_layout(bool min_size_known = true)
         {
+            (void)min_size_known;
             detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
         }
 
         virtual void update_depth(const amal::vec2 &depth_range);
-        virtual void update_style() = 0;
+        virtual StyleUpdateFlags update_style() = 0;
         virtual void draw(DrawCtx &) = 0;
         virtual u16 content_clip_id() const { return clip_id(); }
         virtual amal::vec4 get_content_clip_rect() const { return get_clip_rect(content_clip_id()); }
@@ -167,14 +161,7 @@ namespace auik::v2
             if (_parent) _parent->on_scroll(delta);
         }
 
-        virtual void on_active()
-        {
-            auto &ctx = detail::get_context();
-            ctx.active_id = id();
-            set_style_state(StyleState::active);
-            if (_parent && (_parent->widget_flags & WidgetFlagBits::active_from_child)) _parent->on_active();
-        }
-        virtual void on_parent_active() {}
+        virtual void on_focus(bool focused) { (void)focused; }
 
         virtual void on_hover(HoverState state, u32 prev_tag_id)
         {
@@ -183,15 +170,26 @@ namespace auik::v2
         }
         virtual void on_click(MouseKey key, KeyPressState state, u32 click_count) {}
         virtual void on_drag(const amal::vec2 &delta, KeyPressState state) {}
+        virtual void on_key(u32 key, KeyPressState state, u32 mods)
+        {
+            (void)key;
+            (void)state;
+            (void)mods;
+        }
+        virtual void on_char(const acul::string &text, u32 count)
+        {
+            (void)text;
+            (void)count;
+        }
 
     protected:
         u32 _id;
         Widget *_parent = nullptr;
+        Widget *_focus_parent = nullptr;
         amal::vec2 _depth_range{0.0f, 1.0f};
         detail::RectData _rect{};
         amal::vec2 _required_size{0.0f, 0.0f};
         StyleState _style_state = StyleState::normal;
-        u32 _render_slot_id = AUIK_INVALID_RENDER_SLOT_ID;
     };
 
     APPLIB_API void assign_next_depth(const amal::vec2 &parent_range, amal::vec2 &dst_range);
@@ -205,9 +203,61 @@ namespace auik::v2
 
     inline bool apply_hover_style_state(Widget &widget, HoverState state)
     {
-        if (widget.style_state() == StyleState::active) return false;
+        if (widget.style_state() == StyleState::active || widget.style_state() == StyleState::focus) return false;
         if (state == HoverState::leave) return widget.set_style_state(StyleState::normal);
         return widget.set_style_state(StyleState::hover);
+    }
+
+    inline StyleUpdateFlags make_style_update_flags(const Style &prev_style, const Style &next_style)
+    {
+        const auto union_mask = prev_style.mask() | next_style.mask();
+        detail::StylePropertyFlags changed = detail::StylePropertiesBits::none;
+        if ((union_mask & detail::StylePropertiesBits::padding) && prev_style.padding() != next_style.padding())
+            changed |= detail::StylePropertiesBits::padding;
+        if ((union_mask & detail::StylePropertiesBits::margin) && prev_style.margin() != next_style.margin())
+            changed |= detail::StylePropertiesBits::margin;
+        if ((union_mask & detail::StylePropertiesBits::background_color) &&
+            prev_style.background_color() != next_style.background_color())
+            changed |= detail::StylePropertiesBits::background_color;
+        if ((union_mask & detail::StylePropertiesBits::text_color) &&
+            prev_style.text_color() != next_style.text_color())
+            changed |= detail::StylePropertiesBits::text_color;
+        if ((union_mask & detail::StylePropertiesBits::border_color) &&
+            prev_style.border_color() != next_style.border_color())
+            changed |= detail::StylePropertiesBits::border_color;
+        if ((union_mask & detail::StylePropertiesBits::border_radius) &&
+            prev_style.border_radius() != next_style.border_radius())
+            changed |= detail::StylePropertiesBits::border_radius;
+        if ((union_mask & detail::StylePropertiesBits::border_thickness) &&
+            prev_style.border_thickness() != next_style.border_thickness())
+            changed |= detail::StylePropertiesBits::border_thickness;
+        if ((union_mask & detail::StylePropertiesBits::corner_mask) &&
+            prev_style.corner_mask() != next_style.corner_mask())
+            changed |= detail::StylePropertiesBits::corner_mask;
+        if ((union_mask & detail::StylePropertiesBits::text_size) && prev_style.text_size() != next_style.text_size())
+            changed |= detail::StylePropertiesBits::text_size;
+
+        if (changed == detail::StylePropertiesBits::none) return StyleUpdateFlagBits::none;
+        StyleUpdateFlags out = StyleUpdateFlagBits::redraw;
+        if (changed & g_style_layout_mask) out |= StyleUpdateFlagBits::layout;
+        if (changed & g_style_parent_layout_mask) out |= StyleUpdateFlagBits::parent_layout;
+        return out;
+    }
+
+    inline StyleUpdateFlags resolve_style_selector(StyleSelector &selector, u32 self_id, u32 parent_id,
+                                                   StyleState state = StyleState::normal)
+    {
+        auto *theme = get_theme();
+        const StyleID prev_style_id = selector.id;
+        const StyleID next_style_id = theme->get_resolved_style(selector.tag_id, self_id, parent_id, state);
+        selector.id = next_style_id;
+        if (prev_style_id == Theme::STYLE_ID_INVALID)
+        {
+            const Style empty_style{};
+            return make_style_update_flags(empty_style, theme->get_style(next_style_id));
+        }
+        if (prev_style_id == next_style_id) return StyleUpdateFlagBits::none;
+        return make_style_update_flags(theme->get_style(prev_style_id), theme->get_style(next_style_id));
     }
 
 } // namespace auik::v2

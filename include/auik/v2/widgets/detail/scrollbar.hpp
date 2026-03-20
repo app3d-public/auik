@@ -39,8 +39,8 @@ namespace auik::v2::detail
         Scrollbar(u32 id, u32 track_tag_id, u32 thumb_tag_id, Widget *parent = nullptr, amal::axis axis = amal::axis::y)
             : Widget(id, WidgetFlagBits::visible | WidgetFlagBits::foreground | WidgetFlagBits::hittable, parent,
                      {0.0f, 0.0f}, {0.0f, 0.0f}, track_tag_id),
-              _track_style({0, AUIK_TAG_SCROLLBAR_TRACK}),
-              _thumb_style({0, AUIK_TAG_SCROLLBAR_THUMB}),
+              _track_style({Theme::STYLE_ID_INVALID, AUIK_TAG_SCROLLBAR_TRACK}),
+              _thumb_style({Theme::STYLE_ID_INVALID, AUIK_TAG_SCROLLBAR_THUMB}),
               _thumb_rect(detail::make_rect_data(0, thumb_tag_id)),
               _behavior(axis)
         {
@@ -94,7 +94,7 @@ namespace auik::v2::detail
 
         void configure(const amal::vec2 &track_pos, const amal::vec2 &track_size, f32 content_size, f32 view_size);
 
-        void update_style() override;
+        StyleUpdateFlags update_style() override;
         void rebuild_clip_rects() override;
 
         void draw(DrawCtx &ctx) override;

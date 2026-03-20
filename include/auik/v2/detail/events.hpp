@@ -35,6 +35,45 @@ namespace auik::v2
 
 namespace auik::v2::detail
 {
+    struct immediate_event_traits_tag
+    {
+    };
+    struct deferred_event_traits_tag
+    {
+    };
+
+    struct ImmediateEventTraits
+    {
+        using category = immediate_event_traits_tag;
+    };
+
+    struct DeferredEventTraits
+    {
+        using category = deferred_event_traits_tag;
+    };
+
+    using HoverEventTraits = DeferredEventTraits;
+    using DragEventTraits = ImmediateEventTraits;
+    using ScrollEventTraits = ImmediateEventTraits;
+    using ClickEventTraits = DeferredEventTraits;
+    using FocusEventTraits = DeferredEventTraits;
+    using KeyEventTraits = DeferredEventTraits;
+    using CharEventTraits = DeferredEventTraits;
+
+    struct FrameChangesBits
+    {
+        enum enum_type : u8
+        {
+            none = 0x0,
+            drag_delta = 0x1,
+            scroll_delta = 0x2,
+            key_input = 0x4,
+            char_input = 0x8
+        };
+        using flag_bitmask = std::true_type;
+    };
+    using FrameChanges = acul::flags<FrameChangesBits>;
+
     struct RectData;
     struct RectBits
     {
@@ -105,6 +144,9 @@ namespace auik::v2::detail
     APPLIB_API void on_mouse_move(const amal::vec2 &delta);
     APPLIB_API void on_scroll_event(const amal::vec2 &pos);
     APPLIB_API void on_mouse_click_event(MouseKey key, KeyPressState state);
+    APPLIB_API void on_key_event(u32 key, KeyPressState state, u32 mods);
+    APPLIB_API void on_char_event(u32 char_code);
+    APPLIB_API void flush_frame_changes();
     APPLIB_API void reset_event_state();
     APPLIB_API void on_hover_id_updated(u32 prev_widget_id, u32 prev_tag_id, u32 widget_id, u32 tag_id);
     APPLIB_API HitboxZone get_hitbox_zone(const RectData &rect, const amal::vec2 &mouse_pos);

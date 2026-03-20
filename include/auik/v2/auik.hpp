@@ -19,7 +19,7 @@ namespace auik::v2
         detail::GPUContext *gpu_ctx = nullptr;
         detail::WindowContext *window_ctx = nullptr;
         u32 frames_in_flight = 0;
-        std::atomic_bool *host_refresh_request = nullptr;
+        bool *host_refresh_request = nullptr;
         PendingFilter *pending_filter = nullptr;
 
         CreateInfo &set_event_dispatcher(acul::events::dispatcher *ed)
@@ -53,7 +53,7 @@ namespace auik::v2
             return *this;
         }
 
-        CreateInfo &set_host_refresh_request(std::atomic_bool *host_refresh_request)
+        CreateInfo &set_host_refresh_request(bool *host_refresh_request)
         {
             this->host_refresh_request = host_refresh_request;
             return *this;
@@ -68,13 +68,14 @@ namespace auik::v2
 
     APPLIB_API bool init_library(const CreateInfo &create_info);
     APPLIB_API void destroy_library();
-    APPLIB_API void record_all_commands();
+    APPLIB_API void record_layout_commands();
+    APPLIB_API void redraw_all_commands();
     APPLIB_API void add_widget_to_root(Widget *widget);
     APPLIB_API void sync_draw_streams();
     APPLIB_API void sync_clip_rect_cache();
     APPLIB_API void sync_hit_rect_cache();
     inline void sync_gpu_cache();
-    template <class F>
+    template <class Traits, class F>
     inline bool add_render_command(Widget *widget, F &&fn);
 
     inline void set_window_size(const amal::vec2 &size) { detail::get_io().display_size = size; }
@@ -92,18 +93,16 @@ namespace auik::v2
     {
         auto &ctx = detail::get_context();
         if (ctx.pending_filter && ctx.pending_filter->mask != PendingMaskBits::none) sync_pending_events();
-        detail::clear_widget_pending_bits();
         if (ctx.dirty_flags & DirtyFlagBits::hit_rect_sync) auik::v2::sync_hit_rect_cache();
+        detail::flush_frame_changes();
         if (!ctx.disposal_queue.is_main_queue_empty()) ctx.disposal_queue.flush_main_queue();
     }
 
     inline void next_frame(void *sync_ctx)
     {
         auto &ctx = detail::get_context();
-        auto &io = detail::get_io();
         detail::update_hover_id(ctx.gpu_ctx, sync_ctx);
         detail::new_window_frame(ctx.window_ctx);
-        io.drag_delta = {0.0f, 0.0f};
         ctx.screen_cursor = {0.0f, 0.0f};
         ctx.frame_id = (ctx.frame_id + 1) % ctx.frames_in_flight;
         if (!(ctx.dirty_flags & DirtyFlagBits::hover_update)) ctx.dirty_flags &= ~DirtyFlagBits::redraw;
@@ -113,7 +112,7 @@ namespace auik::v2
     inline void sync_gpu_cache()
     {
         auto &ctx = detail::get_context();
-        if (ctx.dirty_flags & DirtyFlagBits::layout) record_all_commands();
+        if (ctx.dirty_flags & DirtyFlagBits::layout) record_layout_commands();
         else if (ctx.dirty_flags & DirtyFlagBits::clip_rect) sync_clip_rect_cache();
         if (ctx.dirty_flags & DirtyFlagBits::streams) sync_draw_streams();
     }
@@ -133,19 +132,23 @@ namespace auik::v2
 
     inline bool is_host_update_pending() { return detail::get_context().dirty_flags & DirtyFlagBits::host_update; }
 
-    template <class F>
+    inline void set_raw_mouse_mode(bool value) { detail::get_context().raw_mouse_mode = value; }
+
+    inline bool is_raw_mouse_mode() { return detail::get_context().raw_mouse_mode; }
+
+    template <class Traits, class F>
     inline bool add_render_command(Widget *widget, F &&fn)
     {
+        if constexpr (std::is_same_v<typename Traits::category, detail::immediate_event_traits_tag>)
+        {
+            fn();
+            return true;
+        }
+
         assert(widget && "widget is null");
         auto &ctx = detail::get_context();
-        u32 slot_id = widget->render_slot_id();
-        if (slot_id == AUIK_INVALID_RENDER_SLOT_ID) return false;
-        const u32 word_id = slot_id >> 6;
-        while (ctx.pending_task_bits.size() <= word_id) ctx.pending_task_bits.push_back(0ull);
-        const u64 bit = (1ull << (slot_id & 63));
-        if (ctx.pending_task_bits[word_id] & bit) return false;
-        ctx.pending_task_bits[word_id] |= bit;
         ctx.disposal_queue.emplace(std::forward<F>(fn));
+        detail::mark_host_refresh_request();
         return true;
     }
 } // namespace auik::v2

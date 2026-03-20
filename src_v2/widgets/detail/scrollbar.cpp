@@ -204,12 +204,13 @@ namespace auik::v2::detail
         _thumb_rect.size = {thumb_w, thumb_h};
     }
 
-    void Scrollbar::update_style()
+    StyleUpdateFlags Scrollbar::update_style()
     {
-        auto *theme = get_theme();
         const u32 parent_id = parent() ? parent()->id() : 0u;
-        _track_style.id = theme->get_resolved_style(_track_style.tag_id, id(), parent_id);
-        _thumb_style.id = theme->get_resolved_style(_thumb_style.tag_id, id(), parent_id, style_state());
+        StyleUpdateFlags out = StyleUpdateFlagBits::none;
+        out |= resolve_style_selector(_track_style, id(), parent_id, StyleState::normal);
+        out |= resolve_style_selector(_thumb_style, id(), parent_id, style_state());
+        return out;
     }
 
     void Scrollbar::rebuild_clip_rects()

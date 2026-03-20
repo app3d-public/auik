@@ -144,21 +144,17 @@ namespace auik::v2
         // Window body.
         theme->add_style(AUIK_TAG_WINDOW, make_style()
                                               .padding(amal::vec2{10.0f, 8.0f})
-                                              .margin(amal::vec2{2.0f})
                                               .background_color(c_surface)
                                               .border_color(c_border)
                                               .border_radius(6.0f)
                                               .border_thickness(1.0f));
-        theme->add_style(AUIK_TAG_WINDOW, make_style().background_color(c_hover), StyleState::hover);
-
         // Window header.
         theme->add_style(AUIK_TAG_WINDOW_HEADER, make_style()
                                                      .padding(amal::vec2{4.0f, 4.0f})
                                                      .background_color(c_active)
                                                      .border_radius(6.0f)
                                                      .corner_mask(0x3u));
-        theme->add_style(AUIK_TAG_WINDOW_HEADER, make_style().background_color(c_hover), StyleState::hover);
-        theme->add_style(AUIK_TAG_WINDOW_HEADER, make_style().background_color(c_surface_light), StyleState::active);
+        theme->add_style(AUIK_TAG_WINDOW_HEADER, make_style().background_color(c_surface_light), StyleState::focus);
 
         theme->add_style(AUIK_TAG_TEXT_BUTTON, make_style()
                                                    .padding(amal::vec2{10.0f, 6.0f})
@@ -178,7 +174,7 @@ namespace auik::v2
         theme->add_style(AUIK_TAG_SCROLLBAR_THUMB, make_style()
                                                        .background_color(amal::vec4{0.15f, 0.15f, 0.15f, 1.0f})
                                                        .margin(empty_vec2)
-                                                       .padding(amal::vec2{5.0f, 0.0f})
+                                                       .padding(amal::vec2{4.0f, 0.0f})
                                                        .border_radius(4.5f));
         auto scroll_thumb_style = make_style().background_color(amal::vec4{0.4f, 0.4f, 0.4f, 1.0f});
         theme->add_style(AUIK_TAG_SCROLLBAR_THUMB, scroll_thumb_style, StyleState::hover);

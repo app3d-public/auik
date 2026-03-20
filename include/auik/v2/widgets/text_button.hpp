@@ -21,20 +21,17 @@ namespace auik::v2
     class APPLIB_API TextButton : public Widget
     {
     public:
-        TextButton(u32 id, amal::vec2 size = {120.0f, 0.0f},
-                   WidgetFlags widget_flags = get_default_text_button_flags(),
-                   Widget *parent = nullptr)
+        TextButton(u32 id, amal::vec2 size, WidgetFlags widget_flags, Widget *parent)
             : Widget(id, widget_flags, parent, {0.0f, 0.0f}, size, AUIK_TAG_TEXT_BUTTON),
-              _style({0, AUIK_TAG_TEXT_BUTTON})
+              _style({Theme::STYLE_ID_INVALID, AUIK_TAG_TEXT_BUTTON})
         {
         }
 
-        void update_style() override;
-        void update_layout() override;
+        StyleUpdateFlags update_style() override;
+        void update_layout_min_size() override;
+        void update_layout(bool min_size_known) override;
         void rebuild_clip_rects() override;
-        void on_hover(HoverState state, u32 prev_tag_id) override;
-        void on_click(MouseKey key, KeyPressState state, u32 click_count) override;
-
+        
         void draw(DrawCtx &ctx) override;
 
     private:
@@ -42,13 +39,13 @@ namespace auik::v2
         StyleSelector _style;
     };
 
-    inline TextButton *make_text_button(u32 id, amal::vec2 size = {0.0f, 0.0f}, Widget *parent = nullptr)
+    inline TextButton *make_text_button(u32 id, amal::vec2 size = {0.0f, 0.0f})
     {
-        return acul::alloc<TextButton>(id, size, get_default_text_button_flags(), parent);
+        return acul::alloc<TextButton>(id, size, get_default_text_button_flags(), nullptr);
     }
 
-    inline TextButton *make_fixed_text_button(u32 id, amal::vec2 size = {120.0f, 0.0f}, Widget *parent = nullptr)
+    inline TextButton *make_fixed_text_button(u32 id, amal::vec2 size = {120.0f, 0.0f})
     {
-        return acul::alloc<TextButton>(id, size, get_default_fixed_text_button_flags(), parent);
+        return acul::alloc<TextButton>(id, size, get_default_fixed_text_button_flags(), nullptr);
     }
 } // namespace auik::v2

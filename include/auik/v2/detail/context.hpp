@@ -4,10 +4,12 @@
 #include <acul/disposal_queue.hpp>
 #include <acul/enum.hpp>
 #include <acul/event.hpp>
+#include <acul/string/string.hpp>
 #include <amal/common.hpp>
 #include <amal/vector.hpp>
 #include <cstring>
 #include "../pending_filter.hpp"
+#include "events.hpp"
 #include "fwd.hpp"
 #include "gpu_context.hpp"
 
@@ -69,13 +71,26 @@ namespace auik::v2
             amal::vec2 display_size;
             amal::vec2 last_click_pos{0.0f, 0.0f};
             amal::vec2 last_drag_pos{0.0f, 0.0f};
-            amal::vec2 drag_delta{0.0f, 0.0f};
             f64 last_click_time = -1.0;
             u32 click_count = 0;
             u32 click_streak = 0;
+            u32 last_key = 0;
+            u32 last_key_mods = 0;
+            KeyPressState last_key_state = KeyPressState::release;
             ElementID clicked_id{};
             ElementID drag_id{};
             bool mouse_down = false;
+        };
+
+        struct FrameCache
+        {
+            FrameChanges changes = FrameChangesBits::none;
+            u32 drag_widget_id = 0;
+            amal::vec2 drag_delta{0.0f, 0.0f};
+            amal::vec2 scroll_delta{0.0f, 0.0f};
+            u32 char_repeat_count = 0;
+            u32 last_char_code = 0;
+            acul::string char_input;
         };
 
         extern APPLIB_API struct Context
@@ -87,6 +102,7 @@ namespace auik::v2
             ElementID hover_id{};
             detail::HitboxZone hover_hitbox_zone = detail::HitboxZoneBits::none;
             u32 active_id = 0;
+            u32 focus_id = 0;
             int root_depth_counts[3] = {};
             GPUContext *gpu_ctx = nullptr;
             WindowContext *window_ctx = nullptr;
@@ -97,11 +113,10 @@ namespace auik::v2
             amal::vec2 screen_cursor{0.0f, 0.0f};
             DirtyFlags dirty_flags = DirtyFlagBits::none;
             Theme *theme = nullptr;
-            std::atomic_bool *host_refresh_request = nullptr;
+            bool *host_refresh_request = nullptr;
             PendingFilter *pending_filter = nullptr;
-            acul::vector<u64> pending_task_bits;
-            acul::vector<u32> free_render_slot_ids;
-            u32 pending_task_count = 0;
+            FrameCache frame_cache;
+            bool raw_mouse_mode = false;
             struct
             {
                 DrawStream *attached_streams = nullptr;
@@ -172,7 +187,7 @@ namespace auik::v2
         inline void mark_host_refresh_request()
         {
             auto &ctx = get_context();
-            if (ctx.host_refresh_request) ctx.host_refresh_request->store(true, std::memory_order_release);
+            if (ctx.host_refresh_request) *ctx.host_refresh_request = true;
             ctx.dirty_flags |= DirtyFlagBits::host_update;
         }
 
@@ -187,12 +202,7 @@ namespace auik::v2
 
         inline IO &get_io() { return get_context().io; }
 
-        inline void clear_widget_pending_bits()
-        {
-            auto &bits = get_context().pending_task_bits;
-            if (bits.empty()) return;
-            std::memset(bits.data(), 0, bits.size() * sizeof(u64));
-        }
+        inline void clear_widget_pending_bits() {}
     } // namespace detail
 
     inline Theme *get_theme() { return detail::get_context().theme; }
