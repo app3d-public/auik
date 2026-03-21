@@ -5,33 +5,9 @@
 #include <acul/pair.hpp>
 #include <acul/scalars.hpp>
 #include <amal/vector.hpp>
+#include "../events.hpp"
 
 #define AUIK_TAG_HITBOX 0xBF9B2277u
-
-namespace auik::v2
-{
-    enum class KeyPressState : i8
-    {
-        release,
-        press,
-        repeat
-    };
-
-    enum class MouseKey
-    {
-        unknown = -1,
-        left = 0,
-        right = 1,
-        middle = 2
-    };
-
-    enum class HoverState : i8
-    {
-        leave = 0,
-        enter = 1,
-        active = 2
-    };
-} // namespace auik::v2
 
 namespace auik::v2::detail
 {
@@ -134,6 +110,7 @@ namespace auik::v2::detail
     struct WindowContext
     {
         f64 time = 0.0;
+        HostWindowState host_state = HostWindowState::normal;
         PFN_set_window_cursor set_cursor = nullptr;
         PFN_construct_window_backend construct_backend = nullptr;
         PFN_destroy_window_backend destroy_backend = nullptr;
@@ -144,8 +121,9 @@ namespace auik::v2::detail
     APPLIB_API void on_mouse_move(const amal::vec2 &delta);
     APPLIB_API void on_scroll_event(const amal::vec2 &pos);
     APPLIB_API void on_mouse_click_event(MouseKey key, KeyPressState state);
-    APPLIB_API void on_key_event(u32 key, KeyPressState state, u32 mods);
+    APPLIB_API void on_key_event(Key key, KeyPressState state, KeyMode mods);
     APPLIB_API void on_char_event(u32 char_code);
+    APPLIB_API void deregister_widget_shortcuts(u32 widget_id);
     APPLIB_API void flush_frame_changes();
     APPLIB_API void reset_event_state();
     APPLIB_API void on_hover_id_updated(u32 prev_widget_id, u32 prev_tag_id, u32 widget_id, u32 tag_id);

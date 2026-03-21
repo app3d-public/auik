@@ -4,6 +4,9 @@
 #include <acul/disposal_queue.hpp>
 #include <acul/enum.hpp>
 #include <acul/event.hpp>
+#include <acul/functional/unique_function.hpp>
+#include <acul/hash/hashmap.hpp>
+#include <acul/hash/hashset.hpp>
 #include <acul/string/string.hpp>
 #include <amal/common.hpp>
 #include <amal/vector.hpp>
@@ -74,12 +77,14 @@ namespace auik::v2
             f64 last_click_time = -1.0;
             u32 click_count = 0;
             u32 click_streak = 0;
-            u32 last_key = 0;
-            u32 last_key_mods = 0;
-            KeyPressState last_key_state = KeyPressState::release;
             ElementID clicked_id{};
             ElementID drag_id{};
             bool mouse_down = false;
+            acul::hashmap<u64, acul::unique_function<void()>> shortcuts;
+            acul::hashmap<u32, acul::vector<u64>> widget_shortcuts;
+            acul::hashset<Key> active_keys;
+            acul::hashset<MouseKey> active_mouse_buttons;
+            KeyMode active_mods = KeyModeBits::enum_type(0);
         };
 
         struct FrameCache
@@ -88,9 +93,8 @@ namespace auik::v2
             u32 drag_widget_id = 0;
             amal::vec2 drag_delta{0.0f, 0.0f};
             amal::vec2 scroll_delta{0.0f, 0.0f};
+            u32 char_code = 0;
             u32 char_repeat_count = 0;
-            u32 last_char_code = 0;
-            acul::string char_input;
         };
 
         extern APPLIB_API struct Context
@@ -206,7 +210,12 @@ namespace auik::v2
     } // namespace detail
 
     inline Theme *get_theme() { return detail::get_context().theme; }
-    inline void set_theme(Theme *theme) { detail::get_context().theme = theme; }
+    inline void set_theme(Theme *theme)
+    {
+        auto &ctx = detail::get_context();
+        if (ctx.theme) ctx.dirty_flags |= DirtyFlagBits::layout;
+        ctx.theme = theme;
+    }
 
     inline DrawStream *get_primary_quad_stream() { return detail::get_context().streams.primary_quad_stream; }
     inline void set_primary_quad_stream(DrawStream *stream)

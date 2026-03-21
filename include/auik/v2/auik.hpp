@@ -2,6 +2,7 @@
 
 #include <acul/disposal_queue.hpp>
 #include <acul/event.hpp>
+#include <acul/functional/unique_function.hpp>
 #include <utility>
 #include "detail/context.hpp"
 #include "detail/events.hpp"
@@ -135,6 +136,68 @@ namespace auik::v2
     inline void set_raw_mouse_mode(bool value) { detail::get_context().raw_mouse_mode = value; }
 
     inline bool is_raw_mouse_mode() { return detail::get_context().raw_mouse_mode; }
+
+    inline HostWindowState get_host_window_state() { return detail::get_window_context()->host_state; }
+
+    template <class F>
+    inline void register_shortcut(const Shortcut &shortcut, F &&fn)
+    {
+        auto &ctx = detail::get_context();
+        const u64 shortcut_hash = detail::make_shortcut_hash(shortcut.keys, shortcut.mouse, shortcut.mods, 0);
+        ctx.io.shortcuts[shortcut_hash] = acul::unique_function<void()>(std::forward<F>(fn));
+    }
+
+    template <class F>
+    inline void register_shortcut(u32 widget_id, const Shortcut &shortcut, F &&fn)
+    {
+        auto &ctx = detail::get_context();
+        const u64 shortcut_hash = detail::make_shortcut_hash(shortcut.keys, shortcut.mouse, shortcut.mods, widget_id);
+        ctx.io.shortcuts[shortcut_hash] = acul::unique_function<void()>(std::forward<F>(fn));
+        auto &hashes = ctx.io.widget_shortcuts[widget_id];
+        bool exists = false;
+        for (u64 hash : hashes)
+        {
+            if (hash != shortcut_hash) continue;
+            exists = true;
+            break;
+        }
+        if (!exists) hashes.push_back(shortcut_hash);
+        auto it = ctx.id_map.find(widget_id);
+        if (it != ctx.id_map.end() && it->second) it->second->add_event_flags(EventFlagBits::shortcut);
+    }
+
+    inline void deregister_shortcut(const Shortcut &shortcut)
+    {
+        auto &ctx = detail::get_context();
+        const u64 shortcut_hash = detail::make_shortcut_hash(shortcut.keys, shortcut.mouse, shortcut.mods, 0);
+        ctx.io.shortcuts.erase(shortcut_hash);
+    }
+
+    inline void deregister_shortcut(u32 widget_id, const Shortcut &shortcut)
+    {
+        auto &ctx = detail::get_context();
+        const u64 shortcut_hash = detail::make_shortcut_hash(shortcut.keys, shortcut.mouse, shortcut.mods, widget_id);
+        ctx.io.shortcuts.erase(shortcut_hash);
+
+        auto hashes_it = ctx.io.widget_shortcuts.find(widget_id);
+        if (hashes_it != ctx.io.widget_shortcuts.end())
+        {
+            auto &hashes = hashes_it->second;
+            for (size_t i = 0; i < hashes.size(); ++i)
+            {
+                if (hashes[i] != shortcut_hash) continue;
+                hashes.erase(hashes.begin() + i);
+                break;
+            }
+            if (hashes.empty()) ctx.io.widget_shortcuts.erase(hashes_it);
+        }
+
+        auto it = ctx.id_map.find(widget_id);
+        if (it != ctx.id_map.end() && it->second && ctx.io.widget_shortcuts.find(widget_id) == ctx.io.widget_shortcuts.end())
+            it->second->remove_event_flags(EventFlagBits::shortcut);
+    }
+
+    inline void deregister_shortcuts(u32 widget_id) { detail::deregister_widget_shortcuts(widget_id); }
 
     template <class Traits, class F>
     inline bool add_render_command(Widget *widget, F &&fn)

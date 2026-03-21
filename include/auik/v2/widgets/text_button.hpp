@@ -21,8 +21,8 @@ namespace auik::v2
     class APPLIB_API TextButton : public Widget
     {
     public:
-        TextButton(u32 id, amal::vec2 size, WidgetFlags widget_flags, Widget *parent)
-            : Widget(id, widget_flags, parent, {0.0f, 0.0f}, size, AUIK_TAG_TEXT_BUTTON),
+        TextButton(u32 id, amal::vec2 size, WidgetFlags widget_flags, EventFlags event_flags, Widget *parent)
+            : Widget(id, widget_flags, event_flags, parent, {0.0f, 0.0f}, size, AUIK_TAG_TEXT_BUTTON),
               _style({Theme::STYLE_ID_INVALID, AUIK_TAG_TEXT_BUTTON})
         {
         }
@@ -41,11 +41,11 @@ namespace auik::v2
 
     inline TextButton *make_text_button(u32 id, amal::vec2 size = {0.0f, 0.0f})
     {
-        return acul::alloc<TextButton>(id, size, get_default_text_button_flags(), nullptr);
+        return acul::alloc<TextButton>(id, size, get_default_text_button_flags(), EventFlagBits::none, nullptr);
     }
 
     inline TextButton *make_fixed_text_button(u32 id, amal::vec2 size = {120.0f, 0.0f})
     {
-        return acul::alloc<TextButton>(id, size, get_default_fixed_text_button_flags(), nullptr);
+        return acul::alloc<TextButton>(id, size, get_default_fixed_text_button_flags(), EventFlagBits::none, nullptr);
     }
 } // namespace auik::v2

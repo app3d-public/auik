@@ -1,10 +1,16 @@
 #include <auik/v2/auik.hpp>
 #include <auik/v2/backends/awin/awin.hpp>
 #include <auik/v2/detail/context.hpp>
-#include <cstdio>
 
 namespace auik::v2
 {
+    static inline HostWindowState resolve_host_window_state(const awin::Window &window)
+    {
+        if (window.minimized()) return HostWindowState::minimized;
+        if (window.maximized()) return HostWindowState::maximized;
+        return HostWindowState::normal;
+    }
+
     static void set_window_cursor(detail::CursorID::enum_type id, detail::WindowContext *window_ctx)
     {
         auto *backend = static_cast<detail::AwinBackend *>(window_ctx);
@@ -58,19 +64,30 @@ namespace auik::v2
         });
         ed.bind_event(backend, awin::event_id::key_input, [&window](const awin::KeyInputEvent &e) {
             if (e.window != &window) return;
-            detail::on_key_event(static_cast<u32>(e.key), static_cast<KeyPressState>(e.action),
-                                 static_cast<u32>(e.mods));
+            detail::on_key_event(static_cast<Key>(e.key), static_cast<KeyPressState>(e.action),
+                                 static_cast<KeyModeBits::enum_type>(static_cast<i8>(e.mods)));
         });
         ed.bind_event(backend, awin::event_id::scroll, [&window](const awin::ScrollEvent &e) {
             if (e.window != &window) return;
             detail::on_scroll_event({e.h, e.v});
         });
-        ed.bind_event(backend, awin::event_id::dpi_changed,
-                      [](const awin::DpiChangedEvent &) { std::printf("[auik::v2::awin] dpi_changed event\n"); });
-        ed.bind_event(backend, awin::event_id::minimize,
-                      [](const awin::StateEvent &) { std::printf("[auik::v2::awin] minimize event\n"); });
-        ed.bind_event(backend, awin::event_id::maximize,
-                      [](const awin::StateEvent &) { std::printf("[auik::v2::awin] maximize event\n"); });
+        ed.bind_event(backend, awin::event_id::minimize, [&window](const awin::StateEvent &event) {
+            if (event.window != &window) return;
+            auto &ctx = detail::get_context();
+            const HostWindowState next_state = resolve_host_window_state(window);
+            if (ctx.window_ctx->host_state == next_state) return;
+            ctx.window_ctx->host_state = next_state;
+        });
+        ed.bind_event(backend, awin::event_id::maximize, [&window](const awin::StateEvent &event) {
+            if (event.window != &window) return;
+            auto &ctx = detail::get_context();
+            const HostWindowState next_state = resolve_host_window_state(window);
+            const HostWindowState prev_state = ctx.window_ctx->host_state;
+            if (prev_state == next_state) return;
+            ctx.window_ctx->host_state = next_state;
+            detail::mark_host_refresh_request();
+            ctx.dirty_flags |= DirtyFlagBits::layout;
+        });
         ed.bind_event(backend, awin::event_id::mouse_click, [&window](const awin::MouseClickEvent &event) {
             if (event.window != &window) return;
             detail::on_mouse_click_event(static_cast<MouseKey>(event.button), static_cast<KeyPressState>(event.action));
@@ -89,6 +106,7 @@ namespace auik::v2
         cursors[detail::CursorID::resize_nesw] = awin::Cursor::create(awin::Cursor::Type::resize_nesw);
         auto &global_ctx = detail::get_context();
         bind_window_events(awin_ctx->window, *global_ctx.ed, awin_ctx);
+        window_ctx->host_state = resolve_host_window_state(awin_ctx->window);
         auto dimensions = awin_ctx->window.dimensions();
         global_ctx.io.display_size.x = dimensions.x;
         global_ctx.io.display_size.y = dimensions.y;

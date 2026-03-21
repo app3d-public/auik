@@ -13,6 +13,11 @@
 
 namespace auik::v2
 {
+    Widget::~Widget()
+    {
+        if (event_flags & EventFlagBits::shortcut) detail::deregister_widget_shortcuts(id());
+    }
+
     static void clear_all_streams(detail::Context &ctx)
     {
         for (u32 stream_id = 0; stream_id < ctx.streams.stream_count; ++stream_id)
@@ -113,7 +118,8 @@ namespace auik::v2
                 auto it = ctx.id_map.find(id);
                 if (it == ctx.id_map.end()) return;
                 Widget *widget = it->second;
-                widget->on_hover(state, last_tag_id);
+                assert(widget && "widget is null");
+                if (widget->has_event_handler(EventFlagBits::hover)) widget->on_hover(state, last_tag_id);
                 if (apply_hover_style_state(*widget, state))
                 {
                     enqueue_style_refresh(widget);
@@ -173,6 +179,84 @@ namespace auik::v2
             detail::mark_host_refresh_request();
         };
 
+        static inline Widget *resolve_input_root(Context &ctx)
+        {
+            Widget *target = nullptr;
+            if (ctx.focus_id != 0)
+            {
+                auto it = ctx.id_map.find(ctx.focus_id);
+                if (it != ctx.id_map.end()) target = it->second;
+            }
+            if (!target && ctx.active_id != 0)
+            {
+                auto it = ctx.id_map.find(ctx.active_id);
+                if (it != ctx.id_map.end()) target = it->second;
+            }
+            if (!target)
+            {
+                auto it = ctx.id_map.find(ctx.hover_id.widget_id);
+                if (it != ctx.id_map.end()) target = it->second;
+            }
+            return target;
+        }
+
+        static inline Widget *resolve_focus_event_target(Context &ctx, EventFlagBits::enum_type event_flag)
+        {
+            Widget *node = resolve_input_root(ctx);
+            while (node)
+            {
+                if (node->has_event_handler(event_flag)) return node;
+                node = node->focus_parent();
+            }
+            return nullptr;
+        }
+
+        static inline bool is_modifier_key(Key key)
+        {
+            return key == Key::lshift || key == Key::rshift || key == Key::lcontrol || key == Key::rcontrol ||
+                   key == Key::lalt || key == Key::ralt || key == Key::lsuper || key == Key::rsuper ||
+                   key == Key::caps_lock || key == Key::num_lock;
+        }
+
+        static inline KeyMode build_active_shortcut_mods(const IO &io)
+        {
+            KeyMode mods = KeyModeBits::enum_type(0);
+            if (io.active_mods & KeyModeBits::alt) mods |= KeyModeBits::alt;
+            if (io.active_mods & KeyModeBits::control) mods |= KeyModeBits::control;
+            if (io.active_mods & KeyModeBits::shift) mods |= KeyModeBits::shift;
+            return mods;
+        }
+
+        static inline bool dispatch_shortcut(Context &ctx)
+        {
+            const auto &io = ctx.io;
+            const KeyMode mods = build_active_shortcut_mods(io);
+            if (!mods && io.active_keys.empty() && io.active_mouse_buttons.empty()) return false;
+
+            Widget *node = resolve_input_root(ctx);
+            while (node)
+            {
+                if (node->has_event_handler(EventFlagBits::shortcut))
+                {
+                    const u64 hash =
+                        detail::make_shortcut_hash(io.active_keys, io.active_mouse_buttons, mods, node->id());
+                    auto it = io.shortcuts.find(hash);
+                    if (it != io.shortcuts.end())
+                    {
+                        it->second();
+                        return true;
+                    }
+                }
+                node = node->focus_parent();
+            }
+
+            const u64 hash = detail::make_shortcut_hash(io.active_keys, io.active_mouse_buttons, mods, AUIK_TAG_GLOBAL);
+            auto global_it = io.shortcuts.find(hash);
+            if (global_it == io.shortcuts.end()) return false;
+            global_it->second();
+            return true;
+        }
+
         APPLIB_API void reset_event_state()
         {
             auto &ctx = get_context();
@@ -187,7 +271,8 @@ namespace auik::v2
             if (prev_drag.widget_id)
             {
                 auto it = ctx.id_map.find(prev_drag.widget_id);
-                if (it != ctx.id_map.end()) it->second->on_drag({0.0f, 0.0f}, KeyPressState::release);
+                if (it != ctx.id_map.end() && it->second->has_event_handler(EventFlagBits::drag))
+                    it->second->on_drag({0.0f, 0.0f}, KeyPressState::release);
             }
 
             io.mouse_down = false;
@@ -197,9 +282,11 @@ namespace auik::v2
             frame_cache.drag_widget_id = 0;
             frame_cache.drag_delta = {0.0f, 0.0f};
             frame_cache.scroll_delta = {0.0f, 0.0f};
-            frame_cache.char_input.clear();
+            frame_cache.char_code = 0;
             frame_cache.char_repeat_count = 0;
-            frame_cache.last_char_code = 0;
+            io.active_keys.clear();
+            io.active_mouse_buttons.clear();
+            io.active_mods = KeyMode{};
             ctx.active_id = 0;
             ctx.hover_id = {};
             if (prev_active_id)
@@ -218,7 +305,9 @@ namespace auik::v2
                 if (it != ctx.id_map.end())
                 {
                     Widget *widget = it->second;
-                    widget->on_hover(HoverState::leave, prev_hover.tag_id);
+                    assert(widget && "widget is null");
+                    if (widget->has_event_handler(EventFlagBits::hover))
+                        widget->on_hover(HoverState::leave, prev_hover.tag_id);
                     if (apply_hover_style_state(*widget, HoverState::leave)) enqueue_style_refresh(widget);
                 }
             }
@@ -254,46 +343,63 @@ namespace auik::v2
             mark_host_refresh_request();
         }
 
-        APPLIB_API void on_key_event(u32 key, KeyPressState state, u32 mods)
+        APPLIB_API void on_key_event(Key key, KeyPressState state, KeyMode mods)
         {
             auto &ctx = get_context();
-            Widget *target = nullptr;
-            if (ctx.focus_id != 0)
+            auto &io = ctx.io;
+            io.active_mods = mods;
+            if (!is_modifier_key(key))
             {
-                auto it = ctx.id_map.find(ctx.focus_id);
-                if (it != ctx.id_map.end()) target = it->second;
+                if (state == KeyPressState::release) io.active_keys.erase(key);
+                else io.active_keys.insert(key);
             }
-            if (!target && ctx.active_id != 0)
-            {
-                auto it = ctx.id_map.find(ctx.active_id);
-                if (it != ctx.id_map.end()) target = it->second;
-            }
-            if (!target)
-            {
-                auto it = ctx.id_map.find(ctx.hover_id.widget_id);
-                if (it != ctx.id_map.end()) target = it->second;
-            }
-            if (!target) return;
 
-            add_render_command<KeyEventTraits>(target,
-                                               [target, key, state, mods]() { target->on_key(key, state, mods); });
-            mark_host_refresh_request();
+            if (state != KeyPressState::release)
+            {
+                if (dispatch_shortcut(ctx)) return;
+            }
+
+            Widget *target = resolve_focus_event_target(ctx, EventFlagBits::key_input);
+            if (target) target->on_key(key, state, mods);
         }
 
         APPLIB_API void on_char_event(u32 char_code)
         {
             auto &ctx = get_context();
             auto &frame_cache = ctx.frame_cache;
-            if (frame_cache.char_input.empty() || frame_cache.last_char_code != char_code)
+            if (frame_cache.char_repeat_count == 0)
             {
-                if (!frame_cache.char_input.empty()) frame_cache.changes |= FrameChangesBits::char_input;
-                frame_cache.char_input = encode_utf8(char_code);
+                frame_cache.char_code = char_code;
                 frame_cache.char_repeat_count = 1;
             }
-            else ++frame_cache.char_repeat_count;
-            frame_cache.last_char_code = char_code;
+            else if (frame_cache.char_code == char_code) ++frame_cache.char_repeat_count;
+            else
+            {
+                if (frame_cache.char_repeat_count > 0)
+                {
+                    Widget *target = resolve_focus_event_target(ctx, EventFlagBits::char_input);
+                    if (target) target->on_char_input(frame_cache.char_code, frame_cache.char_repeat_count);
+                }
+                frame_cache.char_code = char_code;
+                frame_cache.char_repeat_count = 1;
+            }
             frame_cache.changes |= FrameChangesBits::char_input;
             mark_host_refresh_request();
+        }
+
+        APPLIB_API void deregister_widget_shortcuts(u32 widget_id)
+        {
+            if (!widget_id) return;
+            auto &ctx = get_context();
+            auto it = ctx.io.widget_shortcuts.find(widget_id);
+            if (it == ctx.io.widget_shortcuts.end()) return;
+
+            for (u64 shortcut_hash : it->second) ctx.io.shortcuts.erase(shortcut_hash);
+            ctx.io.widget_shortcuts.erase(it);
+
+            auto widget_it = ctx.id_map.find(widget_id);
+            if (widget_it != ctx.id_map.end() && widget_it->second)
+                widget_it->second->remove_event_flags(EventFlagBits::shortcut);
         }
 
         template <class F>
@@ -314,6 +420,20 @@ namespace auik::v2
             if (widget->style_state() == StyleState::focus) widget->set_style_state(StyleState::focus);
             else if (widget->id() == hovered_id) widget->set_style_state(StyleState::hover);
             else widget->set_style_state(StyleState::normal);
+        }
+
+        static inline Widget *resolve_scroll_target(Context &ctx)
+        {
+            Widget *node = nullptr;
+            auto it = ctx.id_map.find(ctx.hover_id.widget_id);
+            if (it != ctx.id_map.end()) node = it->second;
+
+            while (node)
+            {
+                if (node->has_event_handler(EventFlagBits::scroll)) return node;
+                node = node->parent();
+            }
+            return nullptr;
         }
 
         static inline Widget *get_widget_by_id(Context &ctx, u32 id)
@@ -368,7 +488,8 @@ namespace auik::v2
             for (int k = 0; k <= i; ++k)
             {
                 Widget *w = path_old[k];
-                w->on_focus(false);
+                assert(w && "widget cannot be null");
+                if (w->has_event_handler(EventFlagBits::focus)) w->on_focus(false);
                 if (ctx.active_id != w->id()) w->set_style_state(StyleState::normal);
                 enqueue_style_refresh(w);
             }
@@ -380,7 +501,8 @@ namespace auik::v2
             for (int k = j; k >= 0; --k)
             {
                 Widget *w = path_new[k];
-                w->on_focus(true);
+                assert(w && "widget cannot be null");
+                if (w->has_event_handler(EventFlagBits::focus)) w->on_focus(true);
                 if (ctx.active_id != w->id()) w->set_style_state(StyleState::focus);
                 enqueue_style_refresh(w);
             }
@@ -412,7 +534,8 @@ namespace auik::v2
             if (io.drag_id)
             {
                 auto drag_it = ctx.id_map.find(io.drag_id.widget_id);
-                if (drag_it != ctx.id_map.end()) drag_it->second->on_drag({0.0f, 0.0f}, KeyPressState::press);
+                if (drag_it != ctx.id_map.end() && drag_it->second->has_event_handler(EventFlagBits::drag))
+                    drag_it->second->on_drag({0.0f, 0.0f}, KeyPressState::press);
             }
 
             auto it = ctx.id_map.find(ctx.hover_id.widget_id);
@@ -421,7 +544,8 @@ namespace auik::v2
                 set_focus_target(ctx, it->second);
                 // Press transfers visual state from hover -> active immediately.
                 // Hover re-enter is restored later by hover update/release path.
-                it->second->on_hover(HoverState::leave, ctx.hover_id.tag_id);
+                if (it->second->has_event_handler(EventFlagBits::hover))
+                    it->second->on_hover(HoverState::leave, ctx.hover_id.tag_id);
                 const u32 prev_active_id = ctx.active_id;
                 const u32 next_active_id = it->second->id();
                 const StyleState prev_style_state = it->second->style_state();
@@ -444,7 +568,8 @@ namespace auik::v2
                     for_each_active_chain(ctx, ctx.active_id, [&](Widget *w) { enqueue_style_refresh(w); });
                     detail::mark_host_refresh_request();
                 }
-                it->second->on_click(MouseKey::left, KeyPressState::press, io.click_count);
+                if (it->second->has_event_handler(EventFlagBits::click))
+                    it->second->on_click(MouseKey::left, KeyPressState::press, io.click_count);
             }
             else set_focus_target(ctx, nullptr);
         }
@@ -454,7 +579,8 @@ namespace auik::v2
             auto &frame_cache = ctx.frame_cache;
             const u32 clicked_widget_id = io.clicked_id.widget_id;
             auto it = ctx.id_map.find(io.clicked_id.widget_id);
-            if (it != ctx.id_map.end()) it->second->on_click(MouseKey::left, KeyPressState::release, io.click_count);
+            if (it != ctx.id_map.end() && it->second->has_event_handler(EventFlagBits::click))
+                it->second->on_click(MouseKey::left, KeyPressState::release, io.click_count);
 
             // Interrupted drag: clear pending frame payload.
             frame_cache.drag_widget_id = 0;
@@ -462,7 +588,8 @@ namespace auik::v2
             frame_cache.changes &= ~FrameChangesBits::drag_delta;
 
             it = ctx.id_map.find(io.drag_id.widget_id);
-            if (it != ctx.id_map.end()) it->second->on_drag({0.0f, 0.0f}, KeyPressState::release);
+            if (it != ctx.id_map.end() && it->second->has_event_handler(EventFlagBits::drag))
+                it->second->on_drag({0.0f, 0.0f}, KeyPressState::release);
 
             if (ctx.active_id != 0)
             {
@@ -483,7 +610,10 @@ namespace auik::v2
                     if (ctx.active_id == clicked_widget_id)
                     {
                         if (ctx.hover_id.widget_id == clicked_widget_id)
-                            clicked_it->second->on_hover(HoverState::enter, io.clicked_id.tag_id);
+                        {
+                            if (clicked_it->second->has_event_handler(EventFlagBits::hover))
+                                clicked_it->second->on_hover(HoverState::enter, io.clicked_id.tag_id);
+                        }
                     }
                     else
                     {
@@ -491,7 +621,10 @@ namespace auik::v2
                         resolve_release_state(clicked_it->second, ctx.hover_id.widget_id);
                         const bool style_changed = prev_state != clicked_it->second->style_state();
                         if (ctx.hover_id.widget_id == clicked_widget_id)
-                            clicked_it->second->on_hover(HoverState::enter, io.clicked_id.tag_id);
+                        {
+                            if (clicked_it->second->has_event_handler(EventFlagBits::hover))
+                                clicked_it->second->on_hover(HoverState::enter, io.clicked_id.tag_id);
+                        }
                         else if (style_changed)
                         {
                             enqueue_style_refresh(clicked_it->second);
@@ -514,11 +647,15 @@ namespace auik::v2
             auto &io = ctx.io;
             update_window_time(ctx.window_ctx);
 
+            if (state == KeyPressState::release) io.active_mouse_buttons.erase(key);
+            else io.active_mouse_buttons.insert(key);
+
             if (key != MouseKey::left)
             {
                 const u32 target_id = ctx.hover_id.widget_id;
                 auto it = ctx.id_map.find(target_id);
-                if (it != ctx.id_map.end()) it->second->on_click(key, state, 1);
+                if (it != ctx.id_map.end() && it->second->has_event_handler(EventFlagBits::click))
+                    it->second->on_click(key, state, 1);
                 return;
             }
 
@@ -548,50 +685,27 @@ namespace auik::v2
                 if (drag_widget_id != 0 && drag_delta != amal::vec2{0.0f})
                 {
                     auto it = ctx.id_map.find(drag_widget_id);
-                    if (it != ctx.id_map.end()) it->second->on_drag(drag_delta, KeyPressState::repeat);
+                    if (it != ctx.id_map.end() && it->second->has_event_handler(EventFlagBits::drag))
+                        it->second->on_drag(drag_delta, KeyPressState::repeat);
                 }
             }
 
             if (changes & FrameChangesBits::scroll_delta)
             {
-                auto it = ctx.id_map.find(ctx.hover_id.widget_id);
-                if (it != ctx.id_map.end())
-                {
-                    const auto delta = frame_cache.scroll_delta;
-                    it->second->on_scroll(delta);
-                }
+                Widget *target = resolve_scroll_target(ctx);
+                if (target) target->on_scroll(frame_cache.scroll_delta);
                 frame_cache.scroll_delta = {0.0f, 0.0f};
             }
 
-            if (changes & FrameChangesBits::key_input) {}
-
             if (changes & FrameChangesBits::char_input)
             {
-                Widget *target = nullptr;
-                if (ctx.focus_id != 0)
+                if (frame_cache.char_repeat_count > 0)
                 {
-                    auto it = ctx.id_map.find(ctx.focus_id);
-                    if (it != ctx.id_map.end()) target = it->second;
+                    Widget *target = resolve_focus_event_target(ctx, EventFlagBits::char_input);
+                    if (target) target->on_char_input(frame_cache.char_code, frame_cache.char_repeat_count);
                 }
-                if (!target && ctx.active_id != 0)
-                {
-                    auto it = ctx.id_map.find(ctx.active_id);
-                    if (it != ctx.id_map.end()) target = it->second;
-                }
-                if (!target)
-                {
-                    auto it = ctx.id_map.find(ctx.hover_id.widget_id);
-                    if (it != ctx.id_map.end()) target = it->second;
-                }
-                if (target && !frame_cache.char_input.empty())
-                {
-                    const acul::string text = frame_cache.char_input;
-                    const u32 count = frame_cache.char_repeat_count;
-                    target->on_char(text, count);
-                }
-                frame_cache.char_input.clear();
+                frame_cache.char_code = 0;
                 frame_cache.char_repeat_count = 0;
-                frame_cache.last_char_code = 0;
             }
 
             frame_cache.changes = FrameChangesBits::none;
@@ -666,6 +780,39 @@ namespace auik::v2
         }
     } // namespace detail
 
+    APPLIB_API bool add_char_to_string(acul::string &dst, u32 char_code, TextFlags flags)
+    {
+        u32 c = char_code;
+        if (c == 0) return false;
+        if (!(flags & TextFlagBits::allow_tab_input) && c == '\t') return false;
+        if ((flags & TextFlagBits::chars_no_blank) && (c == ' ' || c == '\t')) return false;
+        if ((flags & TextFlagBits::chars_ascii) && c >= 128) return false;
+
+        const bool is_decimal = flags & TextFlagBits::chars_decimal;
+        const bool is_scientific = flags & TextFlagBits::chars_scientific;
+        const bool is_hex = flags & TextFlagBits::chars_hexadecimal;
+
+        if (is_decimal || is_scientific)
+        {
+            const bool is_digit = c >= '0' && c <= '9';
+            const bool is_common_op = c == '+' || c == '-' || c == '*' || c == '/' || c == '.';
+            const bool is_science_op = (c == 'e' || c == 'E');
+            if (!is_digit && !is_common_op && !(is_scientific && is_science_op)) return false;
+        }
+        else if (is_hex)
+        {
+            const bool is_digit = c >= '0' && c <= '9';
+            const bool is_lower_hex = c >= 'a' && c <= 'f';
+            const bool is_upper_hex = c >= 'A' && c <= 'F';
+            const bool is_hex_prefix = c == 'x' || c == 'X';
+            if (!is_digit && !is_lower_hex && !is_upper_hex && !is_hex_prefix) return false;
+        }
+
+        if ((flags & TextFlagBits::chars_uppercase) && c >= 'a' && c <= 'z') c = c - 'a' + 'A';
+        dst += detail::encode_utf8(c);
+        return true;
+    }
+
     void Widget::update_depth(const amal::vec2 &depth_range)
     {
         _depth_range = detail::normalize_depth_range(depth_range);
@@ -717,9 +864,6 @@ namespace auik::v2
         io.last_click_time = -1.0;
         io.click_count = 0;
         io.click_streak = 0;
-        io.last_key = 0;
-        io.last_key_mods = 0;
-        io.last_key_state = KeyPressState::release;
         io.clicked_id = {};
         io.drag_id = {};
         io.mouse_down = false;
@@ -728,9 +872,8 @@ namespace auik::v2
         frame_cache.drag_widget_id = 0;
         frame_cache.drag_delta = {0.0f, 0.0f};
         frame_cache.scroll_delta = {0.0f, 0.0f};
+        frame_cache.char_code = 0;
         frame_cache.char_repeat_count = 0;
-        frame_cache.last_char_code = 0;
-        frame_cache.char_input.clear();
         ctx.hover_id = {};
         ctx.hover_hitbox_zone = detail::HitboxZoneBits::none;
         ctx.active_id = 0;

@@ -60,8 +60,8 @@ namespace auik::v2
     {
     public:
         explicit WindowHeader(Widget *parent)
-            : Widget(AUIK_TAG_WINDOW_HEADER, WidgetFlagBits::visible | WidgetFlagBits::foreground, parent, {0.0f, 0.0f},
-                     {0.0f, 0.0f}, AUIK_TAG_WINDOW_HEADER),
+            : Widget(AUIK_TAG_WINDOW_HEADER, WidgetFlagBits::visible | WidgetFlagBits::foreground,
+                     EventFlagBits::none, parent, {0.0f, 0.0f}, {0.0f, 0.0f}, AUIK_TAG_WINDOW_HEADER),
               _style({Theme::STYLE_ID_INVALID, AUIK_TAG_WINDOW_HEADER})
         {
             assert(parent);
@@ -115,7 +115,9 @@ namespace auik::v2
 
     Window::Window(u32 id, amal::vec2 pos, amal::vec2 size, WindowFlags in_window_flags, WidgetFlags in_widget_flags,
                    Widget *parent)
-        : Widget(id, in_widget_flags, parent, pos, size, AUIK_TAG_WINDOW), window_flags(in_window_flags)
+        : Widget(id, in_widget_flags, EventFlagBits::click | EventFlagBits::drag | EventFlagBits::focus, parent, pos,
+                 size, AUIK_TAG_WINDOW),
+          window_flags(in_window_flags)
     {
         widget_flags |= WidgetFlagBits::hittable;
         if (window_flags & WindowFlagBits::resizable) _rect.flags |= detail::RectBits::hitbox;
@@ -464,6 +466,9 @@ namespace auik::v2
 
         const bool is_scrollbar_y_visible = _scrollbar_y && _scrollbar_y->is_visible();
         const bool is_scrollbar_x_visible = _scrollbar_x && _scrollbar_x->is_visible();
+        if (is_scrollbar_y_visible || is_scrollbar_x_visible)
+            add_event_flags(EventFlagBits::scroll | EventFlagBits::hover);
+        else remove_event_flags(EventFlagBits::scroll | EventFlagBits::hover);
         if (was_scrollbar_y_visible != is_scrollbar_y_visible || was_scrollbar_x_visible != is_scrollbar_x_visible)
             redraw_all_commands();
 

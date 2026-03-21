@@ -58,14 +58,20 @@ namespace auik::v2
     {
     public:
         WidgetFlags widget_flags;
+        EventFlags event_flags = EventFlagBits::none;
+        TextFlags text_flags = TextFlagBits::none;
 
-        Widget(u32 id, WidgetFlags flags, Widget *parent = nullptr, amal::vec2 pos = {0.0f, 0.0f},
-               amal::vec2 size = {0.0f, 0.0f}, u32 tag_id = 0)
-            : widget_flags(flags), _id(id), _parent(parent), _rect(detail::make_rect_data(id, tag_id, pos, size))
+        Widget(u32 id, WidgetFlags flags, EventFlags event_flags = EventFlagBits::none, Widget *parent = nullptr,
+               amal::vec2 pos = {0.0f, 0.0f}, amal::vec2 size = {0.0f, 0.0f}, u32 tag_id = 0)
+            : widget_flags(flags),
+              event_flags(event_flags),
+              _id(id),
+              _parent(parent),
+              _rect(detail::make_rect_data(id, tag_id, pos, size))
         {
         }
 
-        virtual ~Widget() = default;
+        virtual ~Widget();
 
         inline u32 id() const { return _id; }
         inline Widget *parent() const { return _parent; }
@@ -107,6 +113,10 @@ namespace auik::v2
         inline void set_required_size(const amal::vec2 &size) { _required_size = size; }
         inline bool is_fixed() const { return widget_flags & WidgetFlagBits::fixed; }
         inline bool is_hittable() const { return widget_flags & WidgetFlagBits::hittable; }
+        inline bool has_event_handler(EventFlagBits::enum_type event_flag) const { return event_flags & event_flag; }
+        inline void set_event_flags(EventFlags value) { event_flags = value; }
+        inline void add_event_flags(EventFlags value) { event_flags |= value; }
+        inline void remove_event_flags(EventFlags value) { event_flags &= ~value; }
         inline u16 clip_id() const { return _rect.clip_id; }
         inline void set_clip_id(u16 id) { _rect.clip_id = id; }
         inline void inherit_parent_clip_rect() { _rect.clip_id = _parent ? _parent->clip_id() : 0xFFFFu; }
@@ -156,31 +166,13 @@ namespace auik::v2
             ctx.id_map.emplace(id(), this);
         }
         virtual void on_detach() { detail::get_context().id_map.erase(id()); }
-        virtual void on_scroll(const amal::vec2 &delta)
-        {
-            if (_parent) _parent->on_scroll(delta);
-        }
-
-        virtual void on_focus(bool focused) { (void)focused; }
-
-        virtual void on_hover(HoverState state, u32 prev_tag_id)
-        {
-            (void)prev_tag_id;
-            (void)state;
-        }
+        virtual void on_scroll(const amal::vec2 &delta) {}
+        virtual void on_focus(bool focused) {}
+        virtual void on_hover(HoverState state, u32 prev_tag_id) {}
         virtual void on_click(MouseKey key, KeyPressState state, u32 click_count) {}
         virtual void on_drag(const amal::vec2 &delta, KeyPressState state) {}
-        virtual void on_key(u32 key, KeyPressState state, u32 mods)
-        {
-            (void)key;
-            (void)state;
-            (void)mods;
-        }
-        virtual void on_char(const acul::string &text, u32 count)
-        {
-            (void)text;
-            (void)count;
-        }
+        virtual void on_key(Key key, KeyPressState state, KeyMode mods) {}
+        virtual void on_char_input(u32 char_code, u32 count) {}
 
     protected:
         u32 _id;
