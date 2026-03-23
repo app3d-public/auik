@@ -16,6 +16,9 @@ namespace auik::v2::detail
         agrb::device &device;
         agrb::descriptor_pool *descriptor_pool = nullptr;
         agrb::shader_cache shader_cache;
+        acul::shared_ptr<agrb::descriptor_set_layout> bindless_texture_layout = nullptr;
+        vk::DescriptorSet bindless_texture_set = nullptr;
+        acul::vector<vk::DescriptorImageInfo> bindless_textures;
         agrb::vector<amal::vec4> *clip_rects = nullptr;
         acul::unique_ptr<class GPUPicker> picker;
 

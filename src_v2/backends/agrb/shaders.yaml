@@ -4,6 +4,11 @@ auik:
     stages:
       - vs: "quads/quads.vert"
       - fs: "quads/quads.frag"
+  textures:
+    id: 0x1B6FF1C9
+    stages:
+      - vs: "textures/textures.vert"
+      - fs: "textures/textures.frag"
   picker:
     id: 0xE6B1C4A2
     stages:

@@ -3,6 +3,7 @@
 #include <auik/v2/detail/events.hpp>
 #include <auik/v2/detail/gpu_context.hpp>
 #include <auik/v2/widgets/window.hpp>
+#include <cstring>
 
 #define AUIK_ROOT_DEPTH_ATOMS_COUNT      32
 #define AUIK_CHILD_DEPTH_ATOMS_COUNT     16
@@ -843,6 +844,10 @@ namespace auik::v2
         dst_range = {r0, r1};
     }
 
+    APPLIB_API u32 get_service_pipelines_count() { return 1; }
+    APPLIB_API u32 get_default_streams_pipelines_count() { return 2; }
+    APPLIB_API u32 get_default_streams_count() { return 2; }
+
     bool init_library(const CreateInfo &create_info)
     {
         if (detail::g_context) destroy_library();
@@ -851,11 +856,16 @@ namespace auik::v2
         ctx.ed = create_info.ed;
         ctx.streams.attached_streams = create_info.streams;
         ctx.streams.stream_count = create_info.streams_count;
+        u32 default_streams_count = get_default_streams_count();
+        ctx.streams.default_streams = acul::alloc_n<DrawStream *>(default_streams_count);
+        std::memset(ctx.streams.default_streams, 0, sizeof(DrawStream *) * default_streams_count);
+        ctx.window_ctx = create_info.window_ctx;
         ctx.gpu_ctx = create_info.gpu_ctx;
         ctx.host_refresh_request = create_info.host_refresh_request;
         ctx.pending_filter = create_info.pending_filter;
         ctx.raw_mouse_mode = false;
         ctx.frames_in_flight = create_info.frames_in_flight;
+        ctx.max_textures_size = create_info.max_textures_size;
         auto &io = ctx.io;
         io.display_size = {0.0f, 0.0f};
         io.mouse_pos = {0.0f, 0.0f};
@@ -891,10 +901,12 @@ namespace auik::v2
     {
         if (!detail::g_context) return;
         for (auto *widget : detail::g_context->widget_tree) acul::release(widget);
+        detail::g_context->image_cache.clear();
         detail::destroy_shared_buffer_sync_state(detail::g_context->shared_sync_state[AUIK_SYNC_CLIP_RECT]);
         detail::destroy_shared_buffer_sync_state(detail::g_context->shared_sync_state[AUIK_SYNC_HIT_RECT]);
         detail::destroy_gpu_context(detail::g_context->gpu_ctx);
         detail::destroy_window_context(detail::g_context->window_ctx);
+        acul::release(detail::g_context->streams.default_streams);
         acul::release(detail::g_context);
         detail::g_context = nullptr;
     }

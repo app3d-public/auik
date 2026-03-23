@@ -47,8 +47,16 @@ namespace auik::v2
     {
         amal::vec2 position;
         amal::vec2 size;
+        amal::vec4 tint_color{0.0f};
+        amal::vec2 uv_size;
+        amal::vec2 uv_offset;
         f32 z_order;
-        u32 texture_id;
-        amal::vec2 texture_offset;
+        u16 texture_id;
+        u16 clip_id;
     };
+
+    static_assert(sizeof(TexturesInstanceData) == 56, "TexturesInstanceData must be exactly 56 bytes");
+
+    APPLIB_API void create_textures_stream_cached(DrawStream &stream);
+    APPLIB_API void create_textures_stream_transient(DrawStream &stream);
 } // namespace auik::v2

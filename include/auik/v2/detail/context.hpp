@@ -10,14 +10,15 @@
 #include <acul/string/string.hpp>
 #include <amal/common.hpp>
 #include <amal/vector.hpp>
-#include <cstring>
 #include "../pending_filter.hpp"
 #include "events.hpp"
 #include "fwd.hpp"
 #include "gpu_context.hpp"
 
-#define AUIK_SYNC_CLIP_RECT 0
-#define AUIK_SYNC_HIT_RECT  1
+#define AUIK_SYNC_CLIP_RECT       0
+#define AUIK_SYNC_HIT_RECT        1
+#define AUIK_PRIMARY_QUAD_STREAM  0
+#define AUIK_PRIMARY_IMAGE_STREAM 1
 
 namespace auik::v2
 {
@@ -34,7 +35,8 @@ namespace auik::v2
             host_update = 0x20,
             hover_update = 0x40,
             hit_rect_draw = 0x80,
-            hit_rect_update = 0x100
+            hit_rect_update = 0x100,
+            textures = 0x200
         };
         using flag_bitmask = std::true_type;
     };
@@ -103,6 +105,9 @@ namespace auik::v2
             acul::disposal_queue disposal_queue;
             acul::vector<Widget *> widget_tree;
             acul::hashmap<u32, Widget *> id_map;
+            acul::hashmap<u32, Image *> image_cache;
+            acul::vector<TextureID> textures;
+            acul::hashmap<u64, u32> texture_bind_slots;
             ElementID hover_id{};
             detail::HitboxZone hover_hitbox_zone = detail::HitboxZoneBits::none;
             u32 active_id = 0;
@@ -113,6 +118,7 @@ namespace auik::v2
             IO io;
             u32 frame_id = 0;
             u32 frames_in_flight = 0;
+            u32 max_textures_size = 32;
             SharedBufferSyncState shared_sync_state[2];
             amal::vec2 screen_cursor{0.0f, 0.0f};
             DirtyFlags dirty_flags = DirtyFlagBits::none;
@@ -125,9 +131,7 @@ namespace auik::v2
             {
                 DrawStream *attached_streams = nullptr;
                 u32 stream_count = 0;
-                DrawStream *primary_quad_stream = nullptr;
-                DrawStream *primary_image_stream = nullptr;
-                DrawStream *overlay_quad_stream = nullptr;
+                DrawStream **default_streams = nullptr;
             } streams;
         } *g_context;
 
@@ -195,6 +199,12 @@ namespace auik::v2
             ctx.dirty_flags |= DirtyFlagBits::host_update;
         }
 
+        inline void mark_texture_bindings_mutation()
+        {
+            auto &ctx = get_context();
+            ctx.dirty_flags |= DirtyFlagBits::textures | DirtyFlagBits::redraw;
+        }
+
         APPLIB_API WindowContext *create_window_context();
 
         inline WindowContext *get_window_context()
@@ -217,23 +227,31 @@ namespace auik::v2
         ctx.theme = theme;
     }
 
-    inline DrawStream *get_primary_quad_stream() { return detail::get_context().streams.primary_quad_stream; }
+    inline DrawStream *get_primary_quad_stream()
+    {
+        auto *defaults = detail::get_context().streams.default_streams;
+        assert(defaults && "Default streams are not initialized");
+        return defaults[AUIK_PRIMARY_QUAD_STREAM];
+    }
     inline void set_primary_quad_stream(DrawStream *stream)
     {
-        detail::get_context().streams.primary_quad_stream = stream;
+        auto *defaults = detail::get_context().streams.default_streams;
+        assert(defaults && "Default streams are not initialized");
+        defaults[AUIK_PRIMARY_QUAD_STREAM] = stream;
     }
 
-    inline DrawStream *get_primary_image_stream() { return detail::get_context().streams.primary_image_stream; }
+    inline DrawStream *get_primary_image_stream()
+    {
+        auto *defaults = detail::get_context().streams.default_streams;
+        assert(defaults && "Default streams are not initialized");
+        return defaults[AUIK_PRIMARY_IMAGE_STREAM];
+    }
+
     inline void set_primary_image_stream(DrawStream *stream)
     {
-        detail::get_context().streams.primary_image_stream = stream;
-    }
-
-    inline DrawStream *get_overlay_quad_stream() { return detail::get_context().streams.overlay_quad_stream; }
-
-    inline void set_overlay_quad_stream(DrawStream *stream)
-    {
-        detail::get_context().streams.overlay_quad_stream = stream;
+        auto *defaults = detail::get_context().streams.default_streams;
+        assert(defaults && "Default streams are not initialized");
+        defaults[AUIK_PRIMARY_IMAGE_STREAM] = stream;
     }
 
     inline u16 push_clip_rect(const amal::vec4 &rect)
@@ -281,4 +299,11 @@ namespace auik::v2
     inline const amal::vec2 &get_mouse_pos() { return detail::get_io().mouse_pos; }
 
     inline const amal::vec2 &get_display_size() { return detail::get_io().display_size; }
+
+    inline u32 get_texture_bind_slot(u64 handle)
+    {
+        auto &ctx = detail::get_context();
+        auto it = ctx.texture_bind_slots.find(handle);
+        return (it != ctx.texture_bind_slots.end()) ? it->second : AUIK_INVALID_DRAW_DATA_ID;
+    }
 } // namespace auik::v2

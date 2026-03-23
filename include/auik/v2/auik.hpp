@@ -20,6 +20,7 @@ namespace auik::v2
         detail::GPUContext *gpu_ctx = nullptr;
         detail::WindowContext *window_ctx = nullptr;
         u32 frames_in_flight = 0;
+        u32 max_textures_size = 32;
         bool *host_refresh_request = nullptr;
         PendingFilter *pending_filter = nullptr;
 
@@ -51,6 +52,12 @@ namespace auik::v2
         CreateInfo &set_frames_in_flight(u32 frames_in_flight)
         {
             this->frames_in_flight = frames_in_flight;
+            return *this;
+        }
+
+        CreateInfo &set_max_textures_size(u32 max_textures_size)
+        {
+            this->max_textures_size = max_textures_size;
             return *this;
         }
 
@@ -107,7 +114,8 @@ namespace auik::v2
         ctx.screen_cursor = {0.0f, 0.0f};
         ctx.frame_id = (ctx.frame_id + 1) % ctx.frames_in_flight;
         if (!(ctx.dirty_flags & DirtyFlagBits::hover_update)) ctx.dirty_flags &= ~DirtyFlagBits::redraw;
-        ctx.dirty_flags &= ~(DirtyFlagBits::hover_update | DirtyFlagBits::host_update | DirtyFlagBits::hit_rect_update);
+        ctx.dirty_flags &= ~(DirtyFlagBits::hover_update | DirtyFlagBits::host_update | DirtyFlagBits::hit_rect_update |
+                             DirtyFlagBits::textures);
     }
 
     inline void sync_gpu_cache()
@@ -193,7 +201,8 @@ namespace auik::v2
         }
 
         auto it = ctx.id_map.find(widget_id);
-        if (it != ctx.id_map.end() && it->second && ctx.io.widget_shortcuts.find(widget_id) == ctx.io.widget_shortcuts.end())
+        if (it != ctx.id_map.end() && it->second &&
+            ctx.io.widget_shortcuts.find(widget_id) == ctx.io.widget_shortcuts.end())
             it->second->remove_event_flags(EventFlagBits::shortcut);
     }
 
@@ -214,4 +223,8 @@ namespace auik::v2
         detail::mark_host_refresh_request();
         return true;
     }
+
+    APPLIB_API u32 get_service_pipelines_count();
+    APPLIB_API u32 get_default_streams_pipelines_count();
+    APPLIB_API u32 get_default_streams_count();
 } // namespace auik::v2

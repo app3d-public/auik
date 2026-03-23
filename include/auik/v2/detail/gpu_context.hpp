@@ -55,6 +55,7 @@ namespace auik::v2::detail
         PFN_copy_rects_frame copy_hit_rects_frame = nullptr;
         PFN_update_hover_id update_hover_id = nullptr;
         StreamGPUDispatch quads{};
+        StreamGPUDispatch textures{};
     };
 
     inline u32 push_hit_rect(GPUContext *gpu_context, const RectData &rect)

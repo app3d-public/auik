@@ -5,6 +5,14 @@ namespace auik::v2
 {
     constexpr u32 AUIK_INVALID_DRAW_DATA_ID = 0xFFFFFFFFu;
 
+    struct TextureID
+    {
+        u64 handle = 0;
+        u32 bind_slot = AUIK_INVALID_DRAW_DATA_ID;
+    };
+
+    constexpr TextureID AUIK_INVALID_TEXTURE_ID{};
+
     struct DrawDataID
     {
         u32 render_id = AUIK_INVALID_DRAW_DATA_ID;
@@ -13,6 +21,7 @@ namespace auik::v2
 
     class Theme;
     class Widget;
+    class Image;
     struct DrawStream;
     struct DrawPipeline;
 

@@ -1,48 +1,50 @@
 #include <acul/scalars.hpp>
 #include <acul/string/string.hpp>
 #include <auik/shaders.h>
-#include <auik/v2/backends/agrb/quads_pipeline.hpp>
+#include <auik/v2/backends/agrb/textures_pipeline.hpp>
 #include <auik/v2/pipelines.hpp>
 #include "../instance_stream.hpp"
 
 namespace auik::v2::detail
 {
-    using QuadsStream = InstanceStream<QuadsInstanceData>;
+    using TexturesStream = InstanceStream<TexturesInstanceData>;
 
-    void render_quads_stream(DrawStream *stream, void *render_ctx, GPUContext *gpu_context, u32 frame_id)
+    void render_textures_stream(DrawStream *stream, void *render_ctx, GPUContext *gpu_context, u32 frame_id)
     {
         if (stream->draw_sizes[frame_id] == 0) return;
-        auto &gpu_data = static_cast<QuadsStream *>(stream->stream_instances)[frame_id];
+        auto &gpu_data = static_cast<TexturesStream *>(stream->stream_instances)[frame_id];
+        auto *ctx = get_agrb_context(gpu_context);
+        if (!ctx->bindless_texture_set) return;
         if (!update_instance_descriptor_set(stream, gpu_data, gpu_context, frame_id)) return;
         auto *pipeline = stream->pipeline;
         auto &device = get_agrb_device(gpu_context);
         auto &cmd = *static_cast<vk::CommandBuffer *>(render_ctx);
         auto &loader = device.loader;
+        const vk::DescriptorSet descriptor_sets[] = {gpu_data.descriptor_set, ctx->bindless_texture_set};
         cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline->handle, loader);
-        cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipeline->layout, 0, 1, &gpu_data.descriptor_set, 0,
-                               nullptr, loader);
+        cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipeline->layout, 0, 2, descriptor_sets, 0, nullptr,
+                               loader);
         cmd.pushConstants(pipeline->layout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(amal::vec2),
                           &get_display_size(), loader);
         cmd.draw(6, stream->draw_sizes[frame_id], 0, 0, loader);
     }
 
-    void init_quads_pipeline_calls(StreamGPUDispatch &dispatch)
+    void init_textures_pipeline_calls(StreamGPUDispatch &dispatch)
     {
-        dispatch.push_data_to_stream = &push_data_to_instance_stream<QuadsInstanceData>;
-        dispatch.update_stream_data = &update_instance_stream_data<QuadsInstanceData>;
-        dispatch.clear_stream = &clear_instance_stream<QuadsStream>;
-        dispatch.copy_stream_frame_data = &copy_instance_stream_frame_data<QuadsStream>;
-        dispatch.sync_stream_cache = &sync_instance_stream_cache<QuadsStream>;
-        dispatch.render_stream = &render_quads_stream;
-        dispatch.create_stream_gpu_data = &create_instance_stream_gpu_data<QuadsStream>;
-        dispatch.destroy_stream_gpu_data = &destroy_instance_stream_gpu_data<QuadsStream>;
+        dispatch.push_data_to_stream = &push_data_to_instance_stream<TexturesInstanceData>;
+        dispatch.update_stream_data = &update_instance_stream_data<TexturesInstanceData>;
+        dispatch.clear_stream = &clear_instance_stream<TexturesStream>;
+        dispatch.copy_stream_frame_data = &copy_instance_stream_frame_data<TexturesStream>;
+        dispatch.sync_stream_cache = &sync_instance_stream_cache<TexturesStream>;
+        dispatch.render_stream = &render_textures_stream;
+        dispatch.create_stream_gpu_data = &create_instance_stream_gpu_data<TexturesStream>;
+        dispatch.destroy_stream_gpu_data = &destroy_instance_stream_gpu_data<TexturesStream>;
     }
-
 } // namespace auik::v2::detail
 
 namespace auik::v2
 {
-    bool construct_quads_pipeline(DrawPipeline &pipeline, agrb::device &device)
+    bool construct_textures_pipeline(DrawPipeline &pipeline, agrb::device &device)
     {
         pipeline.descriptor_set_layout =
             agrb::descriptor_set_layout::builder()
@@ -51,10 +53,13 @@ namespace auik::v2
                 .build(device);
         if (!pipeline.descriptor_set_layout) return false;
 
-        const vk::DescriptorSetLayout set_layouts[] = {pipeline.descriptor_set_layout->layout()};
+        auto *ctx = detail::get_agrb_context(detail::get_context().gpu_ctx);
+        assert(ctx && ctx->bindless_texture_layout);
+        const vk::DescriptorSetLayout set_layouts[] = {pipeline.descriptor_set_layout->layout(),
+                                                       ctx->bindless_texture_layout->layout()};
         const vk::PushConstantRange push_constant{vk::ShaderStageFlagBits::eVertex, 0, sizeof(amal::vec2)};
         vk::PipelineLayoutCreateInfo pipeline_layout_info{};
-        pipeline_layout_info.setLayoutCount = 1;
+        pipeline_layout_info.setLayoutCount = 2;
         pipeline_layout_info.pSetLayouts = set_layouts;
         pipeline_layout_info.pushConstantRangeCount = 1;
         pipeline_layout_info.pPushConstantRanges = &push_constant;
@@ -62,8 +67,8 @@ namespace auik::v2
         return pipeline.layout != nullptr;
     }
 
-    bool configure_quads_pipeline(agrb::graphics_pipeline_batch::artifact &artifact, vk::RenderPass render_pass,
-                                  DrawPipeline &pipeline, agrb::device &device)
+    bool configure_textures_pipeline(agrb::graphics_pipeline_batch::artifact &artifact, vk::RenderPass render_pass,
+                                     DrawPipeline &pipeline, agrb::device &device)
     {
         auto *tmp = static_cast<agrb::graphics_pipeline_batch::artifact::custom_data_t<u32> *>(artifact.tmp);
         if (!tmp) return false;
@@ -87,9 +92,9 @@ namespace auik::v2
 
         const auto &path = detail::get_shader_library_path();
         vk::ShaderModule shaders[2];
-        auto vs = agrb::get_shader(AS_AUIK_QUADS_VS, shaders[0], ctx->shader_cache, device, path);
+        auto vs = agrb::get_shader(AS_AUIK_TEXTURES_VS, shaders[0], ctx->shader_cache, device, path);
         if (!vs.success()) return false;
-        auto fs = agrb::get_shader(AS_AUIK_QUADS_FS, shaders[1], ctx->shader_cache, device, path);
+        auto fs = agrb::get_shader(AS_AUIK_TEXTURES_FS, shaders[1], ctx->shader_cache, device, path);
         if (!fs.success()) return false;
         agrb::prepare_base_graphics_pipeline(artifact, shaders, device);
         return true;
