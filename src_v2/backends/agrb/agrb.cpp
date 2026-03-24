@@ -1,3 +1,4 @@
+#include <agrb/texture.hpp>
 #include <auik/v2/backends/agrb/agrb.hpp>
 #include <auik/v2/backends/agrb/quads_pipeline.hpp>
 #include <auik/v2/backends/agrb/textures_pipeline.hpp>
@@ -32,8 +33,7 @@ namespace auik::v2
                 ctx->bindless_texture_layout =
                     agrb::descriptor_set_layout::builder()
                         .add_binding(0, vk::DescriptorType::eCombinedImageSampler, vk::ShaderStageFlagBits::eFragment,
-                                     get_context().max_textures_size,
-                                     vk::DescriptorBindingFlagBits::ePartiallyBound)
+                                     get_context().max_textures_size, vk::DescriptorBindingFlagBits::ePartiallyBound)
                         .build(ctx->device);
                 if (!ctx->bindless_texture_layout) return false;
             }
@@ -145,6 +145,60 @@ namespace auik::v2
             auto *ctx = get_agrb_context(gpu_context);
             ctx->picker->copy_frame_data(dst_frame_id, src_frame_id);
         }
+
+        static bool create_atlas_texture_impl(GPUContext *gpu_context, AtlasTextureResource *resource, u32 width,
+                                              u32 height, const void *pixels, size_t size)
+        {
+            (void)size;
+            if (!resource || !pixels || width == 0 || height == 0) return false;
+
+            auto *ctx = get_agrb_context(gpu_context);
+            auto *handle = acul::alloc<agrb::texture>();
+            handle->format = vk::Format::eR8G8B8A8Unorm;
+            handle->image_extent = vk::Extent3D{width, height, 1};
+            handle->mip_levels = 1;
+            handle->size = static_cast<vk::DeviceSize>(width) * height * 4;
+            if (!agrb::allocate_texture(*handle, vk::ImageViewType::e2D, const_cast<void *>(pixels), ctx->device))
+            {
+                acul::release(handle);
+                return false;
+            }
+
+            resource->texture_id =
+                add_agrb_texture(handle->sampler, handle->image_view, vk::ImageLayout::eShaderReadOnlyOptimal);
+            if (resource->texture_id.handle == 0)
+            {
+                agrb::destroy_texture(*handle, ctx->device);
+                acul::release(handle);
+                return false;
+            }
+
+            resource->handle = handle;
+            resource->width = width;
+            resource->height = height;
+            return true;
+        }
+
+        static void destroy_atlas_texture_impl(GPUContext *gpu_context, AtlasTextureResource *resource)
+        {
+            if (!resource || !resource->handle) return;
+            auto *ctx = get_agrb_context(gpu_context);
+            auto *handle = static_cast<agrb::texture *>(resource->handle);
+            if (handle->image_view) remove_agrb_texture(handle->image_view);
+            if (handle->image) agrb::destroy_texture(*handle, ctx->device);
+            acul::release(handle);
+            *resource = {};
+        }
+
+        static bool upload_atlas_texture_impl(GPUContext *gpu_context, AtlasTextureResource *resource,
+                                              const void *pixels, size_t size, u32 width, u32 height, i32 x, i32 y)
+        {
+            if (!resource || !resource->handle || !pixels || width == 0 || height == 0) return false;
+            auto *ctx = get_agrb_context(gpu_context);
+            auto *handle = static_cast<agrb::texture *>(resource->handle);
+            return agrb::upload_texture_subimage(*handle, const_cast<void *>(pixels), static_cast<vk::DeviceSize>(size),
+                                                 vk::Extent3D{width, height, 1}, vk::Offset3D{x, y, 0}, ctx->device);
+        }
     } // namespace detail
 
     static void destroy_agrb_backend(detail::GPUContext *gpu_context)
@@ -195,6 +249,9 @@ namespace auik::v2
         agrb_ctx->clear_hit_rects = &detail::clear_hit_rects_impl;
         agrb_ctx->copy_hit_rects_frame = &detail::copy_hit_rects_frame_impl;
         agrb_ctx->update_hover_id = &detail::update_hover_id_impl;
+        agrb_ctx->create_atlas_texture = &detail::create_atlas_texture_impl;
+        agrb_ctx->destroy_atlas_texture = &detail::destroy_atlas_texture_impl;
+        agrb_ctx->upload_atlas_texture = &detail::upload_atlas_texture_impl;
         detail::init_quads_pipeline_calls(agrb_ctx->quads);
         detail::init_textures_pipeline_calls(agrb_ctx->textures);
         return agrb_ctx;

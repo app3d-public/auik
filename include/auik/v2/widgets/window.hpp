@@ -41,8 +41,7 @@ namespace auik::v2
         WindowFlags window_flags;
         acul::vector<Widget *> children;
 
-        APPLIB_API Window(u32 id, amal::vec2 pos = amal::vec2(0.0f), amal::vec2 size = amal::vec2(0.0f),
-                          WindowFlags window_flags = get_default_window_flags(),
+        APPLIB_API Window(u32 id, const amal::rect &bounds = {}, WindowFlags window_flags = get_default_window_flags(),
                           WidgetFlags widget_flags = get_default_widget_flags() | WidgetFlagBits::hittable,
                           Widget *parent = nullptr);
         APPLIB_API ~Window() override;

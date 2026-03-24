@@ -1,8 +1,8 @@
 #include <acul/memory/alloc.hpp>
 #include <auik/v2/auik.hpp>
+#include <auik/v2/detail/depth.hpp>
 #include <auik/v2/pipelines.hpp>
 #include <auik/v2/widgets/window.hpp>
-#include <cassert>
 
 namespace auik::v2
 {
@@ -60,8 +60,8 @@ namespace auik::v2
     {
     public:
         explicit WindowHeader(Widget *parent)
-            : Widget(AUIK_TAG_WINDOW_HEADER, WidgetFlagBits::visible | WidgetFlagBits::foreground,
-                     EventFlagBits::none, parent, {0.0f, 0.0f}, {0.0f, 0.0f}, AUIK_TAG_WINDOW_HEADER),
+            : Widget(AUIK_TAG_WINDOW_HEADER, WidgetFlagBits::visible | WidgetFlagBits::foreground, EventFlagBits::none,
+                     parent, {}, AUIK_TAG_WINDOW_HEADER),
               _style({Theme::STYLE_ID_INVALID, AUIK_TAG_WINDOW_HEADER})
         {
             assert(parent);
@@ -101,8 +101,7 @@ namespace auik::v2
             auto *quads_stream = get_primary_quad_stream();
 
             QuadsInstanceData data{};
-            data.position = position();
-            data.size = size();
+            data.rect = bounds();
             data.z_order = get_z_order();
             fill_quads_instance_by_style(theme->get_style(_style.id), clip_id(), data);
             ctx.emit(quads_stream, _bg, &data, get_rect(), ctx.emit_hit_rect);
@@ -113,10 +112,10 @@ namespace auik::v2
         StyleSelector _style;
     };
 
-    Window::Window(u32 id, amal::vec2 pos, amal::vec2 size, WindowFlags in_window_flags, WidgetFlags in_widget_flags,
+    Window::Window(u32 id, const amal::rect &bounds, WindowFlags in_window_flags, WidgetFlags in_widget_flags,
                    Widget *parent)
-        : Widget(id, in_widget_flags, EventFlagBits::click | EventFlagBits::drag | EventFlagBits::focus, parent, pos,
-                 size, AUIK_TAG_WINDOW),
+        : Widget(id, in_widget_flags, EventFlagBits::click | EventFlagBits::drag | EventFlagBits::focus, parent, bounds,
+                 AUIK_TAG_WINDOW),
           window_flags(in_window_flags)
     {
         widget_flags |= WidgetFlagBits::hittable;
@@ -160,8 +159,7 @@ namespace auik::v2
 
         auto &window_style = theme->get_style(_window_style.id);
         QuadsInstanceData bg_data{};
-        bg_data.position = position();
-        bg_data.size = size();
+        bg_data.rect = bounds();
         bg_data.z_order = get_z_order();
         fill_quads_instance_by_style(window_style, clip_id(), bg_data);
         ctx.emit(quads_stream, _bg, &bg_data, get_rect(), ctx.emit_hit_rect);

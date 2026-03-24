@@ -1,5 +1,6 @@
 #pragma once
 
+#include <amal/rect.hpp>
 #include "draw.hpp"
 #include "theme.hpp"
 
@@ -10,8 +11,7 @@ namespace auik::v2
 {
     struct QuadsInstanceData
     {
-        amal::vec2 position;
-        amal::vec2 size;
+        amal::rect rect;
         amal::vec4 background_color;
         amal::vec4 border_color;
         f32 border_radius;
@@ -45,17 +45,17 @@ namespace auik::v2
 
     struct TexturesInstanceData
     {
-        amal::vec2 position;
-        amal::vec2 size;
+        amal::rect rect;
         amal::vec4 tint_color{0.0f};
-        amal::vec2 uv_size;
-        amal::vec2 uv_offset;
+        amal::rect uv_rect;
         f32 z_order;
         u16 texture_id;
         u16 clip_id;
+        // std430 array-of-struct stride is 16-byte aligned, so keep CPU layout at 64 bytes.
+        u32 _padding[2]{0u, 0u};
     };
 
-    static_assert(sizeof(TexturesInstanceData) == 56, "TexturesInstanceData must be exactly 56 bytes");
+    static_assert(sizeof(TexturesInstanceData) == 64, "TexturesInstanceData must be exactly 64 bytes");
 
     APPLIB_API void create_textures_stream_cached(DrawStream &stream);
     APPLIB_API void create_textures_stream_transient(DrawStream &stream);

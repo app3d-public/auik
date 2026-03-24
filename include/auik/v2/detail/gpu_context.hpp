@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <acul/api.hpp>
 #include <amal/vector.hpp>
 #include "events.hpp"
@@ -18,6 +19,18 @@ namespace auik::v2::detail
     using PFN_clear_hit_rects = void (*)(GPUContext *);
     using PFN_update_hover_id = void (*)(GPUContext *, void *);
     using PFN_create_gpu_resources = bool (*)(GPUContext *);
+    struct AtlasTextureResource
+    {
+        void *handle = nullptr;
+        TextureID texture_id = AUIK_INVALID_TEXTURE_ID;
+        u32 width = 0;
+        u32 height = 0;
+    };
+    using PFN_create_atlas_texture =
+        bool (*)(GPUContext *, AtlasTextureResource *, u32, u32, const void *, size_t);
+    using PFN_destroy_atlas_texture = void (*)(GPUContext *, AtlasTextureResource *);
+    using PFN_upload_atlas_texture =
+        bool (*)(GPUContext *, AtlasTextureResource *, const void *, size_t, u32, u32, i32, i32);
 
     using PFN_push_data_to_stream = DrawDataID (*)(DrawStream *, const void *, u32);
     using PFN_update_stream_data = void (*)(DrawStream *, DrawDataID, const void *, u32);
@@ -54,6 +67,9 @@ namespace auik::v2::detail
         PFN_clear_hit_rects clear_hit_rects = nullptr;
         PFN_copy_rects_frame copy_hit_rects_frame = nullptr;
         PFN_update_hover_id update_hover_id = nullptr;
+        PFN_create_atlas_texture create_atlas_texture = nullptr;
+        PFN_destroy_atlas_texture destroy_atlas_texture = nullptr;
+        PFN_upload_atlas_texture upload_atlas_texture = nullptr;
         StreamGPUDispatch quads{};
         StreamGPUDispatch textures{};
     };
@@ -74,6 +90,26 @@ namespace auik::v2::detail
     }
 
     inline bool create_gpu_resources(GPUContext *gpu_context) { return gpu_context->create_resources(gpu_context); }
+
+    inline bool create_atlas_texture(GPUContext *gpu_context, AtlasTextureResource *resource, u32 width, u32 height,
+                                     const void *pixels, size_t size)
+    {
+        assert(gpu_context->create_atlas_texture);
+        return gpu_context->create_atlas_texture(gpu_context, resource, width, height, pixels, size);
+    }
+
+    inline void destroy_atlas_texture(GPUContext *gpu_context, AtlasTextureResource *resource)
+    {
+        if (!resource || !gpu_context->destroy_atlas_texture) return;
+        gpu_context->destroy_atlas_texture(gpu_context, resource);
+    }
+
+    inline bool upload_atlas_texture(GPUContext *gpu_context, AtlasTextureResource *resource, const void *pixels,
+                                     size_t size, u32 width, u32 height, i32 x, i32 y)
+    {
+        assert(gpu_context->upload_atlas_texture);
+        return gpu_context->upload_atlas_texture(gpu_context, resource, pixels, size, width, height, x, y);
+    }
 
     inline void destroy_gpu_context(GPUContext *gpu_context)
     {

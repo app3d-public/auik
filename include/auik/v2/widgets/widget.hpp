@@ -10,11 +10,6 @@
 
 namespace auik::v2
 {
-    namespace detail
-    {
-        APPLIB_API amal::vec2 get_depth_workzone_range(const amal::vec2 &r);
-    } // namespace detail
-
     struct WidgetFlagBits
     {
         enum enum_type
@@ -62,12 +57,12 @@ namespace auik::v2
         TextFlags text_flags = TextFlagBits::none;
 
         Widget(u32 id, WidgetFlags flags, EventFlags event_flags = EventFlagBits::none, Widget *parent = nullptr,
-               amal::vec2 pos = {0.0f, 0.0f}, amal::vec2 size = {0.0f, 0.0f}, u32 tag_id = 0)
+               amal::rect bounds = {}, u32 tag_id = 0)
             : widget_flags(flags),
               event_flags(event_flags),
               _id(id),
               _parent(parent),
-              _rect(detail::make_rect_data(id, tag_id, pos, size))
+              _rect(detail::make_rect_data(id, tag_id, bounds))
         {
         }
 
@@ -103,12 +98,14 @@ namespace auik::v2
 
         inline f32 get_z_order() const { return _rect.depth; }
         inline const amal::vec2 &depth_range() const { return _depth_range; }
-        inline amal::vec2 &position() { return _rect.position; }
-        inline const amal::vec2 &position() const { return _rect.position; }
-        inline amal::vec2 &size() { return _rect.size; }
-        inline const amal::vec2 &size() const { return _rect.size; }
-        inline void set_position(const amal::vec2 &pos) { _rect.position = pos; }
-        inline void set_size(const amal::vec2 &size) { _rect.size = size; }
+        inline amal::rect bounds() { return _rect.bounds; }
+        inline const amal::rect &bounds() const { return _rect.bounds; }
+        inline amal::vec2 &position() { return _rect.bounds.offset; }
+        inline const amal::vec2 &position() const { return _rect.bounds.offset; }
+        inline amal::vec2 &size() { return _rect.bounds.size; }
+        inline const amal::vec2 &size() const { return _rect.bounds.size; }
+        inline void set_position(const amal::vec2 &pos) { _rect.bounds.offset = pos; }
+        inline void set_size(const amal::vec2 &size) { _rect.bounds.size = size; }
         inline const amal::vec2 &required_size() const { return _required_size; }
         inline void set_required_size(const amal::vec2 &size) { _required_size = size; }
         inline bool is_fixed() const { return widget_flags & WidgetFlagBits::fixed; }

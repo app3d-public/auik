@@ -36,10 +36,8 @@ namespace auik::v2
         assert(_texture_id.bind_slot <= 0xFFFFu && "AUIK Image texture slot overflow");
 
         TexturesInstanceData image_data{};
-        image_data.position = position();
-        image_data.size = size();
-        image_data.uv_size = _uv_size;
-        image_data.uv_offset = _uv_offset;
+        image_data.rect = bounds();
+        image_data.uv_rect = _uv_rect;
         image_data.z_order = get_z_order();
         image_data.texture_id = static_cast<u16>(_texture_id.bind_slot);
         image_data.clip_id = clip_id();

@@ -4,7 +4,7 @@
 #include <acul/enum.hpp>
 #include <acul/pair.hpp>
 #include <acul/scalars.hpp>
-#include <amal/vector.hpp>
+#include <amal/rect.hpp>
 #include "../events.hpp"
 
 #define AUIK_TAG_HITBOX 0xBF9B2277u
@@ -156,23 +156,20 @@ namespace auik::v2::detail
     {
         u32 widget_id = 0;
         u32 tag_id = 0;
-        amal::vec2 position{0.0f, 0.0f};
-        amal::vec2 size{0.0f, 0.0f};
+        amal::rect bounds;
         f32 depth = 0.0f;
         u16 clip_id = 0xFFFFu;
         u16 flags = 0;
     };
     static_assert(sizeof(RectData) == 32, "RectData must match picker std430 layout");
 
-    inline RectData make_rect_data(u32 widget_id, u32 tag_id, amal::vec2 position = {0.0f, 0.0f},
-                                   amal::vec2 size = {0.0f, 0.0f}, u16 clip_id = 0xFFFFu, f32 depth = 0.0f,
-                                   u16 flags = 0)
+    inline RectData make_rect_data(u32 widget_id, u32 tag_id, amal::rect bounds = {}, u16 clip_id = 0xFFFFu,
+                                   f32 depth = 0.0f, u16 flags = 0)
     {
         RectData rect{};
         rect.widget_id = widget_id;
         rect.tag_id = tag_id;
-        rect.position = position;
-        rect.size = size;
+        rect.bounds = bounds;
         rect.depth = depth;
         rect.clip_id = clip_id;
         rect.flags = flags;

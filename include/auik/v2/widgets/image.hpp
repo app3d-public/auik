@@ -15,12 +15,11 @@ namespace auik::v2
     class APPLIB_API Image : public Widget
     {
     public:
-        Image(u32 id, TextureID texture_id, amal::vec2 size, amal::vec2 uv_size, amal::vec2 uv_offset,
+        Image(u32 id, TextureID texture_id, amal::vec2 size, amal::rect uv_rect = {{0.0f, 0.0f}, {1.0f, 1.0f}},
               Widget *parent = nullptr)
-            : Widget(id, get_default_image_flags(), EventFlagBits::none, parent, {0.0f, 0.0f}, size, AUIK_TAG_IMAGE),
+            : Widget(id, get_default_image_flags(), EventFlagBits::none, parent, {{0.0f}, size}, AUIK_TAG_IMAGE),
               _texture_id(texture_id),
-              _uv_size(uv_size),
-              _uv_offset(uv_offset)
+              _uv_rect(uv_rect)
         {
         }
 
@@ -34,23 +33,22 @@ namespace auik::v2
         const TextureID &texture_id() const { return _texture_id; }
         void set_texture_id(TextureID texture_id) { _texture_id = texture_id; }
 
-        const amal::vec2 &uv_size() const { return _uv_size; }
-        void set_uv_size(const amal::vec2 &uv_size) { _uv_size = uv_size; }
+        const amal::vec2 &uv_size() const { return _uv_rect.size; }
+        void set_uv_size(const amal::vec2 &uv_size) { _uv_rect.size = uv_size; }
 
-        const amal::vec2 &uv_offset() const { return _uv_offset; }
-        void set_uv_offset(const amal::vec2 &uv_offset) { _uv_offset = uv_offset; }
+        const amal::vec2 &uv_offset() const { return _uv_rect.offset; }
+        void set_uv_offset(const amal::vec2 &uv_offset) { _uv_rect.offset = uv_offset; }
 
     private:
         DrawDataID _image{};
-        TextureID _texture_id{};
-        amal::vec2 _uv_size{1.0f, 1.0f};
-        amal::vec2 _uv_offset{0.0f, 0.0f};
+        TextureID _texture_id;
+        amal::rect _uv_rect;
     };
 
-    inline Image *make_image(u32 id, TextureID texture_id, amal::vec2 size, amal::vec2 uv_size = {1.0f, 1.0f},
-                             amal::vec2 uv_offset = {0.0f, 0.0f})
+    inline Image *make_image(u32 id, TextureID texture_id, amal::vec2 size,
+                             amal::rect uv_rect = {{0.0f, 0.0f}, {1.0f, 1.0f}})
     {
-        return acul::alloc<Image>(id, texture_id, size, uv_size, uv_offset, nullptr);
+        return acul::alloc<Image>(id, texture_id, size, uv_rect, nullptr);
     }
 
     inline void cache_image(u32 id, Image *image)

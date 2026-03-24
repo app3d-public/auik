@@ -22,7 +22,7 @@ namespace auik::v2
     {
     public:
         TextButton(u32 id, amal::vec2 size, WidgetFlags widget_flags, EventFlags event_flags, Widget *parent)
-            : Widget(id, widget_flags, event_flags, parent, {0.0f, 0.0f}, size, AUIK_TAG_TEXT_BUTTON),
+            : Widget(id, widget_flags, event_flags, parent, {}, AUIK_TAG_TEXT_BUTTON),
               _style({Theme::STYLE_ID_INVALID, AUIK_TAG_TEXT_BUTTON})
         {
         }
@@ -31,7 +31,7 @@ namespace auik::v2
         void update_layout_min_size() override;
         void update_layout(bool min_size_known) override;
         void rebuild_clip_rects() override;
-        
+
         void draw(DrawCtx &ctx) override;
 
     private:

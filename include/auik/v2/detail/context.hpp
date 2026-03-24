@@ -10,10 +10,13 @@
 #include <acul/string/string.hpp>
 #include <amal/common.hpp>
 #include <amal/vector.hpp>
+#include "atlas.hpp"
 #include "../pending_filter.hpp"
 #include "events.hpp"
 #include "fwd.hpp"
 #include "gpu_context.hpp"
+
+struct FT_LibraryRec_;
 
 #define AUIK_SYNC_CLIP_RECT       0
 #define AUIK_SYNC_HIT_RECT        1
@@ -115,11 +118,13 @@ namespace auik::v2
             int root_depth_counts[3] = {};
             GPUContext *gpu_ctx = nullptr;
             WindowContext *window_ctx = nullptr;
+            ::FT_LibraryRec_ *ft_library = nullptr;
             IO io;
             u32 frame_id = 0;
             u32 frames_in_flight = 0;
             u32 max_textures_size = 32;
             SharedBufferSyncState shared_sync_state[2];
+            AtlasState atlas_state;
             amal::vec2 screen_cursor{0.0f, 0.0f};
             DirtyFlags dirty_flags = DirtyFlagBits::none;
             Theme *theme = nullptr;

@@ -25,7 +25,12 @@ if(PROJECT_IS_TOP_LEVEL)
     add_subdirectory(modules/acul)
 endif()
 
-target_link_libraries(${PROJECT_NAME} PRIVATE acul amal auik)
+target_link_libraries(${PROJECT_NAME} PRIVATE acul amal auik umbf)
+
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(FREETYPE2 REQUIRED freetype2)
+pkg_search_module(FONTCONFIG REQUIRED fontconfig)
+target_link_libraries(${PROJECT_NAME} PRIVATE ${FREETYPE2_LIBRARIES} ${FONTCONFIG_LIBRARIES})
 
 if(WIN32)
     # Manifest

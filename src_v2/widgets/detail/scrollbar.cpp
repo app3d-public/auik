@@ -66,9 +66,9 @@ namespace auik::v2::detail
 
     bool Scrollbar::is_point_on_thumb(const amal::vec2 &mouse_pos) const
     {
-        const auto &r = _thumb_rect;
-        return mouse_pos.x >= r.position.x && mouse_pos.y >= r.position.y && mouse_pos.x < (r.position.x + r.size.x) &&
-               mouse_pos.y < (r.position.y + r.size.y);
+        const auto &r = _thumb_rect.bounds;
+        return mouse_pos.x >= r.offset.x && mouse_pos.y >= r.offset.y && mouse_pos.x < (r.offset.x + r.size.x) &&
+               mouse_pos.y < (r.offset.y + r.size.y);
     }
 
     bool Scrollbar::scroll_thumb_by_drag_delta(const amal::vec2 &delta)
@@ -176,9 +176,8 @@ namespace auik::v2::detail
             const f32 thumb_w = amal::min(desired_thumb_w, lane_size.x);
             const f32 thumb_offset_x = amal::max((lane_size.x - thumb_w) * 0.5f, 0.0f);
 
-            _thumb_rect.position = {lane_pos.x + thumb_offset_x,
-                                    lane_pos.y + thumb_range * scroll_norm + thumb_offset_top};
-            _thumb_rect.size = {thumb_w, thumb_h};
+            _thumb_rect.bounds = {lane_pos.x + thumb_offset_x,
+                                  lane_pos.y + thumb_range * scroll_norm + thumb_offset_top, thumb_w, thumb_h};
             return;
         }
 
@@ -199,9 +198,8 @@ namespace auik::v2::detail
         const f32 thumb_h = amal::min(desired_thumb_h, lane_size.y);
         const f32 thumb_offset_y = amal::max((lane_size.y - thumb_h) * 0.5f, 0.0f);
 
-        _thumb_rect.position = {lane_pos.x + thumb_range * scroll_norm + thumb_offset_left,
-                                lane_pos.y + thumb_offset_y};
-        _thumb_rect.size = {thumb_w, thumb_h};
+        _thumb_rect.bounds = {lane_pos.x + thumb_range * scroll_norm + thumb_offset_left, lane_pos.y + thumb_offset_y,
+                              thumb_w, thumb_h};
     }
 
     StyleUpdateFlags Scrollbar::update_style()
@@ -227,15 +225,13 @@ namespace auik::v2::detail
         auto *quads_stream = get_primary_quad_stream();
 
         QuadsInstanceData track{};
-        track.position = position();
-        track.size = size();
+        track.rect = bounds();
         track.z_order = get_z_order();
         fill_quads_instance_by_style(theme->get_style(_track_style.id), clip_id(), track);
         ctx.emit(quads_stream, _track_draw_id, &track, get_rect(), ctx.emit_hit_rect);
 
         QuadsInstanceData thumb{};
-        thumb.position = _thumb_rect.position;
-        thumb.size = _thumb_rect.size;
+        thumb.rect = _thumb_rect.bounds;
         thumb.z_order = next_depth(depth_range());
         _thumb_rect.depth = thumb.z_order;
         fill_quads_instance_by_style(theme->get_style(_thumb_style.id), clip_id(), thumb);

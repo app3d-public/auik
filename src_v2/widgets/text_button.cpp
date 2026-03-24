@@ -7,7 +7,8 @@ namespace auik::v2
     StyleUpdateFlags TextButton::update_style()
     {
         const u32 parent_id = parent() ? parent()->id() : 0u;
-        return resolve_style_selector(_style, id(), parent_id, style_state());;
+        return resolve_style_selector(_style, id(), parent_id, style_state());
+        ;
     }
 
     void TextButton::update_layout_min_size()
@@ -61,8 +62,7 @@ namespace auik::v2
         auto *quads_stream = get_primary_quad_stream();
 
         QuadsInstanceData bg_data{};
-        bg_data.position = position();
-        bg_data.size = size();
+        bg_data.rect = bounds();
         bg_data.z_order = get_z_order();
         fill_quads_instance_by_style(theme->get_style(_style.id), clip_id(), bg_data);
         ctx.emit(quads_stream, _bg, &bg_data, get_rect(), ctx.emit_hit_rect);

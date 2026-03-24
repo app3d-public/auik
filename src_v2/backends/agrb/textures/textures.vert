@@ -5,8 +5,8 @@ struct TexturesInstanceData
     vec2 position;
     vec2 size;
     vec4 tint_color;
-    vec2 uv_size;
     vec2 uv_offset;
+    vec2 uv_size;
     float z_order;
     uint packed_id;
 };

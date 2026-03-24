@@ -1,17 +1,36 @@
 #pragma once
 
+#include <acul/comparator.hpp>
 #include <acul/disposal_queue.hpp>
 #include <acul/event.hpp>
 #include <acul/functional/unique_function.hpp>
-#include <utility>
 #include "detail/context.hpp"
 #include "detail/events.hpp"
 #include "draw.hpp"
 #include "pending_filter.hpp"
 #include "widgets/widget.hpp"
 
+struct FT_LibraryRec_;
+struct FT_FaceRec_;
+
+#define AUIK_ICON_CHEVRON_RIGHT 0x87DCB881u
+#define AUIK_ICON_CHEVRON_DOWN  0xE5275EADu
+#define AUIK_ICON_CHECKMARK     0x0E3F8C25u
+#define AUIK_ICON_SEARCH        0x57EA33E1u
+#define AUIK_ICON_FILTER        0x3D57E8D8u
+#define AUIK_ICON_MINIMIZE      0x7CB8CE8Du
+#define AUIK_ICON_MAXIMIZE      0x28392EA5u
+#define AUIK_ICON_RESTORE       0x2F89CAF9u
+#define AUIK_ICON_CLOSE         0xBF822112u
+#define AUIK_ICON_MENU          0xDDD65C07u
+
 namespace auik::v2
 {
+    class Font;
+
+    using FT_Library = ::FT_LibraryRec_ *;
+    using FT_Face = ::FT_FaceRec_ *;
+
     struct CreateInfo
     {
         acul::events::dispatcher *ed = nullptr;
@@ -227,4 +246,165 @@ namespace auik::v2
     APPLIB_API u32 get_service_pipelines_count();
     APPLIB_API u32 get_default_streams_pipelines_count();
     APPLIB_API u32 get_default_streams_count();
+
+    struct FontLoadFlagBits
+    {
+        enum enum_type : u32
+        {
+            none = 0x0,
+            no_scale = (1u << 0),
+            no_hinting = (1u << 1),
+            render = (1u << 2),
+            no_bitmap = (1u << 3),
+            vertical_layout = (1u << 4),
+            force_autohint = (1u << 5),
+            crop_bitmap = (1u << 6),
+            pedantic = (1u << 7),
+            advance_only = (1u << 8),
+            ignore_global_advance_width = (1u << 9),
+            no_recurse = (1u << 10),
+            ignore_transform = (1u << 11),
+            monochrome = (1u << 12),
+            linear_design = (1u << 13),
+            sbits_only = (1u << 14),
+            no_autohint = (1u << 15),
+            target_normal = (0u << 16),
+            target_light = (1u << 16),
+            target_mono = (2u << 16),
+            target_lcd = (3u << 16),
+            target_lcd_v = (4u << 16),
+            color = (1u << 20),
+            compute_metrics = (1u << 21),
+            bitmap_metrics_only = (1u << 22),
+            svg_only = (1u << 23),
+            no_svg = (1u << 24)
+        };
+        using flag_bitmask = std::true_type;
+    };
+
+    using FontLoadFlags = acul::flags<FontLoadFlagBits>;
+
+    enum class FontRenderMode : u32
+    {
+        normal = 0,
+        light = 1,
+        mono = 2,
+        lcd = 3,
+        lcd_v = 4,
+        sdf = 5
+    };
+
+    struct FontInfo
+    {
+        acul::string path = "";
+        acul::string fullname = "";
+        int weight = 0;
+        int slant = 0;
+    };
+
+    struct Glyph
+    {
+        u32 atlas_id = AUIK_INVALID_DRAW_DATA_ID;
+        TextureID texture_id = AUIK_INVALID_TEXTURE_ID;
+        amal::ivec2 size{0, 0};
+        amal::ivec2 offset{0, 0};
+        amal::irect pixel_rect{};
+        amal::rect uv_rect{};
+        f32 advance_x = 0.0f;
+        u32 colored : 1;
+        u32 empty : 1;
+        u32 codepoint : 30;
+
+        Glyph() : colored(0), empty(0), codepoint(0) {}
+
+        bool visible() const { return !empty && !amal::is_rect_empty(pixel_rect) && texture_id.handle != 0; }
+    };
+
+    using FontRegistry = acul::case_insensitive_map<acul::string, FontInfo>;
+
+    inline FontInfo *get_font_info_by_family(const FontRegistry &fonts, const acul::string &family,
+                                             const acul::string &fullname)
+    {
+        auto it = fonts[family];
+        if (it != fonts.cend())
+        {
+            auto &font_list = it->second;
+            auto found = std::find_if(font_list.begin(), font_list.end(),
+                                      [&fullname](const FontInfo &font) { return font.fullname == fullname; });
+            if (found != font_list.end()) return const_cast<FontInfo *>(&(*found));
+            return const_cast<FontInfo *>(&(*font_list.begin()));
+        }
+        return nullptr;
+    }
+
+    inline FontInfo *get_font_info_by_family(const FontRegistry &fonts, const acul::string &family)
+    {
+        return get_font_info_by_family(fonts, family, family);
+    }
+
+    class APPLIB_API Font
+    {
+    public:
+        Font() = default;
+        explicit Font(const FontInfo &info, int face_index = 0);
+        explicit Font(const acul::string &path, int face_index = 0);
+        ~Font();
+
+        Font(const Font &) = delete;
+        Font &operator=(const Font &) = delete;
+
+        Font(Font &&other) noexcept;
+        Font &operator=(Font &&other) noexcept;
+
+        bool load(const FontInfo &info, int face_index = 0);
+        bool load(const acul::string &path, int face_index = 0);
+        void clear();
+
+        bool set_pixel_size(u32 size_px);
+        void set_load_flags(FontLoadFlags flags);
+        void add_load_flags(FontLoadFlags flags);
+        void remove_load_flags(FontLoadFlags flags);
+        FontLoadFlags load_flags() const { return _load_flags; }
+        void set_render_mode(FontRenderMode mode);
+        FontRenderMode render_mode() const { return _render_mode; }
+        bool load_glyph(u32 codepoint);
+        bool load_glyphs(const acul::vector<u32> &codepoints);
+        bool load_glyphs(const acul::string &utf8_text);
+
+        bool is_loaded() const { return _face != nullptr; }
+        int face_index() const { return _face_index; }
+        size_t glyph_count() const { return _glyphs.size(); }
+        const FontInfo &info() const { return _info; }
+        const acul::string &path() const { return _info.path; }
+        const acul::string &fullname() const { return _info.fullname; }
+        int weight() const { return _info.weight; }
+        int slant() const { return _info.slant; }
+        FT_Face native_handle() const { return _face; }
+        Glyph *find_glyph(u32 codepoint);
+        const Glyph *find_glyph(u32 codepoint) const;
+
+    private:
+        FontInfo _info;
+        FT_Face _face = nullptr;
+        int _face_index = 0;
+        FontLoadFlags _load_flags = FontLoadFlagBits::color;
+        FontRenderMode _render_mode = FontRenderMode::normal;
+        acul::hashmap<u32, Glyph> _glyphs;
+    };
+
+    APPLIB_API bool load_fonts(FontRegistry &fonts, const acul::vector<acul::string> &search_dirs = {});
+
+    inline f32 pt_to_px(f32 pt, f32 dpi)
+    {
+        constexpr f32 pixels_per_pt = 96.0f / 72.0f;
+        return pt * dpi * pixels_per_pt;
+    }
+
+    inline u32 round_font_px(f32 size) { return static_cast<u32>(size + 0.5f); }
+
+    APPLIB_API bool load_material_icons(const FontRegistry &fonts, f32 dpi = 1.0f);
+
+#ifdef _WIN32
+    APPLIB_API bool load_win32_icons(const FontRegistry &fonts, f32 dpi = 1.0f);
+#endif
 } // namespace auik::v2
