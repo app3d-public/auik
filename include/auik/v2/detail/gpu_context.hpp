@@ -33,6 +33,7 @@ namespace auik::v2::detail
         bool (*)(GPUContext *, AtlasTextureResource *, const void *, size_t, u32, u32, i32, i32);
 
     using PFN_push_data_to_stream = DrawDataID (*)(DrawStream *, const void *, u32);
+    using PFN_push_data_batch_to_stream = void (*)(DrawStream *, const void *, u32, DrawDataID *, u32);
     using PFN_update_stream_data = void (*)(DrawStream *, DrawDataID, const void *, u32);
     using PFN_clear_stream = void (*)(DrawStream *, u32);
     using PFN_copy_stream_frame_data = void (*)(DrawStream *, u32, u32);
@@ -44,6 +45,7 @@ namespace auik::v2::detail
     struct StreamGPUDispatch
     {
         PFN_push_data_to_stream push_data_to_stream = nullptr;
+        PFN_push_data_batch_to_stream push_data_batch_to_stream = nullptr;
         PFN_update_stream_data update_stream_data = nullptr;
         PFN_clear_stream clear_stream = nullptr;
         PFN_copy_stream_frame_data copy_stream_frame_data = nullptr;

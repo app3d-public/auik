@@ -27,7 +27,7 @@ namespace auik::v2
         return out;
     }
 
-    APPLIB_API bool add_char_to_string(acul::string &dst, u32 char_code, TextFlags flags)
+    bool add_char_to_string(acul::string &dst, u32 char_code, TextFlags flags)
     {
         u32 c = char_code;
         if (c == 0) return false;

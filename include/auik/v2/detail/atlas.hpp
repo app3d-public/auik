@@ -37,9 +37,9 @@ namespace auik::v2::detail
         u32 next_atlas_id = 0;
     };
 
-    APPLIB_API bool init_atlas_state(AtlasState &state);
-    APPLIB_API void destroy_atlas_state(AtlasState &state);
-    APPLIB_API bool allocate_atlas_region(const umbf::Image2D &image, AtlasAllocation &out);
-    APPLIB_API bool allocate_atlas_regions(const acul::vector<umbf::Image2D> &images, acul::vector<AtlasAllocation> &out);
-    APPLIB_API TextureID get_atlas_texture(u32 atlas_id);
+    bool init_atlas_state(AtlasState &state);
+    void destroy_atlas_state(AtlasState &state);
+    bool allocate_atlas_region(const umbf::Image2D &image, AtlasAllocation &out);
+    bool allocate_atlas_regions(const acul::vector<umbf::Image2D> &images, acul::vector<AtlasAllocation> &out);
+    TextureID get_atlas_texture(u32 atlas_id);
 } // namespace auik::v2::detail

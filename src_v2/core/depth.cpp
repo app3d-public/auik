@@ -9,7 +9,7 @@ namespace
 
 namespace auik::v2::detail
 {
-    APPLIB_API amal::vec2 depth_zone_range(const amal::vec2 &base, DepthZone::enum_type zone)
+    amal::vec2 depth_zone_range(const amal::vec2 &base, DepthZone::enum_type zone)
     {
         const f32 span = base.y - base.x;
         switch (zone)
@@ -25,7 +25,7 @@ namespace auik::v2::detail
         }
     }
 
-    APPLIB_API amal::vec2 normalize_depth_range(const amal::vec2 &src)
+    amal::vec2 normalize_depth_range(const amal::vec2 &src)
     {
         f32 z_min = src.x;
         f32 z_max = src.y;
@@ -38,14 +38,14 @@ namespace auik::v2::detail
         return {z_min, z_max};
     }
 
-    APPLIB_API DepthZone::enum_type get_depth_zone_by_flags(WidgetFlags flags)
+    DepthZone::enum_type get_depth_zone_by_flags(WidgetFlags flags)
     {
         if (flags & WidgetFlagBits::foreground) return DepthZone::foreground;
         if (flags & WidgetFlagBits::background) return DepthZone::background;
         return DepthZone::work;
     }
 
-    APPLIB_API amal::vec2 get_root_depth_range(DepthZone::enum_type zone, int lane_index)
+    amal::vec2 get_root_depth_range(DepthZone::enum_type zone, int lane_index)
     {
         constexpr amal::vec2 global = {0.0f, 1.0f};
 
@@ -75,7 +75,7 @@ namespace auik::v2
         _rect.depth = (_depth_range.x + _depth_range.y) * 0.5f;
     }
 
-    APPLIB_API void assign_next_depth(const amal::vec2 &parent_range, amal::vec2 &dst_range)
+    void assign_next_depth(const amal::vec2 &parent_range, amal::vec2 &dst_range)
     {
         const amal::vec2 w = detail::normalize_depth_range(parent_range);
 

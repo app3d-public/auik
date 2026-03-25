@@ -52,6 +52,22 @@ namespace auik::v2::detail
         return gpu_ctx->quads.push_data_to_stream(stream, data, frame_id);
     }
 
+    static void push_data_batch_to_stream_cached(DrawStream *stream, const void *data, u32 count, DrawDataID *out_ids)
+    {
+        if (count == 0) return;
+
+        auto &ctx = get_context();
+        const u32 frame_id = ctx.frame_id;
+        auto *state = static_cast<CachedStreamData *>(stream->runtime_data);
+        auto *gpu_ctx = ctx.gpu_ctx;
+        sync_frame_to_master(stream, state, ctx, frame_id);
+        mark_master_mutation(state, frame_id, ctx.frames_in_flight);
+        stream->flags |= StreamFlagBits::invalidate;
+        ctx.dirty_flags |= DirtyFlagBits::streams;
+        assert(gpu_ctx->quads.push_data_batch_to_stream && "GPU quads batch push dispatch is not initialized");
+        gpu_ctx->quads.push_data_batch_to_stream(stream, data, count, out_ids, frame_id);
+    }
+
     static void update_data_quads_stream_cached(DrawStream *stream, DrawDataID draw_data_id, const void *data)
     {
         auto &ctx = get_context();
@@ -74,6 +90,15 @@ namespace auik::v2::detail
     {
         auto &ctx = get_context();
         return ctx.gpu_ctx->quads.push_data_to_stream(stream, data, ctx.frame_id);
+    }
+
+    static void push_data_batch_to_stream_transient(DrawStream *stream, const void *data, u32 count, DrawDataID *out_ids)
+    {
+        if (count == 0) return;
+
+        auto &ctx = get_context();
+        assert(ctx.gpu_ctx->quads.push_data_batch_to_stream && "GPU quads batch push dispatch is not initialized");
+        ctx.gpu_ctx->quads.push_data_batch_to_stream(stream, data, count, out_ids, ctx.frame_id);
     }
 
     static void update_data_quads_stream_transient(DrawStream *stream, DrawDataID draw_data_id, const void *data)
@@ -170,6 +195,7 @@ namespace auik::v2
     {
         detail::setup_quads_stream(stream);
         stream.push_data_to_stream = &detail::push_data_to_stream_cached;
+        stream.push_data_batch_to_stream = &detail::push_data_batch_to_stream_cached;
         stream.update_data_in_stream = &detail::update_data_quads_stream_cached;
         stream.clear = &detail::clear_quads_stream_cached;
         stream.destroy = &detail::destroy_quads_stream_cached;
@@ -196,6 +222,7 @@ namespace auik::v2
         auto &ctx = detail::get_context();
         auto *gpu_ctx = ctx.gpu_ctx;
         stream.push_data_to_stream = &detail::push_data_to_stream_transient;
+        stream.push_data_batch_to_stream = &detail::push_data_batch_to_stream_transient;
         stream.update_data_in_stream = &detail::update_data_quads_stream_transient;
         stream.push_widget_to_cache = &detail::push_widget_quads_stream_transient;
         stream.clear = gpu_ctx->quads.clear_stream;

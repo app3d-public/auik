@@ -1,6 +1,5 @@
 #pragma once
 
-#include <acul/api.hpp>
 #include <acul/enum.hpp>
 #include <acul/pair.hpp>
 #include <acul/scalars.hpp>
@@ -123,12 +122,12 @@ namespace auik::v2::detail
     APPLIB_API void on_mouse_click_event(MouseKey key, KeyPressState state);
     APPLIB_API void on_key_event(Key key, KeyPressState state, KeyMode mods);
     APPLIB_API void on_char_event(u32 char_code);
-    APPLIB_API void deregister_widget_shortcuts(u32 widget_id);
+    void deregister_widget_shortcuts(u32 widget_id);
     APPLIB_API void flush_frame_changes();
     APPLIB_API void reset_event_state();
     APPLIB_API void on_hover_id_updated(u32 prev_widget_id, u32 prev_tag_id, u32 widget_id, u32 tag_id);
-    APPLIB_API HitboxZone get_hitbox_zone(const RectData &rect, const amal::vec2 &mouse_pos);
-    APPLIB_API CursorID::enum_type get_cursor_for_hitbox_zone(HitboxZone zone);
+    HitboxZone get_hitbox_zone(const RectData &rect, const amal::vec2 &mouse_pos);
+    CursorID::enum_type get_cursor_for_hitbox_zone(HitboxZone zone);
 
     inline void set_window_cursor(CursorID::enum_type id, WindowContext *window_ctx)
     {

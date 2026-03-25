@@ -30,11 +30,26 @@ target_link_libraries(${PROJECT_NAME} PRIVATE acul amal auik umbf)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(FREETYPE2 REQUIRED freetype2)
 pkg_search_module(FONTCONFIG REQUIRED fontconfig)
-target_link_libraries(${PROJECT_NAME} PRIVATE ${FREETYPE2_LIBRARIES} ${FONTCONFIG_LIBRARIES})
+pkg_check_modules(HARFBUZZ REQUIRED harfbuzz)
+target_link_libraries(${PROJECT_NAME} PRIVATE
+    ${FREETYPE2_LIBRARIES}
+    ${FONTCONFIG_LIBRARIES}
+    ${HARFBUZZ_LIBRARIES}    
+)
 
 if(WIN32)
     # Manifest
     gen_manifest_lib(lib${PROJECT_NAME} ${PROJECT_VERSION})
+
+    if(NOT DEFINED BUILD_EXTERNAL_MANIFEST)
+        set(BUILD_EXTERNAL_MANIFEST OFF)
+    endif()
+
+    if(BUILD_EXTERNAL_MANIFEST)
+        gen_manifest_lib("freetype-6" ${FREETYPE2_VERSION})
+        gen_manifest_lib("fontconfig" ${FONTCONFIG_VERSION})
+        gen_manifest_lib("harfbuzz" ${HARFBUZZ_VERSION})
+    endif()
 endif()
 
 set_target_properties(${PROJECT_NAME}

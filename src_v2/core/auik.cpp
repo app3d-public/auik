@@ -14,7 +14,7 @@ namespace auik::v2
 
     namespace detail
     {
-        APPLIB_API HitboxZone get_hitbox_zone(const RectData &rect, const amal::vec2 &mouse_pos)
+        HitboxZone get_hitbox_zone(const RectData &rect, const amal::vec2 &mouse_pos)
         {
             HitboxZone zone = HitboxZoneBits::none;
             if (!(rect.flags & RectBits::hitbox)) return zone;
@@ -32,7 +32,7 @@ namespace auik::v2
             return zone;
         }
 
-        APPLIB_API CursorID::enum_type get_cursor_for_hitbox_zone(HitboxZone zone)
+        CursorID::enum_type get_cursor_for_hitbox_zone(HitboxZone zone)
         {
             const bool has_left = zone & HitboxZoneBits::left;
             const bool has_right = zone & HitboxZoneBits::right;
@@ -344,7 +344,7 @@ namespace auik::v2
             mark_host_refresh_request();
         }
 
-        APPLIB_API void deregister_widget_shortcuts(u32 widget_id)
+        void deregister_widget_shortcuts(u32 widget_id)
         {
             if (!widget_id) return;
             auto &ctx = get_context();

@@ -32,6 +32,7 @@ namespace auik::v2::detail
     void init_textures_pipeline_calls(StreamGPUDispatch &dispatch)
     {
         dispatch.push_data_to_stream = &push_data_to_instance_stream<TexturesInstanceData>;
+        dispatch.push_data_batch_to_stream = &push_data_batch_to_instance_stream<TexturesInstanceData>;
         dispatch.update_stream_data = &update_instance_stream_data<TexturesInstanceData>;
         dispatch.clear_stream = &clear_instance_stream<TexturesStream>;
         dispatch.copy_stream_frame_data = &copy_instance_stream_frame_data<TexturesStream>;

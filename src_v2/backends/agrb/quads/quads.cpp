@@ -29,6 +29,7 @@ namespace auik::v2::detail
     void init_quads_pipeline_calls(StreamGPUDispatch &dispatch)
     {
         dispatch.push_data_to_stream = &push_data_to_instance_stream<QuadsInstanceData>;
+        dispatch.push_data_batch_to_stream = &push_data_batch_to_instance_stream<QuadsInstanceData>;
         dispatch.update_stream_data = &update_instance_stream_data<QuadsInstanceData>;
         dispatch.clear_stream = &clear_instance_stream<QuadsStream>;
         dispatch.copy_stream_frame_data = &copy_instance_stream_frame_data<QuadsStream>;

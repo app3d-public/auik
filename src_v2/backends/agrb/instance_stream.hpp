@@ -28,6 +28,26 @@ namespace auik::v2::detail
     }
 
     template <typename InstanceData>
+    void push_data_batch_to_instance_stream(DrawStream *stream, const void *data, u32 count, DrawDataID *out_draw_ids,
+                                            u32 frame_id)
+    {
+        if (count == 0) return;
+
+        auto &gpu_data = static_cast<InstanceStream<InstanceData> *>(stream->stream_instances)[frame_id];
+        const u32 base_render_id = static_cast<u32>(gpu_data.draw_instances.size());
+        const auto *instances = static_cast<const InstanceData *>(data);
+        gpu_data.draw_instances.insert(gpu_data.draw_instances.end(), instances, instances + count);
+        stream->draw_sizes[frame_id] += count;
+
+        if (!out_draw_ids) return;
+        for (u32 i = 0; i < count; ++i)
+        {
+            out_draw_ids[i].render_id = base_render_id + i;
+            out_draw_ids[i].hit_id = AUIK_INVALID_DRAW_DATA_ID;
+        }
+    }
+
+    template <typename InstanceData>
     void update_instance_stream_data(DrawStream *stream, DrawDataID draw_data_id, const void *data, u32 frame_id)
     {
         auto &gpu_data = static_cast<InstanceStream<InstanceData> *>(stream->stream_instances)[frame_id];

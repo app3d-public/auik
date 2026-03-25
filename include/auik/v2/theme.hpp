@@ -214,7 +214,7 @@ namespace auik::v2
         acul::vector<Style> _resolved_pool;
         acul::hashmap<u32, acul::any> _var_store;
 
-        APPLIB_API StyleID add_desc(u32 key, const Style &style, StyleState state);
+        StyleID add_desc(u32 key, const Style &style, StyleState state);
 
         static u64 make_theme_key(u32 key, StyleState state)
         {

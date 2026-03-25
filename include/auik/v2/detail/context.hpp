@@ -1,6 +1,5 @@
 #pragma once
 
-#include <acul/api.hpp>
 #include <acul/disposal_queue.hpp>
 #include <acul/enum.hpp>
 #include <acul/event.hpp>
@@ -10,11 +9,12 @@
 #include <acul/string/string.hpp>
 #include <amal/common.hpp>
 #include <amal/vector.hpp>
-#include "atlas.hpp"
 #include "../pending_filter.hpp"
+#include "atlas.hpp"
 #include "events.hpp"
 #include "fwd.hpp"
 #include "gpu_context.hpp"
+
 
 struct FT_LibraryRec_;
 
@@ -210,7 +210,7 @@ namespace auik::v2
             ctx.dirty_flags |= DirtyFlagBits::textures | DirtyFlagBits::redraw;
         }
 
-        APPLIB_API WindowContext *create_window_context();
+        WindowContext *create_window_context();
 
         inline WindowContext *get_window_context()
         {

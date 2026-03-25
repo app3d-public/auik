@@ -30,6 +30,12 @@ namespace auik::v2
     APPLIB_API void create_quads_stream_cached(DrawStream &stream);
     APPLIB_API void create_quads_stream_transient(DrawStream &stream);
 
+    inline void push_quads_batch_to_stream(DrawStream *stream, const QuadsInstanceData *data, u32 count,
+                                           DrawDataID *out_draw_ids = nullptr)
+    {
+        push_data_batch_to_stream(stream, data, count, out_draw_ids);
+    }
+
     inline void fill_quads_instance_by_style(const Style &style, u16 clip_id, QuadsInstanceData &data)
     {
         data.background_color = style.background_color();
@@ -59,4 +65,10 @@ namespace auik::v2
 
     APPLIB_API void create_textures_stream_cached(DrawStream &stream);
     APPLIB_API void create_textures_stream_transient(DrawStream &stream);
+
+    inline void push_textures_batch_to_stream(DrawStream *stream, const TexturesInstanceData *data, u32 count,
+                                              DrawDataID *out_draw_ids = nullptr)
+    {
+        push_data_batch_to_stream(stream, data, count, out_draw_ids);
+    }
 } // namespace auik::v2

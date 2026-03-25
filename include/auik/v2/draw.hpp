@@ -23,6 +23,7 @@ namespace auik::v2
     struct DrawStream
     {
         DrawDataID (*push_data_to_stream)(DrawStream *, const void *) = nullptr;
+        void (*push_data_batch_to_stream)(DrawStream *, const void *, u32, DrawDataID *) = nullptr;
         void (*update_data_in_stream)(DrawStream *, DrawDataID, const void *) = nullptr;
         void (*push_widget_to_cache)(DrawStream *, Widget *) = nullptr;
         void (*clear)(DrawStream *, u32) = nullptr;
@@ -41,6 +42,14 @@ namespace auik::v2
     {
         assert(stream->push_data_to_stream);
         return stream->push_data_to_stream(stream, data);
+    }
+
+    inline void push_data_batch_to_stream(DrawStream *stream, const void *data, u32 count, DrawDataID *out_draw_ids = nullptr)
+    {
+        if (count == 0) return;
+        assert(stream && "stream is null");
+        assert(stream->push_data_batch_to_stream && "batch push is not configured for this stream");
+        stream->push_data_batch_to_stream(stream, data, count, out_draw_ids);
     }
 
     inline void update_data_in_stream(DrawStream *stream, DrawDataID draw_data_id, void *data)
