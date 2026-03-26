@@ -1,17 +1,14 @@
-#include <algorithm>
-#include <cctype>
-#include <cstring>
-#include <utility>
 #include <acul/io/fs/path.hpp>
 #include <auik/v2/auik.hpp>
 #include <auik/v2/detail/atlas.hpp>
 #include <auik/v2/detail/context.hpp>
+#include <auik/v2/detail/text.hpp>
 #include <auik/v2/widgets/image.hpp>
 #include <fontconfig/fontconfig.h>
 #include <freetype/freetype.h>
 
 #ifdef _WIN32
-#include <windows.h>
+    #include <windows.h>
 #endif
 
 namespace auik::v2
@@ -76,8 +73,8 @@ namespace auik::v2
             dst.width = bitmap.width;
             dst.height = bitmap.rows;
             dst.format = {umbf::ImageFormat::Type::uint, 1};
-            dst.channels = {"r", "g", "b", "a"};
-            const size_t size = static_cast<size_t>(dst.width) * dst.height * 4;
+            dst.channels = {"r"};
+            const size_t size = static_cast<size_t>(dst.width) * dst.height;
             auto *pixels = acul::mem_allocator<u8>::allocate(size);
             if (!pixels) return false;
 
@@ -86,15 +83,8 @@ namespace auik::v2
             for (u32 y = 0; y < dst.height; ++y)
             {
                 const u8 *src_row = (bitmap.pitch >= 0) ? (src + y * pitch) : (src + (dst.height - 1 - y) * pitch);
-                u8 *dst_row = pixels + static_cast<size_t>(y) * dst.width * 4;
-                for (u32 x = 0; x < dst.width; ++x)
-                {
-                    const u8 alpha = src_row[x];
-                    dst_row[x * 4 + 0] = 0xFF;
-                    dst_row[x * 4 + 1] = 0xFF;
-                    dst_row[x * 4 + 2] = 0xFF;
-                    dst_row[x * 4 + 3] = alpha;
-                }
+                u8 *dst_row = pixels + static_cast<size_t>(y) * dst.width;
+                for (u32 x = 0; x < dst.width; ++x) dst_row[x] = src_row[x];
             }
             dst.pixels = pixels;
             return true;
@@ -105,8 +95,8 @@ namespace auik::v2
             dst.width = bitmap.width;
             dst.height = bitmap.rows;
             dst.format = {umbf::ImageFormat::Type::uint, 1};
-            dst.channels = {"r", "g", "b", "a"};
-            const size_t size = static_cast<size_t>(dst.width) * dst.height * 4;
+            dst.channels = {"r"};
+            const size_t size = static_cast<size_t>(dst.width) * dst.height;
             auto *pixels = acul::mem_allocator<u8>::allocate(size);
             if (!pixels) return false;
 
@@ -115,15 +105,11 @@ namespace auik::v2
             for (u32 y = 0; y < dst.height; ++y)
             {
                 const u8 *src_row = (bitmap.pitch >= 0) ? (src + y * pitch) : (src + (dst.height - 1 - y) * pitch);
-                u8 *dst_row = pixels + static_cast<size_t>(y) * dst.width * 4;
+                u8 *dst_row = pixels + static_cast<size_t>(y) * dst.width;
                 for (u32 x = 0; x < dst.width; ++x)
                 {
                     const u8 bits = src_row[x / 8];
-                    const u8 alpha = (bits & (0x80u >> (x & 7u))) ? 0xFFu : 0x00u;
-                    dst_row[x * 4 + 0] = 0xFF;
-                    dst_row[x * 4 + 1] = 0xFF;
-                    dst_row[x * 4 + 2] = 0xFF;
-                    dst_row[x * 4 + 3] = alpha;
+                    dst_row[x] = (bits & (0x80u >> (x & 7u))) ? 0xFFu : 0x00u;
                 }
             }
             dst.pixels = pixels;
@@ -135,8 +121,8 @@ namespace auik::v2
             dst.width = bitmap.width;
             dst.height = bitmap.rows;
             dst.format = {umbf::ImageFormat::Type::uint, 1};
-            dst.channels = {"r", "g", "b", "a"};
-            const size_t size = static_cast<size_t>(dst.width) * dst.height * 4;
+            dst.channels = {"r"};
+            const size_t size = static_cast<size_t>(dst.width) * dst.height;
             auto *pixels = acul::mem_allocator<u8>::allocate(size);
             if (!pixels) return false;
 
@@ -145,15 +131,11 @@ namespace auik::v2
             for (u32 y = 0; y < dst.height; ++y)
             {
                 const u8 *src_row = (bitmap.pitch >= 0) ? (src + y * pitch) : (src + (dst.height - 1 - y) * pitch);
-                u8 *dst_row = pixels + static_cast<size_t>(y) * dst.width * 4;
+                u8 *dst_row = pixels + static_cast<size_t>(y) * dst.width;
                 for (u32 x = 0; x < dst.width; ++x)
                 {
                     const u8 *bgra = src_row + x * 4;
-                    u8 *rgba = dst_row + x * 4;
-                    rgba[0] = bgra[2];
-                    rgba[1] = bgra[1];
-                    rgba[2] = bgra[0];
-                    rgba[3] = bgra[3];
+                    dst_row[x] = bgra[3];
                 }
             }
             dst.pixels = pixels;
@@ -178,9 +160,92 @@ namespace auik::v2
 
         struct PreparedGlyph
         {
+            u32 size_px = 0;
+            u32 glyph_index = 0;
             Glyph glyph{};
             umbf::Image2D image{};
         };
+
+        static bool prepare_glyph(Font &font, u32 size_px, u32 glyph_index, u32 codepoint, PreparedGlyph &item)
+        {
+            auto *face = detail::TextFontAccess::face(font, size_px);
+            if (!face || glyph_index == 0) return false;
+
+            auto error = FT_Load_Glyph(face, glyph_index, to_ft_load_flags(font.load_flags()));
+            if (error) return false;
+
+            FT_GlyphSlot slot = face->glyph;
+            if (slot->format != FT_GLYPH_FORMAT_BITMAP)
+            {
+                error = FT_Render_Glyph(slot, to_ft_render_mode(font.render_mode()));
+                if (error) return false;
+            }
+
+            item.size_px = size_px;
+            item.glyph_index = glyph_index;
+            item.glyph.codepoint = codepoint;
+            item.glyph.offset = {slot->bitmap_left, slot->bitmap_top};
+            item.glyph.size = {static_cast<i32>(slot->bitmap.width), static_cast<i32>(slot->bitmap.rows)};
+            item.glyph.advance_x = static_cast<f32>(slot->advance.x) / 64.0f;
+            item.glyph.empty = (item.glyph.size.x == 0 || item.glyph.size.y == 0) ? 1u : 0u;
+
+            bool is_colored = false;
+            if (!item.glyph.empty)
+            {
+                if (!make_glyph_image(slot->bitmap, item.image, is_colored)) return false;
+                item.glyph.colored = is_colored ? 1u : 0u;
+            }
+
+            return true;
+        }
+
+        static bool finalize_prepared_glyphs(acul::vector<PreparedGlyph> &prepared)
+        {
+            if (prepared.empty()) return false;
+
+            acul::vector<umbf::Image2D> images;
+            acul::vector<size_t> image_to_glyph;
+            images.reserve(prepared.size());
+            image_to_glyph.reserve(prepared.size());
+
+            auto release_prepared = [&]() {
+                for (auto &item : prepared)
+                {
+                    if (item.image.pixels) acul::release(item.image.pixels);
+                    item.image = {};
+                }
+            };
+
+            for (size_t i = 0; i < prepared.size(); ++i)
+            {
+                if (prepared[i].glyph.empty) continue;
+                images.push_back(prepared[i].image);
+                image_to_glyph.push_back(i);
+            }
+
+            if (!images.empty())
+            {
+                acul::vector<detail::AtlasAllocation> allocations;
+                if (!detail::allocate_atlas_regions(images, allocations) || allocations.size() != images.size())
+                {
+                    release_prepared();
+                    return false;
+                }
+
+                for (size_t i = 0; i < allocations.size(); ++i)
+                {
+                    auto &glyph = prepared[image_to_glyph[i]].glyph;
+                    const auto &allocation = allocations[i];
+                    glyph.atlas_id = allocation.atlas_id;
+                    glyph.texture_id = allocation.texture_id;
+                    glyph.pixel_rect = allocation.pixel_rect;
+                    glyph.uv_rect = allocation.uv_rect;
+                }
+            }
+
+            release_prepared();
+            return true;
+        }
     } // namespace
 
     Font::Font(const FontInfo &info, int face_index) { load(info, face_index); }
@@ -188,11 +253,15 @@ namespace auik::v2
     Font::~Font() { clear(); }
 
     Font::Font(Font &&other) noexcept
-        : _info(std::move(other._info)), _face(other._face), _face_index(other._face_index),
+        : _info(std::move(other._info)),
+          _face(other._face),
+          _face_index(other._face_index),
+          _active_size_px(other._active_size_px),
           _glyphs(std::move(other._glyphs))
     {
         other._face = nullptr;
         other._face_index = 0;
+        other._active_size_px = 0;
     }
 
     Font &Font::operator=(Font &&other) noexcept
@@ -203,10 +272,12 @@ namespace auik::v2
         _info = std::move(other._info);
         _face = other._face;
         _face_index = other._face_index;
+        _active_size_px = other._active_size_px;
         _glyphs = std::move(other._glyphs);
 
         other._face = nullptr;
         other._face_index = 0;
+        other._active_size_px = 0;
         return *this;
     }
 
@@ -242,56 +313,82 @@ namespace auik::v2
             FT_Done_Face(_face);
             _face = nullptr;
         }
+        _active_size_px = 0;
         _face_index = 0;
     }
 
-    bool Font::set_pixel_size(u32 size_px)
+    bool Font::ensure_size_px(u32 size_px)
     {
         if (!_face || size_px == 0) return false;
+        if (_active_size_px == size_px) return true;
         if (FT_Set_Pixel_Sizes(_face, 0, size_px) != 0) return false;
-        _glyphs.clear();
+        _active_size_px = size_px;
         return true;
     }
+
+    GlyphCache *Font::find_cache(u32 size_px)
+    {
+        auto it = _glyphs.find(size_px);
+        return it != _glyphs.end() ? &it->second : nullptr;
+    }
+
+    const GlyphCache *Font::find_cache(u32 size_px) const
+    {
+        auto it = _glyphs.find(size_px);
+        return it != _glyphs.end() ? &it->second : nullptr;
+    }
+
+    GlyphCache &Font::ensure_cache(u32 size_px) { return _glyphs[size_px]; }
 
     void Font::set_load_flags(FontLoadFlags flags)
     {
         _load_flags = flags;
         _glyphs.clear();
+        _active_size_px = 0;
     }
 
     void Font::add_load_flags(FontLoadFlags flags)
     {
         _load_flags |= flags;
         _glyphs.clear();
+        _active_size_px = 0;
     }
 
     void Font::remove_load_flags(FontLoadFlags flags)
     {
         _load_flags &= ~flags;
         _glyphs.clear();
+        _active_size_px = 0;
     }
 
     void Font::set_render_mode(FontRenderMode mode)
     {
         _render_mode = mode;
         _glyphs.clear();
+        _active_size_px = 0;
     }
 
-    bool Font::load_glyph(u32 codepoint)
+    size_t Font::glyph_count() const
+    {
+        size_t total = 0;
+        for (const auto &cache : _glyphs) total += cache.second.size();
+        return total;
+    }
+
+    bool Font::load_glyph(u32 size_px, u32 codepoint)
     {
         acul::vector<u32> codepoints;
         codepoints.push_back(codepoint);
-        return load_glyphs(codepoints);
+        return load_glyphs(size_px, codepoints);
     }
 
-    bool Font::load_glyphs(const acul::vector<u32> &codepoints)
+    bool Font::load_glyphs(u32 size_px, const acul::vector<u32> &codepoints)
     {
-        if (!_face || codepoints.empty()) return false;
+        if (!_face || size_px == 0 || codepoints.empty()) return false;
 
         acul::vector<PreparedGlyph> prepared;
-        acul::vector<umbf::Image2D> images;
-        acul::vector<size_t> image_to_glyph;
         bool loaded_any = false;
+        auto &cache = ensure_cache(size_px);
 
         auto release_prepared = [&]() {
             for (auto &item : prepared)
@@ -303,46 +400,23 @@ namespace auik::v2
 
         auto is_pending = [&](u32 codepoint) {
             for (const auto &item : prepared)
-                if (item.glyph.codepoint == codepoint) return true;
+                if (item.glyph_index == codepoint) return true;
             return false;
         };
 
         for (u32 codepoint : codepoints)
         {
             if (codepoint > 0x3FFFFFFFu) continue;
-            if (_glyphs.find(codepoint) != _glyphs.end() || is_pending(codepoint)) continue;
 
             const FT_UInt glyph_index = FT_Get_Char_Index(_face, codepoint);
             if (glyph_index == 0) continue;
-
-            auto error = FT_Load_Glyph(_face, glyph_index, to_ft_load_flags(_load_flags));
-            if (error) continue;
-
-            FT_GlyphSlot slot = _face->glyph;
-            if (slot->format != FT_GLYPH_FORMAT_BITMAP)
-            {
-                error = FT_Render_Glyph(slot, to_ft_render_mode(_render_mode));
-                if (error) continue;
-            }
+            if (cache.find(glyph_index) != cache.end() || is_pending(glyph_index)) continue;
 
             PreparedGlyph item;
-            item.glyph.codepoint = codepoint;
-            item.glyph.offset = {slot->bitmap_left, slot->bitmap_top};
-            item.glyph.size = {static_cast<i32>(slot->bitmap.width), static_cast<i32>(slot->bitmap.rows)};
-            item.glyph.advance_x = static_cast<f32>(slot->advance.x) / 64.0f;
-            item.glyph.empty = (item.glyph.size.x == 0 || item.glyph.size.y == 0) ? 1u : 0u;
-
-            if (!item.glyph.empty)
+            if (!prepare_glyph(*this, size_px, glyph_index, codepoint, item))
             {
-                bool is_colored = false;
-                if (!make_glyph_image(slot->bitmap, item.image, is_colored))
-                {
-                    release_prepared();
-                    return false;
-                }
-                item.glyph.colored = is_colored ? 1u : 0u;
-                images.push_back(item.image);
-                image_to_glyph.push_back(prepared.size());
+                release_prepared();
+                return false;
             }
 
             prepared.push_back(std::move(item));
@@ -350,30 +424,11 @@ namespace auik::v2
 
         if (prepared.empty()) return false;
 
-        if (!images.empty())
-        {
-            acul::vector<detail::AtlasAllocation> allocations;
-            if (!detail::allocate_atlas_regions(images, allocations) || allocations.size() != images.size())
-            {
-                release_prepared();
-                return false;
-            }
-
-            for (size_t i = 0; i < allocations.size(); ++i)
-            {
-                auto &glyph = prepared[image_to_glyph[i]].glyph;
-                const auto &allocation = allocations[i];
-                glyph.atlas_id = allocation.atlas_id;
-                glyph.texture_id = allocation.texture_id;
-                glyph.pixel_rect = allocation.pixel_rect;
-                glyph.uv_rect = allocation.uv_rect;
-            }
-        }
+        if (!finalize_prepared_glyphs(prepared)) return false;
 
         for (auto &item : prepared)
         {
-            const u32 codepoint = item.glyph.codepoint;
-            _glyphs[codepoint] = item.glyph;
+            cache[item.glyph_index] = item.glyph;
             loaded_any = true;
         }
 
@@ -381,7 +436,7 @@ namespace auik::v2
         return loaded_any;
     }
 
-    bool Font::load_glyphs(const acul::string &utf8_text)
+    bool Font::load_glyphs(u32 size_px, const acul::string &utf8_text)
     {
         acul::vector<u32> codepoints;
         size_t offset = 0;
@@ -396,19 +451,108 @@ namespace auik::v2
             }
             codepoints.push_back(codepoint);
         }
-        return load_glyphs(codepoints);
+        return load_glyphs(size_px, codepoints);
     }
 
-    Glyph *Font::find_glyph(u32 codepoint)
+    Glyph *Font::find_glyph(u32 size_px, u32 codepoint)
     {
-        auto it = _glyphs.find(codepoint);
-        return it != _glyphs.end() ? &it->second : nullptr;
+        if (!_face) return nullptr;
+        const u32 glyph_index = FT_Get_Char_Index(_face, codepoint);
+        if (glyph_index == 0) return nullptr;
+        auto *cache = find_cache(size_px);
+        if (!cache) return nullptr;
+        auto it = cache->find(glyph_index);
+        return it != cache->end() ? &it->second : nullptr;
     }
 
-    const Glyph *Font::find_glyph(u32 codepoint) const
+    const Glyph *Font::find_glyph(u32 size_px, u32 codepoint) const
     {
-        auto it = _glyphs.find(codepoint);
-        return it != _glyphs.end() ? &it->second : nullptr;
+        if (!_face) return nullptr;
+        const u32 glyph_index = FT_Get_Char_Index(_face, codepoint);
+        if (glyph_index == 0) return nullptr;
+        auto *cache = find_cache(size_px);
+        if (!cache) return nullptr;
+        auto it = cache->find(glyph_index);
+        return it != cache->end() ? &it->second : nullptr;
+    }
+
+    FT_Face detail::TextFontAccess::face(Font &font, u32 size_px)
+    {
+        if (!font.ensure_size_px(size_px)) return nullptr;
+        return font._face;
+    }
+
+    Glyph *detail::TextFontAccess::find_glyph_by_index(Font &font, u32 size_px, u32 glyph_index)
+    {
+        auto *cache = font.find_cache(size_px);
+        if (!cache) return nullptr;
+        auto it = cache->find(glyph_index);
+        return it != cache->end() ? &it->second : nullptr;
+    }
+
+    const Glyph *detail::TextFontAccess::find_glyph_by_index(const Font &font, u32 size_px, u32 glyph_index)
+    {
+        auto *cache = font.find_cache(size_px);
+        if (!cache) return nullptr;
+        auto it = cache->find(glyph_index);
+        return it != cache->end() ? &it->second : nullptr;
+    }
+
+    bool detail::TextFontAccess::load_glyph_indices(Font &font, u32 size_px, const acul::vector<u32> &glyph_indices)
+    {
+        if (!font._face || size_px == 0 || glyph_indices.empty()) return false;
+
+        acul::vector<PreparedGlyph> prepared;
+        prepared.reserve(glyph_indices.size());
+        auto &cache = font.ensure_cache(size_px);
+
+        auto is_pending = [&](u32 glyph_index) {
+            for (const auto &item : prepared)
+                if (item.glyph_index == glyph_index) return true;
+            return false;
+        };
+
+        bool loaded_any = false;
+        for (u32 glyph_index : glyph_indices)
+        {
+            if (glyph_index == 0 || cache.find(glyph_index) != cache.end() || is_pending(glyph_index)) continue;
+
+            PreparedGlyph item;
+            if (!prepare_glyph(font, size_px, glyph_index, 0, item))
+            {
+                for (auto &prepared_item : prepared)
+                {
+                    if (prepared_item.image.pixels) acul::release(prepared_item.image.pixels);
+                    prepared_item.image = {};
+                }
+                return false;
+            }
+            prepared.push_back(std::move(item));
+        }
+
+        if (prepared.empty()) return false;
+        if (!finalize_prepared_glyphs(prepared)) return false;
+        for (auto &item : prepared) cache[item.glyph_index] = item.glyph;
+        loaded_any = true;
+        return loaded_any;
+    }
+
+    f32 detail::TextFontAccess::ascender(Font &font, u32 size_px)
+    {
+        if (!font.ensure_size_px(size_px) || !font._face->size) return 0.0f;
+        return static_cast<f32>(font._face->size->metrics.ascender) / 64.0f;
+    }
+
+    f32 detail::TextFontAccess::descender(Font &font, u32 size_px)
+    {
+        if (!font.ensure_size_px(size_px) || !font._face->size) return 0.0f;
+        return static_cast<f32>(font._face->size->metrics.descender) / 64.0f;
+    }
+
+    f32 detail::TextFontAccess::line_height(Font &font, u32 size_px)
+    {
+        if (!font.ensure_size_px(size_px) || !font._face->size) return 0.0f;
+        return static_cast<f32>(font._face->size->metrics.height) / 64.0f;
     }
 
     bool load_fonts(FontRegistry &fonts, const acul::vector<acul::string> &search_dirs)
@@ -459,20 +603,25 @@ namespace auik::v2
         const u32 size = round_font_px(18.0f * dpi);
         const acul::vector<u32> codepoints = {0xE5CCu, 0xE5CFu, 0xE5CAu, 0xE8B6u, 0xEF4Fu, 0xE5D2u};
         const acul::vector<u32> ids = {AUIK_ICON_CHEVRON_RIGHT, AUIK_ICON_CHEVRON_DOWN, AUIK_ICON_CHECKMARK,
-                                       AUIK_ICON_SEARCH, AUIK_ICON_FILTER, AUIK_ICON_MENU};
+                                       AUIK_ICON_SEARCH,        AUIK_ICON_FILTER,       AUIK_ICON_MENU};
 
-        if (!font.load(font_info->path) || !font.set_pixel_size(size)) return false;
-        if (!font.load_glyphs(codepoints)) return false;
+        if (!font.load(font_info->path)) return false;
+        if (!font.load_glyphs(size, codepoints)) return false;
 
         for (u32 i = 0; i < codepoints.size(); ++i)
         {
-            auto *glyph = font.find_glyph(codepoints[i]);
+            auto *glyph = font.find_glyph(size, codepoints[i]);
             if (!glyph) return false;
 
             const u32 id = ids[i];
-            auto *image = make_image(id, glyph->texture_id,
-                                     {static_cast<f32>(glyph->size.x), static_cast<f32>(glyph->size.y)}, glyph->uv_rect);
-            if (image) cache_image(id, image);
+            auto *image =
+                make_image(id, glyph->texture_id, {static_cast<f32>(glyph->size.x), static_cast<f32>(glyph->size.y)},
+                           glyph->uv_rect);
+            if (image)
+            {
+                image->set_coverage_mode(true);
+                cache_image(id, image);
+            }
         }
 
         return true;
@@ -504,34 +653,34 @@ namespace auik::v2
             acul::vector<u32> codepoints;
             acul::vector<u32> ids;
         } specs[3] = {
-            {
-                .size = round_font_px(10.0f * dpi),
-                .codepoints = {0xE921u, 0xE922u, 0xE923u, 0xE8BBu},
-                .ids = {AUIK_ICON_MINIMIZE, AUIK_ICON_MAXIMIZE, AUIK_ICON_RESTORE, AUIK_ICON_CLOSE}
-            },
+            {.size = round_font_px(10.0f * dpi),
+             .codepoints = {0xE921u, 0xE922u, 0xE923u, 0xE8BBu},
+             .ids = {AUIK_ICON_MINIMIZE, AUIK_ICON_MAXIMIZE, AUIK_ICON_RESTORE, AUIK_ICON_CLOSE}},
             {.size = round_font_px(11.5f * dpi), .codepoints = {0xE700u}, .ids = {AUIK_ICON_MENU}},
-            {
-                .size = round_font_px(pt_to_px(11.0f, dpi)),
-                .codepoints = {0xE76Cu, 0xE70Du, 0xE73Eu, 0xE721u, 0xE71Cu},
-                .ids = {AUIK_ICON_CHEVRON_RIGHT, AUIK_ICON_CHEVRON_DOWN, AUIK_ICON_CHECKMARK, AUIK_ICON_SEARCH,
-                        AUIK_ICON_FILTER}
-            },
+            {.size = round_font_px(pt_to_px(11.0f, dpi)),
+             .codepoints = {0xE76Cu, 0xE70Du, 0xE73Eu, 0xE721u, 0xE71Cu},
+             .ids = {AUIK_ICON_CHEVRON_RIGHT, AUIK_ICON_CHEVRON_DOWN, AUIK_ICON_CHECKMARK, AUIK_ICON_SEARCH,
+                     AUIK_ICON_FILTER}},
         };
 
         for (u32 i = 0; i < 3; ++i)
         {
             auto &font = specs[i].font;
-            if (!font.load(font_info->path) || !font.set_pixel_size(specs[i].size)) return false;
-            if (!font.load_glyphs(specs[i].codepoints)) return false;
+            if (!font.load(font_info->path)) return false;
+            if (!font.load_glyphs(specs[i].size, specs[i].codepoints)) return false;
             for (u32 code = 0; code < specs[i].codepoints.size(); ++code)
             {
-                auto *glyph = font.find_glyph(specs[i].codepoints[code]);
+                auto *glyph = font.find_glyph(specs[i].size, specs[i].codepoints[code]);
                 if (!glyph) return false;
                 u32 id = specs[i].ids[code];
                 auto *image =
-                    make_image(id, glyph->texture_id, {static_cast<f32>(glyph->size.x), static_cast<f32>(glyph->size.y)},
-                               glyph->uv_rect);
-                if (image) cache_image(id, image);
+                    make_image(id, glyph->texture_id,
+                               {static_cast<f32>(glyph->size.x), static_cast<f32>(glyph->size.y)}, glyph->uv_rect);
+                if (image)
+                {
+                    image->set_coverage_mode(true);
+                    cache_image(id, image);
+                }
             }
         }
         return true;

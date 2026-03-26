@@ -16,6 +16,29 @@ namespace auik::v2
         void init_quads_pipeline_calls(StreamGPUDispatch &dispatch);
         void init_textures_pipeline_calls(StreamGPUDispatch &dispatch);
 
+        static bool create_text_atlas_sampler(agrb::texture &texture, agrb::device &device)
+        {
+            vk::SamplerCreateInfo sampler_create_info;
+            sampler_create_info.setMagFilter(vk::Filter::eLinear)
+                .setMinFilter(vk::Filter::eLinear)
+                .setAddressModeU(vk::SamplerAddressMode::eClampToEdge)
+                .setAddressModeV(vk::SamplerAddressMode::eClampToEdge)
+                .setAddressModeW(vk::SamplerAddressMode::eClampToEdge)
+                .setAnisotropyEnable(false)
+                .setMaxAnisotropy(1.0f)
+                .setBorderColor(vk::BorderColor::eIntOpaqueBlack)
+                .setUnnormalizedCoordinates(false)
+                .setCompareEnable(false)
+                .setCompareOp(vk::CompareOp::eAlways)
+                .setMipmapMode(vk::SamplerMipmapMode::eNearest)
+                .setMipLodBias(0.0f)
+                .setMinLod(0.0f)
+                .setMaxLod(0.0f);
+
+            return device.vk_device.createSampler(&sampler_create_info, nullptr, &texture.sampler, device.loader) ==
+                   vk::Result::eSuccess;
+        }
+
         static inline u64 image_view_to_handle(vk::ImageView image_view)
         {
             const VkImageView raw_view = image_view;
@@ -149,17 +172,28 @@ namespace auik::v2
         static bool create_atlas_texture_impl(GPUContext *gpu_context, AtlasTextureResource *resource, u32 width,
                                               u32 height, const void *pixels, size_t size)
         {
-            (void)size;
             if (!resource || !pixels || width == 0 || height == 0) return false;
 
             auto *ctx = get_agrb_context(gpu_context);
             auto *handle = acul::alloc<agrb::texture>();
-            handle->format = vk::Format::eR8G8B8A8Unorm;
+            handle->format = vk::Format::eR8Unorm;
             handle->image_extent = vk::Extent3D{width, height, 1};
             handle->mip_levels = 1;
-            handle->size = static_cast<vk::DeviceSize>(width) * height * 4;
+            handle->size = static_cast<vk::DeviceSize>(size);
             if (!agrb::allocate_texture(*handle, vk::ImageViewType::e2D, const_cast<void *>(pixels), ctx->device))
             {
+                acul::release(handle);
+                return false;
+            }
+
+            if (handle->sampler)
+            {
+                ctx->device.vk_device.destroySampler(handle->sampler, nullptr, ctx->device.loader);
+                handle->sampler = nullptr;
+            }
+            if (!create_text_atlas_sampler(*handle, ctx->device))
+            {
+                agrb::destroy_texture(*handle, ctx->device);
                 acul::release(handle);
                 return false;
             }

@@ -46,6 +46,14 @@ namespace auik::v2
             return CursorID::arrow;
         }
 
+        static inline DrawReasonFlags resolve_draw_reason_from_style(StyleUpdateFlags style_flags)
+        {
+            DrawReasonFlags out = DrawReasonBits::style;
+            if ((style_flags & StyleUpdateFlagBits::layout) || (style_flags & StyleUpdateFlagBits::parent_layout))
+                out |= DrawReasonBits::layout;
+            return out;
+        }
+
         APPLIB_API void on_hover_id_updated(u32 prev_widget_id, u32 prev_tag_id, u32 widget_id, u32 tag_id)
         {
             auto &ctx = get_context();
@@ -64,7 +72,7 @@ namespace auik::v2
                     else if (style_flags & StyleUpdateFlagBits::layout) widget->update_layout(false);
                     if (style_flags & StyleUpdateFlagBits::redraw)
                     {
-                        widget->update_draw_commands();
+                        widget->update_draw_commands(resolve_draw_reason_from_style(style_flags));
                         ctx.dirty_flags |= DirtyFlagBits::redraw;
                     }
                 });
@@ -129,7 +137,7 @@ namespace auik::v2
                 else if (style_flags & StyleUpdateFlagBits::layout) widget->update_layout(false);
                 if (style_flags & StyleUpdateFlagBits::redraw)
                 {
-                    widget->update_draw_commands();
+                    widget->update_draw_commands(resolve_draw_reason_from_style(style_flags));
                     ctx.dirty_flags |= DirtyFlagBits::redraw;
                 }
             });

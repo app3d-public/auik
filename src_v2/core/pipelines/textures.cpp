@@ -76,6 +76,22 @@ namespace auik::v2::detail
         ctx.gpu_ctx->textures.update_stream_data(stream, draw_data_id, data, ctx.frame_id);
     }
 
+    static void update_data_batch_textures_stream_cached(DrawStream *stream, const DrawDataID *draw_data_ids,
+                                                         const void *data, u32 count)
+    {
+        if (count == 0) return;
+
+        auto &ctx = get_context();
+        auto *state = static_cast<CachedStreamData *>(stream->runtime_data);
+        sync_frame_to_master(stream, state, ctx, ctx.frame_id);
+        mark_master_mutation(state, ctx.frame_id, ctx.frames_in_flight);
+        stream->flags |= StreamFlagBits::invalidate;
+        ctx.dirty_flags |= DirtyFlagBits::streams;
+        assert(ctx.gpu_ctx->textures.update_stream_data_batch &&
+               "GPU textures batch update dispatch is not initialized");
+        ctx.gpu_ctx->textures.update_stream_data_batch(stream, draw_data_ids, data, count, ctx.frame_id);
+    }
+
     static void push_widget_textures_stream_transient(DrawStream *stream, Widget *widget)
     {
         auto *state = static_cast<TransientStreamData *>(stream->runtime_data);
@@ -105,6 +121,17 @@ namespace auik::v2::detail
         ctx.gpu_ctx->textures.update_stream_data(stream, draw_data_id, data, ctx.frame_id);
     }
 
+    static void update_data_batch_textures_stream_transient(DrawStream *stream, const DrawDataID *draw_data_ids,
+                                                            const void *data, u32 count)
+    {
+        if (count == 0) return;
+
+        auto &ctx = get_context();
+        assert(ctx.gpu_ctx->textures.update_stream_data_batch &&
+               "GPU textures batch update dispatch is not initialized");
+        ctx.gpu_ctx->textures.update_stream_data_batch(stream, draw_data_ids, data, count, ctx.frame_id);
+    }
+
     static void render_textures_stream_cached(DrawStream *stream, void *render_ctx, GPUContext *gpu_context)
     {
         const u32 frame_id = get_context().frame_id;
@@ -119,7 +146,7 @@ namespace auik::v2::detail
         if (widgets_cache.size() == 0) return;
         auto &global_ctx = get_context();
         global_ctx.dirty_flags |= DirtyFlagBits::redraw;
-        for (auto &widget : widgets_cache) widget->update_draw_commands();
+        for (auto &widget : widgets_cache) widget->update_draw_commands(DrawReasonBits::external);
 
         const u32 frame_id = global_ctx.frame_id;
         gpu_context->textures.render_stream(stream, render_ctx, gpu_context, frame_id);
@@ -193,6 +220,7 @@ namespace auik::v2
         stream.push_data_to_stream = &detail::push_data_to_stream_cached;
         stream.push_data_batch_to_stream = &detail::push_data_batch_to_stream_cached;
         stream.update_data_in_stream = &detail::update_data_textures_stream_cached;
+        stream.update_data_batch_in_stream = &detail::update_data_batch_textures_stream_cached;
         stream.clear = &detail::clear_textures_stream_cached;
         stream.destroy = &detail::destroy_textures_stream_cached;
 
@@ -220,6 +248,7 @@ namespace auik::v2
         stream.push_data_to_stream = &detail::push_data_to_stream_transient;
         stream.push_data_batch_to_stream = &detail::push_data_batch_to_stream_transient;
         stream.update_data_in_stream = &detail::update_data_textures_stream_transient;
+        stream.update_data_batch_in_stream = &detail::update_data_batch_textures_stream_transient;
         stream.push_widget_to_cache = &detail::push_widget_textures_stream_transient;
         stream.clear = gpu_ctx->textures.clear_stream;
         stream.destroy = &detail::destroy_textures_stream_transient;

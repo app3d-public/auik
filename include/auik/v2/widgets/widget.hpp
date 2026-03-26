@@ -41,7 +41,8 @@ namespace auik::v2
     using StyleUpdateFlags = acul::flags<StyleUpdateFlagBits>;
     constexpr inline detail::StylePropertyFlags g_style_layout_mask =
         detail::StylePropertiesBits::padding | detail::StylePropertiesBits::text_size |
-        detail::StylePropertiesBits::border_thickness | detail::StylePropertiesBits::border_radius;
+        detail::StylePropertiesBits::border_thickness | detail::StylePropertiesBits::border_radius |
+        detail::StylePropertiesBits::font;
     constexpr inline detail::StylePropertyFlags g_style_parent_layout_mask = detail::StylePropertiesBits::margin;
 
     constexpr inline WidgetFlags get_default_widget_flags()
@@ -105,6 +106,7 @@ namespace auik::v2
         inline amal::vec2 &size() { return _rect.bounds.size; }
         inline const amal::vec2 &size() const { return _rect.bounds.size; }
         inline void set_position(const amal::vec2 &pos) { _rect.bounds.offset = pos; }
+        virtual void translate(const amal::vec2 &delta) { set_position(position() + delta); }
         inline void set_size(const amal::vec2 &size) { _rect.bounds.size = size; }
         inline const amal::vec2 &required_size() const { return _required_size; }
         inline void set_required_size(const amal::vec2 &size) { _required_size = size; }
@@ -129,19 +131,21 @@ namespace auik::v2
 
         virtual void rebuild_clip_rects() {}
 
-        void record_draw_commands()
+        void record_draw_commands(DrawReasonFlags reason = DrawReasonBits::none)
         {
             DrawCtx draw_ctx{};
             draw_ctx.emit = &emit_draw_record;
             draw_ctx.emit_hit_rect = is_hittable();
+            draw_ctx.reason = reason;
             draw(draw_ctx);
         }
 
-        void update_draw_commands()
+        void update_draw_commands(DrawReasonFlags reason = DrawReasonBits::none)
         {
             DrawCtx draw_ctx{};
             draw_ctx.emit = &emit_draw_update;
             draw_ctx.emit_hit_rect = is_hittable();
+            draw_ctx.reason = reason;
             draw(draw_ctx);
         }
 
@@ -225,6 +229,8 @@ namespace auik::v2
             changed |= detail::StylePropertiesBits::corner_mask;
         if ((union_mask & detail::StylePropertiesBits::text_size) && prev_style.text_size() != next_style.text_size())
             changed |= detail::StylePropertiesBits::text_size;
+        if ((union_mask & detail::StylePropertiesBits::font) && prev_style.font() != next_style.font())
+            changed |= detail::StylePropertiesBits::font;
 
         if (changed == detail::StylePropertiesBits::none) return StyleUpdateFlagBits::none;
         StyleUpdateFlags out = StyleUpdateFlagBits::redraw;

@@ -37,10 +37,12 @@ namespace auik::v2
 
         TexturesInstanceData image_data{};
         image_data.rect = bounds();
+        image_data.tint_color = {1.0f, 1.0f, 1.0f, 1.0f};
         image_data.uv_rect = _uv_rect;
         image_data.z_order = get_z_order();
         image_data.texture_id = static_cast<u16>(_texture_id.bind_slot);
         image_data.clip_id = clip_id();
+        image_data.flags = _coverage_mode ? AUIK_TEXTURE_INSTANCE_TEXT_BIT : 0u;
         ctx.emit(image_stream, _image, &image_data, get_rect(), false);
     }
 

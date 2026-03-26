@@ -27,6 +27,10 @@ struct FT_FaceRec_;
 namespace auik::v2
 {
     class Font;
+    namespace detail
+    {
+        struct TextFontAccess;
+    }
 
     using FT_Library = ::FT_LibraryRec_ *;
     using FT_Face = ::FT_FaceRec_ *;
@@ -320,6 +324,8 @@ namespace auik::v2
         bool visible() const { return !empty && !amal::is_rect_empty(pixel_rect) && texture_id.handle != 0; }
     };
 
+    using GlyphCache = acul::hashmap<u32, Glyph>;
+
     using FontRegistry = acul::case_insensitive_map<acul::string, FontInfo>;
 
     inline FontInfo *get_font_info_by_family(const FontRegistry &fonts, const acul::string &family,
@@ -360,39 +366,58 @@ namespace auik::v2
         bool load(const acul::string &path, int face_index = 0);
         void clear();
 
-        bool set_pixel_size(u32 size_px);
         void set_load_flags(FontLoadFlags flags);
         void add_load_flags(FontLoadFlags flags);
         void remove_load_flags(FontLoadFlags flags);
         FontLoadFlags load_flags() const { return _load_flags; }
         void set_render_mode(FontRenderMode mode);
         FontRenderMode render_mode() const { return _render_mode; }
-        bool load_glyph(u32 codepoint);
-        bool load_glyphs(const acul::vector<u32> &codepoints);
-        bool load_glyphs(const acul::string &utf8_text);
+        bool load_glyph(u32 size_px, u32 codepoint);
+        bool load_glyphs(u32 size_px, const acul::vector<u32> &codepoints);
+        bool load_glyphs(u32 size_px, const acul::string &utf8_text);
 
         bool is_loaded() const { return _face != nullptr; }
         int face_index() const { return _face_index; }
-        size_t glyph_count() const { return _glyphs.size(); }
+        size_t glyph_count() const;
         const FontInfo &info() const { return _info; }
         const acul::string &path() const { return _info.path; }
         const acul::string &fullname() const { return _info.fullname; }
         int weight() const { return _info.weight; }
         int slant() const { return _info.slant; }
         FT_Face native_handle() const { return _face; }
-        Glyph *find_glyph(u32 codepoint);
-        const Glyph *find_glyph(u32 codepoint) const;
+        Glyph *find_glyph(u32 size_px, u32 codepoint);
+        const Glyph *find_glyph(u32 size_px, u32 codepoint) const;
 
     private:
+        friend struct detail::TextFontAccess;
+
+        bool ensure_size_px(u32 size_px);
+        GlyphCache *find_cache(u32 size_px);
+        const GlyphCache *find_cache(u32 size_px) const;
+        GlyphCache &ensure_cache(u32 size_px);
+
         FontInfo _info;
         FT_Face _face = nullptr;
         int _face_index = 0;
-        FontLoadFlags _load_flags = FontLoadFlagBits::color;
+        FontLoadFlags _load_flags = FontLoadFlagBits::none;
         FontRenderMode _render_mode = FontRenderMode::normal;
-        acul::hashmap<u32, Glyph> _glyphs;
+        u32 _active_size_px = 0;
+        acul::hashmap<u32, GlyphCache> _glyphs;
     };
 
     APPLIB_API bool load_fonts(FontRegistry &fonts, const acul::vector<acul::string> &search_dirs = {});
+
+    inline bool load_font(const FontRegistry &fonts, Font &dst, const acul::string &family, const acul::string &fullname)
+    {
+        FontInfo *font_info = get_font_info_by_family(fonts, family, fullname);
+        if (!font_info) return false;
+        return dst.load(*font_info);
+    }
+
+    inline bool load_font(const FontRegistry &fonts, Font &dst, const acul::string &family)
+    {
+        return load_font(fonts, dst, family, family);
+    }
 
     inline f32 pt_to_px(f32 pt, f32 dpi)
     {

@@ -34,6 +34,7 @@ namespace auik::v2::detail
         dispatch.push_data_to_stream = &push_data_to_instance_stream<TexturesInstanceData>;
         dispatch.push_data_batch_to_stream = &push_data_batch_to_instance_stream<TexturesInstanceData>;
         dispatch.update_stream_data = &update_instance_stream_data<TexturesInstanceData>;
+        dispatch.update_stream_data_batch = &update_instance_stream_data_batch<TexturesInstanceData>;
         dispatch.clear_stream = &clear_instance_stream<TexturesStream>;
         dispatch.copy_stream_frame_data = &copy_instance_stream_frame_data<TexturesStream>;
         dispatch.sync_stream_cache = &sync_instance_stream_cache<TexturesStream>;

@@ -1,4 +1,6 @@
 #include <auik/v2/auik.hpp>
+#include <auik/v2/detail/text.hpp>
+#include <harfbuzz/hb-ft.h>
 
 namespace auik::v2
 {
@@ -59,4 +61,537 @@ namespace auik::v2
         dst += encode_utf8(c);
         return true;
     }
+
+    namespace detail
+    {
+        namespace
+        {
+            constexpr f32 g_hb_scale = 64.0f;
+            constexpr char g_ellipsis_utf8[] = "\xE2\x80\xA6";
+
+            struct ShapedRun
+            {
+                size_t text_start = 0;
+                size_t text_end = 0;
+                f32 width = 0.0f;
+                acul::vector<hb_glyph_info_t> infos;
+                acul::vector<hb_glyph_position_t> positions;
+            };
+
+            struct Token
+            {
+                size_t start = 0;
+                size_t end = 0;
+                bool whitespace = false;
+            };
+
+            static bool is_inline_space(char c) { return c == ' ' || c == '\t' || c == '\r'; }
+
+            static size_t trim_trailing_spaces(const acul::string &text, size_t start, size_t end)
+            {
+                while (end > start && is_inline_space(text[end - 1])) --end;
+                return end;
+            }
+
+            static size_t skip_leading_spaces(const acul::string &text, size_t start, size_t end)
+            {
+                while (start < end && is_inline_space(text[start])) ++start;
+                return start;
+            }
+
+            static Token next_token(const acul::string &text, size_t start, size_t end)
+            {
+                Token token{};
+                token.start = start;
+                token.end = start;
+                token.whitespace = false;
+                if (start >= end) return token;
+
+                token.whitespace = is_inline_space(text[start]);
+                while (token.end < end && is_inline_space(text[token.end]) == token.whitespace) ++token.end;
+                return token;
+            }
+
+            static bool shape_range(Font &font, u32 size_px, const acul::string &text, size_t start, size_t end,
+                                    ShapedRun &out)
+            {
+                out = {};
+                out.text_start = start;
+                out.text_end = end;
+                if (start >= end) return true;
+
+                auto *face = TextFontAccess::face(font, size_px);
+                if (!face) return false;
+
+                hb_buffer_t *buffer = hb_buffer_create();
+                if (!buffer) return false;
+
+                hb_buffer_add_utf8(buffer, text.c_str(), static_cast<int>(text.size()),
+                                   static_cast<unsigned int>(start), static_cast<int>(end - start));
+                hb_buffer_guess_segment_properties(buffer);
+
+                hb_font_t *hb_font = hb_ft_font_create_referenced(face);
+                if (!hb_font)
+                {
+                    hb_buffer_destroy(buffer);
+                    return false;
+                }
+
+                hb_shape(hb_font, buffer, nullptr, 0);
+
+                unsigned int glyph_count = 0;
+                auto *infos = hb_buffer_get_glyph_infos(buffer, &glyph_count);
+                auto *positions = hb_buffer_get_glyph_positions(buffer, &glyph_count);
+
+                acul::vector<u32> glyph_indices;
+                for (unsigned int i = 0; i < glyph_count; ++i)
+                {
+                    glyph_indices.push_back(infos[i].codepoint);
+                    out.infos.push_back(infos[i]);
+                    out.positions.push_back(positions[i]);
+                    out.width += static_cast<f32>(positions[i].x_advance) / g_hb_scale;
+                }
+
+                if (!glyph_indices.empty()) TextFontAccess::load_glyph_indices(font, size_px, glyph_indices);
+
+                hb_font_destroy(hb_font);
+                hb_buffer_destroy(buffer);
+                return true;
+            }
+
+            static size_t trim_run_to_width(const ShapedRun &run, f32 max_width, f32 &out_width)
+            {
+                out_width = 0.0f;
+                if (run.infos.empty()) return run.text_start;
+
+                size_t first_cluster_end = run.text_end;
+                size_t last_fit_end = run.text_start;
+                f32 width = 0.0f;
+
+                for (size_t i = 0; i < run.infos.size();)
+                {
+                    const u32 cluster = run.infos[i].cluster;
+                    size_t j = i;
+                    while (j < run.infos.size() && run.infos[j].cluster == cluster)
+                    {
+                        width += static_cast<f32>(run.positions[j].x_advance) / g_hb_scale;
+                        ++j;
+                    }
+
+                    const size_t cluster_end =
+                        (j < run.infos.size()) ? (run.text_start + run.infos[j].cluster) : run.text_end;
+                    if (i == 0) first_cluster_end = cluster_end;
+                    if (width <= max_width)
+                    {
+                        last_fit_end = cluster_end;
+                        out_width = width;
+                    }
+                    else break;
+
+                    i = j;
+                }
+
+                if (last_fit_end == run.text_start)
+                {
+                    out_width = width;
+                    return first_cluster_end;
+                }
+                return last_fit_end;
+            }
+
+            static f32 append_run_to_line(TextLayoutResult &out, Font &font, u32 size_px, const ShapedRun &run,
+                                          f32 line_y, f32 pen_x, TextLine &line)
+            {
+                for (size_t i = 0; i < run.infos.size(); ++i)
+                {
+                    const u32 glyph_index = run.infos[i].codepoint;
+                    const auto *glyph = TextFontAccess::find_glyph_by_index(font, size_px, glyph_index);
+                    const f32 x_offset = static_cast<f32>(run.positions[i].x_offset) / g_hb_scale;
+                    const f32 y_offset = static_cast<f32>(run.positions[i].y_offset) / g_hb_scale;
+                    const f32 x_advance = static_cast<f32>(run.positions[i].x_advance) / g_hb_scale;
+                    const f32 y_advance = static_cast<f32>(run.positions[i].y_advance) / g_hb_scale;
+
+                    ShapedGlyph shaped{};
+                    shaped.glyph = glyph;
+                    shaped.glyph_index = glyph_index;
+                    shaped.cluster = static_cast<u32>(run.text_start + run.infos[i].cluster);
+                    shaped.pen = {pen_x + x_offset, line_y + out.ascender - y_offset};
+                    shaped.advance = {x_advance, y_advance};
+                    shaped.offset = {x_offset, y_offset};
+
+                    if (glyph)
+                    {
+                        shaped.rect.offset = {shaped.pen.x + static_cast<f32>(glyph->offset.x),
+                                              shaped.pen.y - static_cast<f32>(glyph->offset.y)};
+                        shaped.rect.size = {static_cast<f32>(glyph->size.x), static_cast<f32>(glyph->size.y)};
+                    }
+
+                    out.glyphs.push_back(shaped);
+                    pen_x += x_advance;
+                }
+
+                line.width = pen_x;
+                return pen_x;
+            }
+
+            static void finalize_line(TextLayoutResult &out, TextLine &line, f32 line_y)
+            {
+                out.lines.push_back(line);
+                out.size.x = amal::max(out.size.x, line.width);
+                out.size.y = amal::max(out.size.y, line_y + out.line_height);
+            }
+
+            static f32 resolve_horizontal_offset(TextHorizontalAlign align, f32 bounds_width, f32 line_width)
+            {
+                switch (align)
+                {
+                    case TextHorizontalAlign::center:
+                        return (bounds_width - line_width) * 0.5f;
+                    case TextHorizontalAlign::right:
+                        return bounds_width - line_width;
+                    case TextHorizontalAlign::left:
+                    default:
+                        return 0.0f;
+                }
+            }
+
+            static f32 resolve_vertical_offset(TextVerticalAlign align, f32 bounds_height, f32 layout_height)
+            {
+                switch (align)
+                {
+                    case TextVerticalAlign::center:
+                        return (bounds_height - layout_height) * 0.5f;
+                    case TextVerticalAlign::bottom:
+                        return bounds_height - layout_height;
+                    case TextVerticalAlign::top:
+                    default:
+                        return 0.0f;
+                }
+            }
+
+            static f32 resolve_vertical_align_height(const TextLayoutResult &layout)
+            {
+                const f32 metrics_height = amal::max(layout.ascender - layout.descender, 0.0f);
+                if (layout.lines.size() <= 1 && metrics_height > 0.0f) return metrics_height;
+                return layout.size.y;
+            }
+
+            static bool append_instances_from_layout(Font &font, u32 size_px, const TextLayoutResult &layout,
+                                                     const TextRenderConfig &render_config,
+                                                     acul::vector<TexturesInstanceData> &out)
+            {
+                out.clear();
+
+                const f32 base_x = render_config.bounds.offset.x;
+                const f32 align_height = resolve_vertical_align_height(layout);
+                const f32 base_y = render_config.bounds.offset.y +
+                                   resolve_vertical_offset(render_config.vertical_align, render_config.bounds.size.y,
+                                                           align_height);
+
+                for (const auto &line : layout.lines)
+                {
+                    const f32 line_shift = resolve_horizontal_offset(render_config.horizontal_align,
+                                                                     render_config.bounds.size.x, line.width);
+
+                    for (u32 i = 0; i < line.glyph_count; ++i)
+                    {
+                        const auto &shaped = layout.glyphs[line.glyph_offset + i];
+                        const Glyph *glyph = shaped.glyph;
+                        amal::vec2 glyph_offset = shaped.rect.offset;
+
+                        if (glyph && glyph->empty) continue;
+
+                        if (!glyph && render_config.fallback_question_mark)
+                        {
+                            if (!font.find_glyph(size_px, '?')) font.load_glyph(size_px, '?');
+                            glyph = font.find_glyph(size_px, '?');
+                            if (glyph)
+                            {
+                                glyph_offset = {shaped.pen.x + static_cast<f32>(glyph->offset.x),
+                                                shaped.pen.y - static_cast<f32>(glyph->offset.y)};
+                            }
+                        }
+
+                        if (!glyph || !glyph->visible()) continue;
+
+                        TexturesInstanceData instance{};
+                        instance.rect.offset = {amal::round(base_x + line_shift + glyph_offset.x),
+                                                amal::round(base_y + glyph_offset.y)};
+                        instance.rect.size = {static_cast<f32>(glyph->size.x), static_cast<f32>(glyph->size.y)};
+                        instance.tint_color = render_config.tint_color;
+                        instance.uv_rect = glyph->uv_rect;
+                        instance.z_order = render_config.z_order;
+                        instance.texture_id = static_cast<u16>(glyph->texture_id.bind_slot);
+                        instance.clip_id = render_config.clip_id;
+                        instance.flags = AUIK_TEXTURE_INSTANCE_TEXT_BIT;
+                        out.push_back(instance);
+                    }
+                }
+
+                return true;
+            }
+
+            static bool append_shaped_line(TextLayoutResult &out, Font &font, u32 size_px, const acul::string &text,
+                                           size_t start, size_t end, f32 line_y)
+            {
+                ShapedRun run;
+                if (!shape_range(font, size_px, text, start, end, run)) return false;
+
+                TextLine line{};
+                line.glyph_offset = static_cast<u32>(out.glyphs.size());
+                line.text_start = start;
+                line.text_end = end;
+                append_run_to_line(out, font, size_px, run, line_y, 0.0f, line);
+                line.glyph_count = static_cast<u32>(out.glyphs.size()) - line.glyph_offset;
+                finalize_line(out, line, line_y);
+                return true;
+            }
+
+            static bool append_ellipsized_line(TextLayoutResult &out, Font &font, u32 size_px, const acul::string &text,
+                                               size_t start, size_t end, f32 line_y, f32 max_width)
+            {
+                const acul::string ellipsis(g_ellipsis_utf8);
+                ShapedRun ellipsis_run;
+                if (!shape_range(font, size_px, ellipsis, 0, ellipsis.size(), ellipsis_run)) return false;
+
+                TextLine line{};
+                line.glyph_offset = static_cast<u32>(out.glyphs.size());
+                line.text_start = start;
+                line.text_end = end;
+
+                if (max_width <= 0.0f || ellipsis_run.width >= max_width)
+                {
+                    append_run_to_line(out, font, size_px, ellipsis_run, line_y, 0.0f, line);
+                    line.glyph_count = static_cast<u32>(out.glyphs.size()) - line.glyph_offset;
+                    finalize_line(out, line, line_y);
+                    return true;
+                }
+
+                const f32 available_width = max_width - ellipsis_run.width;
+                ShapedRun full_run;
+                if (!shape_range(font, size_px, text, start, end, full_run)) return false;
+
+                f32 visible_width = 0.0f;
+                const size_t trim_end = trim_run_to_width(full_run, available_width, visible_width);
+                if (trim_end > start)
+                {
+                    ShapedRun visible_run;
+                    if (!shape_range(font, size_px, text, start, trim_end, visible_run)) return false;
+                    append_run_to_line(out, font, size_px, visible_run, line_y, 0.0f, line);
+                }
+
+                append_run_to_line(out, font, size_px, ellipsis_run, line_y, line.width, line);
+                line.glyph_count = static_cast<u32>(out.glyphs.size()) - line.glyph_offset;
+                finalize_line(out, line, line_y);
+                return true;
+            }
+
+            static bool layout_wrapped_span(TextLayoutResult &out, Font &font, const acul::string &text, size_t start,
+                                            size_t end, const TextLayoutConfig &config, f32 &line_y, bool &truncated)
+            {
+                const u32 size_px = config.size_px;
+                size_t cursor = start;
+                while (cursor < end)
+                {
+                    cursor = skip_leading_spaces(text, cursor, end);
+                    if (cursor >= end) break;
+
+                    if (config.max_lines != 0 && out.lines.size() + 1 >= config.max_lines)
+                    {
+                        if (!append_ellipsized_line(out, font, size_px, text, cursor, end, line_y, config.max_width))
+                            return false;
+                        truncated = true;
+                        return true;
+                    }
+
+                    if (config.max_width <= 0.0f)
+                    {
+                        if (!append_shaped_line(out, font, size_px, text, cursor, end, line_y)) return false;
+                        line_y += out.line_height;
+                        return true;
+                    }
+
+                    size_t probe = cursor;
+                    size_t last_break = cursor;
+                    while (probe < end)
+                    {
+                        Token token = next_token(text, probe, end);
+                        if (token.start == token.end) break;
+
+                        const size_t candidate_end = token.end;
+                        ShapedRun candidate_run;
+                        if (!shape_range(font, size_px, text, cursor, candidate_end, candidate_run)) return false;
+                        if (candidate_run.width <= config.max_width)
+                        {
+                            probe = candidate_end;
+                            if (token.whitespace) last_break = candidate_end;
+                            continue;
+                        }
+
+                        size_t line_end = last_break > cursor ? last_break : cursor;
+                        if (line_end > cursor)
+                        {
+                            line_end =
+                                config.trim_trailing_spaces ? trim_trailing_spaces(text, cursor, line_end) : line_end;
+                            if (!append_shaped_line(out, font, size_px, text, cursor, line_end, line_y)) return false;
+                            line_y += out.line_height;
+                            cursor = skip_leading_spaces(text, last_break, end);
+                            goto next_line;
+                        }
+
+                        {
+                            f32 cluster_width = 0.0f;
+                            const size_t cluster_end =
+                                trim_run_to_width(candidate_run, config.max_width, cluster_width);
+                            if (!append_shaped_line(out, font, size_px, text, cursor, cluster_end, line_y))
+                                return false;
+                            line_y += out.line_height;
+                            cursor = cluster_end;
+                            goto next_line;
+                        }
+                    }
+
+                    if (probe > cursor)
+                    {
+                        size_t line_end =
+                            config.trim_trailing_spaces ? trim_trailing_spaces(text, cursor, probe) : probe;
+                        if (!append_shaped_line(out, font, size_px, text, cursor, line_end, line_y)) return false;
+                        line_y += out.line_height;
+                        cursor = probe;
+                    }
+
+                next_line:
+                    continue;
+                }
+
+                return true;
+            }
+        } // namespace
+
+        bool layout_single_line(Font &font, const acul::string &utf8_text, const TextLayoutConfig &config,
+                                TextLayoutResult &out)
+        {
+            out.clear();
+            if (config.size_px == 0) return false;
+            out.ascender = TextFontAccess::ascender(font, config.size_px);
+            out.descender = TextFontAccess::descender(font, config.size_px);
+            out.line_height = TextFontAccess::line_height(font, config.size_px);
+
+            if (utf8_text.empty()) return true;
+
+            ShapedRun run;
+            if (!shape_range(font, config.size_px, utf8_text, 0, utf8_text.size(), run)) return false;
+
+            if (config.max_width <= 0.0f || run.width <= config.max_width || config.overflow == TextOverflowMode::clip)
+            {
+                if (config.max_width > 0.0f && run.width > config.max_width &&
+                    config.overflow == TextOverflowMode::clip)
+                {
+                    f32 trimmed_width = 0.0f;
+                    const size_t trim_end = trim_run_to_width(run, config.max_width, trimmed_width);
+                    return append_shaped_line(out, font, config.size_px, utf8_text, 0, trim_end, 0.0f);
+                }
+                return append_shaped_line(out, font, config.size_px, utf8_text, 0, utf8_text.size(), 0.0f);
+            }
+
+            out.truncated = true;
+            return append_ellipsized_line(out, font, config.size_px, utf8_text, 0, utf8_text.size(), 0.0f,
+                                          config.max_width);
+        }
+
+        bool layout_multiline(Font &font, const acul::string &utf8_text, const TextLayoutConfig &config,
+                              TextLayoutResult &out)
+        {
+            out.clear();
+            if (config.size_px == 0) return false;
+            out.ascender = TextFontAccess::ascender(font, config.size_px);
+            out.descender = TextFontAccess::descender(font, config.size_px);
+            out.line_height = TextFontAccess::line_height(font, config.size_px);
+
+            if (utf8_text.empty()) return true;
+
+            f32 line_y = 0.0f;
+            size_t cursor = 0;
+            while (cursor <= utf8_text.size())
+            {
+                const size_t line_end = utf8_text.find('\n', cursor);
+                const bool has_newline = line_end != acul::string::npos;
+                const size_t span_end = has_newline ? line_end : utf8_text.size();
+
+                if (config.max_lines != 0 && out.lines.size() >= config.max_lines)
+                {
+                    out.truncated = true;
+                    break;
+                }
+
+                if (config.wrap == TextWrapMode::word)
+                {
+                    bool truncated = false;
+                    if (!layout_wrapped_span(out, font, utf8_text, cursor, span_end, config, line_y, truncated))
+                        return false;
+                    if (truncated)
+                    {
+                        out.truncated = true;
+                        break;
+                    }
+                }
+                else
+                {
+                    if (config.max_lines != 0 && out.lines.size() + 1 >= config.max_lines &&
+                        (span_end < utf8_text.size() || span_end - cursor > 0))
+                    {
+                        if (!append_ellipsized_line(out, font, config.size_px, utf8_text, cursor, span_end, line_y,
+                                                    config.max_width))
+                            return false;
+                        out.truncated = span_end < utf8_text.size();
+                        break;
+                    }
+
+                    if (!append_shaped_line(out, font, config.size_px, utf8_text, cursor, span_end, line_y))
+                        return false;
+                    line_y += out.line_height;
+                }
+
+                if (!has_newline) break;
+                if (span_end == cursor)
+                {
+                    TextLine empty_line{};
+                    empty_line.text_start = cursor;
+                    empty_line.text_end = span_end;
+                    empty_line.glyph_offset = static_cast<u32>(out.glyphs.size());
+                    finalize_line(out, empty_line, line_y);
+                    line_y += out.line_height;
+                }
+                cursor = span_end + 1;
+            }
+
+            return true;
+        }
+
+        bool build_single_line_instances(Font &font, const acul::string &utf8_text,
+                                         const TextLayoutConfig &layout_config, const TextRenderConfig &render_config,
+                                         acul::vector<TexturesInstanceData> &out, TextLayoutResult *layout_result)
+        {
+            TextLayoutResult local_layout;
+            auto &layout = layout_result ? *layout_result : local_layout;
+            auto effective_layout = layout_config;
+            if (effective_layout.size_px == 0) return false;
+            if (effective_layout.max_width <= 0.0f) effective_layout.max_width = render_config.bounds.size.x;
+            if (!layout_single_line(font, utf8_text, effective_layout, layout)) return false;
+            return append_instances_from_layout(font, effective_layout.size_px, layout, render_config, out);
+        }
+
+        bool build_multiline_instances(Font &font, const acul::string &utf8_text, const TextLayoutConfig &layout_config,
+                                       const TextRenderConfig &render_config, acul::vector<TexturesInstanceData> &out,
+                                       TextLayoutResult *layout_result)
+        {
+            TextLayoutResult local_layout;
+            auto &layout = layout_result ? *layout_result : local_layout;
+            auto effective_layout = layout_config;
+            if (effective_layout.size_px == 0) return false;
+            if (effective_layout.max_width <= 0.0f) effective_layout.max_width = render_config.bounds.size.x;
+            if (!layout_multiline(font, utf8_text, effective_layout, layout)) return false;
+            return append_instances_from_layout(font, effective_layout.size_px, layout, render_config, out);
+        }
+    } // namespace detail
 } // namespace auik::v2

@@ -88,12 +88,20 @@ Before adding the subdirectory, define:
 The following dependencies are included as git submodules and must be checked out when cloning:
 - [acbt](https://github.com/app3d-public/acbt)
 - [acul](https://github.com/app3d-public/acul)
-- [awin](https://github.com/app3d-public/awin)
 - [amal](https://github.com/app3d-public/amal)
-- [agrb](https://github.com/app3d-public/agrb)
 - [umbf](https://github.com/app3d-public/umbf)
 
-## Minimal Initialization Example
+The following dependencies must be installed on your system:
+- [fontconfig](https://www.freedesktop.org/wiki/Software/fontconfig/)
+- [freetype](https://www.freetype.org/)
+- [harfbuzz](https://github.com/harfbuzz/harfbuzz)
+
+## Basic Initialization Example
+The example below uses the `awin` window backend and the `agrb` GPU backend.
+It is configured for a `waitEvents` - based update model. 
+A host refresh request flag is used to wake the main loop when UI updates are required,
+while a pending filter is used to limit the effective frame rate.
+
 ### Initializing auik resources
 ```cpp
 acul::vector<auik::v2::DrawPipeline> pipelines;
@@ -107,6 +115,7 @@ streams.resize(auik::v2::get_default_streams_count());
 auto pool = agrb::descriptor_pool::builder()
                 .set_max_sets(100)
                 .add_pool_size(vk::DescriptorType::eStorageBuffer, 10)
+                .add_pool_size(vk::DescriptorType::eCombinedImageSampler, 32)
                 .build(device);
 
 auik::v2::CreateInfo create_info;
@@ -114,7 +123,10 @@ create_info.set_event_dispatcher(&env::get_event_dispatcher())
     .set_draw_streams(streams.data(), static_cast<u32>(streams.size()))
     .set_gpu_backend(auik::v2::create_agrb_backend(device, pool.get()))
     .set_window_backend(auik::v2::create_awin_backend(env::get_main_window()))
-    .set_frames_in_flight(FRAMES_IN_FLIGHT);
+    .set_frames_in_flight(FRAMES_IN_FLIGHT)
+    .set_max_textures_size(32)
+    .set_host_refresh_request(&env::get_window_refresh_request())
+    .set_pending_filter(&env::get_pending_filter());
 auik::v2::init_library(create_info);
 
 agrb::graphics_pipeline_batch batch;
@@ -126,10 +138,24 @@ if (!batch.allocate_pipelines(env::get_device(), pipelines.size()))
 auik::v2::clear_shader_cache(device);
 ```
 
+### Theme configuration
+```cpp
+auik::v2::FontRegistry fonts;
+auik::v2::Font default_font;
+if (!auik::v2::load_fonts(fonts)) throw acul::runtime_error("Failed to load UI fonts");
+const f32 dpi = awin::get_dpi(env::get_main_window());
+if (!auik::v2::load_win32_icons(fonts, dpi)) throw acul::runtime_error("Failed to load OS icons");
+if (!auik::v2::load_font(fonts, default_font, "Segoe UI")) throw acul::runtime_error("Failed to load UI font");
+auik::v2::set_theme(auik::v2::create_default_theme(&default_font, dpi));
+```
+> [!NOTE]
+> For MS Windows, we provide support for loading icons from `Segoe Fluent Icons` / `Segoe MDL2 Assets`.     
+> For other supported platforms, we provide support for `Material Design Icons` (by Google).
+> To load them, specify the directory containing the font and call
+> `auik::v2::load_material_icons(const FontRegistry&, f32)`.
+
 ### Adding widgets
 ```cpp
-const f32 dpi = awin::get_dpi(env::get_main_window());
-auik::v2::set_theme(auik::v2::create_default_theme(dpi));
 auto* demo_window = auik::v2::create_demo_window();
 auik::v2::add_widget_to_root(demo_window);
 ```
@@ -142,8 +168,8 @@ if (auik::v2::is_dirty_render())
    auik::v2::sync_gpu_cache();
    for (auto &stream : streams) auik::v2::render_stream(stream, &cmd);
 }
-if (auik::v2::is_host_update_pending()) awin::push_empty_event();
 auik::v2::next_frame(&cmd);
+if (has_window_refresh_request()) awin::push_empty_event();
 ```
 
 ## License

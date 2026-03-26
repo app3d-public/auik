@@ -2,6 +2,7 @@
 #include <auik/v2/auik.hpp>
 #include <auik/v2/detail/depth.hpp>
 #include <auik/v2/pipelines.hpp>
+#include <auik/v2/widgets/text.hpp>
 #include <auik/v2/widgets/window.hpp>
 
 namespace auik::v2
@@ -56,18 +57,32 @@ namespace auik::v2
         return static_cast<Window *>(widget);
     }
 
+    static inline bool is_style_only_draw_update(const DrawCtx &ctx)
+    {
+        if (ctx.emit != &emit_draw_update) return false;
+        if (!(ctx.reason & DrawReasonBits::style)) return false;
+        if (ctx.reason & DrawReasonBits::layout) return false;
+        if (ctx.reason & DrawReasonBits::full_redraw) return false;
+        return true;
+    }
+
     class WindowHeader final : public Widget
     {
     public:
-        explicit WindowHeader(Widget *parent)
+        explicit WindowHeader(Widget *parent, acul::string text)
             : Widget(AUIK_TAG_WINDOW_HEADER, WidgetFlagBits::visible | WidgetFlagBits::foreground, EventFlagBits::none,
                      parent, {}, AUIK_TAG_WINDOW_HEADER),
-              _style({Theme::STYLE_ID_INVALID, AUIK_TAG_WINDOW_HEADER})
+              _style({Theme::STYLE_ID_INVALID, AUIK_TAG_WINDOW_HEADER}),
+              _title(acul::alloc<Text>(AUIK_TAG_WINDOW_HEADER ^ parent->id(), std::move(text), amal::vec2{0.0f, 0.0f},
+                                        get_default_fixed_text_flags(), this))
         {
             assert(parent);
             _rect.widget_id = parent->id();
             _rect.clip_id = parent->clip_id();
+            _title->set_horizontal_align(detail::TextHorizontalAlign::left);
+            _title->set_vertical_align(detail::TextVerticalAlign::center);
         }
+        ~WindowHeader() override { acul::release(_title); }
 
         f32 compute_height() const
         {
@@ -86,13 +101,57 @@ namespace auik::v2
                 if (ps == StyleState::active || ps == StyleState::focus) state = ps;
             }
             set_style_state(state);
-            return resolve_style_selector(_style, id(), parent_id, style_state());
+            const auto flags = resolve_style_selector(_style, id(), parent_id, style_state());
+            const auto &style = get_theme()->get_style(_style.id);
+            _title->update_style();
+            if (_resolved_text_color != style.text_color())
+            {
+                _resolved_text_color = style.text_color();
+                _title->set_color(_resolved_text_color);
+                _title_draw_dirty = true;
+            }
+            return flags;
+        }
+
+        void update_layout(bool min_size_known) override
+        {
+            (void)min_size_known;
+            Widget::update_layout(true);
+            const auto &style = get_theme()->get_style(_style.id);
+            const amal::vec4 padding = style.padding();
+            const amal::vec2 content_pos = {position().x + padding.x, position().y + padding.y};
+            const amal::vec2 content_size = {amal::max(size().x - padding.x - padding.z, 0.0f),
+                                             amal::max(size().y - padding.y - padding.w, 0.0f)};
+            _title->set_size(content_size);
+            const amal::vec2 prev_cursor = detail::get_context().screen_cursor;
+            detail::get_context().screen_cursor = content_pos;
+            _title->update_layout(true);
+            detail::get_context().screen_cursor = prev_cursor;
+            _title->set_clip_id(clip_id());
+        }
+
+        void translate(const amal::vec2 &delta) override
+        {
+            if (delta.x == 0.0f && delta.y == 0.0f) return;
+            Widget::translate(delta);
+            _title->translate(delta);
+        }
+
+        void update_depth(const amal::vec2 &depth_range) override
+        {
+            Widget::update_depth(depth_range);
+            amal::vec2 text_range{};
+            assign_next_depth(this->depth_range(), text_range);
+            _title->update_depth(text_range);
         }
 
         void rebuild_clip_rects() override
         {
             _rect.clip_id = _parent->clip_id();
             _bg.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+            _title->set_clip_id(clip_id());
+            _title->rebuild_clip_rects();
+            _title_draw_dirty = true;
         }
 
         void draw(DrawCtx &ctx) override
@@ -105,22 +164,29 @@ namespace auik::v2
             data.z_order = get_z_order();
             fill_quads_instance_by_style(theme->get_style(_style.id), clip_id(), data);
             ctx.emit(quads_stream, _bg, &data, get_rect(), ctx.emit_hit_rect);
+
+            if (is_style_only_draw_update(ctx) && !_title_draw_dirty) return;
+            _title->draw(ctx);
+            _title_draw_dirty = false;
         }
 
     private:
         DrawDataID _bg;
         StyleSelector _style;
+        Text *_title = nullptr;
+        amal::vec4 _resolved_text_color{-1.0f, -1.0f, -1.0f, -1.0f};
+        bool _title_draw_dirty = true;
     };
 
-    Window::Window(u32 id, const amal::rect &bounds, WindowFlags in_window_flags, WidgetFlags in_widget_flags,
-                   Widget *parent)
+    Window::Window(u32 id, acul::string title, const amal::rect &bounds, WindowFlags in_window_flags,
+                   WidgetFlags in_widget_flags, Widget *parent)
         : Widget(id, in_widget_flags, EventFlagBits::click | EventFlagBits::drag | EventFlagBits::focus, parent, bounds,
                  AUIK_TAG_WINDOW),
           window_flags(in_window_flags)
     {
         widget_flags |= WidgetFlagBits::hittable;
         if (window_flags & WindowFlagBits::resizable) _rect.flags |= detail::RectBits::hitbox;
-        if (window_flags & WindowFlagBits::decorated) _header = acul::alloc<WindowHeader>(this);
+        if (window_flags & WindowFlagBits::decorated) _header = acul::alloc<WindowHeader>(this, std::move(title));
     }
 
     Window::~Window()
@@ -165,6 +231,7 @@ namespace auik::v2
         ctx.emit(quads_stream, _bg, &bg_data, get_rect(), ctx.emit_hit_rect);
 
         if (_header) _header->draw(ctx);
+        if (is_style_only_draw_update(ctx)) return;
 
         const amal::vec2 prev_cursor = detail::get_context().screen_cursor;
         const auto &padding = window_style.padding();
@@ -229,7 +296,7 @@ namespace auik::v2
     {
         StyleUpdateFlags out = resolve_style_selector(_window_style, id(), 0, style_state());
 
-        if ((window_flags & WindowFlagBits::decorated) && !_header) _header = acul::alloc<WindowHeader>(this);
+        if ((window_flags & WindowFlagBits::decorated) && !_header) _header = acul::alloc<WindowHeader>(this, "");
         if (window_flags & WindowFlagBits::decorated)
         {
             out |= _header->update_style();
@@ -249,6 +316,7 @@ namespace auik::v2
         {
             _header->set_position(position());
             _header->set_size({size().x, _header_height});
+            _header->update_layout(true);
         }
 
         const bool can_scroll_y =
@@ -413,6 +481,7 @@ namespace auik::v2
             _header->set_position(position());
             _header->set_size({size().x, _header_height});
             _header->set_clip_id(clip_id());
+            _header->update_layout(true);
         }
 
         const bool was_scrollbar_y_visible = _scrollbar_y && _scrollbar_y->is_visible();
@@ -482,6 +551,36 @@ namespace auik::v2
         detail::get_context().screen_cursor = prev_cursor;
     }
 
+    void Window::translate(const amal::vec2 &delta)
+    {
+        if (delta.x == 0.0f && delta.y == 0.0f) return;
+
+        Widget::translate(delta);
+        auto &ctx = detail::get_context();
+        ctx.dirty_flags |= DirtyFlagBits::hit_rect_update;
+
+        const amal::vec4 self_clip_rect = parent() ? intersect_rect({position().x, position().y, size().x, size().y},
+                                                                    parent()->get_content_clip_rect())
+                                                   : amal::vec4{position().x, position().y, size().x, size().y};
+        if (clip_id() != 0xFFFFu) update_clip_rect(clip_id(), self_clip_rect);
+        if (_content_clip_id != 0xFFFFu)
+        {
+            _content_clip_rect.x += delta.x;
+            _content_clip_rect.y += delta.y;
+            _content_clip_rect = intersect_rect(self_clip_rect, _content_clip_rect);
+            update_clip_rect(_content_clip_id, _content_clip_rect);
+        }
+
+        if (_header) _header->translate(delta);
+        for (auto *child : children)
+        {
+            if (!child) continue;
+            child->translate(delta);
+        }
+        if (_scrollbar_y) _scrollbar_y->translate(delta);
+        if (_scrollbar_x) _scrollbar_x->translate(delta);
+    }
+
     void Window::on_scroll(const amal::vec2 &delta)
     {
         if (!_scrollbar_x && !_scrollbar_y)
@@ -509,7 +608,7 @@ namespace auik::v2
         {
             add_render_command<detail::ScrollEventTraits>(this, [this]() {
                 update_layout(true);
-                update_draw_commands();
+                update_draw_commands(DrawReasonBits::layout);
                 detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
             });
         }
@@ -554,6 +653,7 @@ namespace auik::v2
         (void)click_count;
 
         auto &ctx = detail::get_context();
+        _move_drag_active = (window_flags & WindowFlagBits::decorated) && (ctx.hover_id.tag_id == AUIK_TAG_WINDOW_HEADER);
         _resize_zone = detail::HitboxZoneBits::none;
         if ((window_flags & WindowFlagBits::resizable) && !(window_flags & WindowFlagBits::docked) &&
             ctx.hover_id.tag_id == AUIK_TAG_HITBOX)
@@ -562,7 +662,10 @@ namespace auik::v2
             // This prevents losing diagonal resize on tiny hover-zone jitter.
             _resize_zone = detail::get_hitbox_zone(get_rect(), ctx.io.mouse_pos);
             if (_resize_zone != detail::HitboxZoneBits::none)
+            {
+                _move_drag_active = false;
                 detail::set_window_cursor(detail::get_cursor_for_hitbox_zone(_resize_zone), ctx.window_ctx);
+            }
         }
 
         if (!_scrollbar_x && !_scrollbar_y) return;
@@ -575,6 +678,7 @@ namespace auik::v2
         if (_scrollbar_y && _scrollbar_y->is_visible() &&
             (ctx.hover_id.tag_id == AUIK_TAG_SCROLLBAR_TRACK_Y || ctx.hover_id.tag_id == AUIK_TAG_SCROLLBAR_THUMB_Y))
         {
+            _move_drag_active = false;
             _scrollbar_y->set_scroll_offset(_content_offset.y);
             if (ctx.hover_id.tag_id == AUIK_TAG_SCROLLBAR_THUMB_Y)
             {
@@ -592,6 +696,7 @@ namespace auik::v2
         if (_scrollbar_x && _scrollbar_x->is_visible() &&
             (ctx.hover_id.tag_id == AUIK_TAG_SCROLLBAR_TRACK_X || ctx.hover_id.tag_id == AUIK_TAG_SCROLLBAR_THUMB_X))
         {
+            _move_drag_active = false;
             _scrollbar_x->set_scroll_offset(_content_offset.x);
             if (ctx.hover_id.tag_id == AUIK_TAG_SCROLLBAR_THUMB_X)
             {
@@ -619,7 +724,7 @@ namespace auik::v2
             sync_clip_rect_cache();
             add_render_command<detail::ClickEventTraits>(this, [this]() {
                 update_layout(true);
-                update_draw_commands();
+                update_draw_commands(DrawReasonBits::layout);
                 detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
             });
             return;
@@ -647,6 +752,7 @@ namespace auik::v2
         if (state == KeyPressState::release)
         {
             auto &ctx = detail::get_context();
+            _move_drag_active = false;
             bool active_state_changed = false;
             active_state_changed = (_scrollbar_y && _scrollbar_y->set_thumb_active(false)) || active_state_changed;
             active_state_changed = (_scrollbar_x && _scrollbar_x->set_thumb_active(false)) || active_state_changed;
@@ -702,7 +808,7 @@ namespace auik::v2
                 sync_clip_rect_cache();
                 add_render_command<detail::DragEventTraits>(this, [this]() {
                     update_layout(true);
-                    update_draw_commands();
+                    update_draw_commands(DrawReasonBits::layout);
                     detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
                 });
                 return;
@@ -784,12 +890,12 @@ namespace auik::v2
 
         if (!(window_flags & WindowFlagBits::movable)) return;
         if (window_flags & WindowFlagBits::docked) return;
+        if (!_move_drag_active) return;
 
-        set_position(position() + delta);
+        translate(delta);
         sync_clip_rect_cache();
         add_render_command<detail::DragEventTraits>(this, [this]() {
-            update_layout(true);
-            update_draw_commands();
+            update_draw_commands(DrawReasonBits::external);
             detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
         });
     }
@@ -835,7 +941,9 @@ namespace auik::v2
         add_render_command<detail::FocusEventTraits>(self_window, [self_window, self_needs_layout]() {
             self_window->update_style();
             if (self_needs_layout) self_window->update_layout(true);
-            self_window->update_draw_commands();
+            DrawReasonFlags reason = DrawReasonBits::style;
+            if (self_needs_layout) reason |= DrawReasonBits::layout;
+            self_window->update_draw_commands(reason);
             detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
         });
 
@@ -845,13 +953,15 @@ namespace auik::v2
             add_render_command<detail::FocusEventTraits>(top_window, [top_window, top_needs_layout]() {
                 top_window->update_style();
                 if (top_needs_layout) top_window->update_layout(true);
-                top_window->update_draw_commands();
+                DrawReasonFlags reason = DrawReasonBits::style;
+                if (top_needs_layout) reason |= DrawReasonBits::layout;
+                top_window->update_draw_commands(reason);
                 detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
             });
         }
         else
             add_render_command<detail::FocusEventTraits>(top, [top]() {
-                top->update_draw_commands();
+                top->update_draw_commands(DrawReasonBits::style);
                 detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
             });
     }

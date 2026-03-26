@@ -95,6 +95,7 @@ namespace auik::v2::detail
         void configure(const amal::vec2 &track_pos, const amal::vec2 &track_size, f32 content_size, f32 view_size);
 
         StyleUpdateFlags update_style() override;
+        void translate(const amal::vec2 &delta) override;
         void rebuild_clip_rects() override;
 
         void draw(DrawCtx &ctx) override;

@@ -211,6 +211,13 @@ namespace auik::v2::detail
         return out;
     }
 
+    void Scrollbar::translate(const amal::vec2 &delta)
+    {
+        if (delta.x == 0.0f && delta.y == 0.0f) return;
+        Widget::translate(delta);
+        _thumb_rect.bounds.offset += delta;
+    }
+
     void Scrollbar::rebuild_clip_rects()
     {
         _thumb_rect.clip_id = clip_id();

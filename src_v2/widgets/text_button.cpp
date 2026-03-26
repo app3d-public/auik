@@ -4,11 +4,28 @@
 
 namespace auik::v2
 {
+    static inline bool is_style_only_draw_update(const DrawCtx &ctx)
+    {
+        if (ctx.emit != &emit_draw_update) return false;
+        if (!(ctx.reason & DrawReasonBits::style)) return false;
+        if (ctx.reason & DrawReasonBits::layout) return false;
+        if (ctx.reason & DrawReasonBits::full_redraw) return false;
+        return true;
+    }
+
     StyleUpdateFlags TextButton::update_style()
     {
         const u32 parent_id = parent() ? parent()->id() : 0u;
-        return resolve_style_selector(_style, id(), parent_id, style_state());
-        ;
+        const auto flags = resolve_style_selector(_style, id(), parent_id, style_state());
+        const auto &style = get_theme()->get_style(_style.id);
+        _text->update_style();
+        if (_resolved_text_color != style.text_color())
+        {
+            _resolved_text_color = style.text_color();
+            _text->set_color(_resolved_text_color);
+            _text_draw_dirty = true;
+        }
+        return flags;
     }
 
     void TextButton::update_layout_min_size()
@@ -18,10 +35,14 @@ namespace auik::v2
         const amal::vec4 margin = style.margin();
         const amal::vec4 padding = style.padding();
 
+        _text->update_layout_min_size();
+        const amal::vec2 text_size = _text->required_size();
+
         amal::vec2 min_size = size();
         if (!is_fixed()) min_size.x = 0.0f;
-        else if (min_size.x <= 0.0f) min_size.x = 120.0f;
-        if (min_size.y <= 0.0f) min_size.y = style.text_size() + padding.y + padding.w;
+        else if (min_size.x <= 0.0f) min_size.x = amal::max(120.0f, text_size.x + padding.x + padding.z);
+        if (min_size.y <= 0.0f) min_size.y = amal::max(style.text_size(), text_size.y) + padding.y + padding.w;
+        if (min_size.x > 0.0f) min_size.x = amal::max(min_size.x, text_size.x + padding.x + padding.z);
         set_required_size({min_size.x + margin.x + margin.z, min_size.y + margin.y + margin.w});
     }
 
@@ -47,13 +68,41 @@ namespace auik::v2
         Widget::update_layout(true);
         inherit_parent_content_clip_rect();
 
+        const amal::vec4 padding = style.padding();
+        const amal::vec2 content_pos = {pos.x + padding.x, pos.y + padding.y};
+        const amal::vec2 content_size = {amal::max(button_size.x - padding.x - padding.z, 0.0f),
+                                         amal::max(button_size.y - padding.y - padding.w, 0.0f)};
+        _text->set_size(content_size);
+        const amal::vec2 prev_cursor = detail::get_context().screen_cursor;
+        detail::get_context().screen_cursor = content_pos;
+        _text->update_layout(true);
+        detail::get_context().screen_cursor = prev_cursor;
+
         detail::get_context().screen_cursor = {cursor.x, pos.y + button_size.y + margin.w};
+    }
+
+    void TextButton::translate(const amal::vec2 &delta)
+    {
+        if (delta.x == 0.0f && delta.y == 0.0f) return;
+        Widget::translate(delta);
+        _text->translate(delta);
     }
 
     void TextButton::rebuild_clip_rects()
     {
         inherit_parent_content_clip_rect();
         _bg.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+        _text->set_clip_id(clip_id());
+        _text->rebuild_clip_rects();
+        _text_draw_dirty = true;
+    }
+
+    void TextButton::update_depth(const amal::vec2 &depth_range)
+    {
+        Widget::update_depth(depth_range);
+        amal::vec2 text_range{};
+        assign_next_depth(this->depth_range(), text_range);
+        _text->update_depth(text_range);
     }
 
     void TextButton::draw(DrawCtx &ctx)
@@ -66,5 +115,9 @@ namespace auik::v2
         bg_data.z_order = get_z_order();
         fill_quads_instance_by_style(theme->get_style(_style.id), clip_id(), bg_data);
         ctx.emit(quads_stream, _bg, &bg_data, get_rect(), ctx.emit_hit_rect);
+
+        if (is_style_only_draw_update(ctx) && !_text_draw_dirty) return;
+        _text->draw(ctx);
+        _text_draw_dirty = false;
     }
 } // namespace auik::v2

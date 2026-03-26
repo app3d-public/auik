@@ -9,6 +9,7 @@ struct TexturesInstanceData
     vec2 uv_size;
     float z_order;
     uint packed_id;
+    uint flags;
 };
 
 layout(std430, set = 0, binding = 0) readonly buffer TexturesBuffer { TexturesInstanceData instances[]; };
@@ -19,7 +20,8 @@ layout(location = 0) out vec2 out_uv;
 layout(location = 1) flat out vec4 out_tint_color;
 layout(location = 2) flat out uint out_texture_id;
 layout(location = 3) flat out uint out_clip_id;
-layout(location = 4) out vec2 out_pixel_pos;
+layout(location = 4) flat out uint out_flags;
+layout(location = 5) out vec2 out_pixel_pos;
 
 vec2 get_quad_uv(uint vertex_index)
 {
@@ -42,5 +44,6 @@ void main()
     out_tint_color = instance.tint_color;
     out_texture_id = instance.packed_id & 0xFFFFu;
     out_clip_id = instance.packed_id >> 16u;
+    out_flags = instance.flags;
     out_pixel_pos = pixel_pos;
 }

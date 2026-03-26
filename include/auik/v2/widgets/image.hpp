@@ -39,10 +39,14 @@ namespace auik::v2
         const amal::vec2 &uv_offset() const { return _uv_rect.offset; }
         void set_uv_offset(const amal::vec2 &uv_offset) { _uv_rect.offset = uv_offset; }
 
+        bool coverage_mode() const { return _coverage_mode; }
+        void set_coverage_mode(bool value) { _coverage_mode = value; }
+
     private:
         DrawDataID _image{};
         TextureID _texture_id;
         amal::rect _uv_rect;
+        bool _coverage_mode = false;
     };
 
     inline Image *make_image(u32 id, TextureID texture_id, amal::vec2 size,

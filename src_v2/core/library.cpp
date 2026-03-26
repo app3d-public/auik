@@ -158,7 +158,7 @@ namespace auik::v2
         for (Widget *widget : ctx.widget_tree)
         {
             widget->update_layout(false);
-            widget->record_draw_commands();
+            widget->record_draw_commands(DrawReasonBits::layout);
         }
         ctx.dirty_flags &= ~DirtyFlagBits::layout;
         if (need_hit_rect_draw)
@@ -177,7 +177,7 @@ namespace auik::v2
                "redraw_all_commands() started with stale current-frame hit rect cache");
         clear_hit_rects();
         clear_all_streams(ctx);
-        for (Widget *widget : ctx.widget_tree) widget->record_draw_commands();
+        for (Widget *widget : ctx.widget_tree) widget->record_draw_commands(DrawReasonBits::full_redraw);
         ctx.dirty_flags &= ~DirtyFlagBits::hit_rect_draw;
         ctx.dirty_flags |= DirtyFlagBits::hit_rect_sync;
     }
@@ -247,7 +247,7 @@ namespace auik::v2
         ++ctx.root_depth_counts[zone];
         widget->update_style();
         widget->update_layout(false);
-        widget->record_draw_commands();
+        widget->record_draw_commands(DrawReasonBits::full_redraw);
         ctx.dirty_flags |= DirtyFlagBits::redraw;
     }
 } // namespace auik::v2

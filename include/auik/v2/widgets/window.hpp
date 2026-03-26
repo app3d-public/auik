@@ -1,5 +1,7 @@
 #pragma once
 
+#include <acul/memory/alloc.hpp>
+#include <acul/string/string.hpp>
 #include "../theme.hpp"
 #include "detail/scrollbar.hpp"
 #include "widget.hpp"
@@ -35,13 +37,26 @@ namespace auik::v2
                WindowFlagBits::scrollable;
     }
 
+    constexpr inline WindowFlags get_decorated_window_flags() { return get_default_window_flags(); }
+
+    constexpr inline WindowFlags get_fixed_window_flags()
+    {
+        return get_default_window_flags() & ~WindowFlagBits::resizable;
+    }
+
+    constexpr inline WindowFlags get_popup_window_flags()
+    {
+        return get_default_window_flags() & ~(WindowFlagBits::decorated | WindowFlagBits::resizable);
+    }
+
     class Window : public Widget
     {
     public:
         WindowFlags window_flags;
         acul::vector<Widget *> children;
 
-        APPLIB_API Window(u32 id, const amal::rect &bounds = {}, WindowFlags window_flags = get_default_window_flags(),
+        APPLIB_API Window(u32 id, acul::string title = "", const amal::rect &bounds = {},
+                          WindowFlags window_flags = get_default_window_flags(),
                           WidgetFlags widget_flags = get_default_widget_flags() | WidgetFlagBits::hittable,
                           Widget *parent = nullptr);
         APPLIB_API ~Window() override;
@@ -64,10 +79,12 @@ namespace auik::v2
         detail::Scrollbar *_scrollbar_y = nullptr;
         detail::Scrollbar *_drag_scrollbar = nullptr;
         detail::HitboxZone _resize_zone = detail::HitboxZoneBits::none;
+        bool _move_drag_active = false;
 
         virtual void update_depth(const amal::vec2 &depth_range) override;
         virtual void update_layout_min_size() override;
         virtual void update_layout(bool min_size_known) override;
+        virtual void translate(const amal::vec2 &delta) override;
 
         virtual void draw(DrawCtx &ctx) override;
         virtual u16 content_clip_id() const override { return _content_clip_id; }
@@ -96,4 +113,26 @@ namespace auik::v2
         virtual void on_click(MouseKey key, KeyPressState state, u32 click_count) override;
         void relayout_children(f32 available_width, const amal::vec2 &content_inset);
     };
+
+    inline Window *make_decorated_window(u32 id, const acul::string &title = "", const amal::rect &bounds = {},
+                                         WidgetFlags widget_flags = get_default_widget_flags() |
+                                                                    WidgetFlagBits::hittable,
+                                         Widget *parent = nullptr)
+    {
+        return acul::alloc<Window>(id, title, bounds, get_decorated_window_flags(), widget_flags, parent);
+    }
+
+    inline Window *make_fixed_window(u32 id, const acul::string &title = "", const amal::rect &bounds = {},
+                                     WidgetFlags widget_flags = get_default_widget_flags() | WidgetFlagBits::hittable,
+                                     Widget *parent = nullptr)
+    {
+        return acul::alloc<Window>(id, title, bounds, get_fixed_window_flags(), widget_flags, parent);
+    }
+
+    inline Window *make_popup_window(u32 id, const amal::rect &bounds = {},
+                                     WidgetFlags widget_flags = get_default_widget_flags() | WidgetFlagBits::hittable,
+                                     Widget *parent = nullptr)
+    {
+        return acul::alloc<Window>(id, "", bounds, get_popup_window_flags(), widget_flags, parent);
+    }
 } // namespace auik::v2

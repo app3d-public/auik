@@ -9,6 +9,21 @@
 
 namespace auik::v2
 {
+    struct DrawReasonBits
+    {
+        enum enum_type : u16
+        {
+            none = 0x0,
+            style = 0x1,
+            layout = 0x2,
+            host_resize = 0x4,
+            full_redraw = 0x8,
+            external = 0x10
+        };
+        using flag_bitmask = std::true_type;
+    };
+    using DrawReasonFlags = acul::flags<DrawReasonBits>;
+
     struct StreamFlagBits
     {
         enum enum_type : u8
@@ -25,6 +40,7 @@ namespace auik::v2
         DrawDataID (*push_data_to_stream)(DrawStream *, const void *) = nullptr;
         void (*push_data_batch_to_stream)(DrawStream *, const void *, u32, DrawDataID *) = nullptr;
         void (*update_data_in_stream)(DrawStream *, DrawDataID, const void *) = nullptr;
+        void (*update_data_batch_in_stream)(DrawStream *, const DrawDataID *, const void *, u32) = nullptr;
         void (*push_widget_to_cache)(DrawStream *, Widget *) = nullptr;
         void (*clear)(DrawStream *, u32) = nullptr;
         void (*render)(DrawStream *, void *, detail::GPUContext *) = nullptr;
@@ -58,6 +74,17 @@ namespace auik::v2
         stream->update_data_in_stream(stream, draw_data_id, data);
     }
 
+    inline void update_data_batch_in_stream(DrawStream *stream, const DrawDataID *draw_data_ids, const void *data,
+                                            u32 count)
+    {
+        if (count == 0) return;
+        assert(stream && "stream is null");
+        assert(draw_data_ids && "draw_data_ids is null");
+        assert(data && "data is null");
+        assert(stream->update_data_batch_in_stream && "batch update is not configured for this stream");
+        stream->update_data_batch_in_stream(stream, draw_data_ids, data, count);
+    }
+
     inline void push_widget_to_cache(DrawStream *stream, Widget *widget)
     {
         assert(stream->push_widget_to_cache);
@@ -86,6 +113,7 @@ namespace auik::v2
     {
         DrawDataID (*emit)(DrawStream *, DrawDataID &, const void *, const detail::RectData &, bool) = nullptr;
         bool emit_hit_rect = true;
+        DrawReasonFlags reason = DrawReasonBits::none;
     };
 
     inline void update_hit_rect(u32 &hit_id, const detail::RectData &rect, bool force_update)

@@ -32,7 +32,7 @@ namespace auik::v2::detail
             surface.width = static_cast<u32>(size.x);
             surface.height = static_cast<u32>(size.y);
             surface.format = g_atlas_image_format;
-            surface.channels = {"r", "g", "b", "a"};
+            surface.channels = {"r"};
             auto clear_pixel = umbf::utils::make_clear_pixel(surface.format, surface.channels.size());
             umbf::utils::fill_color_pixels(clear_pixel.get(), surface);
             return surface.pixels != nullptr;
@@ -53,7 +53,7 @@ namespace auik::v2::detail
         static bool is_atlas_compatible_image(const umbf::Image2D &image)
         {
             return image.pixels != nullptr && image.width > 0 && image.height > 0 &&
-                   image.format == g_atlas_image_format && image.channels.size() == 4;
+                   image.format == g_atlas_image_format && image.channels.size() == 1;
         }
 
         static bool create_page_texture(AtlasPage &page, GPUContext *gpu_ctx)
@@ -200,7 +200,7 @@ namespace auik::v2::detail
         for (size_t i = 0; i < images.size(); ++i)
         {
             const auto &source = images[i];
-            assert(is_atlas_compatible_image(source) && "auik atlas expects atlas-native RGBA8 images");
+            assert(is_atlas_compatible_image(source) && "auik atlas expects atlas-native R8 images");
             if (!is_atlas_compatible_image(source))
             {
                 out.clear();

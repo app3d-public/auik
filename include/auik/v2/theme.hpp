@@ -10,9 +10,12 @@
 #include <amal/vector.hpp>
 
 #define AUIK_TAG_GLOBAL 0x00000000u
+#define AUIK_TAG_NO_PAD 0x907B6DA8u
 
 namespace auik::v2
 {
+    class Font;
+
     namespace detail
     {
         struct StylePropertiesBits
@@ -28,7 +31,8 @@ namespace auik::v2
                 border_radius = 0x20,
                 border_thickness = 0x40,
                 corner_mask = 0x80,
-                text_size = 0x100
+                text_size = 0x100,
+                font = 0x200
             };
 
             using flag_bitmask = std::true_type;
@@ -37,7 +41,7 @@ namespace auik::v2
         using StylePropertyFlags = acul::flags<StylePropertiesBits>;
 
         static constexpr StylePropertyFlags g_inheritable_mask =
-            StylePropertiesBits::text_color | StylePropertiesBits::text_size;
+            StylePropertiesBits::text_color | StylePropertiesBits::text_size | StylePropertiesBits::font;
         static constexpr StylePropertyFlags g_all_mask = acul::flag_traits<StylePropertiesBits>::all_flags;
         static constexpr StylePropertyFlags g_non_inheritable_mask = g_all_mask & ~g_inheritable_mask;
 
@@ -108,6 +112,14 @@ namespace auik::v2
             return *this;
         }
 
+        [[nodiscard]] Font *font() const { return _font; }
+        Style &font(Font *value)
+        {
+            _font = value;
+            _mask |= detail::StylePropertiesBits::font;
+            return *this;
+        }
+
         [[nodiscard]] const amal::vec4 &border_color() const { return _border_color; }
         Style &border_color(const amal::vec4 &value)
         {
@@ -162,6 +174,7 @@ namespace auik::v2
         f32 _border_radius{0.0f};
         f32 _border_thickness{0.0f};
         f32 _text_size{12.5f};
+        Font *_font{nullptr};
         u32 _corner_mask{0};
         detail::StylePropertyFlags _mask{0};
     };
@@ -237,5 +250,5 @@ namespace auik::v2
         u32 tag_id = 0;
     };
 
-    APPLIB_API Theme *create_default_theme(f32 dpi = 1.0f);
+    APPLIB_API Theme *create_default_theme(Font *default_font = nullptr, f32 dpi = 1.0f);
 } // namespace auik::v2

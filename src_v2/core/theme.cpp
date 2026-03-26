@@ -18,6 +18,7 @@ namespace auik::v2
         if (take & StylePropertiesBits::border_thickness) out.border_thickness(d.border_thickness());
         if (take & StylePropertiesBits::corner_mask) out.corner_mask(d.corner_mask());
         if (take & StylePropertiesBits::text_size) out.text_size(d.text_size());
+        if (take & StylePropertiesBits::font) out.font(d.font());
     }
 
     StyleID Theme::get_resolved_style(u32 type, u32 id, u32 parent, StyleState state)
@@ -125,7 +126,7 @@ namespace auik::v2
         return id;
     }
 
-    Theme *create_default_theme(f32 dpi)
+    Theme *create_default_theme(Font *default_font, f32 dpi)
     {
         auto *theme = acul::alloc<Theme>();
 
@@ -138,8 +139,12 @@ namespace auik::v2
         constexpr amal::vec2 empty_vec2{0.0f};
 
         // Global settings.
-        theme->add_style(AUIK_TAG_GLOBAL,
-                         make_style().text_color({1.0f}).text_size(12.5f * dpi).margin(amal::vec2{8.0f, 8.0f}));
+        theme->add_style(AUIK_TAG_GLOBAL, make_style()
+                                              .text_color({0.75f, 0.75f, 0.75f, 1.0f})
+                                              .text_size(12.5f * dpi)
+                                              .font(default_font)
+                                              .margin(amal::vec2{8.0f, 8.0f}));
+        theme->add_style(AUIK_TAG_NO_PAD, make_style().margin(empty_vec2).padding(empty_vec2));
 
         // Window body.
         theme->add_style(AUIK_TAG_WINDOW, make_style()
@@ -150,7 +155,7 @@ namespace auik::v2
                                               .border_thickness(1.0f));
         // Window header.
         theme->add_style(AUIK_TAG_WINDOW_HEADER, make_style()
-                                                     .padding(amal::vec2{4.0f, 4.0f})
+                                                     .padding(amal::vec2{10.0f, 8.0f})
                                                      .background_color(c_active)
                                                      .border_radius(6.0f)
                                                      .corner_mask(0x3u));
