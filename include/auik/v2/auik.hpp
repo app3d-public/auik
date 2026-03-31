@@ -103,6 +103,10 @@ namespace auik::v2
     APPLIB_API void redraw_all_commands();
     APPLIB_API void add_widget_to_root(Widget *widget);
     APPLIB_API void push_widget_to_transient_cache(Widget *widget);
+    APPLIB_API bool erase_widget_from_transient_cache(Widget *widget);
+    APPLIB_API void show_tooltip(f32 x, const acul::string *text_source);
+    APPLIB_API void hide_tooltip();
+    APPLIB_API void clear_tooltip_if_source(const acul::string *text_source);
     APPLIB_API void sync_draw_streams();
     APPLIB_API void sync_clip_rect_cache();
     APPLIB_API void sync_hit_rect_cache();

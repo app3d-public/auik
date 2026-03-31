@@ -110,6 +110,7 @@ namespace auik::v2
             acul::vector<Widget *> transient_cache;
             acul::hashmap<u32, Widget *> id_map;
             acul::hashmap<u32, Image *> image_cache;
+            Tooltip *tooltip = nullptr;
             acul::vector<TextureID> textures;
             acul::hashmap<u64, u32> texture_bind_slots;
             ElementID hover_id{};

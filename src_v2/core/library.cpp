@@ -5,6 +5,7 @@
 #include <auik/v2/detail/events.hpp>
 #include <auik/v2/detail/gpu_context.hpp>
 #include <auik/v2/widgets/image.hpp>
+#include <auik/v2/widgets/tooltip.hpp>
 #include <freetype/freetype.h>
 
 namespace auik::v2
@@ -72,6 +73,7 @@ namespace auik::v2
         auto &ctx = detail::get_context();
         ctx.ed = create_info.ed;
         ctx.image_cache.clear();
+        ctx.tooltip = nullptr;
         ctx.transient_cache.clear();
         ctx.streams.attached_streams = create_info.streams;
         ctx.streams.stream_count = create_info.streams_count;
@@ -264,5 +266,60 @@ namespace auik::v2
 
         ctx.transient_cache.push_back(widget);
         detail::mark_host_refresh_request();
+    }
+
+    APPLIB_API bool erase_widget_from_transient_cache(Widget *widget)
+    {
+        assert(widget && "widget is null");
+        auto &ctx = detail::get_context();
+        for (size_t i = 0; i < ctx.transient_cache.size(); ++i)
+        {
+            if (ctx.transient_cache[i] != widget) continue;
+            ctx.transient_cache.erase(ctx.transient_cache.begin() + i);
+            detail::mark_host_refresh_request();
+            return true;
+        }
+        return false;
+    }
+
+    APPLIB_API void show_tooltip(f32 x, const acul::string *text_source)
+    {
+        if (!text_source || text_source->empty())
+        {
+            hide_tooltip();
+            return;
+        }
+
+        auto &ctx = detail::get_context();
+        if (!ctx.tooltip)
+        {
+            ctx.tooltip = make_tooltip();
+            add_widget_to_root(ctx.tooltip);
+            ctx.tooltip->hide();
+        }
+
+        ctx.tooltip->show_at(x, text_source);
+        push_widget_to_transient_cache(ctx.tooltip);
+    }
+
+    APPLIB_API void hide_tooltip()
+    {
+        auto &ctx = detail::get_context();
+        if (!ctx.tooltip) return;
+
+        erase_widget_from_transient_cache(ctx.tooltip);
+        if (!ctx.tooltip->is_visible()) return;
+
+        ctx.tooltip->hide();
+        redraw_all_commands();
+        detail::mark_host_refresh_request();
+    }
+
+    APPLIB_API void clear_tooltip_if_source(const acul::string *text_source)
+    {
+        auto &ctx = detail::get_context();
+        if (!ctx.tooltip || !text_source) return;
+        ctx.tooltip->clear_if_source(text_source);
+        erase_widget_from_transient_cache(ctx.tooltip);
     }
 } // namespace auik::v2

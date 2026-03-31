@@ -74,7 +74,7 @@ namespace auik::v2
                      parent, {}, AUIK_TAG_WINDOW_HEADER),
               _style({Theme::STYLE_ID_INVALID, AUIK_TAG_WINDOW_HEADER}),
               _title(acul::alloc<Text>(AUIK_TAG_WINDOW_HEADER ^ parent->id(), std::move(text), amal::vec2{0.0f, 0.0f},
-                                        get_default_fixed_text_flags(), this))
+                                       get_default_fixed_text_flags(), this))
         {
             assert(parent);
             _rect.widget_id = parent->id();
@@ -166,7 +166,9 @@ namespace auik::v2
             ctx.emit(quads_stream, _bg, &data, get_rect(), ctx.emit_hit_rect);
 
             if (is_style_only_draw_update(ctx) && !_title_draw_dirty) return;
-            _title->draw(ctx);
+            DrawCtx title_ctx = ctx;
+            title_ctx.emit_hit_rect = _title->is_hittable();
+            _title->draw(title_ctx);
             _title_draw_dirty = false;
         }
 
@@ -230,7 +232,12 @@ namespace auik::v2
         fill_quads_instance_by_style(window_style, clip_id(), bg_data);
         ctx.emit(quads_stream, _bg, &bg_data, get_rect(), ctx.emit_hit_rect);
 
-        if (_header) _header->draw(ctx);
+        if (_header)
+        {
+            DrawCtx header_ctx = ctx;
+            header_ctx.emit_hit_rect = _header->is_hittable();
+            _header->draw(header_ctx);
+        }
         if (is_style_only_draw_update(ctx)) return;
 
         const amal::vec2 prev_cursor = detail::get_context().screen_cursor;
@@ -242,11 +249,23 @@ namespace auik::v2
         for (auto *child : children)
         {
             if (!child) continue;
-            child->draw(ctx);
+            DrawCtx child_ctx = ctx;
+            child_ctx.emit_hit_rect = child->is_hittable();
+            child->draw(child_ctx);
         }
 
-        if (_scrollbar_y && _scrollbar_y->is_visible()) _scrollbar_y->draw(ctx);
-        if (_scrollbar_x && _scrollbar_x->is_visible()) _scrollbar_x->draw(ctx);
+        if (_scrollbar_y && _scrollbar_y->is_visible())
+        {
+            DrawCtx scrollbar_ctx = ctx;
+            scrollbar_ctx.emit_hit_rect = _scrollbar_y->is_hittable();
+            _scrollbar_y->draw(scrollbar_ctx);
+        }
+        if (_scrollbar_x && _scrollbar_x->is_visible())
+        {
+            DrawCtx scrollbar_ctx = ctx;
+            scrollbar_ctx.emit_hit_rect = _scrollbar_x->is_hittable();
+            _scrollbar_x->draw(scrollbar_ctx);
+        }
 
         detail::get_context().screen_cursor = prev_cursor;
     }
@@ -653,7 +672,8 @@ namespace auik::v2
         (void)click_count;
 
         auto &ctx = detail::get_context();
-        _move_drag_active = (window_flags & WindowFlagBits::decorated) && (ctx.hover_id.tag_id == AUIK_TAG_WINDOW_HEADER);
+        _move_drag_active =
+            (window_flags & WindowFlagBits::decorated) && (ctx.hover_id.tag_id == AUIK_TAG_WINDOW_HEADER);
         _resize_zone = detail::HitboxZoneBits::none;
         if ((window_flags & WindowFlagBits::resizable) && !(window_flags & WindowFlagBits::docked) &&
             ctx.hover_id.tag_id == AUIK_TAG_HITBOX)

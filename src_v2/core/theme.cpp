@@ -2,6 +2,7 @@
 #include <amal/color.hpp>
 #include <auik/v2/theme.hpp>
 #include <auik/v2/widgets/text_button.hpp>
+#include <auik/v2/widgets/tooltip.hpp>
 #include <auik/v2/widgets/window.hpp>
 
 namespace auik::v2
@@ -170,6 +171,14 @@ namespace auik::v2
                                                    .border_thickness(1.0f));
         theme->add_style(AUIK_TAG_TEXT_BUTTON, make_style().background_color(c_hover), StyleState::hover);
         theme->add_style(AUIK_TAG_TEXT_BUTTON, make_style().background_color(c_surface_light), StyleState::active);
+
+        theme->add_style(AUIK_TAG_TOOLTIP, make_style()
+                                               .margin(empty_vec2)
+                                               .padding(amal::vec2{10.0f, 6.0f})
+                                               .background_color(c_active)
+                                               .border_color(c_border)
+                                               .border_radius(3.0f)
+                                               .text_color({0.92f, 0.92f, 0.92f, 1.0f}));
 
         // Scrollbar overlay in window space.
         theme->add_style(AUIK_TAG_SCROLLBAR_TRACK, make_style()

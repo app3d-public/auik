@@ -22,6 +22,7 @@ namespace auik::v2
     class Theme;
     class Widget;
     class Image;
+    class Tooltip;
     struct DrawStream;
     struct DrawPipeline;
 

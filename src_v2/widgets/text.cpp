@@ -13,6 +13,19 @@ namespace auik::v2
         return out;
     }
 
+    static amal::vec4 intersect_rect(const amal::vec4 &a, const amal::vec4 &b)
+    {
+        const amal::vec2 a_min = {a.x, a.y};
+        const amal::vec2 a_max = {a.x + a.z, a.y + a.w};
+        const amal::vec2 b_min = {b.x, b.y};
+        const amal::vec2 b_max = {b.x + b.z, b.y + b.w};
+
+        const amal::vec2 out_min = {amal::max(a_min.x, b_min.x), amal::max(a_min.y, b_min.y)};
+        const amal::vec2 out_max = {amal::min(a_max.x, b_max.x), amal::min(a_max.y, b_max.y)};
+        const amal::vec2 out_size = {amal::max(out_max.x - out_min.x, 0.0f), amal::max(out_max.y - out_min.y, 0.0f)};
+        return {out_min, out_size};
+    }
+
     StyleUpdateFlags Text::update_style()
     {
         const u32 parent_id = parent() ? parent()->id() : 0u;
@@ -106,19 +119,48 @@ namespace auik::v2
         if (!_instances.empty()) _instances_gpu_dirty = true;
     }
 
+    amal::rect Text::resolve_content_bounds() const
+    {
+        if (_instances.empty()) return {position(), {0.0f, 0.0f}};
+
+        amal::vec2 min_pos = _instances[0].rect.offset;
+        amal::vec2 max_pos = _instances[0].rect.offset + _instances[0].rect.size;
+        for (size_t i = 1; i < _instances.size(); ++i)
+        {
+            const auto &rect = _instances[i].rect;
+            min_pos.x = amal::min(min_pos.x, rect.offset.x);
+            min_pos.y = amal::min(min_pos.y, rect.offset.y);
+            max_pos.x = amal::max(max_pos.x, rect.offset.x + rect.size.x);
+            max_pos.y = amal::max(max_pos.y, rect.offset.y + rect.size.y);
+        }
+
+        return {min_pos, {amal::max(max_pos.x - min_pos.x, 0.0f), amal::max(max_pos.y - min_pos.y, 0.0f)}};
+    }
+
     void Text::rebuild_clip_rects()
     {
-        inherit_parent_content_clip_rect();
+        const auto content_bounds = resolve_content_bounds();
+        if (content_bounds.size.x > 0.0f || content_bounds.size.y > 0.0f)
+        {
+            amal::vec4 clip_rect = {content_bounds.offset.x, content_bounds.offset.y, content_bounds.size.x,
+                                    content_bounds.size.y};
+            if (parent()) clip_rect = intersect_rect(clip_rect, parent()->get_content_clip_rect());
+            ensure_own_clip_rect(clip_rect);
+        }
+        else inherit_parent_content_clip_rect();
         _draw_ids.clear();
+        _hit_id = AUIK_INVALID_DRAW_DATA_ID;
     }
 
     void Text::draw(DrawCtx &ctx)
     {
         if (ctx.emit_hit_rect)
         {
+            detail::RectData hit_rect = get_rect();
+            hit_rect.bounds = resolve_content_bounds();
             const bool force_update = (ctx.emit == &emit_draw_record) ||
                                       (detail::get_context().dirty_flags & DirtyFlagBits::hit_rect_update);
-            update_hit_rect(_hit_id, get_rect(), force_update);
+            update_hit_rect(_hit_id, hit_rect, force_update);
         }
 
         auto *image_stream = get_primary_image_stream();
@@ -241,5 +283,44 @@ namespace auik::v2
         ctx.dirty_flags |= DirtyFlagBits::layout;
         detail::mark_host_refresh_request();
         _draw_ids.clear();
+    }
+
+    TextWithTooltip::~TextWithTooltip() { clear_tooltip_if_source(&_tooltip_text); }
+
+    void TextWithTooltip::on_hover(HoverState state, u32 prev_tag_id)
+    {
+        (void)prev_tag_id;
+        const u32 wid = id();
+        if (_tooltip_text.empty())
+        {
+            if (state == HoverState::leave)
+            {
+                add_render_command<detail::HoverEventTraits>(this, []() { hide_tooltip(); });
+            }
+            return;
+        }
+
+        if (state == HoverState::leave)
+        {
+            add_render_command<detail::HoverEventTraits>(this, [wid]() {
+                auto &ctx = detail::get_context();
+                auto it = ctx.id_map.find(wid);
+                if (it == ctx.id_map.end()) return;
+                auto *widget = static_cast<TextWithTooltip *>(it->second);
+                hide_tooltip();
+                clear_tooltip_if_source(&widget->_tooltip_text);
+            });
+            return;
+        }
+
+        if (state != HoverState::enter) return;
+        const f32 anchor_x = get_mouse_pos().x;
+        add_render_command<detail::HoverEventTraits>(this, [wid, anchor_x]() {
+            auto &ctx = detail::get_context();
+            auto it = ctx.id_map.find(wid);
+            if (it == ctx.id_map.end()) return;
+            auto *widget = static_cast<TextWithTooltip *>(it->second);
+            show_tooltip(anchor_x, &widget->_tooltip_text);
+        });
     }
 } // namespace auik::v2

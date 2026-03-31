@@ -53,10 +53,9 @@ namespace auik::v2
         const amal::vec4 &color() const { return _render_config.tint_color; }
         void set_color(const amal::vec4 &color);
 
-    private:
-        bool rebuild_text_buffers(const amal::vec2 &bounds_size);
+    protected:
         void mark_layout_dirty();
-
+        amal::rect resolve_content_bounds() const;
         acul::string _text;
         StyleSelector _style;
         bool _use_style_text_color = true;
@@ -70,6 +69,30 @@ namespace auik::v2
         amal::vec4 _applied_tint_color{-1.0f, -1.0f, -1.0f, -1.0f};
         f32 _applied_z_order = 0.0f;
         u16 _applied_clip_id = 0xFFFFu;
+
+    private:
+        bool rebuild_text_buffers(const amal::vec2 &bounds_size);
+    };
+
+    class APPLIB_API TextWithTooltip : public Text
+    {
+    public:
+        TextWithTooltip(u32 id, acul::string text, acul::string tooltip_text, amal::vec2 size, WidgetFlags flags,
+                        Widget *parent = nullptr, u32 style_tag_id = AUIK_TAG_NO_PAD)
+            : Text(id, std::move(text), size, flags | WidgetFlagBits::hittable, parent, style_tag_id),
+              _tooltip_text(std::move(tooltip_text))
+        {
+            add_event_flags(EventFlagBits::hover);
+        }
+
+        ~TextWithTooltip() override;
+
+        const acul::string &tooltip_text() const { return _tooltip_text; }
+        void set_tooltip_text(const acul::string &text) { _tooltip_text = text; }
+        void on_hover(HoverState state, u32 prev_tag_id) override;
+
+    private:
+        acul::string _tooltip_text;
     };
 
     inline Text *make_text(u32 id, const acul::string &text = "", amal::vec2 size = {0.0f, 0.0f})
@@ -80,5 +103,21 @@ namespace auik::v2
     inline Text *make_fixed_text(u32 id, const acul::string &text = "", amal::vec2 size = {0.0f, 0.0f})
     {
         return acul::alloc<Text>(id, text, size, get_default_fixed_text_flags(), nullptr, Theme::STYLE_ID_INVALID);
+    }
+
+    inline TextWithTooltip *make_text_with_tooltip(u32 id, const acul::string &text = "",
+                                                   const acul::string &tooltip_text = "",
+                                                   amal::vec2 size = {0.0f, 0.0f})
+    {
+        return acul::alloc<TextWithTooltip>(id, text, tooltip_text, size, get_default_text_flags(), nullptr,
+                                            Theme::STYLE_ID_INVALID);
+    }
+
+    inline TextWithTooltip *make_fixed_text_with_tooltip(u32 id, const acul::string &text = "",
+                                                         const acul::string &tooltip_text = "",
+                                                         amal::vec2 size = {0.0f, 0.0f})
+    {
+        return acul::alloc<TextWithTooltip>(id, text, tooltip_text, size, get_default_fixed_text_flags(), nullptr,
+                                            Theme::STYLE_ID_INVALID);
     }
 } // namespace auik::v2
