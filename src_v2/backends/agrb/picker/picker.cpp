@@ -337,9 +337,9 @@ namespace auik::v2::detail
         const auto &path = get_shader_library_path();
         auto &device = ctx->device;
         vk::ShaderModule shaders[2];
-        auto vs = agrb::get_shader(AS_AUIK_PICKER_VS, shaders[0], ctx->shader_cache, device, path);
+        auto vs = ctx->shader_cache.get_shader(AS_AUIK_PICKER_VS, shaders[0], device, path);
         if (!vs.success()) return false;
-        auto fs = agrb::get_shader(AS_AUIK_PICKER_FS, shaders[1], ctx->shader_cache, device, path);
+        auto fs = ctx->shader_cache.get_shader(AS_AUIK_PICKER_FS, shaders[1], device, path);
         if (!fs.success()) return false;
         agrb::prepare_base_graphics_pipeline(artifact, shaders, device);
         return true;

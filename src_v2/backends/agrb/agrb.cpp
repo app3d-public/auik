@@ -350,7 +350,7 @@ namespace auik::v2
     APPLIB_API void clear_shader_cache(agrb::device &device)
     {
         detail::GPUContext *gpu_backend = detail::get_context().gpu_ctx;
-        agrb::clear_shader_cache(device, detail::get_agrb_context(gpu_backend)->shader_cache);
+        detail::get_agrb_context(gpu_backend)->shader_cache.reset(device);
     }
 
     APPLIB_API void destroy_draw_pipeline(DrawPipeline &pipeline, agrb::device &device)
