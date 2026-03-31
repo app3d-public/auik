@@ -94,10 +94,9 @@ namespace auik::v2::detail
     bool sync_instance_stream_cache(DrawStream *stream, void *sync_ctx, GPUContext *gpu_context, u32 frame_id)
     {
         (void)sync_ctx;
-        if (stream->push_widget_to_cache) return false;
         if (!stream->runtime_data) return false;
 
-        auto *state = static_cast<CachedStreamData *>(stream->runtime_data);
+        auto *state = static_cast<StreamSyncState *>(stream->runtime_data);
         assert(state && state->buffer_versions);
         if (state->buffer_versions[frame_id] != state->master_version)
         {

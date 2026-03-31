@@ -9,6 +9,15 @@ namespace auik::v2
 {
     Widget::~Widget()
     {
+        if (detail::g_context)
+        {
+            auto &transient_cache = detail::g_context->transient_cache;
+            for (size_t i = 0; i < transient_cache.size();)
+            {
+                if (transient_cache[i] == this) transient_cache.erase(transient_cache.begin() + i);
+                else ++i;
+            }
+        }
         if (event_flags & EventFlagBits::shortcut) detail::deregister_widget_shortcuts(id());
     }
 

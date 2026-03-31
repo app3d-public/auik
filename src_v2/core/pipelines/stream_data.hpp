@@ -3,10 +3,5 @@
 
 namespace auik::v2::detail
 {
-    struct TransientStreamData
-    {
-        acul::vector<Widget *> widgets_cache;
-    };
-    
-    using CachedStreamData = SharedBufferSyncState;
+    using StreamSyncState = SharedBufferSyncState;
 } // namespace auik::v2::detail

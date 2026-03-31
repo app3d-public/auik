@@ -72,6 +72,7 @@ namespace auik::v2
         auto &ctx = detail::get_context();
         ctx.ed = create_info.ed;
         ctx.image_cache.clear();
+        ctx.transient_cache.clear();
         ctx.streams.attached_streams = create_info.streams;
         ctx.streams.stream_count = create_info.streams_count;
         const u32 default_streams_count = get_default_streams_count();
@@ -249,5 +250,19 @@ namespace auik::v2
         widget->update_layout(false);
         widget->record_draw_commands(DrawReasonBits::full_redraw);
         ctx.dirty_flags |= DirtyFlagBits::redraw;
+    }
+
+    APPLIB_API void push_widget_to_transient_cache(Widget *widget)
+    {
+        assert(widget && "widget is null");
+        auto &ctx = detail::get_context();
+        for (Widget *cached_widget : ctx.transient_cache)
+        {
+            if (cached_widget != widget) continue;
+            return;
+        }
+
+        ctx.transient_cache.push_back(widget);
+        detail::mark_host_refresh_request();
     }
 } // namespace auik::v2

@@ -114,6 +114,13 @@ namespace auik::v2
 
     void Text::draw(DrawCtx &ctx)
     {
+        if (ctx.emit_hit_rect)
+        {
+            const bool force_update = (ctx.emit == &emit_draw_record) ||
+                                      (detail::get_context().dirty_flags & DirtyFlagBits::hit_rect_update);
+            update_hit_rect(_hit_id, get_rect(), force_update);
+        }
+
         auto *image_stream = get_primary_image_stream();
         if (!image_stream || _instances.empty()) return;
 

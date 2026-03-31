@@ -107,6 +107,7 @@ namespace auik::v2
             acul::events::dispatcher *ed = nullptr;
             acul::disposal_queue disposal_queue;
             acul::vector<Widget *> widget_tree;
+            acul::vector<Widget *> transient_cache;
             acul::hashmap<u32, Widget *> id_map;
             acul::hashmap<u32, Image *> image_cache;
             acul::vector<TextureID> textures;

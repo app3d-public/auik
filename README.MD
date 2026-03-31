@@ -18,10 +18,10 @@ It is not a windowing framework and does not own your main loop. Instead, it pro
 - **Advanced Typography**  
   Full Unicode-aware text shaping and layout.
 
-## Data stream modes
-Auik supports two stream recording models:
-- **Cached**: Event-driven recording model. GPU data remains stable between frames and is updated only when widget state changes.
-- **Transient**: Frame-driven recording model. GPU data is refreshed every frame from the widget cache regardless of state changes.  
+## Data streams
+Auik uses a single stream recording model:
+- GPU data remains stable between frames and is updated only when widget state changes.
+- Widgets that require per-frame refresh can be registered in the library transient cache and are re-synced during `sync_frame()`.
 
 
 ## Theme and styling

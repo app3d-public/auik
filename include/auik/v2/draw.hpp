@@ -29,9 +29,7 @@ namespace auik::v2
         enum enum_type : u8
         {
             none = 0x0,
-            cached = 0x1,
-            transient = 0x2,
-            invalidate = 0x4
+            invalidate = 0x1
         };
     };
 
@@ -41,7 +39,6 @@ namespace auik::v2
         void (*push_data_batch_to_stream)(DrawStream *, const void *, u32, DrawDataID *) = nullptr;
         void (*update_data_in_stream)(DrawStream *, DrawDataID, const void *) = nullptr;
         void (*update_data_batch_in_stream)(DrawStream *, const DrawDataID *, const void *, u32) = nullptr;
-        void (*push_widget_to_cache)(DrawStream *, Widget *) = nullptr;
         void (*clear)(DrawStream *, u32) = nullptr;
         void (*render)(DrawStream *, void *, detail::GPUContext *) = nullptr;
         void (*sync_stream)(DrawStream *, u32) = nullptr;
@@ -83,12 +80,6 @@ namespace auik::v2
         assert(data && "data is null");
         assert(stream->update_data_batch_in_stream && "batch update is not configured for this stream");
         stream->update_data_batch_in_stream(stream, draw_data_ids, data, count);
-    }
-
-    inline void push_widget_to_cache(DrawStream *stream, Widget *widget)
-    {
-        assert(stream->push_widget_to_cache);
-        stream->push_widget_to_cache(stream, widget);
     }
 
     inline void render_stream(DrawStream &stream, void *render_ctx)

@@ -102,6 +102,7 @@ namespace auik::v2
     APPLIB_API void record_layout_commands();
     APPLIB_API void redraw_all_commands();
     APPLIB_API void add_widget_to_root(Widget *widget);
+    APPLIB_API void push_widget_to_transient_cache(Widget *widget);
     APPLIB_API void sync_draw_streams();
     APPLIB_API void sync_clip_rect_cache();
     APPLIB_API void sync_hit_rect_cache();
@@ -124,6 +125,15 @@ namespace auik::v2
     {
         auto &ctx = detail::get_context();
         if (ctx.pending_filter && ctx.pending_filter->mask != PendingMaskBits::none) sync_pending_events();
+        if (!ctx.transient_cache.empty())
+        {
+            ctx.dirty_flags |= DirtyFlagBits::redraw;
+            for (Widget *widget : ctx.transient_cache)
+            {
+                if (!widget) continue;
+                widget->update_draw_commands(DrawReasonBits::external);
+            }
+        }
         if (ctx.dirty_flags & DirtyFlagBits::hit_rect_sync) auik::v2::sync_hit_rect_cache();
         detail::flush_frame_changes();
         if (!ctx.disposal_queue.is_main_queue_empty()) ctx.disposal_queue.flush_main_queue();

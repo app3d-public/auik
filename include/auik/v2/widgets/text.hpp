@@ -65,6 +65,7 @@ namespace auik::v2
         detail::TextLayoutResult _layout_result{};
         acul::vector<TexturesInstanceData> _instances;
         acul::vector<DrawDataID> _draw_ids;
+        u32 _hit_id = AUIK_INVALID_DRAW_DATA_ID;
         bool _instances_gpu_dirty = true;
         amal::vec4 _applied_tint_color{-1.0f, -1.0f, -1.0f, -1.0f};
         f32 _applied_z_order = 0.0f;

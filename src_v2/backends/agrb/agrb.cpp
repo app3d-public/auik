@@ -378,7 +378,7 @@ namespace auik::v2
         auto &device = detail::get_agrb_context(global_ctx.gpu_ctx)->device;
 
         auto &cquads_stream = streams[0];
-        auik::v2::create_quads_stream_cached(cquads_stream);
+        auik::v2::create_quads_stream(cquads_stream);
         auik::v2::set_primary_quad_stream(&cquads_stream);
         auto &quads_pipeline = pipelines[0];
         if (!auik::v2::construct_quads_pipeline(quads_pipeline, device)) return false;
@@ -388,7 +388,7 @@ namespace auik::v2
         if (!auik::v2::configure_quads_pipeline(cquads_artifact, render_pass, quads_pipeline, device)) return false;
 
         auto &ctextures_stream = streams[1];
-        auik::v2::create_textures_stream_cached(ctextures_stream);
+        auik::v2::create_textures_stream(ctextures_stream);
         auik::v2::set_primary_image_stream(&ctextures_stream);
         auto &textures_pipeline = pipelines[1];
         if (!auik::v2::construct_textures_pipeline(textures_pipeline, device)) return false;

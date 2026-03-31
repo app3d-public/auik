@@ -28,8 +28,7 @@ namespace auik::v2
 
     static_assert(sizeof(QuadsInstanceData) == 64, "QuadsInstanceData must be exactly 64 bytes");
 
-    APPLIB_API void create_quads_stream_cached(DrawStream &stream);
-    APPLIB_API void create_quads_stream_transient(DrawStream &stream);
+    APPLIB_API void create_quads_stream(DrawStream &stream);
 
     inline void push_quads_batch_to_stream(DrawStream *stream, const QuadsInstanceData *data, u32 count,
                                            DrawDataID *out_draw_ids = nullptr)
@@ -71,8 +70,7 @@ namespace auik::v2
 
     static_assert(sizeof(TexturesInstanceData) == 64, "TexturesInstanceData must be exactly 64 bytes");
 
-    APPLIB_API void create_textures_stream_cached(DrawStream &stream);
-    APPLIB_API void create_textures_stream_transient(DrawStream &stream);
+    APPLIB_API void create_textures_stream(DrawStream &stream);
 
     inline void push_textures_batch_to_stream(DrawStream *stream, const TexturesInstanceData *data, u32 count,
                                               DrawDataID *out_draw_ids = nullptr)
