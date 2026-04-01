@@ -71,8 +71,6 @@ namespace auik::v2
         _bg = {};
         _draw_ids.clear();
         _applied_clip_id = 0xFFFFu;
-        _applied_z_order = 0.0f;
-        _applied_tint_color = {-1.0f, -1.0f, -1.0f, -1.0f};
         _instances_gpu_dirty = true;
     }
 
@@ -209,9 +207,8 @@ namespace auik::v2
         const u16 current_clip = clip_id();
         const f32 current_z = get_z_order();
         const amal::vec4 current_tint = _render_config.tint_color;
-        const bool draw_state_changed = (_applied_clip_id != current_clip) || (_applied_z_order != current_z) ||
-                                        (_applied_tint_color != current_tint);
-        if (draw_state_changed)
+        const bool draw_state_changed = (_applied_clip_id != current_clip);
+        if (draw_state_changed || _instances_gpu_dirty)
         {
             for (auto &instance : _instances)
             {
@@ -232,8 +229,6 @@ namespace auik::v2
                                             static_cast<u32>(_instances.size()));
 
         _applied_clip_id = current_clip;
-        _applied_z_order = current_z;
-        _applied_tint_color = current_tint;
         _instances_gpu_dirty = false;
     }
 

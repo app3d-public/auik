@@ -42,8 +42,6 @@ namespace auik::v2
         acul::vector<TexturesInstanceData> _instances;
         acul::vector<DrawDataID> _draw_ids;
         bool _instances_gpu_dirty = true;
-        amal::vec4 _applied_tint_color{-1.0f, -1.0f, -1.0f, -1.0f};
-        f32 _applied_z_order = 0.0f;
         u16 _applied_clip_id = 0xFFFFu;
     };
 

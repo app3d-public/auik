@@ -55,19 +55,18 @@ namespace auik::v2
 
     protected:
         void mark_layout_dirty();
-        amal::rect resolve_content_bounds() const;
+        void update_content_bounds();
         acul::string _text;
         StyleSelector _style;
         bool _use_style_text_color = true;
         detail::TextLayoutConfig _layout_config{};
         detail::TextRenderConfig _render_config{};
         detail::TextLayoutResult _layout_result{};
+        amal::rect _content_bounds{};
         acul::vector<TexturesInstanceData> _instances;
         acul::vector<DrawDataID> _draw_ids;
         u32 _hit_id = AUIK_INVALID_DRAW_DATA_ID;
         bool _instances_gpu_dirty = true;
-        amal::vec4 _applied_tint_color{-1.0f, -1.0f, -1.0f, -1.0f};
-        f32 _applied_z_order = 0.0f;
         u16 _applied_clip_id = 0xFFFFu;
 
     private:

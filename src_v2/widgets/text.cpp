@@ -39,6 +39,7 @@ namespace auik::v2
     void Text::update_layout_min_size()
     {
         _layout_result.clear();
+        _content_bounds = {position(), {0.0f, 0.0f}};
         _instances.clear();
         _instances_gpu_dirty = true;
         const auto &style = get_theme()->get_style(_style.id);
@@ -97,6 +98,7 @@ namespace auik::v2
         inherit_parent_content_clip_rect();
 
         rebuild_text_buffers(text_size);
+        update_content_bounds();
 
         if (!is_fixed())
         {
@@ -114,14 +116,18 @@ namespace auik::v2
     {
         if (delta.x == 0.0f && delta.y == 0.0f) return;
         Widget::translate(delta);
-        for (auto &instance : _instances)
-            instance.rect.offset += delta;
+        for (auto &instance : _instances) instance.rect.offset += delta;
+        _content_bounds.offset += delta;
         if (!_instances.empty()) _instances_gpu_dirty = true;
     }
 
-    amal::rect Text::resolve_content_bounds() const
+    void Text::update_content_bounds()
     {
-        if (_instances.empty()) return {position(), {0.0f, 0.0f}};
+        if (_instances.empty())
+        {
+            _content_bounds = {position(), {0.0f, 0.0f}};
+            return;
+        }
 
         amal::vec2 min_pos = _instances[0].rect.offset;
         amal::vec2 max_pos = _instances[0].rect.offset + _instances[0].rect.size;
@@ -134,12 +140,12 @@ namespace auik::v2
             max_pos.y = amal::max(max_pos.y, rect.offset.y + rect.size.y);
         }
 
-        return {min_pos, {amal::max(max_pos.x - min_pos.x, 0.0f), amal::max(max_pos.y - min_pos.y, 0.0f)}};
+        _content_bounds = {min_pos, {amal::max(max_pos.x - min_pos.x, 0.0f), amal::max(max_pos.y - min_pos.y, 0.0f)}};
     }
 
     void Text::rebuild_clip_rects()
     {
-        const auto content_bounds = resolve_content_bounds();
+        const auto &content_bounds = _content_bounds;
         if (content_bounds.size.x > 0.0f || content_bounds.size.y > 0.0f)
         {
             amal::vec4 clip_rect = {content_bounds.offset.x, content_bounds.offset.y, content_bounds.size.x,
@@ -157,9 +163,9 @@ namespace auik::v2
         if (ctx.emit_hit_rect)
         {
             detail::RectData hit_rect = get_rect();
-            hit_rect.bounds = resolve_content_bounds();
-            const bool force_update = (ctx.emit == &emit_draw_record) ||
-                                      (detail::get_context().dirty_flags & DirtyFlagBits::hit_rect_update);
+            hit_rect.bounds = _content_bounds;
+            const bool force_update =
+                (ctx.emit == &emit_draw_record) || (detail::get_context().dirty_flags & DirtyFlagBits::hit_rect_update);
             update_hit_rect(_hit_id, hit_rect, force_update);
         }
 
@@ -169,14 +175,16 @@ namespace auik::v2
         const u16 current_clip = clip_id();
         const f32 current_z = get_z_order();
         const amal::vec4 current_tint = _render_config.tint_color;
-        const bool draw_state_changed = (_applied_clip_id != current_clip) || (_applied_z_order != current_z) ||
-                                        (_applied_tint_color != current_tint);
+        const bool draw_state_changed = (_applied_clip_id != current_clip);
         const bool instances_changed = _instances_gpu_dirty;
         if (draw_state_changed)
         {
+            for (auto &instance : _instances) instance.clip_id = current_clip;
+        }
+        if (draw_state_changed || instances_changed)
+        {
             for (auto &instance : _instances)
             {
-                instance.clip_id = current_clip;
                 instance.z_order = current_z;
                 instance.tint_color = current_tint;
             }
@@ -188,8 +196,6 @@ namespace auik::v2
             push_textures_batch_to_stream(image_stream, _instances.data(), static_cast<u32>(_instances.size()),
                                           _draw_ids.data());
             _applied_clip_id = current_clip;
-            _applied_z_order = current_z;
-            _applied_tint_color = current_tint;
             _instances_gpu_dirty = false;
             return;
         }
@@ -199,8 +205,6 @@ namespace auik::v2
         update_textures_batch_in_stream(image_stream, _draw_ids.data(), _instances.data(),
                                         static_cast<u32>(_instances.size()));
         _applied_clip_id = current_clip;
-        _applied_z_order = current_z;
-        _applied_tint_color = current_tint;
         _instances_gpu_dirty = false;
     }
 
