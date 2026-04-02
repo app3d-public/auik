@@ -1,4 +1,3 @@
-#include <cstring>
 #include <auik/v2/auik.hpp>
 #include <auik/v2/detail/context.hpp>
 #include <auik/v2/detail/depth.hpp>
@@ -6,12 +5,19 @@
 #include <auik/v2/detail/gpu_context.hpp>
 #include <auik/v2/widgets/image.hpp>
 #include <auik/v2/widgets/tooltip.hpp>
+#include <cstring>
 #include <freetype/freetype.h>
 
 namespace auik::v2
 {
     namespace
     {
+        static inline amal::vec2 get_root_overlay_depth_range()
+        {
+            // Reserve the very top foreground root lane for transient overlays such as tooltips.
+            return detail::get_root_depth_range(detail::DepthZone::foreground, 31);
+        }
+
         static void clear_all_streams(detail::Context &ctx)
         {
             for (u32 stream_id = 0; stream_id < ctx.streams.stream_count; ++stream_id)
@@ -271,15 +277,11 @@ namespace auik::v2
     APPLIB_API bool erase_widget_from_transient_cache(Widget *widget)
     {
         assert(widget && "widget is null");
-        auto &ctx = detail::get_context();
-        for (size_t i = 0; i < ctx.transient_cache.size(); ++i)
-        {
-            if (ctx.transient_cache[i] != widget) continue;
-            ctx.transient_cache.erase(ctx.transient_cache.begin() + i);
-            detail::mark_host_refresh_request();
-            return true;
-        }
-        return false;
+        auto &transient_cache = detail::get_context().transient_cache;
+        auto it = std::find(transient_cache.begin(), transient_cache.end(), widget);
+        if (it == transient_cache.end()) return false;
+        transient_cache.erase(it);
+        return true;
     }
 
     APPLIB_API void show_tooltip(f32 x, const acul::string *text_source)
@@ -294,8 +296,7 @@ namespace auik::v2
         if (!ctx.tooltip)
         {
             ctx.tooltip = make_tooltip();
-            add_widget_to_root(ctx.tooltip);
-            ctx.tooltip->hide();
+            ctx.tooltip->update_depth(get_root_overlay_depth_range());
         }
 
         ctx.tooltip->show_at(x, text_source);
@@ -308,9 +309,6 @@ namespace auik::v2
         if (!ctx.tooltip) return;
 
         erase_widget_from_transient_cache(ctx.tooltip);
-        if (!ctx.tooltip->is_visible()) return;
-
-        ctx.tooltip->hide();
         redraw_all_commands();
         detail::mark_host_refresh_request();
     }
@@ -320,6 +318,5 @@ namespace auik::v2
         auto &ctx = detail::get_context();
         if (!ctx.tooltip || !text_source) return;
         ctx.tooltip->clear_if_source(text_source);
-        erase_widget_from_transient_cache(ctx.tooltip);
     }
 } // namespace auik::v2

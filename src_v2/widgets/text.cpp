@@ -160,7 +160,7 @@ namespace auik::v2
 
     void Text::draw(DrawCtx &ctx)
     {
-        if (ctx.emit_hit_rect)
+        if (is_hittable())
         {
             detail::RectData hit_rect = get_rect();
             hit_rect.bounds = _content_bounds;
@@ -298,9 +298,7 @@ namespace auik::v2
         if (_tooltip_text.empty())
         {
             if (state == HoverState::leave)
-            {
                 add_render_command<detail::HoverEventTraits>(this, []() { hide_tooltip(); });
-            }
             return;
         }
 

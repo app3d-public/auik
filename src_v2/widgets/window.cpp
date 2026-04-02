@@ -69,8 +69,11 @@ namespace auik::v2
     class WindowHeader final : public Widget
     {
     public:
-        explicit WindowHeader(Widget *parent, acul::string text)
-            : Widget(AUIK_TAG_WINDOW_HEADER, WidgetFlagBits::visible | WidgetFlagBits::foreground, EventFlagBits::none,
+        explicit WindowHeader(Widget *parent, acul::string text, bool hittable)
+            : Widget(AUIK_TAG_WINDOW_HEADER,
+                     WidgetFlagBits::visible | WidgetFlagBits::foreground |
+                         (hittable ? WidgetFlagBits::hittable : WidgetFlagBits::none),
+                     EventFlagBits::none,
                      parent, {}, AUIK_TAG_WINDOW_HEADER),
               _style({Theme::STYLE_ID_INVALID, AUIK_TAG_WINDOW_HEADER}),
               _title(acul::alloc<Text>(AUIK_TAG_WINDOW_HEADER ^ parent->id(), std::move(text), amal::vec2{0.0f, 0.0f},
@@ -188,7 +191,8 @@ namespace auik::v2
     {
         widget_flags |= WidgetFlagBits::hittable;
         if (window_flags & WindowFlagBits::resizable) _rect.flags |= detail::RectBits::hitbox;
-        if (window_flags & WindowFlagBits::decorated) _header = acul::alloc<WindowHeader>(this, std::move(title));
+        if (window_flags & WindowFlagBits::decorated)
+            _header = acul::alloc<WindowHeader>(this, std::move(title), window_flags & WindowFlagBits::movable);
     }
 
     Window::~Window()
@@ -315,9 +319,12 @@ namespace auik::v2
     {
         StyleUpdateFlags out = resolve_style_selector(_window_style, id(), 0, style_state());
 
-        if ((window_flags & WindowFlagBits::decorated) && !_header) _header = acul::alloc<WindowHeader>(this, "");
+        if ((window_flags & WindowFlagBits::decorated) && !_header)
+            _header = acul::alloc<WindowHeader>(this, "", window_flags & WindowFlagBits::movable);
         if (window_flags & WindowFlagBits::decorated)
         {
+            if (window_flags & WindowFlagBits::movable) _header->widget_flags |= WidgetFlagBits::hittable;
+            else _header->widget_flags &= ~WidgetFlagBits::hittable;
             out |= _header->update_style();
             _header_height = static_cast<WindowHeader *>(_header)->compute_height();
         }

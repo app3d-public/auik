@@ -68,6 +68,7 @@ namespace auik::v2
     {
         Widget::hide();
         _text_source = nullptr;
+        _rect.clip_id = 0xFFFFu;
         _bg = {};
         _draw_ids.clear();
         _applied_clip_id = 0xFFFFu;
