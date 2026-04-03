@@ -30,7 +30,8 @@ namespace auik::v2
     namespace detail
     {
         struct TextFontAccess;
-    }
+        u64 schedule_delayed_task_fn(u64 owner_id, f64 due_time, acul::unique_function<void()> fn);
+    } // namespace detail
 
     using FT_Library = ::FT_LibraryRec_ *;
     using FT_Face = ::FT_FaceRec_ *;
@@ -104,6 +105,10 @@ namespace auik::v2
     APPLIB_API void add_widget_to_root(Widget *widget);
     APPLIB_API void push_widget_to_transient_cache(Widget *widget);
     APPLIB_API bool erase_widget_from_transient_cache(Widget *widget);
+    APPLIB_API void cancel_all_delayed_tasks();
+    APPLIB_API void cancel_delayed_tasks(u64 owner_id);
+    APPLIB_API f64 next_delayed_task_in(f64 now);
+    APPLIB_API bool dispatch_delayed_tasks(f64 now);
     APPLIB_API void show_tooltip(f32 x, const acul::string *text_source);
     APPLIB_API void hide_tooltip();
     APPLIB_API void clear_tooltip_if_source(const acul::string *text_source);
@@ -113,6 +118,8 @@ namespace auik::v2
     inline void sync_gpu_cache();
     template <class Traits, class F>
     inline bool add_render_command(Widget *widget, F &&fn);
+    template <class F>
+    inline u64 schedule_delayed_host_task(u64 owner_id, f64 due_time, F &&fn);
 
     inline void set_window_size(const amal::vec2 &size) { detail::get_io().display_size = size; }
 
@@ -175,6 +182,8 @@ namespace auik::v2
     inline bool is_dirty_hit_rect() { return detail::get_context().dirty_flags & DirtyFlagBits::hit_rect_sync; }
 
     inline bool is_dirty_clip_rect() { return detail::get_context().dirty_flags & DirtyFlagBits::clip_rect; }
+
+    inline bool has_delayed_tasks() { return detail::get_context().dirty_flags & DirtyFlagBits::delayed_tasks; }
 
     inline bool is_host_update_pending() { return detail::get_context().dirty_flags & DirtyFlagBits::host_update; }
 
@@ -259,6 +268,13 @@ namespace auik::v2
         ctx.disposal_queue.emplace(std::forward<F>(fn));
         detail::mark_host_refresh_request();
         return true;
+    }
+
+    template <class F>
+    inline u64 schedule_delayed_host_task(u64 owner_id, f64 due_time, F &&fn)
+    {
+        return detail::schedule_delayed_task_fn(owner_id, due_time,
+                                                     acul::unique_function<void()>(std::forward<F>(fn)));
     }
 
     APPLIB_API u32 get_service_pipelines_count();
@@ -421,7 +437,8 @@ namespace auik::v2
 
     APPLIB_API bool load_fonts(FontRegistry &fonts, const acul::vector<acul::string> &search_dirs = {});
 
-    inline bool load_font(const FontRegistry &fonts, Font &dst, const acul::string &family, const acul::string &fullname)
+    inline bool load_font(const FontRegistry &fonts, Font &dst, const acul::string &family,
+                          const acul::string &fullname)
     {
         FontInfo *font_info = get_font_info_by_family(fonts, family, fullname);
         if (!font_info) return false;

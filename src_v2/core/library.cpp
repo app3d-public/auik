@@ -18,6 +18,17 @@ namespace auik::v2
             return detail::get_root_depth_range(detail::DepthZone::foreground, 31);
         }
 
+        static void compact_delayed_tasks(detail::Context &ctx)
+        {
+            for (size_t i = 0; i < ctx.delayed_tasks.size();)
+            {
+                if (ctx.delayed_tasks[i].fn) ++i;
+                else ctx.delayed_tasks.erase(ctx.delayed_tasks.begin() + i);
+            }
+            if (ctx.delayed_tasks.empty()) ctx.dirty_flags &= ~DirtyFlagBits::delayed_tasks;
+            else ctx.dirty_flags |= DirtyFlagBits::delayed_tasks;
+        }
+
         static void clear_all_streams(detail::Context &ctx)
         {
             for (u32 stream_id = 0; stream_id < ctx.streams.stream_count; ++stream_id)
@@ -66,7 +77,22 @@ namespace auik::v2
     namespace detail
     {
         Context *g_context = nullptr;
-    }
+
+        u64 schedule_delayed_task_fn(u64 owner_id, f64 due_time, acul::unique_function<void()> fn)
+        {
+            auto &ctx = detail::get_context();
+            compact_delayed_tasks(ctx);
+            detail::DelayedHostTask task{};
+            task.id = ctx.next_delayed_task_id++;
+            task.owner_id = owner_id;
+            task.due_time = due_time;
+            task.fn = std::move(fn);
+            ctx.delayed_tasks.push_back(std::move(task));
+            ctx.dirty_flags |= DirtyFlagBits::delayed_tasks;
+            detail::mark_host_refresh_request();
+            return ctx.delayed_tasks.back().id;
+        }
+    } // namespace detail
 
     APPLIB_API u32 get_service_pipelines_count() { return 1; }
     APPLIB_API u32 get_default_streams_pipelines_count() { return 2; }
@@ -282,6 +308,57 @@ namespace auik::v2
         if (it == transient_cache.end()) return false;
         transient_cache.erase(it);
         return true;
+    }
+
+    APPLIB_API void cancel_delayed_tasks(u64 owner_id)
+    {
+        auto &ctx = detail::get_context();
+        for (auto &task : ctx.delayed_tasks)
+        {
+            if (task.owner_id != owner_id) continue;
+            task.fn = nullptr;
+        }
+        compact_delayed_tasks(ctx);
+    }
+
+    APPLIB_API void cancel_all_delayed_tasks()
+    {
+        auto &ctx = detail::get_context();
+        for (auto &task : ctx.delayed_tasks) task.fn = nullptr;
+        compact_delayed_tasks(ctx);
+    }
+
+    APPLIB_API f64 next_delayed_task_in(f64 now)
+    {
+        auto &ctx = detail::get_context();
+        f64 next = -1.0;
+        for (const auto &task : ctx.delayed_tasks)
+        {
+            if (!task.fn) continue;
+            const f64 remaining = task.due_time - now;
+            if (next < 0.0 || remaining < next) next = remaining;
+        }
+        if (next < 0.0) return -1.0;
+        return next > 0.0 ? next : 0.0;
+    }
+
+    APPLIB_API bool dispatch_delayed_tasks(f64 now)
+    {
+        auto &ctx = detail::get_context();
+        acul::vector<acul::unique_function<void()>> due_tasks;
+        for (auto &task : ctx.delayed_tasks)
+        {
+            if (!task.fn || task.due_time > now) continue;
+            due_tasks.push_back(std::move(task.fn));
+            task.fn = nullptr;
+        }
+        compact_delayed_tasks(ctx);
+        for (auto &fn : due_tasks)
+        {
+            assert(fn && "fn is null");
+            fn();
+        }
+        return !due_tasks.empty();
     }
 
     APPLIB_API void show_tooltip(f32 x, const acul::string *text_source)

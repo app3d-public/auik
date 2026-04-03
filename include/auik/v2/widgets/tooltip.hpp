@@ -31,11 +31,13 @@ namespace auik::v2
 
     private:
         bool rebuild_text_buffers(const amal::vec2 &bounds_size);
+        void reset_source_state();
 
         DrawDataID _bg;
         StyleSelector _style{Theme::STYLE_ID_INVALID, AUIK_TAG_TOOLTIP};
         f32 _anchor_x = 0.0f;
         const acul::string *_text_source = nullptr;
+        bool _dismissed_for_current_source = false;
         detail::TextLayoutConfig _layout_config{};
         detail::TextRenderConfig _render_config{};
         detail::TextLayoutResult _layout_result{};

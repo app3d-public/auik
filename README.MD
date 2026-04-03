@@ -172,6 +172,65 @@ auik::v2::next_frame(&cmd);
 if (has_window_refresh_request()) awin::push_empty_event();
 ```
 
+## Recommended Host Lifecycle
+Auik does not own the application loop, so the host is responsible for deciding when to sleep,
+when to wake, and when a UI update may actually be rendered.
+
+The recommended integration model is:
+
+1. The host owns a latched `host_refresh_request` flag.
+2. Auik raises this flag when UI state requires another host iteration.
+3. The host computes the next sleep timeout from its own pacing policy plus the nearest auik delayed task.
+4. The host waits for OS events or timeout expiration.
+5. After wakeup, the host applies its own frame pacing / pending-filter policy.
+6. Only in an allowed frame does the host dispatch delayed auik tasks, process resize work, and render UI.
+7. After rendering, the host clears its latched refresh request.
+
+In practice, it is useful to treat the host loop and auik as two different lifetimes:
+
+- The host loop owns sleeping, wakeup, window visibility, and frame pacing.
+- Auik owns UI dirtiness, transient redraw requests, and delayed UI tasks such as tooltip reveal.
+
+These two lifetimes are intentionally connected through only a small contract:
+
+- `host_refresh_request`
+- `PendingFilter`
+- `next_delayed_task_in(...)`
+- `dispatch_delayed_tasks(...)`
+
+### Integration notes
+- `host_refresh_request` is a request/response latch between auik and the host application. Auik may raise it many times, but the host should clear it only after it has completed an iteration that can observe and process the requested work.
+- `PendingFilter` belongs to the host pacing policy. Auik can participate in it, but should not replace it.
+- Delayed auik tasks should normally be dispatched only in a frame that is allowed by the host pacing policy. This avoids running UI work more often than the renderer can present it.
+- The timeout used by `wait_events_timeout()` should be resolved from the nearest valid wake source, not from sentinel values such as "infinite timeout".
+- Minimized windows should usually bypass normal render work and fall back to plain event waiting until the window becomes renderable again.
+
+### Pseudocode
+```cpp
+while (!window.ready_to_close())
+{
+    const bool has_ui_delay = auik::v2::has_delayed_tasks();
+    f64 timeout = host_refresh_request ? pending_filter.remaining(awin::get_time()) : WINDOW_TIMEOUT_INF;
+    if (has_ui_delay)
+    {
+        const f64 ui_delay = auik::v2::next_delayed_task_in(awin::get_time());
+        if (ui_delay > 0.0 && (timeout < 0.0 || ui_delay < timeout)) timeout = ui_delay;
+    }
+
+    awin::set_timeout(timeout);
+    awin::wait_events_timeout();
+    if (!window.focused()) continue;
+
+    pending_filter.sync(awin::get_time());
+    if (!pending_filter.allow()) continue;
+
+    if (has_ui_delay) auik::v2::dispatch_delayed_tasks(awin::get_time());
+    renderer.draw();
+    pending_filter.reset();
+    host_refresh_request = false;
+}
+```
+
 ## License
 This project is licensed under the  [MIT License](LICENSE).
 

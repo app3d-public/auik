@@ -41,14 +41,23 @@ namespace auik::v2
         Widget::hide();
     }
 
+    void Tooltip::reset_source_state()
+    {
+        _dismissed_for_current_source = false;
+        _text_source = nullptr;
+    }
+
     void Tooltip::show_at(f32 x, const acul::string *text_source)
     {
         if (!text_source || text_source->empty())
         {
             hide();
-            _text_source = nullptr;
+            reset_source_state();
             return;
         }
+
+        if (_text_source == text_source && _dismissed_for_current_source) return;
+        if (_text_source != text_source) _dismissed_for_current_source = false;
 
         _anchor_x = x;
         _text_source = text_source;
@@ -67,7 +76,7 @@ namespace auik::v2
     void Tooltip::hide()
     {
         Widget::hide();
-        _text_source = nullptr;
+        if (_text_source) _dismissed_for_current_source = true;
         _rect.clip_id = 0xFFFFu;
         _bg = {};
         _draw_ids.clear();
@@ -79,6 +88,7 @@ namespace auik::v2
     {
         if (_text_source != text_source) return;
         hide();
+        reset_source_state();
     }
 
     StyleUpdateFlags Tooltip::update_style()

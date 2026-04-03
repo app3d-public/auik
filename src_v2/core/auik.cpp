@@ -240,6 +240,8 @@ namespace auik::v2
             const auto prev_drag = io.drag_id;
             const auto prev_hover = ctx.hover_id;
 
+            cancel_all_delayed_tasks();
+
             // Focus loss/minimize may skip mouse-up event from backend.
             // Force drag release to clear widget-local drag state (e.g. scrollbar thumb active).
             if (prev_drag.widget_id)

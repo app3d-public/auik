@@ -3,6 +3,8 @@
 #include <auik/v2/pipelines.hpp>
 #include <auik/v2/widgets/text.hpp>
 
+#define AUIK_TOOLTIP_SHOW_DELAY 0.35
+
 namespace auik::v2
 {
     static amal::vec2 resolve_text_size(const Text &widget, const amal::vec2 &measured_size)
@@ -289,40 +291,43 @@ namespace auik::v2
         _draw_ids.clear();
     }
 
-    TextWithTooltip::~TextWithTooltip() { clear_tooltip_if_source(&_tooltip_text); }
+    TextWithTooltip::~TextWithTooltip()
+    {
+        cancel_delayed_tasks(id());
+        clear_tooltip_if_source(&_tooltip_text);
+    }
 
     void TextWithTooltip::on_hover(HoverState state, u32 prev_tag_id)
     {
         (void)prev_tag_id;
         const u32 wid = id();
+        const auto current_hover = detail::get_context().hover_id;
+        const bool is_same_hover_session = current_hover.widget_id == wid;
         if (_tooltip_text.empty())
         {
             if (state == HoverState::leave)
+            {
+                cancel_delayed_tasks(wid);
                 add_render_command<detail::HoverEventTraits>(this, []() { hide_tooltip(); });
+            }
             return;
         }
 
         if (state == HoverState::leave)
         {
-            add_render_command<detail::HoverEventTraits>(this, [wid]() {
-                auto &ctx = detail::get_context();
-                auto it = ctx.id_map.find(wid);
-                if (it == ctx.id_map.end()) return;
-                auto *widget = static_cast<TextWithTooltip *>(it->second);
+            cancel_delayed_tasks(wid);
+            add_render_command<detail::HoverEventTraits>(this, [this, is_same_hover_session]() {
                 hide_tooltip();
-                clear_tooltip_if_source(&widget->_tooltip_text);
+                if (!is_same_hover_session) clear_tooltip_if_source(&_tooltip_text);
             });
             return;
         }
 
         if (state != HoverState::enter) return;
         const f32 anchor_x = get_mouse_pos().x;
-        add_render_command<detail::HoverEventTraits>(this, [wid, anchor_x]() {
-            auto &ctx = detail::get_context();
-            auto it = ctx.id_map.find(wid);
-            if (it == ctx.id_map.end()) return;
-            auto *widget = static_cast<TextWithTooltip *>(it->second);
-            show_tooltip(anchor_x, &widget->_tooltip_text);
-        });
+        cancel_delayed_tasks(wid);
+        detail::update_window_time(detail::get_context().window_ctx);
+        const f64 due_time = detail::get_context().window_ctx->time + AUIK_TOOLTIP_SHOW_DELAY;
+        schedule_delayed_host_task(wid, due_time, [this, anchor_x]() { show_tooltip(anchor_x, &_tooltip_text); });
     }
 } // namespace auik::v2

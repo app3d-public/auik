@@ -39,7 +39,8 @@ namespace auik::v2
             hover_update = 0x40,
             hit_rect_draw = 0x80,
             hit_rect_update = 0x100,
-            textures = 0x200
+            textures = 0x200,
+            delayed_tasks = 0x400
         };
         using flag_bitmask = std::true_type;
     };
@@ -102,6 +103,14 @@ namespace auik::v2
             u32 char_repeat_count = 0;
         };
 
+        struct DelayedHostTask
+        {
+            u64 id = 0;
+            u64 owner_id = 0;
+            f64 due_time = 0.0;
+            acul::unique_function<void()> fn = nullptr;
+        };
+
         extern APPLIB_API struct Context
         {
             acul::events::dispatcher *ed = nullptr;
@@ -133,6 +142,8 @@ namespace auik::v2
             bool *host_refresh_request = nullptr;
             PendingFilter *pending_filter = nullptr;
             FrameCache frame_cache;
+            acul::vector<DelayedHostTask> delayed_tasks;
+            u64 next_delayed_task_id = 1;
             bool raw_mouse_mode = false;
             struct
             {
