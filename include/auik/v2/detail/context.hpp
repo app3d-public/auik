@@ -137,6 +137,7 @@ namespace auik::v2
             SharedBufferSyncState shared_sync_state[2];
             AtlasState atlas_state;
             amal::vec2 screen_cursor{0.0f, 0.0f};
+            amal::vec4 main_viewport{0.0f, 0.0f, 0.0f, 0.0f};
             DirtyFlags dirty_flags = DirtyFlagBits::none;
             Theme *theme = nullptr;
             bool *host_refresh_request = nullptr;

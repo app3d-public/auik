@@ -39,6 +39,29 @@ namespace auik::v2
                    vk::Result::eSuccess;
         }
 
+        static bool create_ui_image_sampler(agrb::texture &texture, agrb::device &device)
+        {
+            vk::SamplerCreateInfo sampler_create_info;
+            sampler_create_info.setMagFilter(vk::Filter::eLinear)
+                .setMinFilter(vk::Filter::eLinear)
+                .setAddressModeU(vk::SamplerAddressMode::eClampToEdge)
+                .setAddressModeV(vk::SamplerAddressMode::eClampToEdge)
+                .setAddressModeW(vk::SamplerAddressMode::eClampToEdge)
+                .setAnisotropyEnable(false)
+                .setMaxAnisotropy(1.0f)
+                .setBorderColor(vk::BorderColor::eIntOpaqueBlack)
+                .setUnnormalizedCoordinates(false)
+                .setCompareEnable(false)
+                .setCompareOp(vk::CompareOp::eAlways)
+                .setMipmapMode(vk::SamplerMipmapMode::eNearest)
+                .setMipLodBias(0.0f)
+                .setMinLod(0.0f)
+                .setMaxLod(0.0f);
+
+            return device.vk_device.createSampler(&sampler_create_info, nullptr, &texture.sampler, device.loader) ==
+                   vk::Result::eSuccess;
+        }
+
         static inline u64 image_view_to_handle(vk::ImageView image_view)
         {
             const VkImageView raw_view = image_view;
@@ -233,6 +256,76 @@ namespace auik::v2
             return agrb::upload_texture_subimage(*handle, const_cast<void *>(pixels), static_cast<vk::DeviceSize>(size),
                                                  vk::Extent3D{width, height, 1}, vk::Offset3D{x, y, 0}, ctx->device);
         }
+
+        static bool create_image_texture_impl(GPUContext *gpu_context, ImageTextureResource *resource,
+                                              const umbf::Image2D &image)
+        {
+            if (!resource || !image.pixels || image.width == 0 || image.height == 0) return false;
+
+            auto *ctx = get_agrb_context(gpu_context);
+            const int src_channels = static_cast<int>(image.channels.size());
+            if (src_channels <= 0) return false;
+
+            const umbf::ImageFormat rgba8_format{umbf::ImageFormat::Type::uint, 1};
+            void *rgba_pixels = image.pixels;
+            if (image.format != rgba8_format || src_channels != 4)
+            {
+                rgba_pixels = umbf::utils::convert_image(image, rgba8_format, 4);
+                if (!rgba_pixels) return false;
+            }
+
+            auto *handle = acul::alloc<agrb::texture>();
+            handle->format = vk::Format::eR8G8B8A8Srgb;
+            handle->image_extent = vk::Extent3D{image.width, image.height, 1};
+            handle->mip_levels = 1;
+            handle->size = static_cast<vk::DeviceSize>(static_cast<size_t>(image.width) * image.height * 4u);
+            if (!agrb::allocate_texture(*handle, vk::ImageViewType::e2D, rgba_pixels, ctx->device))
+            {
+                acul::release(handle);
+                if (rgba_pixels != image.pixels) acul::release(rgba_pixels);
+                return false;
+            }
+
+            if (handle->sampler)
+            {
+                ctx->device.vk_device.destroySampler(handle->sampler, nullptr, ctx->device.loader);
+                handle->sampler = nullptr;
+            }
+            if (!create_ui_image_sampler(*handle, ctx->device))
+            {
+                agrb::destroy_texture(*handle, ctx->device);
+                acul::release(handle);
+                if (rgba_pixels != image.pixels) acul::release(rgba_pixels);
+                return false;
+            }
+
+            resource->texture_id =
+                add_agrb_texture(handle->sampler, handle->image_view, vk::ImageLayout::eShaderReadOnlyOptimal);
+            if (resource->texture_id.handle == 0)
+            {
+                agrb::destroy_texture(*handle, ctx->device);
+                acul::release(handle);
+                if (rgba_pixels != image.pixels) acul::release(rgba_pixels);
+                return false;
+            }
+
+            resource->handle = handle;
+            resource->width = image.width;
+            resource->height = image.height;
+            if (rgba_pixels != image.pixels) acul::release(rgba_pixels);
+            return true;
+        }
+
+        static void destroy_image_texture_impl(GPUContext *gpu_context, ImageTextureResource *resource)
+        {
+            if (!resource || !resource->handle) return;
+            auto *ctx = get_agrb_context(gpu_context);
+            auto *handle = static_cast<agrb::texture *>(resource->handle);
+            if (handle->image_view) remove_agrb_texture(handle->image_view);
+            if (handle->image) agrb::destroy_texture(*handle, ctx->device);
+            acul::release(handle);
+            *resource = {};
+        }
     } // namespace detail
 
     static void destroy_agrb_backend(detail::GPUContext *gpu_context)
@@ -286,6 +379,8 @@ namespace auik::v2
         agrb_ctx->create_atlas_texture = &detail::create_atlas_texture_impl;
         agrb_ctx->destroy_atlas_texture = &detail::destroy_atlas_texture_impl;
         agrb_ctx->upload_atlas_texture = &detail::upload_atlas_texture_impl;
+        agrb_ctx->create_image_texture = &detail::create_image_texture_impl;
+        agrb_ctx->destroy_image_texture = &detail::destroy_image_texture_impl;
         detail::init_quads_pipeline_calls(agrb_ctx->quads);
         detail::init_textures_pipeline_calls(agrb_ctx->textures);
         return agrb_ctx;

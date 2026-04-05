@@ -150,8 +150,10 @@ namespace auik::v2
         ctx.active_id = 0;
         ctx.focus_id = 0;
         ctx.screen_cursor = {0.0f, 0.0f};
+        ctx.main_viewport = {0.0f, 0.0f, 0.0f, 0.0f};
         ctx.window_ctx = create_info.window_ctx;
         detail::construct_window_backend(ctx.window_ctx);
+        reset_main_viewport();
         ctx.dirty_flags = DirtyFlagBits::redraw | DirtyFlagBits::layout;
         detail::construct_shared_buffer_sync_state(ctx.shared_sync_state[AUIK_SYNC_CLIP_RECT], ctx.frames_in_flight);
         detail::construct_shared_buffer_sync_state(ctx.shared_sync_state[AUIK_SYNC_HIT_RECT], ctx.frames_in_flight);
@@ -188,6 +190,7 @@ namespace auik::v2
         const bool need_hit_rect_draw = ctx.dirty_flags & DirtyFlagBits::hit_rect_draw;
         assert(detail::is_hit_rects_frame_synced(ctx.frame_id) &&
                "record_layout_commands() started with stale current-frame hit rect cache");
+        reset_main_viewport();
         reset_clip_rects();
         clear_all_streams(ctx);
         for (Widget *widget : ctx.widget_tree)

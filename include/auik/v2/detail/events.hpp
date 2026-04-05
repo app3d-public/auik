@@ -4,6 +4,7 @@
 #include <acul/pair.hpp>
 #include <acul/scalars.hpp>
 #include <amal/rect.hpp>
+#include <umbf/utils.hpp>
 #include "../events.hpp"
 
 #define AUIK_TAG_HITBOX 0xBF9B2277u
@@ -94,6 +95,7 @@ namespace auik::v2::detail
     using PFN_update_window_time = void (*)(struct WindowContext *);
     using PFN_window_new_frame = void (*)(struct WindowContext *);
     using PFN_construct_window_backend = void (*)(struct WindowContext *);
+    using PFN_get_window_icon_image = bool (*)(struct WindowContext *, umbf::Image2D &);
 
     struct ElementID
     {
@@ -115,6 +117,7 @@ namespace auik::v2::detail
         PFN_destroy_window_backend destroy_backend = nullptr;
         PFN_update_window_time update_time = nullptr;
         PFN_window_new_frame new_frame = nullptr;
+        PFN_get_window_icon_image get_window_icon_image = nullptr;
     };
 
     APPLIB_API void on_mouse_move(const amal::vec2 &delta);
@@ -150,6 +153,13 @@ namespace auik::v2::detail
     }
 
     inline void new_window_frame(WindowContext *window_ctx) { window_ctx->new_frame(window_ctx); }
+
+    inline bool get_window_icon_image(WindowContext *window_ctx, umbf::Image2D &image)
+    {
+        assert(window_ctx && "auik window context is not initialized");
+        if (!window_ctx->get_window_icon_image) return false;
+        return window_ctx->get_window_icon_image(window_ctx, image);
+    }
 
     struct RectData
     {

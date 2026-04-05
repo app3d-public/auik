@@ -123,6 +123,31 @@ namespace auik::v2
 
     inline void set_window_size(const amal::vec2 &size) { detail::get_io().display_size = size; }
 
+    inline void reset_main_viewport()
+    {
+        auto &ctx = detail::get_context();
+        ctx.main_viewport = {0.0f, 0.0f, ctx.io.display_size.x, ctx.io.display_size.y};
+    }
+
+    inline void set_main_viewport(const amal::vec4 &viewport) { detail::get_context().main_viewport = viewport; }
+
+    inline const amal::vec4 &get_main_viewport() { return detail::get_context().main_viewport; }
+
+    inline void reserve_main_viewport_top(f32 height)
+    {
+        auto &viewport = detail::get_context().main_viewport;
+        const f32 consumed = amal::clamp(height, 0.0f, viewport.w);
+        viewport.y += consumed;
+        viewport.w -= consumed;
+    }
+
+    inline void reserve_main_viewport_bottom(f32 height)
+    {
+        auto &viewport = detail::get_context().main_viewport;
+        const f32 consumed = amal::clamp(height, 0.0f, viewport.w);
+        viewport.w -= consumed;
+    }
+
     inline void sync_pending_events()
     {
         auto &ctx = detail::get_context();

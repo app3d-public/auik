@@ -162,6 +162,11 @@ namespace auik::v2
                                                      .corner_mask(0x3u));
         theme->add_style(AUIK_TAG_WINDOW_HEADER, make_style().background_color(c_surface_light), StyleState::focus);
 
+        theme->add_style(AUIK_TAG_TITLEBAR, make_style().background_color(c_active));
+        theme->add_style(AUIK_TAG_TITLEBAR_ICON, make_style()
+                                                   .margin(amal::vec4{8.0f, 0.0f, 8.0f, 0.0f})
+                                                   .background_color(c_surface));
+
         theme->add_style(AUIK_TAG_TEXT_BUTTON, make_style()
                                                    .padding(amal::vec2{10.0f, 6.0f})
                                                    .margin(amal::vec2{0.0f, 4.0f})

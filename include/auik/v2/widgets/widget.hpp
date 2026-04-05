@@ -21,7 +21,8 @@ namespace auik::v2
             foreground = 0x8,
             background = 0x10,
             fixed = 0x20,
-            hittable = 0x40
+            hittable = 0x40,
+            viewport_reserved = 0x80
         };
         using flag_bitmask = std::true_type;
     };
@@ -112,6 +113,9 @@ namespace auik::v2
         inline void set_required_size(const amal::vec2 &size) { _required_size = size; }
         inline bool is_fixed() const { return widget_flags & WidgetFlagBits::fixed; }
         inline bool is_hittable() const { return widget_flags & WidgetFlagBits::hittable; }
+        inline bool is_viewport_reserved() const { return widget_flags & WidgetFlagBits::viewport_reserved; }
+        inline const amal::vec2 &root_viewport_origin() const { return _root_viewport_origin; }
+        inline void set_root_viewport_origin(const amal::vec2 &origin) { _root_viewport_origin = origin; }
         inline bool has_event_handler(EventFlagBits::enum_type event_flag) const { return event_flags & event_flag; }
         inline void set_event_flags(EventFlags value) { event_flags = value; }
         inline void add_event_flags(EventFlags value) { event_flags |= value; }
@@ -180,6 +184,7 @@ namespace auik::v2
         Widget *_parent = nullptr;
         Widget *_focus_parent = nullptr;
         amal::vec2 _depth_range{0.0f, 1.0f};
+        amal::vec2 _root_viewport_origin{0.0f, 0.0f};
         detail::RectData _rect{};
         amal::vec2 _required_size{0.0f, 0.0f};
         StyleState _style_state = StyleState::normal;

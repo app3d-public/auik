@@ -26,11 +26,20 @@ namespace auik::v2::detail
         u32 width = 0;
         u32 height = 0;
     };
+    struct ImageTextureResource
+    {
+        void *handle = nullptr;
+        TextureID texture_id = AUIK_INVALID_TEXTURE_ID;
+        u32 width = 0;
+        u32 height = 0;
+    };
     using PFN_create_atlas_texture =
         bool (*)(GPUContext *, AtlasTextureResource *, u32, u32, const void *, size_t);
     using PFN_destroy_atlas_texture = void (*)(GPUContext *, AtlasTextureResource *);
     using PFN_upload_atlas_texture =
         bool (*)(GPUContext *, AtlasTextureResource *, const void *, size_t, u32, u32, i32, i32);
+    using PFN_create_image_texture = bool (*)(GPUContext *, ImageTextureResource *, const umbf::Image2D &);
+    using PFN_destroy_image_texture = void (*)(GPUContext *, ImageTextureResource *);
 
     using PFN_push_data_to_stream = DrawDataID (*)(DrawStream *, const void *, u32);
     using PFN_push_data_batch_to_stream = void (*)(DrawStream *, const void *, u32, DrawDataID *, u32);
@@ -74,6 +83,8 @@ namespace auik::v2::detail
         PFN_create_atlas_texture create_atlas_texture = nullptr;
         PFN_destroy_atlas_texture destroy_atlas_texture = nullptr;
         PFN_upload_atlas_texture upload_atlas_texture = nullptr;
+        PFN_create_image_texture create_image_texture = nullptr;
+        PFN_destroy_image_texture destroy_image_texture = nullptr;
         StreamGPUDispatch quads{};
         StreamGPUDispatch textures{};
     };
@@ -113,6 +124,18 @@ namespace auik::v2::detail
     {
         assert(gpu_context->upload_atlas_texture);
         return gpu_context->upload_atlas_texture(gpu_context, resource, pixels, size, width, height, x, y);
+    }
+
+    inline bool create_image_texture(GPUContext *gpu_context, ImageTextureResource *resource, const umbf::Image2D &image)
+    {
+        assert(gpu_context->create_image_texture);
+        return gpu_context->create_image_texture(gpu_context, resource, image);
+    }
+
+    inline void destroy_image_texture(GPUContext *gpu_context, ImageTextureResource *resource)
+    {
+        if (!resource || !gpu_context->destroy_image_texture) return;
+        gpu_context->destroy_image_texture(gpu_context, resource);
     }
 
     inline void destroy_gpu_context(GPUContext *gpu_context)

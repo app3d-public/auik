@@ -66,6 +66,48 @@ namespace auik::v2
         return true;
     }
 
+    static inline amal::vec4 get_root_viewport_clip_rect(Widget *widget)
+    {
+        if (widget && widget->parent()) return widget->parent()->get_content_clip_rect();
+        return get_main_viewport();
+    }
+
+    static inline amal::vec2 get_min_pos(const Widget *widget)
+    {
+        if (!widget || widget->parent() || widget->is_viewport_reserved()) return {0.0f, 0.0f};
+
+        const amal::vec4 viewport = get_main_viewport();
+        return {viewport.x, viewport.y};
+    }
+
+    static inline amal::vec2 clamp_root_widget_position(const Widget *widget, const amal::vec2 &local_pos,
+                                                        const amal::vec2 &size)
+    {
+        if (!widget || widget->parent() || widget->is_viewport_reserved()) return local_pos;
+
+        const amal::vec4 viewport = get_main_viewport();
+        const f32 max_x = amal::max(viewport.z - size.x, 0.0f);
+        const f32 max_y = amal::max(viewport.w - size.y, 0.0f);
+        return {amal::clamp(local_pos.x, 0.0f, max_x), amal::clamp(local_pos.y, 0.0f, max_y)};
+    }
+
+    static inline amal::vec2 resolve_root_widget_position(Widget *widget, const amal::vec2 &size)
+    {
+        if (!widget || widget->parent()) return widget ? widget->position() : amal::vec2{0.0f, 0.0f};
+
+        const amal::vec2 min_pos = get_min_pos(widget);
+        amal::vec2 local_pos = widget->position() - widget->root_viewport_origin();
+        if (widget->is_viewport_reserved())
+        {
+            widget->set_root_viewport_origin({0.0f, 0.0f});
+            return local_pos;
+        }
+
+        local_pos = clamp_root_widget_position(widget, local_pos, size);
+        widget->set_root_viewport_origin(min_pos);
+        return min_pos + local_pos;
+    }
+
     class WindowHeader final : public Widget
     {
     public:
@@ -440,10 +482,11 @@ namespace auik::v2
     void Window::update_layout(bool min_size_known)
     {
         if (!min_size_known) update_layout_min_size();
+        if (!parent() && !(window_flags & WindowFlagBits::docked)) set_position(resolve_root_widget_position(this, size()));
         Widget::update_layout(true);
-        const amal::vec4 self_clip_rect = parent() ? intersect_rect({position().x, position().y, size().x, size().y},
-                                                                    parent()->get_content_clip_rect())
-                                                   : amal::vec4{position().x, position().y, size().x, size().y};
+        const amal::vec4 parent_bounds = get_root_viewport_clip_rect(this);
+        const amal::vec4 self_clip_rect =
+            intersect_rect({position().x, position().y, size().x, size().y}, parent_bounds);
         ensure_own_clip_rect(self_clip_rect);
 
         const amal::vec2 prev_cursor = detail::get_context().screen_cursor;
@@ -581,30 +624,39 @@ namespace auik::v2
     {
         if (delta.x == 0.0f && delta.y == 0.0f) return;
 
-        Widget::translate(delta);
+        amal::vec2 next_position = position() + delta;
+        if (!parent() && !(window_flags & WindowFlagBits::docked))
+        {
+            const amal::vec2 local_pos = position() - root_viewport_origin() + delta;
+            next_position = get_min_pos(this) + clamp_root_widget_position(this, local_pos, size());
+        }
+        const amal::vec2 applied_delta = next_position - position();
+        if (applied_delta.x == 0.0f && applied_delta.y == 0.0f) return;
+
+        Widget::translate(applied_delta);
         auto &ctx = detail::get_context();
         ctx.dirty_flags |= DirtyFlagBits::hit_rect_update;
 
-        const amal::vec4 self_clip_rect = parent() ? intersect_rect({position().x, position().y, size().x, size().y},
-                                                                    parent()->get_content_clip_rect())
-                                                   : amal::vec4{position().x, position().y, size().x, size().y};
+        const amal::vec4 parent_bounds = get_root_viewport_clip_rect(this);
+        const amal::vec4 self_clip_rect =
+            intersect_rect({position().x, position().y, size().x, size().y}, parent_bounds);
         if (clip_id() != 0xFFFFu) update_clip_rect(clip_id(), self_clip_rect);
         if (_content_clip_id != 0xFFFFu)
         {
-            _content_clip_rect.x += delta.x;
-            _content_clip_rect.y += delta.y;
+            _content_clip_rect.x += applied_delta.x;
+            _content_clip_rect.y += applied_delta.y;
             _content_clip_rect = intersect_rect(self_clip_rect, _content_clip_rect);
             update_clip_rect(_content_clip_id, _content_clip_rect);
         }
 
-        if (_header) _header->translate(delta);
+        if (_header) _header->translate(applied_delta);
         for (auto *child : children)
         {
             if (!child) continue;
-            child->translate(delta);
+            child->translate(applied_delta);
         }
-        if (_scrollbar_y) _scrollbar_y->translate(delta);
-        if (_scrollbar_x) _scrollbar_x->translate(delta);
+        if (_scrollbar_y) _scrollbar_y->translate(applied_delta);
+        if (_scrollbar_x) _scrollbar_x->translate(applied_delta);
     }
 
     void Window::on_scroll(const amal::vec2 &delta)
