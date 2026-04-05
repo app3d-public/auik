@@ -210,7 +210,7 @@ These two lifetimes are intentionally connected through only a small contract:
 while (!window.ready_to_close())
 {
     const bool has_ui_delay = auik::v2::has_delayed_tasks();
-    f64 timeout = host_refresh_request ? pending_filter.remaining(awin::get_time()) : WINDOW_TIMEOUT_INF;
+    f64 timeout = host_refresh_request ? pending_filter.remaining(awin::get_time()) : AWIN_TIMEOUT_INF;
     if (has_ui_delay)
     {
         const f64 ui_delay = auik::v2::next_delayed_task_in(awin::get_time());

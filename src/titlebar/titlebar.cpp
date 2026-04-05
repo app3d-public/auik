@@ -34,77 +34,77 @@ namespace auik
         using ControlArea = TitlebarDecorator::ControlArea;
         using ControlState = TitlebarDecorator::ControlState;
 
-        ed->bind_event(self, awin::event_id::nc_hit_test,
-                       [&window, self, &decorator = self->_decorator](awin::Win32NativeEvent &e) {
-                           if (e.window != &window) return;
-                           POINT cursor_point = {0};
-                           cursor_point.x = LOWORD(e.lParam);
-                           cursor_point.y = HIWORD(e.lParam);
-                           ScreenToClient(e.hwnd, &cursor_point);
-                           if (cursor_point.y < decorator._control_size.y)
-                           {
-                               if (cursor_point.x < self->_client_width)
-                                   decorator._active_area = ControlArea::client;
-                               else if (cursor_point.x < self->_caption_width)
-                               {
-                                   decorator._active_area = ControlArea::caption;
-                                   e.lResult = HTCAPTION;
-                               }
-                               else if (cursor_point.x < self->_caption_width + decorator._control_size.x)
-                               {
-                                   decorator._active_area = ControlArea::min;
-                                   if (decorator._controls[0].state != ControlState::active)
-                                   {
-                                       decorator._controls[0].state = ControlState::hover;
-                                       e.lResult = HTMINBUTTON;
-                                   }
-                               }
-                               else if (cursor_point.x < self->_caption_width + decorator._control_size.x * 2)
-                               {
-                                   decorator._active_area = ControlArea::max;
-                                   if (decorator._controls[1].state != ControlState::active)
-                                   {
-                                       decorator._controls[1].state = ControlState::hover;
-                                       e.lResult = HTMAXBUTTON;
-                                   }
-                               }
-                               else
-                               {
-                                   decorator._active_area = ControlArea::close;
-                                   if (decorator._controls[2].state != ControlState::active)
-                                   {
-                                       decorator._controls[2].state = ControlState::hover;
-                                       e.lResult = HTCLOSE;
-                                   }
-                               }
-                           }
-                           else
-                               decorator._active_area = ControlArea::none;
+        // ed->bind_event(self, awin::event_id::nc_hit_test,
+        //                [&window, self, &decorator = self->_decorator](awin::Win32NativeEvent &e) {
+        //                    if (e.window != &window) return;
+        //                    POINT cursor_point = {0};
+        //                    cursor_point.x = LOWORD(e.lParam);
+        //                    cursor_point.y = HIWORD(e.lParam);
+        //                    ScreenToClient(e.hwnd, &cursor_point);
+        //                    if (cursor_point.y < decorator._control_size.y)
+        //                    {
+        //                        if (cursor_point.x < self->_client_width)
+        //                            decorator._active_area = ControlArea::client;
+        //                        else if (cursor_point.x < self->_caption_width)
+        //                        {
+        //                            decorator._active_area = ControlArea::caption;
+        //                            e.lResult = HTCAPTION;
+        //                        }
+        //                        else if (cursor_point.x < self->_caption_width + decorator._control_size.x)
+        //                        {
+        //                            decorator._active_area = ControlArea::min;
+        //                            if (decorator._controls[0].state != ControlState::active)
+        //                            {
+        //                                decorator._controls[0].state = ControlState::hover;
+        //                                e.lResult = HTMINBUTTON;
+        //                            }
+        //                        }
+        //                        else if (cursor_point.x < self->_caption_width + decorator._control_size.x * 2)
+        //                        {
+        //                            decorator._active_area = ControlArea::max;
+        //                            if (decorator._controls[1].state != ControlState::active)
+        //                            {
+        //                                decorator._controls[1].state = ControlState::hover;
+        //                                e.lResult = HTMAXBUTTON;
+        //                            }
+        //                        }
+        //                        else
+        //                        {
+        //                            decorator._active_area = ControlArea::close;
+        //                            if (decorator._controls[2].state != ControlState::active)
+        //                            {
+        //                                decorator._controls[2].state = ControlState::hover;
+        //                                e.lResult = HTCLOSE;
+        //                            }
+        //                        }
+        //                    }
+        //                    else
+        //                        decorator._active_area = ControlArea::none;
 
-                           for (auto &control : decorator._controls)
-                               if (control.area != decorator._active_area) control.state = ControlState::idle;
-                       });
-        ed->bind_event(self, awin::event_id::nc_mouse_down,
-                       [&window, &decorator = self->_decorator](awin::Win32NativeEvent &e) {
-                           if (e.window != &window || decorator._active_area == ControlArea::none) return;
-                           switch (decorator._active_area)
-                           {
-                               case ControlArea::min:
-                                   decorator._controls[0].state = ControlState::active;
-                                   e.lResult = 0;
-                                   break;
-                               case ControlArea::max:
-                                   decorator._controls[1].state = ControlState::active;
-                                   e.lResult = 0;
-                                   break;
-                               case ControlArea::close:
-                                   decorator._controls[2].state = ControlState::active;
-                                   e.lResult = 0;
-                                   break;
-                               default:
-                                   break;
-                           };
-                       });
+        //                    for (auto &control : decorator._controls)
+        //                        if (control.area != decorator._active_area) control.state = ControlState::idle;
+        //                });
+        // ed->bind_event(self, awin::event_id::nc_mouse_down,
+        //                [&window, &decorator = self->_decorator](awin::Win32NativeEvent &e) {
+        //                    if (e.window != &window || decorator._active_area == ControlArea::none) return;
+        //                    switch (decorator._active_area)
+        //                    {
+        //                        case ControlArea::min:
+        //                            decorator._controls[0].state = ControlState::active;
+        //                            e.lResult = 0;
+        //                            break;
+        //                        case ControlArea::max:
+        //                            decorator._controls[1].state = ControlState::active;
+        //                            e.lResult = 0;
+        //                            break;
+        //                        case ControlArea::close:
+        //                            decorator._controls[2].state = ControlState::active;
+        //                            e.lResult = 0;
+        //                            break;
+        //                        default:
+        //                            break;
+        //                    };
+        //                });
         ed->bind_event(self, awin::event_id::mouse_click,
                        [&decorator = self->_decorator, &window](const awin::MouseClickEvent &e) {
                            if (e.window != &window || decorator._active_area == ControlArea::none) return;
