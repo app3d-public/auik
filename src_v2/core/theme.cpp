@@ -1,5 +1,4 @@
 #include <acul/memory/alloc.hpp>
-#include <amal/color.hpp>
 #include <auik/v2/theme.hpp>
 #include <auik/v2/widgets/text_button.hpp>
 #include <auik/v2/widgets/tooltip.hpp>
@@ -132,11 +131,11 @@ namespace auik::v2
         auto *theme = acul::alloc<Theme>();
 
         // Base palette
-        constexpr auto c_surface = amal::srgb8_to_linear(amal::vec4{41, 41, 43, 255});       // ~0.16
-        constexpr auto c_surface_light = amal::srgb8_to_linear(amal::vec4{74, 74, 75, 255}); // ~0.29
-        constexpr auto c_hover = amal::srgb8_to_linear(amal::vec4{97, 97, 97, 255});         // ~0.38
-        constexpr auto c_active = amal::srgb8_to_linear(amal::vec4{31, 31, 31, 255});        // ~0.42
-        constexpr auto c_border = amal::srgb8_to_linear(amal::vec4{51, 51, 51, 255});
+        constexpr auto c_surface = amal::rgba8_to_vec4(41, 41, 43, 255);
+        constexpr auto c_surface_light = amal::rgba8_to_vec4(74, 74, 75, 255);
+        constexpr auto c_hover = amal::rgba8_to_vec4(97, 97, 97, 255);
+        constexpr auto c_active = amal::rgba8_to_vec4(31, 31, 31, 255);
+        constexpr auto c_border = amal::rgba8_to_vec4(51, 51, 51, 255);
         constexpr amal::vec2 empty_vec2{0.0f};
 
         // Global settings.
@@ -163,9 +162,8 @@ namespace auik::v2
         theme->add_style(AUIK_TAG_WINDOW_HEADER, make_style().background_color(c_surface_light), StyleState::focus);
 
         theme->add_style(AUIK_TAG_TITLEBAR, make_style().background_color(c_active));
-        theme->add_style(AUIK_TAG_TITLEBAR_ICON, make_style()
-                                                   .margin(amal::vec4{8.0f, 0.0f, 8.0f, 0.0f})
-                                                   .background_color(c_surface));
+        theme->add_style(AUIK_TAG_TITLEBAR_ICON,
+                         make_style().margin(amal::vec4{8.0f, 0.0f, 8.0f, 0.0f}).background_color(c_surface));
 
         theme->add_style(AUIK_TAG_TEXT_BUTTON, make_style()
                                                    .padding(amal::vec2{10.0f, 6.0f})

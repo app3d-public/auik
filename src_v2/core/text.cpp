@@ -318,7 +318,7 @@ namespace auik::v2
                         instance.rect.offset = {amal::round(base_x + line_shift + glyph_offset.x),
                                                 amal::round(base_y + glyph_offset.y)};
                         instance.rect.size = {static_cast<f32>(glyph->size.x), static_cast<f32>(glyph->size.y)};
-                        instance.tint_color = render_config.tint_color;
+                        instance.tint_color = detail::pack_rgba8(render_config.tint_color);
                         instance.uv_rect = glyph->uv_rect;
                         instance.z_order = render_config.z_order;
                         instance.texture_id = static_cast<u16>(glyph->texture_id.bind_slot);

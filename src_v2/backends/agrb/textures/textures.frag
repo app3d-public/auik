@@ -1,5 +1,6 @@
 #version 460
 #extension GL_EXT_nonuniform_qualifier : require
+#include <common/clip.glsl>
 
 layout(location = 0) in vec2 in_uv;
 layout(location = 1) flat in vec4 in_tint_color;
@@ -17,12 +18,7 @@ layout(set = 1, binding = 0) uniform sampler2D ui_textures[];
 
 void main()
 {
-    vec4 clip_rect = clip_rects[in_clip_id];
-    vec2 clip_min = clip_rect.xy;
-    vec2 clip_max = clip_rect.xy + clip_rect.zw;
-    if (in_pixel_pos.x < clip_min.x || in_pixel_pos.y < clip_min.y || in_pixel_pos.x >= clip_max.x ||
-        in_pixel_pos.y >= clip_max.y)
-        discard;
+    if (is_clipped(in_pixel_pos, clip_rects[in_clip_id])) discard;
 
     vec4 sampled = texture(ui_textures[nonuniformEXT(in_texture_id)], in_uv);
     if ((in_flags & TEXTURE_INSTANCE_TEXT_BIT) != 0u) out_color = vec4(in_tint_color.rgb, in_tint_color.a * sampled.r);

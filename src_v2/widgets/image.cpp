@@ -37,7 +37,7 @@ namespace auik::v2
 
         TexturesInstanceData image_data{};
         image_data.rect = bounds();
-        image_data.tint_color = {1.0f, 1.0f, 1.0f, 1.0f};
+        image_data.tint_color = detail::pack_rgba8(255, 255, 255, 255);
         image_data.uv_rect = _uv_rect;
         image_data.z_order = get_z_order();
         image_data.texture_id = static_cast<u16>(_texture_id.bind_slot);

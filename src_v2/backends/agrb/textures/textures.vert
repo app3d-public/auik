@@ -4,9 +4,9 @@ struct TexturesInstanceData
 {
     vec2 position;
     vec2 size;
-    vec4 tint_color;
     vec2 uv_offset;
     vec2 uv_size;
+    uint tint_color;
     float z_order;
     uint packed_id;
     uint flags;
@@ -41,7 +41,7 @@ void main()
     gl_Position = vec4(ndc, instance.z_order, 1.0);
 
     out_uv = instance.uv_offset + uv * instance.uv_size;
-    out_tint_color = instance.tint_color;
+    out_tint_color = unpackUnorm4x8(instance.tint_color);
     out_texture_id = instance.packed_id & 0xFFFFu;
     out_clip_id = instance.packed_id >> 16u;
     out_flags = instance.flags;

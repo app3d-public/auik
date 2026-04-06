@@ -1,4 +1,5 @@
 #version 460
+#include <common/clip.glsl>
 
 layout(location = 0) flat in uint in_widget_id;
 layout(location = 1) flat in uint in_tag_id;
@@ -33,12 +34,7 @@ void main()
     }
     else
     {
-        vec4 clip_rect = clip_rects[clip_id];
-        vec2 clip_min = clip_rect.xy;
-        vec2 clip_max = clip_rect.xy + clip_rect.zw;
-        if (in_pixel_pos.x < clip_min.x || in_pixel_pos.y < clip_min.y || in_pixel_pos.x >= clip_max.x ||
-            in_pixel_pos.y >= clip_max.y)
-            discard;
+        if (is_clipped(in_pixel_pos, clip_rects[clip_id])) discard;
     }
 
     out_id = out_value;

@@ -4,8 +4,8 @@ struct QuadsInstanceData
 {
     vec2 position;
     vec2 size;
-    vec4 background_color;
-    vec4 border_color;
+    uint background_color;
+    uint border_color;
     float border_radius;
     float border_thickness;
     float z_order;
@@ -47,8 +47,8 @@ void main()
     out_local_pos = (uv - 0.5) * instance.size;
     out_pixel_pos = pixel_pos;
     out_size = instance.size;
-    out_background_color = instance.background_color;
-    out_border_color = instance.border_color;
+    out_background_color = unpackUnorm4x8(instance.background_color);
+    out_border_color = unpackUnorm4x8(instance.border_color);
     out_border_radius = instance.border_radius;
     out_border_thickness = instance.border_thickness;
     const uint style_mask = instance.mask >> 16u;

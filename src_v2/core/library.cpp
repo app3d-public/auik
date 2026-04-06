@@ -95,8 +95,8 @@ namespace auik::v2
     } // namespace detail
 
     APPLIB_API u32 get_service_pipelines_count() { return 1; }
-    APPLIB_API u32 get_default_streams_pipelines_count() { return 2; }
-    APPLIB_API u32 get_default_streams_count() { return 2; }
+    APPLIB_API u32 get_default_streams_pipelines_count() { return 3; }
+    APPLIB_API u32 get_default_streams_count() { return 3; }
 
     bool init_library(const CreateInfo &create_info)
     {

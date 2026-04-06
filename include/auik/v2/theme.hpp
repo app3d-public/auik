@@ -20,6 +20,22 @@ namespace auik::v2
 
     namespace detail
     {
+        inline constexpr u32 pack_rgba8(u8 r, u8 g, u8 b, u8 a)
+        {
+            // Match GLSL unpackUnorm4x8(): x=LSB -> r, y -> g, z -> b, w=MSB -> a.
+            return static_cast<u32>(r) | (static_cast<u32>(g) << 8u) | (static_cast<u32>(b) << 16u) |
+                   (static_cast<u32>(a) << 24u);
+        }
+
+        inline u32 pack_rgba8(const amal::vec4 &color)
+        {
+            const auto to_u8 = [](f32 v) -> u8 {
+                const f32 clamped = v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
+                return static_cast<u8>(clamped * 255.0f + 0.5f);
+            };
+            return pack_rgba8(to_u8(color.x), to_u8(color.y), to_u8(color.z), to_u8(color.w));
+        }
+
         struct StylePropertiesBits
         {
             enum enum_type : u16
@@ -91,17 +107,21 @@ namespace auik::v2
         }
 
         [[nodiscard]] const amal::vec4 &background_color() const { return _background_color; }
+        [[nodiscard]] u32 background_color_packed() const { return _background_color_packed; }
         Style &background_color(const amal::vec4 &value)
         {
             _background_color = value;
+            _background_color_packed = detail::pack_rgba8(value);
             _mask |= detail::StylePropertiesBits::background_color;
             return *this;
         }
 
         [[nodiscard]] const amal::vec4 &text_color() const { return _text_color; }
+        [[nodiscard]] u32 text_color_packed() const { return _text_color_packed; }
         Style &text_color(const amal::vec4 &value)
         {
             _text_color = value;
+            _text_color_packed = detail::pack_rgba8(value);
             _mask |= detail::StylePropertiesBits::text_color;
             return *this;
         }
@@ -123,9 +143,11 @@ namespace auik::v2
         }
 
         [[nodiscard]] const amal::vec4 &border_color() const { return _border_color; }
+        [[nodiscard]] u32 border_color_packed() const { return _border_color_packed; }
         Style &border_color(const amal::vec4 &value)
         {
             _border_color = value;
+            _border_color_packed = detail::pack_rgba8(value);
             _mask |= detail::StylePropertiesBits::border_color;
             return *this;
         }
@@ -173,6 +195,9 @@ namespace auik::v2
         amal::vec4 _background_color{0.0f};
         amal::vec4 _text_color{1.0f};
         amal::vec4 _border_color{0.0f};
+        u32 _background_color_packed{detail::pack_rgba8(0, 0, 0, 0)};
+        u32 _text_color_packed{detail::pack_rgba8(255, 255, 255, 255)};
+        u32 _border_color_packed{detail::pack_rgba8(0, 0, 0, 0)};
         f32 _border_radius{0.0f};
         f32 _border_thickness{0.0f};
         f32 _text_size{12.5f};

@@ -217,7 +217,6 @@ namespace auik::v2
 
         const u16 current_clip = clip_id();
         const f32 current_z = get_z_order();
-        const amal::vec4 current_tint = _render_config.tint_color;
         const bool draw_state_changed = (_applied_clip_id != current_clip);
         if (draw_state_changed || _instances_gpu_dirty)
         {
@@ -225,7 +224,7 @@ namespace auik::v2
             {
                 instance.clip_id = current_clip;
                 instance.z_order = current_z;
-                instance.tint_color = current_tint;
+                instance.tint_color = detail::pack_rgba8(_render_config.tint_color);
             }
         }
 

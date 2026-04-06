@@ -9,6 +9,11 @@ auik:
     stages:
       - vs: "textures/textures.vert"
       - fs: "textures/textures.frag"
+  vertex_stream:
+    id: 0x6A4B3F12
+    stages:
+      - vs: "vertex/vertex.vert"
+      - fs: "vertex/vertex.frag"
   picker:
     id: 0xE6B1C4A2
     stages:

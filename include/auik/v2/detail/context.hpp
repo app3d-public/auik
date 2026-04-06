@@ -22,6 +22,7 @@ struct FT_LibraryRec_;
 #define AUIK_SYNC_HIT_RECT        1
 #define AUIK_PRIMARY_QUAD_STREAM  0
 #define AUIK_PRIMARY_IMAGE_STREAM 1
+#define AUIK_PRIMARY_VERTEX_STREAM 2
 
 namespace auik::v2
 {
@@ -271,6 +272,20 @@ namespace auik::v2
         auto *defaults = detail::get_context().streams.default_streams;
         assert(defaults && "Default streams are not initialized");
         defaults[AUIK_PRIMARY_IMAGE_STREAM] = stream;
+    }
+
+    inline DrawStream *get_primary_vertex_stream()
+    {
+        auto *defaults = detail::get_context().streams.default_streams;
+        assert(defaults && "Default streams are not initialized");
+        return defaults[AUIK_PRIMARY_VERTEX_STREAM];
+    }
+
+    inline void set_primary_vertex_stream(DrawStream *stream)
+    {
+        auto *defaults = detail::get_context().streams.default_streams;
+        assert(defaults && "Default streams are not initialized");
+        defaults[AUIK_PRIMARY_VERTEX_STREAM] = stream;
     }
 
     inline u16 push_clip_rect(const amal::vec4 &rect)

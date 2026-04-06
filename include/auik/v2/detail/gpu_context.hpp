@@ -87,6 +87,7 @@ namespace auik::v2::detail
         PFN_destroy_image_texture destroy_image_texture = nullptr;
         StreamGPUDispatch quads{};
         StreamGPUDispatch textures{};
+        StreamGPUDispatch vertex_stream{};
     };
 
     inline u32 push_hit_rect(GPUContext *gpu_context, const RectData &rect)

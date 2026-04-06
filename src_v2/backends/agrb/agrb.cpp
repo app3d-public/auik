@@ -2,6 +2,7 @@
 #include <auik/v2/backends/agrb/agrb.hpp>
 #include <auik/v2/backends/agrb/quads_pipeline.hpp>
 #include <auik/v2/backends/agrb/textures_pipeline.hpp>
+#include <auik/v2/backends/agrb/vertex_pipeline.hpp>
 #include <auik/v2/detail/context.hpp>
 #include <auik/v2/detail/gpu_context.hpp>
 #include <auik/v2/draw.hpp>
@@ -15,6 +16,7 @@ namespace auik::v2
     {
         void init_quads_pipeline_calls(StreamGPUDispatch &dispatch);
         void init_textures_pipeline_calls(StreamGPUDispatch &dispatch);
+        void init_vertex_stream_pipeline_calls(StreamGPUDispatch &dispatch);
 
         static bool create_text_atlas_sampler(agrb::texture &texture, agrb::device &device)
         {
@@ -275,7 +277,7 @@ namespace auik::v2
             }
 
             auto *handle = acul::alloc<agrb::texture>();
-            handle->format = vk::Format::eR8G8B8A8Srgb;
+            handle->format = vk::Format::eR8G8B8A8Unorm;
             handle->image_extent = vk::Extent3D{image.width, image.height, 1};
             handle->mip_levels = 1;
             handle->size = static_cast<vk::DeviceSize>(static_cast<size_t>(image.width) * image.height * 4u);
@@ -383,6 +385,7 @@ namespace auik::v2
         agrb_ctx->destroy_image_texture = &detail::destroy_image_texture_impl;
         detail::init_quads_pipeline_calls(agrb_ctx->quads);
         detail::init_textures_pipeline_calls(agrb_ctx->textures);
+        detail::init_vertex_stream_pipeline_calls(agrb_ctx->vertex_stream);
         return agrb_ctx;
     }
 
@@ -490,6 +493,17 @@ namespace auik::v2
         ctextures_stream.pipeline = &textures_pipeline;
         auto &ctextures_artifact = batch.artifacts.emplace_back();
         auik::v2::construct_pipeline_artifact(ctextures_artifact, subpass, &textures_pipeline);
-        return auik::v2::configure_textures_pipeline(ctextures_artifact, render_pass, textures_pipeline, device);
+        if (!auik::v2::configure_textures_pipeline(ctextures_artifact, render_pass, textures_pipeline, device))
+            return false;
+
+        auto &cvertex_stream = streams[2];
+        auik::v2::create_vertex_stream(cvertex_stream);
+        auik::v2::set_primary_vertex_stream(&cvertex_stream);
+        auto &vertex_stream_pipeline = pipelines[2];
+        if (!auik::v2::construct_vertex_pipeline(vertex_stream_pipeline, device)) return false;
+        cvertex_stream.pipeline = &vertex_stream_pipeline;
+        auto &cvertex_artifact = batch.artifacts.emplace_back();
+        auik::v2::construct_pipeline_artifact(cvertex_artifact, subpass, &vertex_stream_pipeline);
+        return auik::v2::configure_vertex_pipeline(cvertex_artifact, render_pass, vertex_stream_pipeline, device);
     }
 } // namespace auik::v2
