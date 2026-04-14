@@ -9,13 +9,6 @@ namespace auik::v2
 {
     namespace detail
     {
-        static inline f32 mid_depth(const amal::vec2 &range) { return (range.x + range.y) * 0.5f; }
-
-        static inline bool has_visible_border(const Style &style)
-        {
-            return style.border_thickness() > 0.0f && style.border_color().w > 0.0f;
-        }
-
         static inline void fill_border_only_instance(const Style &style, const amal::rect &rect, f32 z_order,
                                                      u16 clip_id, QuadsInstanceData &data)
         {
@@ -23,7 +16,7 @@ namespace auik::v2
             data.background_color = pack_rgba8(0, 0, 0, 0);
             data.border_color = style.border_color_packed();
             data.border_radius = style.border_radius();
-            data.border_thickness = has_visible_border(style) ? style.border_thickness() : 0.0f;
+            data.border_thickness = style.has_visible_border() ? style.border_thickness() : 0.0f;
             data.z_order = z_order;
             u32 flags = 0u;
             if (data.border_thickness > 0.0f) flags |= AUIK_HAS_BORDER_BIT;
@@ -105,7 +98,7 @@ namespace auik::v2
                 build_gradient_rect_vertex_data(gradient_visual.data, track_rect, mid_depth(depth_range), clip_id,
                                                 colors, color_count, style.border_radius(), style.corner_mask(), 1.0f);
 
-            if (has_visible_border(style))
+            if (style.has_visible_border())
             {
                 visual.set_layer(SliderTrackVisual::LayerBits::border);
                 amal::vec2 border_range{};
@@ -117,8 +110,8 @@ namespace auik::v2
 
     Slider::Slider(u32 id, f32 *value, f32 min_value, f32 max_value, f32 width, f32 *range_start_value,
                    WidgetFlags widget_flags, Widget *parent)
-        : Widget(id, widget_flags, EventFlagBits::hover | EventFlagBits::click | EventFlagBits::drag, parent,
-                 {{0.0f, 0.0f}, {width, 0.0f}}, AUIK_TAG_SLIDER),
+        : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::drag, parent, {{0.0f, 0.0f}, {width, 0.0f}},
+                 AUIK_TAG_SLIDER),
           _value(value),
           _range_start_value(range_start_value),
           _min_value(min_value),
@@ -342,8 +335,6 @@ namespace auik::v2
         set_value(_min_value + (_max_value - _min_value) * t);
     }
 
-    void Slider::on_hover(HoverState state) { (void)state; }
-
     void Slider::on_click(MouseKey key, KeyPressState state, u32 click_count)
     {
         (void)click_count;
@@ -352,22 +343,12 @@ namespace auik::v2
         if (state == KeyPressState::press)
         {
             update_value_from_mouse();
-            add_render_command<detail::ClickEventTraits>(this, [this]() {
-                if (has_draw_record()) update_draw_commands(DrawReasonBits::external);
-                else record_draw_commands(DrawReasonBits::external);
-                detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
-            });
+            add_render_command<detail::ClickEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
             return;
         }
 
         if (state == KeyPressState::release)
-        {
-            add_render_command<detail::ClickEventTraits>(this, [this]() {
-                if (has_draw_record()) update_draw_commands(DrawReasonBits::external);
-                else record_draw_commands(DrawReasonBits::external);
-                detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
-            });
-        }
+            add_render_command<detail::ClickEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
     }
 
     void Slider::on_drag(const amal::vec2 &delta, KeyPressState state)
@@ -386,11 +367,7 @@ namespace auik::v2
         else if (state == KeyPressState::release) { _drag_started = false; }
         else return;
 
-        add_render_command<detail::DragEventTraits>(this, [this]() {
-            if (has_draw_record()) update_draw_commands(DrawReasonBits::external);
-            else record_draw_commands(DrawReasonBits::external);
-            detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
-        });
+        add_render_command<detail::DragEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
     }
 
     void Slider::rebuild_track_fill_visual()
@@ -433,7 +410,7 @@ namespace auik::v2
             return;
         }
 
-        if (!detail::has_visible_border(fill_style))
+        if (!fill_style.has_visible_border())
         {
             _track_visual.fill.border_thickness = 0.0f;
             _track_visual.fill.mask &= ~(static_cast<u32>(AUIK_HAS_BORDER_BIT) << 20u);
@@ -481,7 +458,7 @@ namespace auik::v2
         _grab_visual.rect = _grab_rect;
         _grab_visual.z_order = grab_z;
         fill_quads_instance_by_style(grab_style, grab_clip_id, _grab_visual);
-        if (!detail::has_visible_border(grab_style))
+        if (!grab_style.has_visible_border())
         {
             _grab_visual.border_thickness = 0.0f;
             _grab_visual.mask &= ~(static_cast<u32>(AUIK_HAS_BORDER_BIT) << 20u);
@@ -497,8 +474,8 @@ namespace auik::v2
     GradientSlider::GradientSlider(u32 id, f32 *value, f32 min_value, f32 max_value, f32 width,
                                    const amal::vec4 *colors, u32 color_count, WidgetFlags widget_flags, Widget *parent,
                                    GradientTrackKind gradient_kind)
-        : Widget(id, widget_flags, EventFlagBits::hover | EventFlagBits::click | EventFlagBits::drag, parent,
-                 {{0.0f, 0.0f}, {width, 0.0f}}, AUIK_TAG_GRADIENT_SLIDER),
+        : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::drag, parent, {{0.0f, 0.0f}, {width, 0.0f}},
+                 AUIK_TAG_GRADIENT_SLIDER),
           _value(value),
           _min_value(min_value),
           _max_value(max_value),
@@ -513,8 +490,7 @@ namespace auik::v2
         {
             constexpr u32 width_hsl = 360u;
             _hsl_cache.resize(width_hsl);
-            for (u32 i = 0; i < width_hsl; ++i)
-                _hsl_cache[i] = amal::hsl_to_rgba(static_cast<f32>(i), 1.0f, 0.5f);
+            for (u32 i = 0; i < width_hsl; ++i) _hsl_cache[i] = amal::hsl_to_rgba(static_cast<f32>(i), 1.0f, 0.5f);
         }
         if (_max_value < _min_value) std::swap(_min_value, _max_value);
         set_value(value ? *value : _min_value);
@@ -729,8 +705,6 @@ namespace auik::v2
         set_value(_min_value + (_max_value - _min_value) * t);
     }
 
-    void GradientSlider::on_hover(HoverState state) { (void)state; }
-
     void GradientSlider::on_click(MouseKey key, KeyPressState state, u32 click_count)
     {
         (void)click_count;
@@ -739,22 +713,12 @@ namespace auik::v2
         if (state == KeyPressState::press)
         {
             update_value_from_mouse();
-            add_render_command<detail::ClickEventTraits>(this, [this]() {
-                if (has_draw_record()) update_draw_commands(DrawReasonBits::external);
-                else record_draw_commands(DrawReasonBits::external);
-                detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
-            });
+            add_render_command<detail::ClickEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
             return;
         }
 
         if (state == KeyPressState::release)
-        {
-            add_render_command<detail::ClickEventTraits>(this, [this]() {
-                if (has_draw_record()) update_draw_commands(DrawReasonBits::external);
-                else record_draw_commands(DrawReasonBits::external);
-                detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
-            });
-        }
+            add_render_command<detail::ClickEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
     }
 
     void GradientSlider::on_drag(const amal::vec2 &delta, KeyPressState state)
@@ -773,11 +737,7 @@ namespace auik::v2
         else if (state == KeyPressState::release) { _drag_started = false; }
         else return;
 
-        add_render_command<detail::DragEventTraits>(this, [this]() {
-            if (has_draw_record()) update_draw_commands(DrawReasonBits::external);
-            else record_draw_commands(DrawReasonBits::external);
-            detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
-        });
+        add_render_command<detail::DragEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
     }
 
     void GradientSlider::rebuild_track_visuals()
@@ -886,8 +846,8 @@ namespace auik::v2
         };
 
         auto resolve_grab_state = [&](u32 grab_tag, StyleState state) -> StyleUpdateFlags {
-            const auto flags = resolve_style_selector(_grab_style, grab_tag, parent_id,
-                                                      detail::resolve_grab_visual_state(state));
+            const auto flags =
+                resolve_style_selector(_grab_style, grab_tag, parent_id, detail::resolve_grab_visual_state(state));
             if (flags & StyleUpdateFlagBits::redraw) grab_changed = true;
             return flags;
         };
@@ -902,9 +862,8 @@ namespace auik::v2
                                   transition.prev_tag_id == AUIK_TAG_RANGE_SLIDER_GRAB_TO;
         const bool curr_is_grab = transition.current_tag_id == AUIK_TAG_RANGE_SLIDER_GRAB_FROM ||
                                   transition.current_tag_id == AUIK_TAG_RANGE_SLIDER_GRAB_TO;
-        if (prev_is_grab &&
-            (!curr_is_grab || transition.current_tag_id != transition.prev_tag_id ||
-             transition.current_state != transition.prev_state))
+        if (prev_is_grab && (!curr_is_grab || transition.current_tag_id != transition.prev_tag_id ||
+                             transition.current_state != transition.prev_state))
             out |= resolve_grab_state(transition.prev_tag_id, StyleState::normal);
         if (curr_is_grab) out |= resolve_grab_state(transition.current_tag_id, transition.current_state);
 
@@ -1117,7 +1076,7 @@ namespace auik::v2
                 _track_visual.fill.rect.size.x = fill_w;
                 _track_visual.fill.z_order = detail::mid_depth(_track_depth_range);
                 fill_quads_instance_by_style(fill_style, clip_id(), _track_visual.fill);
-                if (!detail::has_visible_border(fill_style))
+                if (!fill_style.has_visible_border())
                 {
                     _track_visual.fill.border_thickness = 0.0f;
                     _track_visual.fill.mask &= ~(static_cast<u32>(AUIK_HAS_BORDER_BIT) << 20u);
@@ -1172,7 +1131,7 @@ namespace auik::v2
         _to_visual.z_order = detail::mid_depth(_grab_depth_range);
         fill_quads_instance_by_style(grab_style, grab_clip_id, _to_visual);
 
-        if (!detail::has_visible_border(grab_style))
+        if (!grab_style.has_visible_border())
         {
             _from_visual.border_thickness = 0.0f;
             _from_visual.mask &= ~(static_cast<u32>(AUIK_HAS_BORDER_BIT) << 20u);
@@ -1218,8 +1177,6 @@ namespace auik::v2
         else set_values(*_from_value, amal::max(target, *_from_value));
     }
 
-    void RangeSlider::on_hover(HoverState state) { (void)state; }
-
     void RangeSlider::on_click(MouseKey key, KeyPressState state, u32 click_count)
     {
         (void)click_count;
@@ -1229,22 +1186,14 @@ namespace auik::v2
         {
             update_active_grab_from_mouse();
             update_active_value_from_mouse();
-            add_render_command<detail::ClickEventTraits>(this, [this]() {
-                if (has_draw_record()) update_draw_commands(DrawReasonBits::external);
-                else record_draw_commands(DrawReasonBits::external);
-                detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
-            });
+            add_render_command<detail::ClickEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
             return;
         }
 
         if (state == KeyPressState::release)
         {
             _active_grab = ActiveGrab::none;
-            add_render_command<detail::ClickEventTraits>(this, [this]() {
-                if (has_draw_record()) update_draw_commands(DrawReasonBits::external);
-                else record_draw_commands(DrawReasonBits::external);
-                detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
-            });
+            add_render_command<detail::ClickEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
         }
     }
 
@@ -1263,10 +1212,6 @@ namespace auik::v2
         else if (state == KeyPressState::release) _active_grab = ActiveGrab::none;
         else return;
 
-        add_render_command<detail::DragEventTraits>(this, [this]() {
-            if (has_draw_record()) update_draw_commands(DrawReasonBits::external);
-            else record_draw_commands(DrawReasonBits::external);
-            detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
-        });
+        add_render_command<detail::DragEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
     }
 } // namespace auik::v2

@@ -1,11 +1,8 @@
 #include <auik/v2/detail/depth.hpp>
 
-namespace
-{
-    constexpr int g_root_depth_atoms_count = 32;
-    constexpr int g_child_depth_atoms_count = 16;
-    constexpr f32 g_depth_min_step = 1e-6f;
-}
+#define AUIK_ROOT_DEPTH_ATOMS_COUNT  32
+#define AUIK_CHILD_DEPTH_ATOMS_COUNT 16
+#define AUIK_DEPTH_MIN_STEP          1e-6f
 
 namespace auik::v2::detail
 {
@@ -51,7 +48,7 @@ namespace auik::v2::detail
 
         const amal::vec2 lane_range = depth_zone_range(global, zone);
         const f32 span = lane_range.y - lane_range.x;
-        const f32 step = amal::max(span / static_cast<f32>(g_root_depth_atoms_count), g_depth_min_step);
+        const f32 step = amal::max(span / static_cast<f32>(AUIK_ROOT_DEPTH_ATOMS_COUNT), AUIK_DEPTH_MIN_STEP);
 
         const f32 r0 = lane_range.x + step * static_cast<f32>(lane_index);
         const f32 r1 = (r0 + step <= lane_range.y) ? (r0 + step) : lane_range.y;
@@ -86,7 +83,7 @@ namespace auik::v2
             return;
         }
 
-        const f32 step = amal::max(span / static_cast<f32>(g_child_depth_atoms_count), g_depth_min_step);
+        const f32 step = amal::max(span / static_cast<f32>(AUIK_CHILD_DEPTH_ATOMS_COUNT), AUIK_DEPTH_MIN_STEP);
         const f32 r1 = w.y;
         const f32 r0 = (r1 - step >= w.x) ? (r1 - step) : w.x;
         dst_range = {r0, r1};

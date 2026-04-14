@@ -210,8 +210,6 @@ namespace auik::v2
             handle->size = static_cast<vk::DeviceSize>(image.size());
             if (!agrb::allocate_texture(*handle, vk::ImageViewType::e2D, image.pixels, ctx->device))
             {
-                std::printf("create_atlas_texture: agrb::allocate_texture failed (%ux%u, channels=%u)\n", image.width,
-                            image.height, channel_count);
                 acul::release(handle);
                 return false;
             }
@@ -223,7 +221,6 @@ namespace auik::v2
             }
             if (!create_text_atlas_sampler(*handle, ctx->device))
             {
-                std::printf("create_atlas_texture: create_text_atlas_sampler failed\n");
                 agrb::destroy_texture(*handle, ctx->device);
                 acul::release(handle);
                 return false;
@@ -233,9 +230,6 @@ namespace auik::v2
                 add_agrb_texture(handle->sampler, handle->image_view, vk::ImageLayout::eShaderReadOnlyOptimal);
             if (resource->texture_id.handle == 0)
             {
-                const auto &global_ctx = get_context();
-                std::printf("create_atlas_texture: add_agrb_texture failed (textures=%zu/%u)\n",
-                            global_ctx.textures.size(), global_ctx.max_textures_size);
                 agrb::destroy_texture(*handle, ctx->device);
                 acul::release(handle);
                 return false;
@@ -415,12 +409,7 @@ namespace auik::v2
         }
 
         assert(global_ctx.textures.size() < global_ctx.max_textures_size && "AUIK texture capacity exceeded");
-        if (global_ctx.textures.size() >= global_ctx.max_textures_size)
-        {
-            std::printf("add_agrb_texture: capacity exceeded (%zu/%u)\n", global_ctx.textures.size(),
-                        global_ctx.max_textures_size);
-            return AUIK_INVALID_TEXTURE_ID;
-        }
+        if (global_ctx.textures.size() >= global_ctx.max_textures_size) return AUIK_INVALID_TEXTURE_ID;
 
         global_ctx.textures.push_back(TextureID{handle, static_cast<u32>(global_ctx.textures.size())});
         ctx->bindless_textures.push_back(
@@ -428,7 +417,6 @@ namespace auik::v2
 
         if (!detail::rewrite_bindless_texture_table(ctx))
         {
-            std::printf("add_agrb_texture: rewrite_bindless_texture_table failed\n");
             global_ctx.textures.pop_back();
             ctx->bindless_textures.pop_back();
             return AUIK_INVALID_TEXTURE_ID;

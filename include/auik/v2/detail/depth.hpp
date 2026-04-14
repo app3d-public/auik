@@ -20,4 +20,5 @@ namespace auik::v2::detail
     amal::vec2 normalize_depth_range(const amal::vec2 &src);
     DepthZone::enum_type get_depth_zone_by_flags(WidgetFlags flags);
     amal::vec2 get_root_depth_range(DepthZone::enum_type zone, int lane_index);
+    inline f32 mid_depth(const amal::vec2 &range) { return (range.x + range.y) * 0.5f; }
 } // namespace auik::v2::detail

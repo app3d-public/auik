@@ -178,6 +178,10 @@ namespace auik::v2
             _mask |= detail::StylePropertiesBits::border_thickness;
             return *this;
         }
+        [[nodiscard]] bool has_visible_border() const
+        {
+            return _border_thickness > 0.0f && _border_color.w > 0.0f;
+        }
 
         [[nodiscard]] u32 corner_mask() const { return _corner_mask; }
         Style &corner_mask(u32 value)

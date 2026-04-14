@@ -180,6 +180,13 @@ namespace auik::v2
         virtual void on_char_input(u32 char_code, u32 count) {}
 
     protected:
+        inline void redraw_external(bool has_record, DrawReasonFlags update_reason = DrawReasonBits::external)
+        {
+            if (has_record) update_draw_commands(update_reason);
+            else record_draw_commands(DrawReasonBits::external);
+            detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
+        }
+
         u32 _id;
         Widget *_parent = nullptr;
         Widget *_focus_parent = nullptr;

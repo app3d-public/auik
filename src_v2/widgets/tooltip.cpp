@@ -66,11 +66,7 @@ namespace auik::v2
         update_style();
         update_layout(false);
 
-        if (has_draw_record()) update_draw_commands(DrawReasonBits::layout | DrawReasonBits::external);
-        else record_draw_commands(DrawReasonBits::full_redraw);
-
-        auto &ctx = detail::get_context();
-        ctx.dirty_flags |= DirtyFlagBits::redraw;
+        redraw_external(has_draw_record(), DrawReasonBits::layout | DrawReasonBits::external);
         detail::mark_host_refresh_request();
     }
 

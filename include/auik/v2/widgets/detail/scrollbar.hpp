@@ -67,15 +67,8 @@ namespace auik::v2::detail
         bool scroll_to_track_click(const amal::vec2 &mouse_pos);
         bool scroll_thumb_by_drag_delta(const amal::vec2 &delta);
         bool is_point_on_thumb(const amal::vec2 &mouse_pos) const;
-        bool has_draw_record() const
-        {
-            return _track_draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID &&
-                   _thumb_draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID;
-        }
         const ScrollBehavior &behavior() const { return _behavior; }
-
         void configure(const amal::vec2 &track_pos, const amal::vec2 &track_size, f32 content_size, f32 view_size);
-
         StyleUpdateFlags update_style() override;
         void translate(const amal::vec2 &delta) override;
         void rebuild_clip_rects() override;
