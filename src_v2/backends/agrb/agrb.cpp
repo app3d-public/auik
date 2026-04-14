@@ -194,19 +194,24 @@ namespace auik::v2
             ctx->picker->copy_frame_data(dst_frame_id, src_frame_id);
         }
 
-        static bool create_atlas_texture_impl(GPUContext *gpu_context, AtlasTextureResource *resource, u32 width,
-                                              u32 height, const void *pixels, size_t size)
+        static bool create_atlas_texture_impl(GPUContext *gpu_context, AtlasTextureResource *resource,
+                                              const umbf::Image2D &image)
         {
-            if (!resource || !pixels || width == 0 || height == 0) return false;
+            if (!resource || !image.pixels || image.width == 0 || image.height == 0) return false;
+            const u32 channel_count = static_cast<u32>(image.channels.size());
+            if (image.format.type != umbf::ImageFormat::Type::uint || image.format.bytes_per_channel != 1) return false;
+            if (channel_count != 1u && channel_count != 4u) return false;
 
             auto *ctx = get_agrb_context(gpu_context);
             auto *handle = acul::alloc<agrb::texture>();
-            handle->format = vk::Format::eR8Unorm;
-            handle->image_extent = vk::Extent3D{width, height, 1};
+            handle->format = channel_count == 4u ? vk::Format::eR8G8B8A8Unorm : vk::Format::eR8Unorm;
+            handle->image_extent = vk::Extent3D{image.width, image.height, 1};
             handle->mip_levels = 1;
-            handle->size = static_cast<vk::DeviceSize>(size);
-            if (!agrb::allocate_texture(*handle, vk::ImageViewType::e2D, const_cast<void *>(pixels), ctx->device))
+            handle->size = static_cast<vk::DeviceSize>(image.size());
+            if (!agrb::allocate_texture(*handle, vk::ImageViewType::e2D, image.pixels, ctx->device))
             {
+                std::printf("create_atlas_texture: agrb::allocate_texture failed (%ux%u, channels=%u)\n", image.width,
+                            image.height, channel_count);
                 acul::release(handle);
                 return false;
             }
@@ -218,6 +223,7 @@ namespace auik::v2
             }
             if (!create_text_atlas_sampler(*handle, ctx->device))
             {
+                std::printf("create_atlas_texture: create_text_atlas_sampler failed\n");
                 agrb::destroy_texture(*handle, ctx->device);
                 acul::release(handle);
                 return false;
@@ -227,14 +233,17 @@ namespace auik::v2
                 add_agrb_texture(handle->sampler, handle->image_view, vk::ImageLayout::eShaderReadOnlyOptimal);
             if (resource->texture_id.handle == 0)
             {
+                const auto &global_ctx = get_context();
+                std::printf("create_atlas_texture: add_agrb_texture failed (textures=%zu/%u)\n",
+                            global_ctx.textures.size(), global_ctx.max_textures_size);
                 agrb::destroy_texture(*handle, ctx->device);
                 acul::release(handle);
                 return false;
             }
 
             resource->handle = handle;
-            resource->width = width;
-            resource->height = height;
+            resource->width = image.width;
+            resource->height = image.height;
             return true;
         }
 
@@ -250,12 +259,12 @@ namespace auik::v2
         }
 
         static bool upload_atlas_texture_impl(GPUContext *gpu_context, AtlasTextureResource *resource,
-                                              const void *pixels, size_t size, u32 width, u32 height, i32 x, i32 y)
+                                              const umbf::Image2D &image, u32 width, u32 height, i32 x, i32 y)
         {
-            if (!resource || !resource->handle || !pixels || width == 0 || height == 0) return false;
+            if (!resource || !resource->handle || !image.pixels || width == 0 || height == 0) return false;
             auto *ctx = get_agrb_context(gpu_context);
             auto *handle = static_cast<agrb::texture *>(resource->handle);
-            return agrb::upload_texture_subimage(*handle, const_cast<void *>(pixels), static_cast<vk::DeviceSize>(size),
+            return agrb::upload_texture_subimage(*handle, image.pixels, static_cast<vk::DeviceSize>(image.size()),
                                                  vk::Extent3D{width, height, 1}, vk::Offset3D{x, y, 0}, ctx->device);
         }
 
@@ -406,7 +415,12 @@ namespace auik::v2
         }
 
         assert(global_ctx.textures.size() < global_ctx.max_textures_size && "AUIK texture capacity exceeded");
-        if (global_ctx.textures.size() >= global_ctx.max_textures_size) return AUIK_INVALID_TEXTURE_ID;
+        if (global_ctx.textures.size() >= global_ctx.max_textures_size)
+        {
+            std::printf("add_agrb_texture: capacity exceeded (%zu/%u)\n", global_ctx.textures.size(),
+                        global_ctx.max_textures_size);
+            return AUIK_INVALID_TEXTURE_ID;
+        }
 
         global_ctx.textures.push_back(TextureID{handle, static_cast<u32>(global_ctx.textures.size())});
         ctx->bindless_textures.push_back(
@@ -414,6 +428,7 @@ namespace auik::v2
 
         if (!detail::rewrite_bindless_texture_table(ctx))
         {
+            std::printf("add_agrb_texture: rewrite_bindless_texture_table failed\n");
             global_ctx.textures.pop_back();
             ctx->bindless_textures.pop_back();
             return AUIK_INVALID_TEXTURE_ID;
@@ -475,35 +490,41 @@ namespace auik::v2
         auto &global_ctx = detail::get_context();
         auto &device = detail::get_agrb_context(global_ctx.gpu_ctx)->device;
 
-        auto &cquads_stream = streams[0];
-        auik::v2::create_quads_stream(cquads_stream);
-        auik::v2::set_primary_quad_stream(&cquads_stream);
+        auto &quads_stream = streams[0];
+        create_quads_stream(quads_stream);
+        set_primary_quad_stream(&quads_stream);
         auto &quads_pipeline = pipelines[0];
-        if (!auik::v2::construct_quads_pipeline(quads_pipeline, device)) return false;
-        cquads_stream.pipeline = &quads_pipeline;
-        auto &cquads_artifact = batch.artifacts.emplace_back();
-        auik::v2::construct_pipeline_artifact(cquads_artifact, subpass, &quads_pipeline);
-        if (!auik::v2::configure_quads_pipeline(cquads_artifact, render_pass, quads_pipeline, device)) return false;
+        if (!construct_quads_pipeline(quads_pipeline, device)) return false;
+        quads_stream.pipeline = &quads_pipeline;
+        auto &quads_artifact = batch.artifacts.emplace_back();
+        construct_pipeline_artifact(quads_artifact, subpass, &quads_pipeline);
+        if (!configure_quads_pipeline(quads_artifact, render_pass, quads_pipeline, device)) return false;
 
-        auto &ctextures_stream = streams[1];
-        auik::v2::create_textures_stream(ctextures_stream);
-        auik::v2::set_primary_image_stream(&ctextures_stream);
-        auto &textures_pipeline = pipelines[1];
-        if (!auik::v2::construct_textures_pipeline(textures_pipeline, device)) return false;
-        ctextures_stream.pipeline = &textures_pipeline;
-        auto &ctextures_artifact = batch.artifacts.emplace_back();
-        auik::v2::construct_pipeline_artifact(ctextures_artifact, subpass, &textures_pipeline);
-        if (!auik::v2::configure_textures_pipeline(ctextures_artifact, render_pass, textures_pipeline, device))
+        auto &textured_quads_stream = streams[1];
+        create_textured_quads_stream(textured_quads_stream);
+        set_primary_textured_quads_stream(&textured_quads_stream);
+        auto &textured_quads_pipeline = pipelines[1];
+        if (!construct_textures_pipeline(textured_quads_pipeline, device)) return false;
+        textured_quads_stream.pipeline = &textured_quads_pipeline;
+        auto &textured_quads_artifact = batch.artifacts.emplace_back();
+        construct_pipeline_artifact(textured_quads_artifact, subpass, &textured_quads_pipeline);
+        if (!configure_textures_pipeline(textured_quads_artifact, render_pass, textured_quads_pipeline, device))
             return false;
 
-        auto &cvertex_stream = streams[2];
-        auik::v2::create_vertex_stream(cvertex_stream);
-        auik::v2::set_primary_vertex_stream(&cvertex_stream);
+        auto &vertex_stream = streams[2];
+        create_vertex_stream(vertex_stream);
+        set_primary_vertex_stream(&vertex_stream);
         auto &vertex_stream_pipeline = pipelines[2];
-        if (!auik::v2::construct_vertex_pipeline(vertex_stream_pipeline, device)) return false;
-        cvertex_stream.pipeline = &vertex_stream_pipeline;
-        auto &cvertex_artifact = batch.artifacts.emplace_back();
-        auik::v2::construct_pipeline_artifact(cvertex_artifact, subpass, &vertex_stream_pipeline);
-        return auik::v2::configure_vertex_pipeline(cvertex_artifact, render_pass, vertex_stream_pipeline, device);
+        if (!construct_vertex_pipeline(vertex_stream_pipeline, device)) return false;
+        vertex_stream.pipeline = &vertex_stream_pipeline;
+        auto &vertex_artifact = batch.artifacts.emplace_back();
+        construct_pipeline_artifact(vertex_artifact, subpass, &vertex_stream_pipeline);
+        if (!configure_vertex_pipeline(vertex_artifact, render_pass, vertex_stream_pipeline, device)) return false;
+
+        auto &overlay_quads_stream = streams[3];
+        create_quads_stream(overlay_quads_stream);
+        set_overlay_quads_stream(&overlay_quads_stream);
+        overlay_quads_stream.pipeline = &quads_pipeline;
+        return true;
     }
 } // namespace auik::v2

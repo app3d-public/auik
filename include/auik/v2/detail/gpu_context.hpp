@@ -33,11 +33,10 @@ namespace auik::v2::detail
         u32 width = 0;
         u32 height = 0;
     };
-    using PFN_create_atlas_texture =
-        bool (*)(GPUContext *, AtlasTextureResource *, u32, u32, const void *, size_t);
+    using PFN_create_atlas_texture = bool (*)(GPUContext *, AtlasTextureResource *, const umbf::Image2D &);
     using PFN_destroy_atlas_texture = void (*)(GPUContext *, AtlasTextureResource *);
     using PFN_upload_atlas_texture =
-        bool (*)(GPUContext *, AtlasTextureResource *, const void *, size_t, u32, u32, i32, i32);
+        bool (*)(GPUContext *, AtlasTextureResource *, const umbf::Image2D &, u32, u32, i32, i32);
     using PFN_create_image_texture = bool (*)(GPUContext *, ImageTextureResource *, const umbf::Image2D &);
     using PFN_destroy_image_texture = void (*)(GPUContext *, ImageTextureResource *);
 
@@ -107,11 +106,10 @@ namespace auik::v2::detail
 
     inline bool create_gpu_resources(GPUContext *gpu_context) { return gpu_context->create_resources(gpu_context); }
 
-    inline bool create_atlas_texture(GPUContext *gpu_context, AtlasTextureResource *resource, u32 width, u32 height,
-                                     const void *pixels, size_t size)
+    inline bool create_atlas_texture(GPUContext *gpu_context, AtlasTextureResource *resource, const umbf::Image2D &image)
     {
         assert(gpu_context->create_atlas_texture);
-        return gpu_context->create_atlas_texture(gpu_context, resource, width, height, pixels, size);
+        return gpu_context->create_atlas_texture(gpu_context, resource, image);
     }
 
     inline void destroy_atlas_texture(GPUContext *gpu_context, AtlasTextureResource *resource)
@@ -120,11 +118,11 @@ namespace auik::v2::detail
         gpu_context->destroy_atlas_texture(gpu_context, resource);
     }
 
-    inline bool upload_atlas_texture(GPUContext *gpu_context, AtlasTextureResource *resource, const void *pixels,
-                                     size_t size, u32 width, u32 height, i32 x, i32 y)
+    inline bool upload_atlas_texture(GPUContext *gpu_context, AtlasTextureResource *resource, const umbf::Image2D &image,
+                                     u32 width, u32 height, i32 x, i32 y)
     {
         assert(gpu_context->upload_atlas_texture);
-        return gpu_context->upload_atlas_texture(gpu_context, resource, pixels, size, width, height, x, y);
+        return gpu_context->upload_atlas_texture(gpu_context, resource, image, width, height, x, y);
     }
 
     inline bool create_image_texture(GPUContext *gpu_context, ImageTextureResource *resource, const umbf::Image2D &image)

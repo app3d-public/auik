@@ -226,6 +226,14 @@ namespace auik::v2
             return it == _style_options.end() ? STYLE_ID_INVALID : it->second;
         }
 
+        const Style *get_desc_style(u32 key, StyleState state = StyleState::normal) const
+        {
+            const StyleID id = get(key, state);
+            if (id == STYLE_ID_INVALID) return nullptr;
+            assert(id < _style_options_pool.size());
+            return &_style_options_pool[id];
+        }
+
         const Style &get_style(StyleID id) const
         {
             assert(id != STYLE_ID_INVALID);

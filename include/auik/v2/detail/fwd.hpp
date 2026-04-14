@@ -4,6 +4,7 @@
 namespace auik::v2
 {
     constexpr u32 AUIK_INVALID_DRAW_DATA_ID = 0xFFFFFFFFu;
+    enum class StyleState : u8;
 
     struct TextureID
     {

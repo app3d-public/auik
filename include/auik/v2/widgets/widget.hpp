@@ -173,7 +173,7 @@ namespace auik::v2
         virtual void on_detach() { detail::get_context().id_map.erase(id()); }
         virtual void on_scroll(const amal::vec2 &delta) {}
         virtual void on_focus(bool focused) {}
-        virtual void on_hover(HoverState state, u32 prev_tag_id) {}
+        virtual void on_hover(HoverState state) {}
         virtual void on_click(MouseKey key, KeyPressState state, u32 click_count) {}
         virtual void on_drag(const amal::vec2 &delta, KeyPressState state) {}
         virtual void on_key(Key key, KeyPressState state, KeyMode mods) {}

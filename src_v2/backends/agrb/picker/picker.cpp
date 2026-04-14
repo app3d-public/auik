@@ -407,13 +407,13 @@ namespace auik::v2::detail
 
     void GPUPicker::pick(AgrbContext *ctx, u32 read_frame_id)
     {
+        (void)ctx;
         auto *data = static_cast<const PickValue *>(_readback_buffers[read_frame_id].mapped);
         if (!data) return;
         auto &global_ctx = get_context();
         const auto prev_hover = global_ctx.hover_id;
         global_ctx.hover_id = make_element_id(data->widget_id, data->tag_id);
-        on_hover_id_updated(prev_hover.widget_id, prev_hover.tag_id, global_ctx.hover_id.widget_id,
-                            global_ctx.hover_id.tag_id);
+        on_hover_id_updated(static_cast<u64>(prev_hover), static_cast<u64>(global_ctx.hover_id));
     }
 
     u32 GPUPicker::push_hit_rect(const RectData &rect)
@@ -453,7 +453,7 @@ namespace auik::v2::detail
         {
             const auto prev_hover = global_ctx.hover_id;
             global_ctx.hover_id = {};
-            on_hover_id_updated(prev_hover.widget_id, prev_hover.tag_id, 0, 0);
+            on_hover_id_updated(static_cast<u64>(prev_hover), 0);
             return;
         }
         auto *agrb_ctx = get_agrb_context(gpu_context);

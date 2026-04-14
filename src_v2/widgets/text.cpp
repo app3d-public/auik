@@ -171,8 +171,8 @@ namespace auik::v2
             update_hit_rect(_hit_id, hit_rect, force_update);
         }
 
-        auto *image_stream = get_primary_image_stream();
-        if (!image_stream || _instances.empty()) return;
+        auto *textured_quads_stream = get_primary_textured_quads_stream();
+        if (!textured_quads_stream || _instances.empty()) return;
 
         const u16 current_clip = clip_id();
         const f32 current_z = get_z_order();
@@ -194,8 +194,8 @@ namespace auik::v2
         if (ctx.emit == &emit_draw_record)
         {
             _draw_ids.resize(_instances.size());
-            push_textures_batch_to_stream(image_stream, _instances.data(), static_cast<u32>(_instances.size()),
-                                          _draw_ids.data());
+            push_textured_quads_batch_to_stream(textured_quads_stream, _instances.data(),
+                                                static_cast<u32>(_instances.size()), _draw_ids.data());
             _applied_clip_id = current_clip;
             _instances_gpu_dirty = false;
             return;
@@ -203,8 +203,8 @@ namespace auik::v2
 
         assert(_draw_ids.size() == _instances.size() && "Text draw ids are out of sync with layout instances");
         if (!draw_state_changed && !instances_changed) return;
-        update_textures_batch_in_stream(image_stream, _draw_ids.data(), _instances.data(),
-                                        static_cast<u32>(_instances.size()));
+        update_textured_quads_batch_in_stream(textured_quads_stream, _draw_ids.data(), _instances.data(),
+                                              static_cast<u32>(_instances.size()));
         _applied_clip_id = current_clip;
         _instances_gpu_dirty = false;
     }
@@ -296,9 +296,8 @@ namespace auik::v2
         clear_tooltip_if_source(&_tooltip_text);
     }
 
-    void TextWithTooltip::on_hover(HoverState state, u32 prev_tag_id)
+    void TextWithTooltip::on_hover(HoverState state)
     {
-        (void)prev_tag_id;
         const u32 wid = id();
         const auto current_hover = detail::get_context().hover_id;
         const bool is_same_hover_session = current_hover.widget_id == wid;

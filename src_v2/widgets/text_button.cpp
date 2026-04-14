@@ -108,7 +108,7 @@ namespace auik::v2
     void TextButton::draw(DrawCtx &ctx)
     {
         auto *theme = get_theme();
-        auto *quads_stream = get_primary_quad_stream();
+        auto *quads_stream = get_primary_quads_stream();
 
         QuadsInstanceData bg_data{};
         bg_data.rect = bounds();

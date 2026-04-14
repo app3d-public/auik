@@ -142,6 +142,8 @@ namespace auik::v2
             StyleState state = StyleState::normal;
             if (parent())
             {
+                const auto transition = detail::get_widget_style_selector_transition(parent_id);
+                if (transition.current_tag_id == AUIK_TAG_WINDOW_HEADER) state = transition.current_state;
                 const auto ps = parent()->style_state();
                 if (ps == StyleState::active || ps == StyleState::focus) state = ps;
             }
@@ -202,7 +204,7 @@ namespace auik::v2
         void draw(DrawCtx &ctx) override
         {
             auto *theme = get_theme();
-            auto *quads_stream = get_primary_quad_stream();
+            auto *quads_stream = get_primary_quads_stream();
 
             QuadsInstanceData data{};
             data.rect = bounds();
@@ -269,7 +271,7 @@ namespace auik::v2
     void Window::draw(DrawCtx &ctx)
     {
         auto *theme = get_theme();
-        auto *quads_stream = get_primary_quad_stream();
+        auto *quads_stream = get_primary_quads_stream();
 
         auto &window_style = theme->get_style(_window_style.id);
         QuadsInstanceData bg_data{};
@@ -284,7 +286,13 @@ namespace auik::v2
             header_ctx.emit_hit_rect = _header->is_hittable();
             _header->draw(header_ctx);
         }
-        if (is_style_only_draw_update(ctx)) return;
+        if (is_style_only_draw_update(ctx))
+        {
+            const auto transition = detail::get_widget_style_selector_transition(id());
+            const bool is_scrollbar_transition =
+                detail::is_scrollbar_tag(transition.current_tag_id) || detail::is_scrollbar_tag(transition.prev_tag_id);
+            if (!is_scrollbar_transition) return;
+        }
 
         const amal::vec2 prev_cursor = detail::get_context().screen_cursor;
         const auto &padding = window_style.padding();
@@ -393,6 +401,7 @@ namespace auik::v2
             (window_flags & WindowFlagBits::scrollable) && !(window_flags & WindowFlagBits::no_scrollbar_x);
         if (can_scroll_y) ensure_y_scrollbar(_scrollbar_y, this);
         if (can_scroll_x) ensure_x_scrollbar(_scrollbar_x, this);
+
         if (_scrollbar_y) out |= _scrollbar_y->update_style();
         if (_scrollbar_x) out |= _scrollbar_x->update_style();
         return out;
@@ -692,36 +701,9 @@ namespace auik::v2
         }
     }
 
-    void Window::on_hover(HoverState state, u32 prev_tag_id)
+    void Window::on_hover(HoverState state)
     {
-        if (state == HoverState::leave) return;
-        if (!_scrollbar_x && !_scrollbar_y) return;
-        auto &ctx = detail::get_context();
-
-        const bool now_thumb_y =
-            (ctx.hover_id.widget_id == id()) && (ctx.hover_id.tag_id == AUIK_TAG_SCROLLBAR_THUMB_Y);
-        const bool now_thumb_x =
-            (ctx.hover_id.widget_id == id()) && (ctx.hover_id.tag_id == AUIK_TAG_SCROLLBAR_THUMB_X);
-        const bool was_thumb_y = prev_tag_id == AUIK_TAG_SCROLLBAR_THUMB_Y;
-        const bool was_thumb_x = prev_tag_id == AUIK_TAG_SCROLLBAR_THUMB_X;
-        if (!now_thumb_y && !now_thumb_x && !was_thumb_y && !was_thumb_x) return;
-
-        if ((_scrollbar_y && _scrollbar_y->set_thumb_hovered(now_thumb_y)))
-            add_render_command<detail::HoverEventTraits>(_scrollbar_y, [this]() {
-                _scrollbar_y->update_style();
-                if (_scrollbar_y->has_draw_record()) _scrollbar_y->update_draw_commands();
-                else _scrollbar_y->record_draw_commands();
-                detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
-            });
-
-        if ((_scrollbar_x && _scrollbar_x->set_thumb_hovered(now_thumb_x)))
-            add_render_command<detail::HoverEventTraits>(_scrollbar_x, [this]() {
-                _scrollbar_x->update_style();
-                if (_scrollbar_x->has_draw_record()) _scrollbar_x->update_draw_commands();
-                else _scrollbar_x->record_draw_commands();
-                detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
-            });
-        apply_hover_style_state(*this, state);
+        (void)state;
     }
 
     void Window::on_click(MouseKey key, KeyPressState state, u32 click_count)
@@ -751,7 +733,6 @@ namespace auik::v2
         if (!detail::is_scrollbar_tag(ctx.hover_id.tag_id)) return;
 
         bool is_offset_changed = false;
-        amal::bvec2 is_thumb_drag_started{false, false};
         _drag_scrollbar = nullptr;
 
         if (_scrollbar_y && _scrollbar_y->is_visible() &&
@@ -760,10 +741,7 @@ namespace auik::v2
             _move_drag_active = false;
             _scrollbar_y->set_scroll_offset(_content_offset.y);
             if (ctx.hover_id.tag_id == AUIK_TAG_SCROLLBAR_THUMB_Y)
-            {
                 _drag_scrollbar = _scrollbar_y;
-                is_thumb_drag_started.y = true;
-            }
             else
             {
                 is_offset_changed = _scrollbar_y->scroll_to_track_click(ctx.io.mouse_pos) || is_offset_changed;
@@ -778,10 +756,7 @@ namespace auik::v2
             _move_drag_active = false;
             _scrollbar_x->set_scroll_offset(_content_offset.x);
             if (ctx.hover_id.tag_id == AUIK_TAG_SCROLLBAR_THUMB_X)
-            {
                 _drag_scrollbar = _scrollbar_x;
-                is_thumb_drag_started.x = true;
-            }
             else
             {
                 is_offset_changed = _scrollbar_x->scroll_to_track_click(ctx.io.mouse_pos) || is_offset_changed;
@@ -789,14 +764,6 @@ namespace auik::v2
             }
             _content_offset.x = _scrollbar_x->scroll_offset();
         }
-
-        amal::bvec2 active_state_changed{false, false};
-        if (_scrollbar_x)
-            active_state_changed.x =
-                _scrollbar_x->set_thumb_active(is_thumb_drag_started.x ? _drag_scrollbar == _scrollbar_x : false);
-        if (_scrollbar_y)
-            active_state_changed.y =
-                _scrollbar_y->set_thumb_active(is_thumb_drag_started.y ? _drag_scrollbar == _scrollbar_y : false);
 
         if (is_offset_changed)
         {
@@ -808,22 +775,6 @@ namespace auik::v2
             });
             return;
         }
-
-        if (active_state_changed.x)
-            add_render_command<detail::ClickEventTraits>(_scrollbar_x, [this]() {
-                _scrollbar_x->update_style();
-                if (_scrollbar_x->has_draw_record()) _scrollbar_x->update_draw_commands();
-                else _scrollbar_x->record_draw_commands();
-                detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
-            });
-
-        if (active_state_changed.y)
-            add_render_command<detail::ClickEventTraits>(_scrollbar_y, [this]() {
-                _scrollbar_y->update_style();
-                if (_scrollbar_y->has_draw_record()) _scrollbar_y->update_draw_commands();
-                else _scrollbar_y->record_draw_commands();
-                detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
-            });
     }
 
     void Window::on_drag(const amal::vec2 &delta, KeyPressState state)
@@ -832,26 +783,6 @@ namespace auik::v2
         {
             auto &ctx = detail::get_context();
             _move_drag_active = false;
-            bool active_state_changed = false;
-            active_state_changed = (_scrollbar_y && _scrollbar_y->set_thumb_active(false)) || active_state_changed;
-            active_state_changed = (_scrollbar_x && _scrollbar_x->set_thumb_active(false)) || active_state_changed;
-            if (active_state_changed)
-            {
-                if (_scrollbar_y)
-                    add_render_command<detail::DragEventTraits>(_scrollbar_y, [this]() {
-                        _scrollbar_y->update_style();
-                        if (_scrollbar_y->has_draw_record()) _scrollbar_y->update_draw_commands();
-                        else _scrollbar_y->record_draw_commands();
-                        detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
-                    });
-                if (_scrollbar_x)
-                    add_render_command<detail::DragEventTraits>(_scrollbar_x, [this]() {
-                        _scrollbar_x->update_style();
-                        if (_scrollbar_x->has_draw_record()) _scrollbar_x->update_draw_commands();
-                        else _scrollbar_x->record_draw_commands();
-                        detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
-                    });
-            }
             if (ctx.hover_id.tag_id == AUIK_TAG_HITBOX)
                 detail::set_window_cursor(detail::get_cursor_for_hitbox_zone(ctx.hover_hitbox_zone), ctx.window_ctx);
             else detail::set_window_cursor(detail::CursorID::arrow, ctx.window_ctx);
@@ -862,12 +793,6 @@ namespace auik::v2
 
         if (_drag_scrollbar)
         {
-            bool active_state_changed = false;
-            active_state_changed = (_scrollbar_y && _scrollbar_y->set_thumb_active(_drag_scrollbar == _scrollbar_y)) ||
-                                   active_state_changed;
-            active_state_changed = (_scrollbar_x && _scrollbar_x->set_thumb_active(_drag_scrollbar == _scrollbar_x)) ||
-                                   active_state_changed;
-
             bool is_offset_changed = false;
             if (_drag_scrollbar == _scrollbar_y)
             {
@@ -891,24 +816,6 @@ namespace auik::v2
                     detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
                 });
                 return;
-            }
-
-            if (active_state_changed)
-            {
-                if (_scrollbar_y)
-                    add_render_command<detail::DragEventTraits>(_scrollbar_y, [this]() {
-                        _scrollbar_y->update_style();
-                        if (_scrollbar_y->has_draw_record()) _scrollbar_y->update_draw_commands();
-                        else _scrollbar_y->record_draw_commands();
-                        detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
-                    });
-                if (_scrollbar_x)
-                    add_render_command<detail::DragEventTraits>(_scrollbar_x, [this]() {
-                        _scrollbar_x->update_style();
-                        if (_scrollbar_x->has_draw_record()) _scrollbar_x->update_draw_commands();
-                        else _scrollbar_x->record_draw_commands();
-                        detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
-                    });
             }
             return;
         }

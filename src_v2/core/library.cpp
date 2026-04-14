@@ -4,6 +4,7 @@
 #include <auik/v2/detail/events.hpp>
 #include <auik/v2/detail/gpu_context.hpp>
 #include <auik/v2/widgets/image.hpp>
+#include <auik/v2/widgets/slider.hpp>
 #include <auik/v2/widgets/tooltip.hpp>
 #include <cstring>
 #include <freetype/freetype.h>
@@ -96,7 +97,7 @@ namespace auik::v2
 
     APPLIB_API u32 get_service_pipelines_count() { return 1; }
     APPLIB_API u32 get_default_streams_pipelines_count() { return 3; }
-    APPLIB_API u32 get_default_streams_count() { return 3; }
+    APPLIB_API u32 get_default_streams_count() { return 4; }
 
     bool init_library(const CreateInfo &create_info)
     {
@@ -146,6 +147,7 @@ namespace auik::v2
         frame_cache.char_code = 0;
         frame_cache.char_repeat_count = 0;
         ctx.hover_id = {};
+        detail::reset_style_selector();
         ctx.hover_hitbox_zone = detail::HitboxZoneBits::none;
         ctx.active_id = 0;
         ctx.focus_id = 0;

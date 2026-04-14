@@ -5,8 +5,6 @@ namespace auik::v2::detail
 {
     namespace
     {
-        constexpr umbf::ImageFormat g_atlas_image_format{umbf::ImageFormat::Type::uint, 1};
-
         static inline amal::rect make_uv_rect(const amal::irect &rect, const umbf::Image2D &image)
         {
             const f32 inv_width = 1.0f / static_cast<f32>(image.width);
@@ -27,12 +25,14 @@ namespace auik::v2::detail
             page.texture = {};
         }
 
-        static bool init_surface(umbf::Image2D &surface, const amal::ivec2 &size)
+        static bool init_surface(umbf::Image2D &surface, const amal::ivec2 &size, umbf::ImageFormat format, u32 channel_count)
         {
             surface.width = static_cast<u32>(size.x);
             surface.height = static_cast<u32>(size.y);
-            surface.format = g_atlas_image_format;
-            surface.channels = {"r"};
+            surface.format = format;
+            surface.channels.clear();
+            static constexpr const char *channel_names[] = {"r", "g", "b", "a"};
+            for (u32 i = 0; i < channel_count && i < 4u; ++i) surface.channels.push_back(channel_names[i]);
             auto clear_pixel = umbf::utils::make_clear_pixel(surface.format, surface.channels.size());
             umbf::utils::fill_color_pixels(clear_pixel.get(), surface);
             return surface.pixels != nullptr;
@@ -53,19 +53,19 @@ namespace auik::v2::detail
         static bool is_atlas_compatible_image(const umbf::Image2D &image)
         {
             return image.pixels != nullptr && image.width > 0 && image.height > 0 &&
-                   image.format == g_atlas_image_format && image.channels.size() == 1;
+                   image.format.type == umbf::ImageFormat::Type::uint && image.format.bytes_per_channel == 1 &&
+                   (image.channels.size() == 1 || image.channels.size() == 4);
         }
 
         static bool create_page_texture(AtlasPage &page, GPUContext *gpu_ctx)
         {
-            return create_atlas_texture(gpu_ctx, &page.texture, page.surface.width, page.surface.height,
-                                        page.surface.pixels, page.surface.size());
+            return create_atlas_texture(gpu_ctx, &page.texture, page.surface);
         }
 
         static bool upload_full_page(AtlasPage &page, GPUContext *gpu_ctx)
         {
-            return upload_atlas_texture(gpu_ctx, &page.texture, page.surface.pixels, page.surface.size(),
-                                        page.surface.width, page.surface.height, 0, 0);
+            return upload_atlas_texture(gpu_ctx, &page.texture, page.surface, page.surface.width, page.surface.height, 0,
+                                        0);
         }
 
         static bool can_fit_after_growth(const AtlasPage &page, const amal::ivec2 &new_size, amal::irect &probe_rect,
@@ -93,7 +93,9 @@ namespace auik::v2::detail
                 if (!can_fit_after_growth(page, next_size, probe, grown_packer, padding)) continue;
 
                 umbf::Image2D grown_surface;
-                if (!init_surface(grown_surface, next_size)) return false;
+                if (!init_surface(grown_surface, next_size, page.surface.format,
+                                  static_cast<u32>(page.surface.channels.size())))
+                    return false;
                 copy_full_surface(page.surface, grown_surface);
 
                 destroy_atlas_texture(gpu_ctx, &page.texture);
@@ -119,7 +121,8 @@ namespace auik::v2::detail
             return nullptr;
         }
 
-        static AtlasPage *create_page(AtlasState &state, const amal::ivec2 &required_size, GPUContext *gpu_ctx)
+        static AtlasPage *create_page(AtlasState &state, const amal::ivec2 &required_size, GPUContext *gpu_ctx,
+                                      umbf::ImageFormat format, u32 channel_count)
         {
             amal::ivec2 page_size = state.initial_size;
             while ((page_size.x < required_size.x || page_size.y < required_size.y) &&
@@ -134,7 +137,7 @@ namespace auik::v2::detail
             auto *page = acul::alloc<AtlasPage>();
             page->atlas_id = state.next_atlas_id++;
             page->packer.reset(page_size, state.padding);
-            if (!init_surface(page->surface, page_size) || !create_page_texture(*page, gpu_ctx))
+            if (!init_surface(page->surface, page_size, format, channel_count) || !create_page_texture(*page, gpu_ctx))
             {
                 destroy_page(*page, gpu_ctx);
                 acul::release(page);
@@ -190,7 +193,7 @@ namespace auik::v2::detail
     {
         out.clear();
         if (images.empty()) return true;
-        if (!g_context || !g_context->gpu_ctx) return false;
+        assert (g_context && g_context->gpu_ctx);
 
         auto &state = g_context->atlas_state;
         auto *gpu_ctx = g_context->gpu_ctx;
@@ -206,6 +209,7 @@ namespace auik::v2::detail
                 out.clear();
                 return false;
             }
+            const u32 source_channels = static_cast<u32>(source.channels.size());
             const amal::ivec2 required_size{static_cast<i32>(source.width), static_cast<i32>(source.height)};
             AtlasPage *target_page = nullptr;
             amal::irect rect{{0, 0}, required_size};
@@ -213,6 +217,8 @@ namespace auik::v2::detail
             for (auto *page : state.pages)
             {
                 if (!page) continue;
+                if (page->surface.format != source.format) continue;
+                if (page->surface.channels.size() != source.channels.size()) continue;
 
                 rect = {{0, 0}, required_size};
                 if (!page->packer.pack_rect(rect, umbf::utils::SkylineHeuristic::bottom_left))
@@ -231,7 +237,7 @@ namespace auik::v2::detail
 
             if (!target_page)
             {
-                target_page = create_page(state, required_size, gpu_ctx);
+                target_page = create_page(state, required_size, gpu_ctx, source.format, source_channels);
                 if (!target_page)
                 {
                     out.clear();

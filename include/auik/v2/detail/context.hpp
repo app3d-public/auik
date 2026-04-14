@@ -21,8 +21,9 @@ struct FT_LibraryRec_;
 #define AUIK_SYNC_CLIP_RECT       0
 #define AUIK_SYNC_HIT_RECT        1
 #define AUIK_PRIMARY_QUAD_STREAM  0
-#define AUIK_PRIMARY_IMAGE_STREAM 1
+#define AUIK_PRIMARY_TEXTURED_QUADS_STREAM 1
 #define AUIK_PRIMARY_VERTEX_STREAM 2
+#define AUIK_PRIMARY_OVERLAY_QUADS_STREAM 3
 
 namespace auik::v2
 {
@@ -112,6 +113,14 @@ namespace auik::v2
             acul::unique_function<void()> fn = nullptr;
         };
 
+        struct StyleSelectorTransition
+        {
+            ElementID prev_id{};
+            ElementID current_id{};
+            u8 prev_state = 0;
+            u8 current_state = 0;
+        };
+
         extern APPLIB_API struct Context
         {
             acul::events::dispatcher *ed = nullptr;
@@ -124,6 +133,7 @@ namespace auik::v2
             acul::vector<TextureID> textures;
             acul::hashmap<u64, u32> texture_bind_slots;
             ElementID hover_id{};
+            StyleSelectorTransition style_selector{};
             detail::HitboxZone hover_hitbox_zone = detail::HitboxZoneBits::none;
             u32 active_id = 0;
             u32 focus_id = 0;
@@ -236,6 +246,73 @@ namespace auik::v2
 
         inline IO &get_io() { return get_context().io; }
 
+        inline const StyleSelectorTransition &get_style_selector_transition()
+        {
+            return get_context().style_selector;
+        }
+
+        inline ElementID get_prev_style_selector_id() { return get_style_selector_transition().prev_id; }
+
+        inline ElementID get_style_selector_id() { return get_style_selector_transition().current_id; }
+
+        inline StyleState get_prev_style_selector_state()
+        {
+            return static_cast<StyleState>(get_style_selector_transition().prev_state);
+        }
+
+        inline StyleState get_style_selector_state()
+        {
+            return static_cast<StyleState>(get_style_selector_transition().current_state);
+        }
+
+        inline bool set_style_selector(ElementID id, StyleState state)
+        {
+            auto &transition = get_context().style_selector;
+            const u8 encoded_state = static_cast<u8>(state);
+            if (transition.current_id.widget_id == id.widget_id && transition.current_id.tag_id == id.tag_id &&
+                transition.current_state == encoded_state)
+                return false;
+            transition.prev_id = transition.current_id;
+            transition.prev_state = transition.current_state;
+            transition.current_id = id;
+            transition.current_state = encoded_state;
+            return true;
+        }
+
+        inline void reset_style_selector(ElementID id = {}, StyleState state = static_cast<StyleState>(0))
+        {
+            auto &transition = get_context().style_selector;
+            transition.prev_id = id;
+            transition.current_id = id;
+            transition.prev_state = static_cast<u8>(state);
+            transition.current_state = static_cast<u8>(state);
+        }
+
+        struct WidgetStyleSelectorTransition
+        {
+            u32 prev_tag_id = 0;
+            u32 current_tag_id = 0;
+            StyleState prev_state = static_cast<StyleState>(0);
+            StyleState current_state = static_cast<StyleState>(0);
+        };
+
+        inline WidgetStyleSelectorTransition get_widget_style_selector_transition(u32 widget_id)
+        {
+            const auto &transition = get_style_selector_transition();
+            WidgetStyleSelectorTransition out{};
+            if (transition.prev_id.widget_id == widget_id)
+            {
+                out.prev_tag_id = transition.prev_id.tag_id;
+                out.prev_state = static_cast<StyleState>(transition.prev_state);
+            }
+            if (transition.current_id.widget_id == widget_id)
+            {
+                out.current_tag_id = transition.current_id.tag_id;
+                out.current_state = static_cast<StyleState>(transition.current_state);
+            }
+            return out;
+        }
+
         inline void clear_widget_pending_bits() {}
     } // namespace detail
 
@@ -247,7 +324,7 @@ namespace auik::v2
         ctx.theme = theme;
     }
 
-    inline DrawStream *get_primary_quad_stream()
+    inline DrawStream *get_primary_quads_stream()
     {
         auto *defaults = detail::get_context().streams.default_streams;
         assert(defaults && "Default streams are not initialized");
@@ -260,18 +337,32 @@ namespace auik::v2
         defaults[AUIK_PRIMARY_QUAD_STREAM] = stream;
     }
 
-    inline DrawStream *get_primary_image_stream()
+    inline DrawStream *get_primary_textured_quads_stream()
     {
         auto *defaults = detail::get_context().streams.default_streams;
         assert(defaults && "Default streams are not initialized");
-        return defaults[AUIK_PRIMARY_IMAGE_STREAM];
+        return defaults[AUIK_PRIMARY_TEXTURED_QUADS_STREAM];
     }
 
-    inline void set_primary_image_stream(DrawStream *stream)
+    inline void set_primary_textured_quads_stream(DrawStream *stream)
     {
         auto *defaults = detail::get_context().streams.default_streams;
         assert(defaults && "Default streams are not initialized");
-        defaults[AUIK_PRIMARY_IMAGE_STREAM] = stream;
+        defaults[AUIK_PRIMARY_TEXTURED_QUADS_STREAM] = stream;
+    }
+
+    inline DrawStream *get_overlay_quads_stream()
+    {
+        auto *defaults = detail::get_context().streams.default_streams;
+        assert(defaults && "Default streams are not initialized");
+        return defaults[AUIK_PRIMARY_OVERLAY_QUADS_STREAM];
+    }
+
+    inline void set_overlay_quads_stream(DrawStream *stream)
+    {
+        auto *defaults = detail::get_context().streams.default_streams;
+        assert(defaults && "Default streams are not initialized");
+        defaults[AUIK_PRIMARY_OVERLAY_QUADS_STREAM] = stream;
     }
 
     inline DrawStream *get_primary_vertex_stream()
@@ -287,6 +378,9 @@ namespace auik::v2
         assert(defaults && "Default streams are not initialized");
         defaults[AUIK_PRIMARY_VERTEX_STREAM] = stream;
     }
+
+    inline DrawStream *get_primary_image_stream() { return get_primary_textured_quads_stream(); }
+    inline void set_primary_image_stream(DrawStream *stream) { set_primary_textured_quads_stream(stream); }
 
     inline u16 push_clip_rect(const amal::vec4 &rect)
     {

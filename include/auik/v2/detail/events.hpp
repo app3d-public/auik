@@ -104,8 +104,21 @@ namespace auik::v2::detail
 
         constexpr bool is_valid() const { return widget_id != 0; }
         constexpr explicit operator bool() const { return is_valid(); }
+        constexpr bool operator==(const ElementID &other) const
+        {
+            return widget_id == other.widget_id && tag_id == other.tag_id;
+        }
+        constexpr bool operator!=(const ElementID &other) const { return !(*this == other); }
+        constexpr explicit operator u64() const
+        {
+            return (static_cast<u64>(widget_id) << 32u) | static_cast<u64>(tag_id);
+        }
     };
 
+    inline constexpr ElementID make_element_id(u64 encoded)
+    {
+        return {static_cast<u32>(encoded >> 32u), static_cast<u32>(encoded & 0xFFFFFFFFu)};
+    }
     inline constexpr ElementID make_element_id(u32 widget_id = 0, u32 tag_id = 0) { return {widget_id, tag_id}; }
 
     struct WindowContext
@@ -128,7 +141,7 @@ namespace auik::v2::detail
     void deregister_widget_shortcuts(u32 widget_id);
     APPLIB_API void flush_frame_changes();
     APPLIB_API void reset_event_state();
-    APPLIB_API void on_hover_id_updated(u32 prev_widget_id, u32 prev_tag_id, u32 widget_id, u32 tag_id);
+    APPLIB_API void on_hover_id_updated(u64 prev_hover_id, u64 hover_id);
     HitboxZone get_hitbox_zone(const RectData &rect, const amal::vec2 &mouse_pos);
     CursorID::enum_type get_cursor_for_hitbox_zone(HitboxZone zone);
 

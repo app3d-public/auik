@@ -206,8 +206,13 @@ namespace auik::v2::detail
     {
         const u32 parent_id = parent() ? parent()->id() : 0u;
         StyleUpdateFlags out = StyleUpdateFlagBits::none;
-        out |= resolve_style_selector(_track_style, id(), parent_id, StyleState::normal);
-        out |= resolve_style_selector(_thumb_style, id(), parent_id, style_state());
+        const auto transition = detail::get_widget_style_selector_transition(parent_id);
+        StyleState track_state = StyleState::normal;
+        StyleState thumb_state = StyleState::normal;
+        if (transition.current_tag_id == _rect.tag_id) track_state = transition.current_state;
+        else if (transition.current_tag_id == _thumb_rect.tag_id) thumb_state = transition.current_state;
+        out |= resolve_style_selector(_track_style, _rect.tag_id, parent_id, track_state);
+        out |= resolve_style_selector(_thumb_style, _thumb_rect.tag_id, parent_id, thumb_state);
         return out;
     }
 
@@ -229,7 +234,7 @@ namespace auik::v2::detail
     {
         if (!(widget_flags & WidgetFlagBits::visible)) return;
         auto *theme = get_theme();
-        auto *quads_stream = get_primary_quad_stream();
+        auto *quads_stream = get_primary_quads_stream();
 
         QuadsInstanceData track{};
         track.rect = bounds();

@@ -146,7 +146,7 @@ namespace auik::v2::detail
         stream->draw_sizes = nullptr;
     }
 
-    static inline void setup_textures_stream(DrawStream &stream)
+    static inline void setup_textured_quads_stream(DrawStream &stream)
     {
         stream.draw_sizes = acul::alloc_n<u32>(get_context().frames_in_flight);
         for (u32 i = 0; i < get_context().frames_in_flight; ++i) stream.draw_sizes[i] = 0;
@@ -155,9 +155,9 @@ namespace auik::v2::detail
 
 namespace auik::v2
 {
-    void create_textures_stream(DrawStream &stream)
+    void create_textured_quads_stream(DrawStream &stream)
     {
-        detail::setup_textures_stream(stream);
+        detail::setup_textured_quads_stream(stream);
         stream.push_data_to_stream = &detail::push_data_to_stream;
         stream.push_data_batch_to_stream = &detail::push_data_batch_to_stream;
         stream.update_data_in_stream = &detail::update_data_textures_stream;

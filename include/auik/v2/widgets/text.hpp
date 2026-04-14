@@ -88,7 +88,7 @@ namespace auik::v2
 
         const acul::string &tooltip_text() const { return _tooltip_text; }
         void set_tooltip_text(const acul::string &text) { _tooltip_text = text; }
-        void on_hover(HoverState state, u32 prev_tag_id) override;
+        void on_hover(HoverState state) override;
 
     private:
         acul::string _tooltip_text;

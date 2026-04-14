@@ -47,7 +47,6 @@ void main()
     vec2 half_size = 0.5 * in_size;
     bool has_border = (in_flags & AUIK_HAS_BORDER_BIT) != 0u;
     bool has_radius = (in_flags & AUIK_HAS_RADIUS_BIT) != 0u;
-
     // Fast path: plain rect (no radius).
     if (!has_radius)
     {
@@ -74,20 +73,36 @@ void main()
 
     float dist_outer = sd_rounded_rect(in_local_pos, half_size, corner_radius);
     float aa_outer = max(fwidth(dist_outer), 1e-4);
-    float fill_outer = 1.0 - smoothstep(0.0, aa_outer, dist_outer);
+    float fill_outer = 1.0 - smoothstep(-aa_outer, 0.0, dist_outer);
+
     if (fill_outer <= 0.0) discard;
 
-    vec4 color = in_background_color;
-    if (has_border)
+    if (!has_border)
     {
-        float thickness = max(in_border_thickness, 0.0);
-        vec2 inner_half = max(half_size - vec2(thickness), vec2(0.0));
-        float inner_radius = max(corner_radius - thickness, 0.0);
-        float dist_inner = sd_rounded_rect(in_local_pos, inner_half, inner_radius);
-        float aa_inner = max(fwidth(dist_inner), 1e-4);
-        float fill_inner = 1.0 - smoothstep(0.0, aa_inner, dist_inner);
-        color = mix(in_border_color, in_background_color, fill_inner);
+        vec4 color = in_background_color;
+        color.a *= fill_outer;
+        out_color = color;
+        return;
     }
+
+    vec4 color = in_background_color;
+    float thickness = max(in_border_thickness, 0.0);
+    vec2 inner_half = max(half_size - vec2(thickness), vec2(0.0));
+    float inner_radius = max(corner_radius - thickness, 0.0);
+    float dist_inner = sd_rounded_rect(in_local_pos, inner_half, inner_radius);
+    float aa_inner = max(fwidth(dist_inner), 1e-4);
+    float fill_inner = 1.0 - smoothstep(0.0, aa_inner, dist_inner);
+
+    float border_alpha = in_border_color.a * (1.0 - fill_inner);
+    float fill_alpha = in_background_color.a * fill_inner;
+    float out_alpha = border_alpha + fill_alpha;
+    if (out_alpha > 1e-5)
+    {
+        vec3 premul_rgb = in_border_color.rgb * border_alpha + in_background_color.rgb * fill_alpha;
+        color.rgb = premul_rgb / out_alpha;
+        color.a = out_alpha;
+    }
+    else color = vec4(0.0);
 
     color.a *= fill_outer;
     out_color = color;

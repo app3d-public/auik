@@ -25,8 +25,8 @@ namespace auik::v2
 
     void Image::draw(DrawCtx &ctx)
     {
-        auto *image_stream = get_primary_image_stream();
-        if (!image_stream || _texture_id.handle == 0) return;
+        auto *textured_quads_stream = get_primary_textured_quads_stream();
+        if (!textured_quads_stream || _texture_id.handle == 0) return;
 
         if ((detail::get_context().dirty_flags & DirtyFlagBits::textures) ||
             _texture_id.bind_slot == AUIK_INVALID_DRAW_DATA_ID)
@@ -43,7 +43,7 @@ namespace auik::v2
         image_data.texture_id = static_cast<u16>(_texture_id.bind_slot);
         image_data.clip_id = clip_id();
         image_data.flags = _coverage_mode ? AUIK_TEXTURE_INSTANCE_TEXT_BIT : 0u;
-        ctx.emit(image_stream, _image, &image_data, get_rect(), false);
+        ctx.emit(textured_quads_stream, _image, &image_data, get_rect(), false);
     }
 
     void Image::on_detach()

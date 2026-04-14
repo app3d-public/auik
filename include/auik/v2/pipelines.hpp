@@ -62,15 +62,15 @@ namespace auik::v2
 
     static_assert(sizeof(TexturesInstanceData) == 48, "TexturesInstanceData must be exactly 48 bytes");
 
-    APPLIB_API void create_textures_stream(DrawStream &stream);
+    APPLIB_API void create_textured_quads_stream(DrawStream &stream);
 
-    inline void push_textures_batch_to_stream(DrawStream *stream, const TexturesInstanceData *data, u32 count,
+    inline void push_textured_quads_batch_to_stream(DrawStream *stream, const TexturesInstanceData *data, u32 count,
                                               DrawDataID *out_draw_ids = nullptr)
     {
         push_data_batch_to_stream(stream, data, count, out_draw_ids);
     }
 
-    inline void update_textures_batch_in_stream(DrawStream *stream, const DrawDataID *draw_data_ids,
+    inline void update_textured_quads_batch_in_stream(DrawStream *stream, const DrawDataID *draw_data_ids,
                                                 const TexturesInstanceData *data, u32 count)
     {
         update_data_batch_in_stream(stream, draw_data_ids, data, count);

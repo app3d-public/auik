@@ -1,6 +1,7 @@
 #include <auik/v2/auik.hpp>
 #include <auik/v2/detail/context.hpp>
 #include <auik/v2/detail/events.hpp>
+
 #define AUIK_MOUSE_DOUBLE_CLICK_TIME     0.45
 #define AUIK_MOUSE_DOUBLE_CLICK_MAX_DIST 8.0
 #define AUIK_HITBOX_PAD                  4.0f
@@ -63,50 +64,70 @@ namespace auik::v2
             return out;
         }
 
-        APPLIB_API void on_hover_id_updated(u32 prev_widget_id, u32 prev_tag_id, u32 widget_id, u32 tag_id)
+        template <class Traits>
+        static void enqueue_style_refresh(Widget *widget)
+        {
+            if (!widget) return;
+            add_render_command<Traits>(widget, [widget]() {
+                auto &ctx = detail::get_context();
+                const auto style_flags = widget->update_style();
+                if (style_flags & StyleUpdateFlagBits::parent_layout)
+                {
+                    if (auto *parent = widget->parent()) parent->update_layout(false);
+                    else widget->update_layout(false);
+                    ctx.dirty_flags |= DirtyFlagBits::layout;
+                }
+                else if (style_flags & StyleUpdateFlagBits::layout) widget->update_layout(false);
+                if (style_flags & StyleUpdateFlagBits::redraw)
+                {
+                    widget->update_draw_commands(resolve_draw_reason_from_style(style_flags));
+                    ctx.dirty_flags |= DirtyFlagBits::redraw;
+                }
+            });
+            detail::mark_host_refresh_request();
+        }
+
+        APPLIB_API void on_hover_id_updated(u64 prev_hover_id, u64 hover_id)
         {
             auto &ctx = get_context();
+            const ElementID prev_hover = make_element_id(prev_hover_id);
+            const ElementID hover = make_element_id(hover_id);
+            const u32 prev_widget_id = prev_hover.widget_id;
+            const u32 prev_tag_id = prev_hover.tag_id;
+            const u32 widget_id = hover.widget_id;
+            const u32 tag_id = hover.tag_id;
             const bool is_dragging = ctx.io.mouse_down && ctx.io.drag_id;
-            auto enqueue_style_refresh = [](Widget *widget) {
-                if (!widget) return;
-                add_render_command<detail::HoverEventTraits>(widget, [widget]() {
-                    auto &ctx = detail::get_context();
-                    const auto style_flags = widget->update_style();
-                    if (style_flags & StyleUpdateFlagBits::parent_layout)
-                    {
-                        if (auto *parent = widget->parent()) parent->update_layout(false);
-                        else widget->update_layout(false);
-                        ctx.dirty_flags |= DirtyFlagBits::layout;
-                    }
-                    else if (style_flags & StyleUpdateFlagBits::layout) widget->update_layout(false);
-                    if (style_flags & StyleUpdateFlagBits::redraw)
-                    {
-                        widget->update_draw_commands(resolve_draw_reason_from_style(style_flags));
-                        ctx.dirty_flags |= DirtyFlagBits::redraw;
-                    }
-                });
-                detail::mark_host_refresh_request();
-            };
-            auto dispatch_hover = [&](u32 id, HoverState state, u32 last_tag_id) {
+            const bool hover_changed = prev_hover_id != hover_id;
+            if (!is_dragging) detail::set_style_selector(hover, hover ? StyleState::hover : StyleState::normal);
+            auto dispatch_hover = [&](u32 id, HoverState state) {
                 if (id == 0) return;
                 auto it = ctx.id_map.find(id);
                 if (it == ctx.id_map.end()) return;
                 Widget *widget = it->second;
                 assert(widget && "widget is null");
-                if (widget->has_event_handler(EventFlagBits::hover)) widget->on_hover(state, last_tag_id);
+                if (widget->has_event_handler(EventFlagBits::hover)) widget->on_hover(state);
                 if (apply_hover_style_state(*widget, state))
                 {
-                    enqueue_style_refresh(widget);
+                    enqueue_style_refresh<detail::HoverEventTraits>(widget);
                     mark_host_refresh_request();
                 }
             };
 
-            if (!is_dragging && prev_widget_id != widget_id)
+            if (!is_dragging)
             {
-                dispatch_hover(prev_widget_id, HoverState::leave, prev_tag_id);
-                dispatch_hover(widget_id, HoverState::enter, prev_tag_id);
+                if (!hover_changed) dispatch_hover(widget_id, HoverState::active);
+                else if (prev_widget_id != widget_id)
+                {
+                    dispatch_hover(prev_widget_id, HoverState::leave);
+                    dispatch_hover(widget_id, HoverState::enter);
+                }
+                else
+                {
+                    dispatch_hover(widget_id, HoverState::active);
+                    auto it = ctx.id_map.find(widget_id);
+                    if (it != ctx.id_map.end()) enqueue_style_refresh<detail::HoverEventTraits>(it->second);
+                }
             }
-            else if (!is_dragging) dispatch_hover(widget_id, HoverState::active, prev_tag_id);
 
             ctx.hover_hitbox_zone = HitboxZoneBits::none;
             if (tag_id == AUIK_TAG_HITBOX && widget_id != 0)
@@ -125,33 +146,6 @@ namespace auik::v2
             if (prev_tag_id == AUIK_TAG_HITBOX && tag_id != AUIK_TAG_HITBOX && !is_dragging)
                 set_window_cursor(CursorID::arrow, ctx.window_ctx);
         }
-
-        static void enqueue_style_refresh(Widget *widget)
-        {
-            if (!widget) return;
-            const u32 wid = widget->id();
-            auto &ctx = detail::get_context();
-            ctx.disposal_queue.emplace([wid]() {
-                auto &ctx = detail::get_context();
-                auto it = ctx.id_map.find(wid);
-                if (it == ctx.id_map.end()) return;
-                Widget *widget = it->second;
-                const auto style_flags = widget->update_style();
-                if (style_flags & StyleUpdateFlagBits::parent_layout)
-                {
-                    if (auto *parent = widget->parent()) parent->update_layout(false);
-                    else widget->update_layout(false);
-                    ctx.dirty_flags |= DirtyFlagBits::layout;
-                }
-                else if (style_flags & StyleUpdateFlagBits::layout) widget->update_layout(false);
-                if (style_flags & StyleUpdateFlagBits::redraw)
-                {
-                    widget->update_draw_commands(resolve_draw_reason_from_style(style_flags));
-                    ctx.dirty_flags |= DirtyFlagBits::redraw;
-                }
-            });
-            detail::mark_host_refresh_request();
-        };
 
         static inline Widget *resolve_input_root(Context &ctx)
         {
@@ -265,6 +259,7 @@ namespace auik::v2
             io.active_mods = KeyMode{};
             ctx.active_id = 0;
             ctx.hover_id = {};
+            detail::reset_style_selector();
             if (prev_active_id)
             {
                 auto it = ctx.id_map.find(prev_active_id);
@@ -272,7 +267,7 @@ namespace auik::v2
                 {
                     if (it->second->id() == ctx.focus_id) it->second->set_style_state(StyleState::focus);
                     else it->second->set_style_state(StyleState::normal);
-                    enqueue_style_refresh(it->second);
+                    enqueue_style_refresh<detail::HoverEventTraits>(it->second);
                 }
             }
             if (prev_hover.widget_id)
@@ -282,9 +277,9 @@ namespace auik::v2
                 {
                     Widget *widget = it->second;
                     assert(widget && "widget is null");
-                    if (widget->has_event_handler(EventFlagBits::hover))
-                        widget->on_hover(HoverState::leave, prev_hover.tag_id);
-                    if (apply_hover_style_state(*widget, HoverState::leave)) enqueue_style_refresh(widget);
+                    if (widget->has_event_handler(EventFlagBits::hover)) widget->on_hover(HoverState::leave);
+                    if (apply_hover_style_state(*widget, HoverState::leave))
+                        enqueue_style_refresh<detail::HoverEventTraits>(widget);
                 }
             }
             ctx.hover_hitbox_zone = HitboxZoneBits::none;
@@ -467,7 +462,7 @@ namespace auik::v2
                 assert(w && "widget cannot be null");
                 if (w->has_event_handler(EventFlagBits::focus)) w->on_focus(false);
                 if (ctx.active_id != w->id()) w->set_style_state(StyleState::normal);
-                enqueue_style_refresh(w);
+                enqueue_style_refresh<detail::FocusEventTraits>(w);
             }
 
             // Switch current focus leaf id before focus-gain callbacks.
@@ -480,7 +475,7 @@ namespace auik::v2
                 assert(w && "widget cannot be null");
                 if (w->has_event_handler(EventFlagBits::focus)) w->on_focus(true);
                 if (ctx.active_id != w->id()) w->set_style_state(StyleState::focus);
-                enqueue_style_refresh(w);
+                enqueue_style_refresh<detail::FocusEventTraits>(w);
             }
 
             detail::mark_host_refresh_request();
@@ -520,15 +515,14 @@ namespace auik::v2
                 set_focus_target(ctx, it->second);
                 // Press transfers visual state from hover -> active immediately.
                 // Hover re-enter is restored later by hover update/release path.
-                if (it->second->has_event_handler(EventFlagBits::hover))
-                    it->second->on_hover(HoverState::leave, ctx.hover_id.tag_id);
+                if (it->second->has_event_handler(EventFlagBits::hover)) it->second->on_hover(HoverState::leave);
                 const u32 prev_active_id = ctx.active_id;
                 const u32 next_active_id = it->second->id();
                 const StyleState prev_style_state = it->second->style_state();
                 if (prev_active_id != next_active_id)
                     for_each_active_chain(ctx, prev_active_id, [&](Widget *w) {
                         w->set_style_state(StyleState::normal);
-                        enqueue_style_refresh(w);
+                        enqueue_style_refresh<detail::ClickEventTraits>(w);
                     });
                 ctx.active_id = next_active_id;
                 const StyleState prev_style = it->second->style_state();
@@ -537,11 +531,15 @@ namespace auik::v2
                 const StyleState next_style =
                     (prev_style == StyleState::focus) ? StyleState::focus : StyleState::active;
                 if (prev_style != next_style) it->second->set_style_state(next_style);
+                // Pressed element (tag-based selector target) should always enter active visuals,
+                // even if owning widget keeps focus state.
+                detail::set_style_selector(io.drag_id, io.drag_id ? StyleState::active : StyleState::normal);
                 const bool active_changed = prev_active_id != ctx.active_id;
                 const bool style_changed = it->second->style_state() != prev_style_state;
                 if (active_changed || style_changed)
                 {
-                    for_each_active_chain(ctx, ctx.active_id, [&](Widget *w) { enqueue_style_refresh(w); });
+                    for_each_active_chain(ctx, ctx.active_id,
+                                          [&](Widget *w) { enqueue_style_refresh<detail::ClickEventTraits>(w); });
                     detail::mark_host_refresh_request();
                 }
                 if (it->second->has_event_handler(EventFlagBits::click))
@@ -553,7 +551,9 @@ namespace auik::v2
         static void handle_left_mouse_release(Context &ctx, IO &io)
         {
             auto &frame_cache = ctx.frame_cache;
-            const u32 clicked_widget_id = io.clicked_id.widget_id;
+            const ElementID clicked_id = io.clicked_id;
+            const ElementID hover_id = ctx.hover_id;
+            const u32 clicked_widget_id = clicked_id.widget_id;
             auto it = ctx.id_map.find(io.clicked_id.widget_id);
             if (it != ctx.id_map.end() && it->second->has_event_handler(EventFlagBits::click))
                 it->second->on_click(MouseKey::left, KeyPressState::release, io.click_count);
@@ -571,9 +571,10 @@ namespace auik::v2
             {
                 const u32 prev_active_id = ctx.active_id;
                 ctx.active_id = 0;
+                detail::set_style_selector(ctx.hover_id, ctx.hover_id ? StyleState::hover : StyleState::normal);
                 for_each_active_chain(ctx, prev_active_id, [&](Widget *w) {
                     resolve_release_state(w, ctx.hover_id.widget_id);
-                    enqueue_style_refresh(w);
+                    enqueue_style_refresh<detail::HoverEventTraits>(w);
                 });
                 detail::mark_host_refresh_request();
             }
@@ -583,35 +584,23 @@ namespace auik::v2
                 auto clicked_it = ctx.id_map.find(clicked_widget_id);
                 if (clicked_it != ctx.id_map.end())
                 {
-                    if (ctx.active_id == clicked_widget_id)
+                    const StyleState prev_state = clicked_it->second->style_state();
+                    resolve_release_state(clicked_it->second, ctx.hover_id.widget_id);
+                    const bool style_changed = prev_state != clicked_it->second->style_state();
+                    if (hover_id == clicked_id)
                     {
-                        if (ctx.hover_id.widget_id == clicked_widget_id)
-                        {
-                            if (clicked_it->second->has_event_handler(EventFlagBits::hover))
-                                clicked_it->second->on_hover(HoverState::enter, io.clicked_id.tag_id);
-                        }
+                        if (clicked_it->second->has_event_handler(EventFlagBits::hover))
+                            clicked_it->second->on_hover(HoverState::enter);
                     }
-                    else
+                    else if (style_changed)
                     {
-                        const StyleState prev_state = clicked_it->second->style_state();
-                        resolve_release_state(clicked_it->second, ctx.hover_id.widget_id);
-                        const bool style_changed = prev_state != clicked_it->second->style_state();
-                        if (ctx.hover_id.widget_id == clicked_widget_id)
-                        {
-                            if (clicked_it->second->has_event_handler(EventFlagBits::hover))
-                                clicked_it->second->on_hover(HoverState::enter, io.clicked_id.tag_id);
-                        }
-                        else if (style_changed)
-                        {
-                            enqueue_style_refresh(clicked_it->second);
-                            detail::mark_host_refresh_request();
-                        }
+                        enqueue_style_refresh<detail::HoverEventTraits>(clicked_it->second);
+                        detail::mark_host_refresh_request();
                     }
                 }
             }
 
-            if (ctx.hover_id && ctx.hover_id.widget_id != clicked_widget_id)
-                on_hover_id_updated(0, 0, ctx.hover_id.widget_id, ctx.hover_id.tag_id);
+            if (clicked_id || hover_id) on_hover_id_updated(static_cast<u64>(clicked_id), static_cast<u64>(hover_id));
 
             io.clicked_id = {};
             io.drag_id = {};

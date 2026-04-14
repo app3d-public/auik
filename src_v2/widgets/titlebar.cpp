@@ -211,7 +211,7 @@ namespace auik::v2
     void Titlebar::draw(DrawCtx &ctx)
     {
         auto *theme = get_theme();
-        auto *quads_stream = get_primary_quad_stream();
+        auto *quads_stream = get_primary_quads_stream();
         const amal::vec2 background_range = detail::depth_zone_range(depth_range(), detail::DepthZone::background);
 
         QuadsInstanceData bg_data{};

@@ -20,7 +20,8 @@ namespace auik::v2
 
             const amal::vec2 out_min = {amal::max(a_min.x, b_min.x), amal::max(a_min.y, b_min.y)};
             const amal::vec2 out_max = {amal::min(a_max.x, b_max.x), amal::min(a_max.y, b_max.y)};
-            const amal::vec2 out_size = {amal::max(out_max.x - out_min.x, 0.0f), amal::max(out_max.y - out_min.y, 0.0f)};
+            const amal::vec2 out_size = {amal::max(out_max.x - out_min.x, 0.0f),
+                                         amal::max(out_max.y - out_min.y, 0.0f)};
             return {out_min, out_size};
         }
 
@@ -136,7 +137,8 @@ namespace auik::v2
             return;
         }
 
-        set_required_size({_layout_result.size.x + padding.x + padding.z, _layout_result.size.y + padding.y + padding.w});
+        set_required_size(
+            {_layout_result.size.x + padding.x + padding.z, _layout_result.size.y + padding.y + padding.w});
     }
 
     void Tooltip::update_layout(bool min_size_known)
@@ -156,8 +158,9 @@ namespace auik::v2
         const f32 mouse_y = get_mouse_pos().y + g_tooltip_mouse_offset_y;
         const f32 max_y = amal::max(display.y - size().y - g_tooltip_screen_padding, g_tooltip_screen_padding);
         f32 pos_y = clamp_axis(mouse_y, g_tooltip_screen_padding, max_y);
-        if (mouse_y > max_y) pos_y = clamp_axis(get_mouse_pos().y - size().y - g_tooltip_mouse_offset_y,
-                                                g_tooltip_screen_padding, max_y);
+        if (mouse_y > max_y)
+            pos_y =
+                clamp_axis(get_mouse_pos().y - size().y - g_tooltip_mouse_offset_y, g_tooltip_screen_padding, max_y);
 
         set_position({pos_x, pos_y});
 
@@ -165,13 +168,11 @@ namespace auik::v2
             intersect_rect({position().x, position().y, size().x, size().y}, {0.0f, 0.0f, display.x, display.y});
         ensure_own_clip_rect(self_clip_rect);
 
-        rebuild_text_buffers({amal::max(size().x - padding.x - padding.z, 1.0f), amal::max(size().y - padding.y - padding.w, 0.0f)});
+        rebuild_text_buffers(
+            {amal::max(size().x - padding.x - padding.z, 1.0f), amal::max(size().y - padding.y - padding.w, 0.0f)});
     }
 
-    void Tooltip::update_depth(const amal::vec2 &depth_range)
-    {
-        Widget::update_depth(depth_range);
-    }
+    void Tooltip::update_depth(const amal::vec2 &depth_range) { Widget::update_depth(depth_range); }
 
     void Tooltip::translate(const amal::vec2 &delta)
     {
@@ -204,8 +205,8 @@ namespace auik::v2
     {
         if (!is_visible() || !_text_source || _text_source->empty()) return;
 
-        auto *quads_stream = get_primary_quad_stream();
-        auto *image_stream = get_primary_image_stream();
+        auto *quads_stream = get_primary_quads_stream();
+        auto *textured_quads_stream = get_primary_textured_quads_stream();
         auto *theme = get_theme();
         QuadsInstanceData bg{};
         bg.rect = bounds();
@@ -213,7 +214,7 @@ namespace auik::v2
         fill_quads_instance_by_style(theme->get_style(_style.id), clip_id(), bg);
         ctx.emit(quads_stream, _bg, &bg, get_rect(), false);
 
-        if (!image_stream || _instances.empty()) return;
+        if (!textured_quads_stream || _instances.empty()) return;
 
         const u16 current_clip = clip_id();
         const f32 current_z = get_z_order();
@@ -231,12 +232,12 @@ namespace auik::v2
         if (ctx.emit == &emit_draw_record)
         {
             _draw_ids.resize(_instances.size());
-            push_textures_batch_to_stream(image_stream, _instances.data(), static_cast<u32>(_instances.size()),
-                                          _draw_ids.data());
+            push_textured_quads_batch_to_stream(textured_quads_stream, _instances.data(),
+                                                static_cast<u32>(_instances.size()), _draw_ids.data());
         }
         else if (draw_state_changed || _instances_gpu_dirty)
-            update_textures_batch_in_stream(image_stream, _draw_ids.data(), _instances.data(),
-                                            static_cast<u32>(_instances.size()));
+            update_textured_quads_batch_in_stream(textured_quads_stream, _draw_ids.data(), _instances.data(),
+                                                  static_cast<u32>(_instances.size()));
 
         _applied_clip_id = current_clip;
         _instances_gpu_dirty = false;

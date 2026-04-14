@@ -1,5 +1,6 @@
 #include <acul/memory/alloc.hpp>
 #include <auik/v2/theme.hpp>
+#include <auik/v2/widgets/slider.hpp>
 #include <auik/v2/widgets/text_button.hpp>
 #include <auik/v2/widgets/tooltip.hpp>
 #include <auik/v2/widgets/window.hpp>
@@ -136,6 +137,9 @@ namespace auik::v2
         constexpr auto c_hover = amal::rgba8_to_vec4(97, 97, 97, 255);
         constexpr auto c_active = amal::rgba8_to_vec4(31, 31, 31, 255);
         constexpr auto c_border = amal::rgba8_to_vec4(51, 51, 51, 255);
+        constexpr auto c_ascent = amal::rgba8_to_vec4(72, 114, 255, 255);
+        constexpr amal::vec4 c_light = {0.8f, 0.8f, 0.8f, 1.0f};
+        constexpr amal::vec4 c_white = {1.0f};
         constexpr amal::vec2 empty_vec2{0.0f};
 
         // Global settings.
@@ -143,7 +147,7 @@ namespace auik::v2
                                               .text_color({0.75f, 0.75f, 0.75f, 1.0f})
                                               .text_size(12.5f * dpi)
                                               .font(default_font)
-                                              .margin(amal::vec2{8.0f, 8.0f}));
+                                              .margin(amal::vec2{0.0f, 5.0f}));
         theme->add_style(AUIK_TAG_NO_PAD, make_style().margin(empty_vec2).padding(empty_vec2));
 
         // Window body.
@@ -167,13 +171,52 @@ namespace auik::v2
 
         theme->add_style(AUIK_TAG_TEXT_BUTTON, make_style()
                                                    .padding(amal::vec2{10.0f, 6.0f})
-                                                   .margin(amal::vec2{0.0f, 4.0f})
                                                    .background_color(c_surface_light)
                                                    .border_radius(6.0f)
                                                    .border_color(c_border)
                                                    .border_thickness(1.0f));
         theme->add_style(AUIK_TAG_TEXT_BUTTON, make_style().background_color(c_hover), StyleState::hover);
         theme->add_style(AUIK_TAG_TEXT_BUTTON, make_style().background_color(c_surface_light), StyleState::active);
+
+        theme->add_style(
+            AUIK_TAG_SLIDER,
+            make_style().background_color(c_surface_light).border_radius(2.5f).padding(amal::vec2{0.0f, 5.0f}));
+        theme->add_style(AUIK_TAG_SLIDER,
+                         make_style().background_color(c_ascent).border_radius(2.5f).padding(amal::vec2{0.0f, 5.0f}),
+                         StyleState::active);
+        theme->add_style(AUIK_TAG_SLIDER_GRAB, make_style()
+                                                   .padding(amal::vec2{8.0f})
+                                                   .background_color(c_light)
+                                                   .border_color(c_surface_light)
+                                                   .border_thickness(2.0f)
+                                                   .border_radius(8.0f));
+        theme->add_style(AUIK_TAG_SLIDER_GRAB, make_style().background_color(c_white), StyleState::hover);
+        theme->add_style(AUIK_TAG_SLIDER_GRAB, make_style().background_color(c_white), StyleState::active);
+        theme->add_style(AUIK_TAG_SLIDER_GRAB, make_style().background_color(c_white), StyleState::focus);
+        theme->add_style(AUIK_TAG_GRADIENT_SLIDER_GRAB, make_style()
+                                                            .padding(amal::vec2{7.0f})
+                                                            .background_color(c_white)
+                                                            .border_color(c_surface)
+                                                            .border_thickness(2.f)
+                                                            .border_radius(7.0f));
+        theme->add_style(AUIK_TAG_GRADIENT_SLIDER_GRAB_BORDER, make_style()
+                                                                   .padding(amal::vec2{9.0f})
+                                                                   .background_color(c_white)
+                                                                   .border_thickness(1.5f)
+                                                                   .border_color(c_surface)
+                                                                   .border_radius(9.0f));
+        theme->add_style(
+            AUIK_TAG_GRADIENT_SLIDER,
+            make_style().background_color(c_surface_light).border_radius(2.5f).padding(amal::vec2{0.0f, 5.0f}));
+        theme->add_style(AUIK_TAG_RANGE_SLIDER_GRAB, make_style()
+                                                         .padding(amal::vec2{8.0f})
+                                                         .background_color(c_light)
+                                                         .border_color(c_surface_light)
+                                                         .border_thickness(2.0f)
+                                                         .border_radius(8.0f));
+        theme->add_style(AUIK_TAG_RANGE_SLIDER_GRAB, make_style().background_color(c_white), StyleState::hover);
+        theme->add_style(AUIK_TAG_RANGE_SLIDER_GRAB, make_style().background_color(c_white), StyleState::active);
+        theme->add_style(AUIK_TAG_RANGE_SLIDER_GRAB, make_style().background_color(c_white), StyleState::focus);
 
         theme->add_style(AUIK_TAG_TOOLTIP, make_style()
                                                .margin(empty_vec2)
@@ -183,17 +226,16 @@ namespace auik::v2
                                                .border_radius(3.0f)
                                                .text_color({0.92f, 0.92f, 0.92f, 1.0f}));
 
-        // Scrollbar overlay in window space.
         theme->add_style(AUIK_TAG_SCROLLBAR_TRACK, make_style()
-                                                       .background_color(amal::vec4{0.0f, 0.0f, 0.0f, 0.55f})
+                                                       .background_color(c_active)
                                                        .margin(empty_vec2)
                                                        .padding(amal::vec2{2.0f}));
         theme->add_style(AUIK_TAG_SCROLLBAR_THUMB, make_style()
-                                                       .background_color(amal::vec4{0.15f, 0.15f, 0.15f, 1.0f})
+                                                       .background_color(amal::vec4{0.35f, 0.35f, 0.35f, 1.0f})
                                                        .margin(empty_vec2)
                                                        .padding(amal::vec2{4.0f, 0.0f})
-                                                       .border_radius(4.5f));
-        auto scroll_thumb_style = make_style().background_color(amal::vec4{0.4f, 0.4f, 0.4f, 1.0f});
+                                                       .border_radius(2.0f));
+        auto scroll_thumb_style = make_style().background_color(amal::vec4{0.5f, 0.5f, 0.5f, 1.0f});
         theme->add_style(AUIK_TAG_SCROLLBAR_THUMB, scroll_thumb_style, StyleState::hover);
         theme->add_style(AUIK_TAG_SCROLLBAR_THUMB, scroll_thumb_style, StyleState::active);
 
