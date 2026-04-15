@@ -4,10 +4,21 @@
 #include <auik/v2/widgets/color_picker.hpp>
 
 #define AUIK_CIRCLE_WHEEL_FRINGE                  2.0f
-#define AUIK_CIRCLE_TESSELLATION_MAX_ERROR         0.30f
+#define AUIK_CIRCLE_TESSELLATION_MAX_ERROR        0.30f
 #define AUIK_CIRCLE_FRINGE_TESSELLATION_MAX_ERROR 0.15f
 #define AUIK_CIRCLE_SEGMENTS_MIN                  4u
 #define AUIK_CIRCLE_SEGMENTS_MAX                  512u
+#define AUIK_CIRCLE_PICKER_MIN_SIDE               120.0f
+#define AUIK_SQUARE_PICKER_MIN_SIDE               120.0f
+#define AUIK_SQUARE_PICKER_RING_WIDTH_FACTOR      (16.0f / 180.0f)
+#define AUIK_SQUARE_PICKER_RING_WIDTH_MIN         8.0f
+#define AUIK_SQUARE_PICKER_RING_WIDTH_MAX         18.0f
+#define AUIK_SQUARE_PICKER_RING_FRINGE            2.0f
+#define AUIK_SQUARE_PICKER_INNER_PADDING          4.0f
+#define AUIK_TAG_CIRCLE_COLOR_PICKER              0xD3C6A92Fu
+#define AUIK_TAG_CIRCLE_COLOR_PICKER_GRAB         0x5A9E10C4u
+#define AUIK_TAG_SQUARE_COLOR_PICKER              0x18D73B9Au
+#define AUIK_TAG_SQUARE_COLOR_PICKER_GRAB         0x9B41E062u
 
 namespace auik::v2
 {
@@ -52,6 +63,97 @@ namespace auik::v2
             const f32 t = amal::clamp(radius_t, 0.0f, 1.0f);
             return {white.x + (hue.x - white.x) * t, white.y + (hue.y - white.y) * t, white.z + (hue.z - white.z) * t,
                     1.0f};
+        }
+
+        static inline amal::vec4 hsv_to_rgba(f32 hue_deg, f32 saturation, f32 value_t, f32 alpha)
+        {
+            const f32 h =
+                hue_deg < 0.0f ? hue_deg + 360.0f : (hue_deg >= 360.0f ? std::fmod(hue_deg, 360.0f) : hue_deg);
+            const f32 s = amal::clamp(saturation, 0.0f, 1.0f);
+            const f32 v = amal::clamp(value_t, 0.0f, 1.0f);
+
+            if (s <= 1e-6f) return {v, v, v, alpha};
+
+            const f32 c = v * s;
+            const f32 hh = h / 60.0f;
+            const f32 x = c * (1.0f - amal::abs(std::fmod(hh, 2.0f) - 1.0f));
+            f32 r1 = 0.0f;
+            f32 g1 = 0.0f;
+            f32 b1 = 0.0f;
+            if (hh < 1.0f)
+            {
+                r1 = c;
+                g1 = x;
+            }
+            else if (hh < 2.0f)
+            {
+                r1 = x;
+                g1 = c;
+            }
+            else if (hh < 3.0f)
+            {
+                g1 = c;
+                b1 = x;
+            }
+            else if (hh < 4.0f)
+            {
+                g1 = x;
+                b1 = c;
+            }
+            else if (hh < 5.0f)
+            {
+                r1 = x;
+                b1 = c;
+            }
+            else
+            {
+                r1 = c;
+                b1 = x;
+            }
+
+            const f32 m = v - c;
+            return {r1 + m, g1 + m, b1 + m, alpha};
+        }
+
+        static inline void rgba_to_hsv(const amal::vec4 &color, f32 &hue_deg, f32 &saturation, f32 &value_t)
+        {
+            const f32 r = amal::clamp(color.x, 0.0f, 1.0f);
+            const f32 g = amal::clamp(color.y, 0.0f, 1.0f);
+            const f32 b = amal::clamp(color.z, 0.0f, 1.0f);
+            const f32 max_c = amal::max(r, amal::max(g, b));
+            const f32 min_c = amal::min(r, amal::min(g, b));
+            const f32 delta = max_c - min_c;
+
+            value_t = max_c;
+            saturation = max_c > 1e-6f ? (delta / max_c) : 0.0f;
+            if (delta <= 1e-6f) return;
+
+            f32 h = 0.0f;
+            if (max_c == r) h = 60.0f * std::fmod(((g - b) / delta), 6.0f);
+            else if (max_c == g) h = 60.0f * (((b - r) / delta) + 2.0f);
+            else h = 60.0f * (((r - g) / delta) + 4.0f);
+            if (h < 0.0f) h += 360.0f;
+            hue_deg = h;
+        }
+
+        static inline void append_hue_ring_vertices(acul::vector<VertexStreamVertex> &vertices,
+                                                    const amal::vec2 &center, f32 radius, u32 segments, f32 alpha,
+                                                    f32 z_order, u16 clip_id)
+        {
+            const f32 two_pi = amal::pi<f32>() * 2.0f;
+            for (u32 i = 0; i <= segments; ++i)
+            {
+                const f32 t = static_cast<f32>(i) / static_cast<f32>(segments);
+                const f32 angle = t * two_pi;
+                const f32 hue_deg = t * 360.0f;
+                const amal::vec4 hue = hsv_to_rgba(hue_deg, 1.0f, 1.0f, alpha);
+                VertexStreamVertex v{};
+                v.position = {center.x + amal::cos(angle) * radius, center.y + amal::sin(angle) * radius};
+                v.z_order = z_order;
+                v.color = detail::pack_rgba8(hue);
+                v.clip_id = clip_id;
+                vertices.push_back(v);
+            }
         }
 
         static inline void append_ring_strip_indices(acul::vector<u32> &indices, u32 inner_start, u32 inner_segments,
@@ -184,32 +286,54 @@ namespace auik::v2
 
     void CircleColorPicker::update_layout_min_size()
     {
+        const Style *picker_style = get_theme()->get_desc_style(AUIK_TAG_CIRCLE_COLOR_PICKER);
+        const amal::vec4 margin = picker_style ? picker_style->margin() : amal::vec4{0.0f};
         amal::vec2 min_size = size();
-        const f32 min_side = 160.0f;
+        const f32 min_side = AUIK_CIRCLE_PICKER_MIN_SIDE;
         if (!is_fixed()) min_size.x = 0.0f;
         else if (min_size.x <= 0.0f) min_size.x = min_side;
         if (min_size.y <= 0.0f) min_size.y = min_size.x > 0.0f ? min_size.x : min_side;
         const f32 side = amal::max(min_size.x, min_size.y);
-        set_required_size({side, side});
+        set_required_size({side + margin.x + margin.z, side + margin.y + margin.w});
     }
 
     void CircleColorPicker::update_layout(bool min_size_known)
     {
         if (!min_size_known) update_layout_min_size();
+        const Style *picker_style = get_theme()->get_desc_style(AUIK_TAG_CIRCLE_COLOR_PICKER);
+        const amal::vec4 margin = picker_style ? picker_style->margin() : amal::vec4{0.0f};
         const amal::vec2 cursor = detail::get_context().screen_cursor;
         const amal::vec2 min_required = required_size();
+        const f32 min_side = amal::max(min_required.x - margin.x - margin.z, min_required.y - margin.y - margin.w);
 
-        f32 side = size().x;
-        if (side <= 0.0f) side = min_required.x;
-        if (size().y > 0.0f) side = amal::min(side, size().y);
-        side = amal::max(side, amal::max(min_required.x, min_required.y));
+        f32 side = 0.0f;
+        if (!is_fixed() && parent())
+        {
+            const amal::vec4 parent_clip = parent()->get_content_clip_rect();
+            const f32 available_w = amal::max((parent_clip.x + parent_clip.z) - (cursor.x + margin.x + margin.z), 0.0f);
+            const f32 available_h = amal::max((parent_clip.y + parent_clip.w) - (cursor.y + margin.y + margin.w), 0.0f);
+            const f32 allocated_w = size().x > 0.0f ? amal::max(size().x - margin.x - margin.z, 0.0f) : available_w;
+            const f32 allocated_h = available_h;
+            side = amal::min(amal::min(allocated_w, allocated_h), amal::min(available_w, available_h));
+        }
+        else
+        {
+            side = size().x;
+            if (side > 0.0f) side -= (margin.x + margin.z);
+            if (side <= 0.0f) side = min_required.x - margin.x - margin.z;
+            if (size().y > 0.0f) side = amal::min(side, size().y - margin.y - margin.w);
+            side = amal::max(side, min_side);
+        }
+        side = amal::max(side, 1.0f);
 
-        set_position(cursor);
+        set_position({cursor.x + margin.x, cursor.y + margin.y});
         set_size({side, side});
         Widget::update_layout(true);
-        inherit_parent_content_clip_rect();
+        assert(parent() && "CircleColorPicker must have parent");
+        set_clip_id(parent()->content_clip_id());
+        _grab_hit_rect.clip_id = clip_id();
         rebuild_cached_visuals();
-        detail::get_context().screen_cursor = {cursor.x, cursor.y + side};
+        detail::get_context().screen_cursor = {cursor.x, cursor.y + side + margin.y + margin.w};
     }
 
     void CircleColorPicker::translate(const amal::vec2 &delta)
@@ -222,7 +346,8 @@ namespace auik::v2
 
     void CircleColorPicker::rebuild_clip_rects()
     {
-        inherit_parent_content_clip_rect();
+        assert(parent() && "CircleColorPicker must have parent");
+        set_clip_id(parent()->content_clip_id());
         _wheel_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
         _grab_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
         _grab_back_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
@@ -400,9 +525,8 @@ namespace auik::v2
         _grab_hit_rect.bounds.offset = {pick_pos.x - grab_w * 0.5f, pick_pos.y - grab_h * 0.5f};
         _grab_hit_rect.bounds.size = {grab_w, grab_h};
         _grab_hit_rect.depth = detail::mid_depth(_grab_depth_range);
-        _grab_hit_rect.clip_id = parent() ? parent()->clip_id() : clip_id();
 
-        const u16 grab_clip = parent() ? parent()->clip_id() : clip_id();
+        const u16 grab_clip = clip_id();
         const f32 grab_z = detail::mid_depth(_grab_depth_range);
         _grab_visual = {};
         _grab_back_visual = {};
@@ -426,6 +550,14 @@ namespace auik::v2
     {
         rebuild_wheel_visual();
         rebuild_grab_visual();
+
+        static u32 s_prev_vtx = 0u;
+        static u32 s_prev_idx = 0u;
+        if (s_prev_vtx != _wheel_batch.vertex_count || s_prev_idx != _wheel_batch.index_count)
+        {
+            s_prev_vtx = _wheel_batch.vertex_count;
+            s_prev_idx = _wheel_batch.index_count;
+        }
     }
 
     void CircleColorPicker::update_value_from_mouse()
@@ -478,6 +610,506 @@ namespace auik::v2
             update_value_from_mouse();
         }
         else if (state == KeyPressState::release) _drag_started = false;
+        else return;
+
+        add_render_command<detail::DragEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
+    }
+
+    SquareColorPicker::SquareColorPicker(u32 id, amal::vec4 *value, f32 size, WidgetFlags widget_flags, Widget *parent)
+        : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::drag, parent, {{0.0f, 0.0f}, {size, size}},
+                 AUIK_TAG_SQUARE_COLOR_PICKER),
+          _value(value)
+    {
+        _ring_grab_hit_rect = detail::make_rect_data(id, AUIK_TAG_SQUARE_COLOR_PICKER_GRAB);
+        _sv_grab_hit_rect = detail::make_rect_data(id, AUIK_TAG_SQUARE_COLOR_PICKER_GRAB);
+        _ring_vertices.reserve(384);
+        _ring_indices.reserve(1152);
+        _sv_vertices.reserve(4);
+        _sv_indices.reserve(6);
+        if (_value) set_color(*_value);
+        else set_hsv(0.0f, 1.0f, 1.0f);
+    }
+
+    StyleUpdateFlags SquareColorPicker::update_style()
+    {
+        const u32 parent_id = parent() ? parent()->id() : 0u;
+        StyleUpdateFlags out = StyleUpdateFlagBits::none;
+        bool grab_changed = false;
+        auto resolve_grab_state = [&](StyleState state) -> StyleUpdateFlags {
+            const auto flags = resolve_style_selector(_grab_style, _grab_style.tag_id, parent_id,
+                                                      detail::resolve_grab_visual_state(state));
+            if (flags & StyleUpdateFlagBits::redraw) grab_changed = true;
+            return flags;
+        };
+
+        if (_grab_style.id == Theme::STYLE_ID_INVALID) out |= resolve_grab_state(StyleState::normal);
+        const StyleState widget_grab_state = detail::resolve_grab_visual_state(style_state());
+        if (widget_grab_state == StyleState::active || widget_grab_state == StyleState::focus)
+            out |= resolve_grab_state(widget_grab_state);
+
+        if (grab_changed) rebuild_grab_visuals();
+        return out;
+    }
+
+    void SquareColorPicker::update_layout_min_size()
+    {
+        const Style *picker_style = get_theme()->get_desc_style(AUIK_TAG_SQUARE_COLOR_PICKER);
+        const amal::vec4 margin = picker_style ? picker_style->margin() : amal::vec4{0.0f};
+        amal::vec2 min_size = size();
+        const f32 min_side = AUIK_SQUARE_PICKER_MIN_SIDE;
+        if (!is_fixed()) min_size.x = 0.0f;
+        else if (min_size.x <= 0.0f) min_size.x = min_side;
+        if (min_size.y <= 0.0f) min_size.y = min_size.x > 0.0f ? min_size.x : min_side;
+        const f32 side = amal::max(min_size.x, min_size.y);
+        set_required_size({side + margin.x + margin.z, side + margin.y + margin.w});
+    }
+
+    void SquareColorPicker::update_layout(bool min_size_known)
+    {
+        if (!min_size_known) update_layout_min_size();
+        const Style *picker_style = get_theme()->get_desc_style(AUIK_TAG_SQUARE_COLOR_PICKER);
+        const amal::vec4 margin = picker_style ? picker_style->margin() : amal::vec4{0.0f};
+        const amal::vec2 cursor = detail::get_context().screen_cursor;
+        const amal::vec2 min_required = required_size();
+        const f32 min_side = amal::max(min_required.x - margin.x - margin.z, min_required.y - margin.y - margin.w);
+
+        f32 side = 0.0f;
+        if (!is_fixed() && parent())
+        {
+            const amal::vec4 parent_clip = parent()->get_content_clip_rect();
+            const f32 available_w = amal::max((parent_clip.x + parent_clip.z) - (cursor.x + margin.x + margin.z), 0.0f);
+            const f32 available_h = amal::max((parent_clip.y + parent_clip.w) - (cursor.y + margin.y + margin.w), 0.0f);
+            const f32 allocated_w = size().x > 0.0f ? amal::max(size().x - margin.x - margin.z, 0.0f) : available_w;
+            const f32 allocated_h = available_h;
+            side = amal::min(amal::min(allocated_w, allocated_h), amal::min(available_w, available_h));
+        }
+        else
+        {
+            side = size().x;
+            if (side > 0.0f) side -= (margin.x + margin.z);
+            if (side <= 0.0f) side = min_required.x - margin.x - margin.z;
+            if (size().y > 0.0f) side = amal::min(side, size().y - margin.y - margin.w);
+            side = amal::max(side, min_side);
+        }
+        side = amal::max(side, 1.0f);
+
+        set_position({cursor.x + margin.x, cursor.y + margin.y});
+        set_size({side, side});
+        Widget::update_layout(true);
+        assert(parent() && "SquareColorPicker must have parent");
+        set_clip_id(parent()->content_clip_id());
+        _ring_grab_hit_rect.clip_id = clip_id();
+        _sv_grab_hit_rect.clip_id = clip_id();
+        rebuild_cached_visuals();
+        detail::get_context().screen_cursor = {cursor.x, cursor.y + side + margin.y + margin.w};
+    }
+
+    void SquareColorPicker::translate(const amal::vec2 &delta)
+    {
+        if (delta.x == 0.0f && delta.y == 0.0f) return;
+        Widget::translate(delta);
+        detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
+        rebuild_cached_visuals();
+    }
+
+    void SquareColorPicker::rebuild_clip_rects()
+    {
+        assert(parent() && "SquareColorPicker must have parent");
+        set_clip_id(parent()->content_clip_id());
+        _ring_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+        _sv_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+        _ring_grab_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+        _ring_grab_back_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+        _sv_grab_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+        _sv_grab_back_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+        _ring_grab_hit_rect.clip_id = clip_id();
+        _sv_grab_hit_rect.clip_id = clip_id();
+        rebuild_cached_visuals();
+    }
+
+    void SquareColorPicker::update_depth(const amal::vec2 &depth_range)
+    {
+        Widget::update_depth(depth_range);
+        assign_next_depth(this->depth_range(), _ring_depth_range);
+        assign_next_depth(_ring_depth_range, _square_depth_range);
+        assign_next_depth(_square_depth_range, _square_overlay_depth_range);
+        assign_next_depth(_square_overlay_depth_range, _grab_depth_range);
+        rebuild_cached_visuals();
+    }
+
+    void SquareColorPicker::draw(DrawCtx &ctx)
+    {
+        auto *vertex_stream = get_primary_vertex_stream();
+        auto *overlay_stream = get_overlay_quads_stream();
+        bool hit_pending = ctx.emit_hit_rect;
+
+        if (_ring_batch.vertex_count > 0 && _ring_batch.index_count > 0)
+        {
+            ctx.emit(vertex_stream, _ring_draw_id, &_ring_batch, get_rect(), hit_pending);
+            hit_pending = false;
+        }
+        if (_sv_batch.vertex_count > 0 && _sv_batch.index_count > 0)
+        {
+            ctx.emit(vertex_stream, _sv_draw_id, &_sv_batch, get_rect(), hit_pending);
+            hit_pending = false;
+        }
+
+        if (_ring_grab_back_visual.rect.size.x > 0.0f && _ring_grab_back_visual.rect.size.y > 0.0f)
+            ctx.emit(overlay_stream, _ring_grab_back_draw_id, &_ring_grab_back_visual, _ring_grab_hit_rect, false);
+        if (_sv_grab_back_visual.rect.size.x > 0.0f && _sv_grab_back_visual.rect.size.y > 0.0f)
+            ctx.emit(overlay_stream, _sv_grab_back_draw_id, &_sv_grab_back_visual, _sv_grab_hit_rect, false);
+
+        ctx.emit(overlay_stream, _ring_grab_draw_id, &_ring_grab_visual, _ring_grab_hit_rect, ctx.emit_hit_rect);
+        ctx.emit(overlay_stream, _sv_grab_draw_id, &_sv_grab_visual, _sv_grab_hit_rect, ctx.emit_hit_rect);
+    }
+
+    bool SquareColorPicker::has_draw_record() const
+    {
+        if (_ring_batch.vertex_count > 0 && _ring_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
+        if (_sv_batch.vertex_count > 0 && _sv_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
+        if (_ring_grab_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
+        if (_sv_grab_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
+        if (_ring_grab_back_visual.rect.size.x > 0.0f && _ring_grab_back_visual.rect.size.y > 0.0f &&
+            _ring_grab_back_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID)
+            return false;
+        if (_sv_grab_back_visual.rect.size.x > 0.0f && _sv_grab_back_visual.rect.size.y > 0.0f &&
+            _sv_grab_back_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID)
+            return false;
+        return true;
+    }
+
+    void SquareColorPicker::set_hsv(f32 hue_deg, f32 saturation, f32 value_t)
+    {
+        f32 hue = std::fmod(hue_deg, 360.0f);
+        if (hue < 0.0f) hue += 360.0f;
+        _hue_deg = hue;
+        _saturation = amal::clamp(saturation, 0.0f, 1.0f);
+        _value_t = amal::clamp(value_t, 0.0f, 1.0f);
+        _resolved_color = detail::hsv_to_rgba(_hue_deg, _saturation, _value_t, _alpha);
+        if (_value) *_value = _resolved_color;
+    }
+
+    void SquareColorPicker::set_color(const amal::vec4 &color)
+    {
+        _alpha = amal::clamp(color.w, 0.0f, 1.0f);
+        f32 hue = _hue_deg;
+        f32 sat = _saturation;
+        f32 val = _value_t;
+        detail::rgba_to_hsv(color, hue, sat, val);
+        set_hsv(hue, sat, val);
+    }
+
+    void SquareColorPicker::sync_batches()
+    {
+        _ring_batch.vertices = _ring_vertices.empty() ? nullptr : _ring_vertices.data();
+        _ring_batch.indices = _ring_indices.empty() ? nullptr : _ring_indices.data();
+        _ring_batch.vertex_count = static_cast<u32>(_ring_vertices.size());
+        _ring_batch.index_count = static_cast<u32>(_ring_indices.size());
+
+        _sv_batch.vertices = _sv_vertices.empty() ? nullptr : _sv_vertices.data();
+        _sv_batch.indices = _sv_indices.empty() ? nullptr : _sv_indices.data();
+        _sv_batch.vertex_count = static_cast<u32>(_sv_vertices.size());
+        _sv_batch.index_count = static_cast<u32>(_sv_indices.size());
+    }
+
+    void SquareColorPicker::rebuild_layout_geometry()
+    {
+        const amal::vec2 picker_size = size();
+        const f32 side = amal::max(amal::min(picker_size.x, picker_size.y), 0.0f);
+        _center = position() + picker_size * 0.5f;
+
+        _ring_outer_radius = side * 0.5f;
+        const f32 ring_width = amal::clamp(side * AUIK_SQUARE_PICKER_RING_WIDTH_FACTOR,
+                                           AUIK_SQUARE_PICKER_RING_WIDTH_MIN, AUIK_SQUARE_PICKER_RING_WIDTH_MAX);
+        _ring_inner_radius = amal::max(_ring_outer_radius - ring_width, 1.0f);
+
+        const f32 inner_for_square = amal::max(_ring_inner_radius - AUIK_SQUARE_PICKER_INNER_PADDING, 1.0f);
+        const f32 half_square = inner_for_square * 0.70710678f;
+        _sv_rect.offset = {_center.x - half_square, _center.y - half_square};
+        _sv_rect.size = {half_square * 2.0f, half_square * 2.0f};
+    }
+
+    void SquareColorPicker::rebuild_ring_visual()
+    {
+        _ring_vertices.clear();
+        _ring_indices.clear();
+        sync_batches();
+
+        if (_ring_outer_radius <= 1e-4f || _ring_inner_radius <= 1e-4f || _ring_outer_radius <= _ring_inner_radius)
+            return;
+
+        const f32 fringe = amal::min(AUIK_SQUARE_PICKER_RING_FRINGE, (_ring_outer_radius - _ring_inner_radius) * 0.49f);
+        const f32 main_inner = _ring_inner_radius + fringe;
+        const f32 main_outer = _ring_outer_radius - fringe;
+        if (main_outer <= main_inner) return;
+
+        const u32 main_segments = detail::calc_circle_auto_segment_count(_ring_outer_radius);
+        const u32 fringe_segments =
+            detail::calc_circle_auto_segment_count(_ring_outer_radius, AUIK_CIRCLE_FRINGE_TESSELLATION_MAX_ERROR);
+
+        const u32 inner_fade_start = 0u;
+        const u32 inner_main_start = inner_fade_start + (fringe_segments + 1u);
+        const u32 outer_main_start = inner_main_start + (main_segments + 1u);
+        const u32 outer_fade_start = outer_main_start + (main_segments + 1u);
+
+        _ring_vertices.reserve((fringe_segments + 1u) + (main_segments + 1u) + (main_segments + 1u) +
+                               (fringe_segments + 1u));
+        _ring_indices.reserve((main_segments + fringe_segments + fringe_segments) * 6u);
+
+        const f32 z = detail::mid_depth(_ring_depth_range);
+        const u16 cid = clip_id();
+        detail::append_hue_ring_vertices(_ring_vertices, _center, _ring_inner_radius, fringe_segments, 0.0f, z, cid);
+        detail::append_hue_ring_vertices(_ring_vertices, _center, main_inner, main_segments, 1.0f, z, cid);
+        detail::append_hue_ring_vertices(_ring_vertices, _center, main_outer, main_segments, 1.0f, z, cid);
+        detail::append_hue_ring_vertices(_ring_vertices, _center, _ring_outer_radius, fringe_segments, 0.0f, z, cid);
+
+        detail::append_ring_strip_indices(_ring_indices, inner_fade_start, fringe_segments, inner_main_start,
+                                          main_segments);
+        detail::append_ring_strip_indices(_ring_indices, inner_main_start, main_segments, outer_main_start,
+                                          main_segments);
+        detail::append_ring_strip_indices(_ring_indices, outer_main_start, main_segments, outer_fade_start,
+                                          fringe_segments);
+        sync_batches();
+    }
+
+    void SquareColorPicker::rebuild_square_visual()
+    {
+        _sv_vertices.clear();
+        _sv_indices.clear();
+        sync_batches();
+        if (amal::is_rect_empty(_sv_rect)) return;
+
+        const amal::vec4 hue_color = detail::hsv_to_rgba(_hue_deg, 1.0f, 1.0f, 1.0f);
+        const amal::vec4 white = {1.0f};
+        const amal::vec4 black_a0 = {0.0f, 0.0f, 0.0f, 0.0f};
+        const amal::vec4 black_a1 = {0.0f, 0.0f, 0.0f, 1.0f};
+        const f32 z_base = detail::mid_depth(_square_depth_range);
+        const f32 z_overlay = detail::mid_depth(_square_overlay_depth_range);
+        const u16 cid = clip_id();
+        _sv_vertices.reserve(8);
+        _sv_indices.reserve(12);
+
+        // Pass 1: horizontal gradient (white -> hue).
+        VertexStreamVertex v0{};
+        v0.position = {_sv_rect.offset.x, _sv_rect.offset.y};
+        v0.z_order = z_base;
+        v0.color = detail::pack_rgba8(white);
+        v0.clip_id = cid;
+        VertexStreamVertex v1{};
+        v1.position = {_sv_rect.offset.x + _sv_rect.size.x, _sv_rect.offset.y};
+        v1.z_order = z_base;
+        v1.color = detail::pack_rgba8(hue_color);
+        v1.clip_id = cid;
+        VertexStreamVertex v2{};
+        v2.position = {_sv_rect.offset.x + _sv_rect.size.x, _sv_rect.offset.y + _sv_rect.size.y};
+        v2.z_order = z_base;
+        v2.color = detail::pack_rgba8(hue_color);
+        v2.clip_id = cid;
+        VertexStreamVertex v3{};
+        v3.position = {_sv_rect.offset.x, _sv_rect.offset.y + _sv_rect.size.y};
+        v3.z_order = z_base;
+        v3.color = detail::pack_rgba8(white);
+        v3.clip_id = cid;
+        _sv_vertices.push_back(v0);
+        _sv_vertices.push_back(v1);
+        _sv_vertices.push_back(v2);
+        _sv_vertices.push_back(v3);
+        _sv_indices.push_back(0u);
+        _sv_indices.push_back(1u);
+        _sv_indices.push_back(2u);
+        _sv_indices.push_back(0u);
+        _sv_indices.push_back(2u);
+        _sv_indices.push_back(3u);
+
+        // Pass 2: vertical black overlay (transparent -> opaque).
+        VertexStreamVertex o0{};
+        o0.position = {_sv_rect.offset.x, _sv_rect.offset.y};
+        o0.z_order = z_overlay;
+        o0.color = detail::pack_rgba8(black_a0);
+        o0.clip_id = cid;
+        VertexStreamVertex o1{};
+        o1.position = {_sv_rect.offset.x + _sv_rect.size.x, _sv_rect.offset.y};
+        o1.z_order = z_overlay;
+        o1.color = detail::pack_rgba8(black_a0);
+        o1.clip_id = cid;
+        VertexStreamVertex o2{};
+        o2.position = {_sv_rect.offset.x + _sv_rect.size.x, _sv_rect.offset.y + _sv_rect.size.y};
+        o2.z_order = z_overlay;
+        o2.color = detail::pack_rgba8(black_a1);
+        o2.clip_id = cid;
+        VertexStreamVertex o3{};
+        o3.position = {_sv_rect.offset.x, _sv_rect.offset.y + _sv_rect.size.y};
+        o3.z_order = z_overlay;
+        o3.color = detail::pack_rgba8(black_a1);
+        o3.clip_id = cid;
+        _sv_vertices.push_back(o0);
+        _sv_vertices.push_back(o1);
+        _sv_vertices.push_back(o2);
+        _sv_vertices.push_back(o3);
+        _sv_indices.push_back(4u);
+        _sv_indices.push_back(5u);
+        _sv_indices.push_back(6u);
+        _sv_indices.push_back(4u);
+        _sv_indices.push_back(6u);
+        _sv_indices.push_back(7u);
+        sync_batches();
+    }
+
+    amal::vec2 SquareColorPicker::resolve_grab_size(const Style &grab_style)
+    {
+        const amal::vec4 grab_padding = grab_style.padding();
+        return {amal::max(grab_padding.x + grab_padding.z, 1.0f), amal::max(grab_padding.y + grab_padding.w, 1.0f)};
+    }
+
+    void SquareColorPicker::rebuild_grab_visuals()
+    {
+        if (_grab_style.id == Theme::STYLE_ID_INVALID) return;
+        const auto &grab_style = get_theme()->get_style(_grab_style.id);
+        const amal::vec2 grab_size = resolve_grab_size(grab_style);
+        const f32 grab_w = amal::max(amal::round(grab_size.x), 3.0f);
+        const f32 grab_h = amal::max(amal::round(grab_size.y), 3.0f);
+        const f32 grab_z = detail::mid_depth(_grab_depth_range);
+        const u16 grab_clip = clip_id();
+
+        const f32 ring_mid = (_ring_inner_radius + _ring_outer_radius) * 0.5f;
+        const f32 ring_angle = (_hue_deg / 180.0f) * amal::pi<f32>();
+        const amal::vec2 ring_pos = {_center.x + amal::cos(ring_angle) * ring_mid,
+                                     _center.y + amal::sin(ring_angle) * ring_mid};
+        const amal::vec2 sv_pos = {_sv_rect.offset.x + _sv_rect.size.x * _saturation,
+                                   _sv_rect.offset.y + _sv_rect.size.y * (1.0f - _value_t)};
+
+        _ring_grab_hit_rect.bounds.offset = {ring_pos.x - grab_w * 0.5f, ring_pos.y - grab_h * 0.5f};
+        _ring_grab_hit_rect.bounds.size = {grab_w, grab_h};
+        _ring_grab_hit_rect.depth = grab_z;
+
+        _sv_grab_hit_rect.bounds.offset = {sv_pos.x - grab_w * 0.5f, sv_pos.y - grab_h * 0.5f};
+        _sv_grab_hit_rect.bounds.size = {grab_w, grab_h};
+        _sv_grab_hit_rect.depth = grab_z;
+
+        _ring_grab_visual = {};
+        _ring_grab_back_visual = {};
+        _sv_grab_visual = {};
+        _sv_grab_back_visual = {};
+        detail::fill_circle_grab_instance(grab_style, _ring_grab_hit_rect.bounds, grab_z, grab_clip,
+                                          detail::hsv_to_rgba(_hue_deg, 1.0f, 1.0f, 1.0f), _ring_grab_visual);
+        detail::fill_circle_grab_instance(grab_style, _sv_grab_hit_rect.bounds, grab_z, grab_clip, _resolved_color,
+                                          _sv_grab_visual);
+
+        if (const Style *border_style = get_theme()->get_desc_style(AUIK_TAG_GRADIENT_SLIDER_GRAB_BORDER))
+        {
+            const amal::vec2 border_size = resolve_grab_size(*border_style);
+            const f32 border_w = amal::max(amal::round(border_size.x), grab_w);
+            const f32 border_h = amal::max(amal::round(border_size.y), grab_h);
+            amal::rect ring_border_rect{};
+            ring_border_rect.size = {border_w, border_h};
+            ring_border_rect.offset = {ring_pos.x - border_w * 0.5f, ring_pos.y - border_h * 0.5f};
+            detail::fill_circle_grab_instance(*border_style, ring_border_rect, grab_z, grab_clip,
+                                              border_style->background_color(), _ring_grab_back_visual);
+
+            amal::rect sv_border_rect{};
+            sv_border_rect.size = {border_w, border_h};
+            sv_border_rect.offset = {sv_pos.x - border_w * 0.5f, sv_pos.y - border_h * 0.5f};
+            detail::fill_circle_grab_instance(*border_style, sv_border_rect, grab_z, grab_clip,
+                                              border_style->background_color(), _sv_grab_back_visual);
+        }
+    }
+
+    void SquareColorPicker::rebuild_cached_visuals()
+    {
+        rebuild_layout_geometry();
+        rebuild_ring_visual();
+        rebuild_square_visual();
+        rebuild_grab_visuals();
+
+        static u32 s_prev_ring_vtx = 0u;
+        static u32 s_prev_ring_idx = 0u;
+        static u32 s_prev_sv_vtx = 0u;
+        static u32 s_prev_sv_idx = 0u;
+        if (s_prev_ring_vtx != _ring_batch.vertex_count || s_prev_ring_idx != _ring_batch.index_count ||
+            s_prev_sv_vtx != _sv_batch.vertex_count || s_prev_sv_idx != _sv_batch.index_count)
+        {
+            s_prev_ring_vtx = _ring_batch.vertex_count;
+            s_prev_ring_idx = _ring_batch.index_count;
+            s_prev_sv_vtx = _sv_batch.vertex_count;
+            s_prev_sv_idx = _sv_batch.index_count;
+        }
+    }
+
+    SquareColorPicker::ActiveZone SquareColorPicker::pick_active_zone_from_mouse() const
+    {
+        const amal::vec2 mouse = get_mouse_pos();
+        if (mouse.x >= _sv_rect.offset.x && mouse.y >= _sv_rect.offset.y &&
+            mouse.x <= _sv_rect.offset.x + _sv_rect.size.x && mouse.y <= _sv_rect.offset.y + _sv_rect.size.y)
+            return ActiveZone::square;
+
+        const f32 dx = mouse.x - _center.x;
+        const f32 dy = mouse.y - _center.y;
+        const f32 d2 = dx * dx + dy * dy;
+        const f32 inner2 = _ring_inner_radius * _ring_inner_radius;
+        const f32 outer2 = _ring_outer_radius * _ring_outer_radius;
+        if (d2 >= inner2 && d2 <= outer2) return ActiveZone::ring;
+        return ActiveZone::none;
+    }
+
+    void SquareColorPicker::update_value_from_mouse()
+    {
+        const amal::vec2 mouse = get_mouse_pos();
+        if (_active_zone == ActiveZone::ring)
+        {
+            const f32 dx = mouse.x - _center.x;
+            const f32 dy = mouse.y - _center.y;
+            f32 hue = amal::atan2(dy, dx) * (180.0f / amal::pi<f32>());
+            if (hue < 0.0f) hue += 360.0f;
+            set_hsv(hue, _saturation, _value_t);
+        }
+        else if (_active_zone == ActiveZone::square)
+        {
+            const f32 s = amal::clamp((mouse.x - _sv_rect.offset.x) / amal::max(_sv_rect.size.x, 1e-5f), 0.0f, 1.0f);
+            const f32 v =
+                amal::clamp(1.0f - (mouse.y - _sv_rect.offset.y) / amal::max(_sv_rect.size.y, 1e-5f), 0.0f, 1.0f);
+            set_hsv(_hue_deg, s, v);
+        }
+        else return;
+
+        detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
+        rebuild_square_visual();
+        rebuild_grab_visuals();
+    }
+
+    void SquareColorPicker::on_click(MouseKey key, KeyPressState state, u32 click_count)
+    {
+        (void)click_count;
+        if (key != MouseKey::left) return;
+
+        if (state == KeyPressState::press)
+        {
+            _active_zone = pick_active_zone_from_mouse();
+            update_value_from_mouse();
+            add_render_command<detail::ClickEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
+            return;
+        }
+
+        if (state == KeyPressState::release)
+        {
+            _active_zone = ActiveZone::none;
+            add_render_command<detail::ClickEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
+        }
+    }
+
+    void SquareColorPicker::on_drag(const amal::vec2 &delta, KeyPressState state)
+    {
+        (void)delta;
+        if (state == KeyPressState::press)
+        {
+            _active_zone = pick_active_zone_from_mouse();
+            update_value_from_mouse();
+        }
+        else if (state == KeyPressState::repeat)
+        {
+            if (_active_zone == ActiveZone::none) _active_zone = pick_active_zone_from_mouse();
+            update_value_from_mouse();
+        }
+        else if (state == KeyPressState::release) _active_zone = ActiveZone::none;
         else return;
 
         add_render_command<detail::DragEventTraits>(this, [this]() { redraw_external(has_draw_record()); });

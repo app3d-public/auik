@@ -220,7 +220,9 @@ namespace auik::v2
         set_position(pos);
         set_size(slider_size);
         Widget::update_layout(true);
-        inherit_parent_content_clip_rect();
+        assert(parent() && "Slider must have parent");
+        set_clip_id(parent()->content_clip_id());
+        _grab_hit_rect.clip_id = clip_id();
 
         rebuild_track_visuals();
         rebuild_grab_visual();
@@ -241,7 +243,8 @@ namespace auik::v2
 
     void Slider::rebuild_clip_rects()
     {
-        inherit_parent_content_clip_rect();
+        assert(parent() && "Slider must have parent");
+        set_clip_id(parent()->content_clip_id());
         _track_visual.background_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
         _track_visual.fill_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
         _track_visual.border_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
@@ -451,9 +454,8 @@ namespace auik::v2
         _grab_rect.size.y = grab_h;
         _grab_hit_rect.bounds = _grab_rect;
         _grab_hit_rect.depth = detail::mid_depth(_grab_depth_range);
-        _grab_hit_rect.clip_id = parent() ? parent()->clip_id() : clip_id();
 
-        const u16 grab_clip_id = parent() ? parent()->clip_id() : clip_id();
+        const u16 grab_clip_id = clip_id();
         const f32 grab_z = detail::mid_depth(_grab_depth_range);
         _grab_visual.rect = _grab_rect;
         _grab_visual.z_order = grab_z;
@@ -590,7 +592,9 @@ namespace auik::v2
         set_position(pos);
         set_size(slider_size);
         Widget::update_layout(true);
-        inherit_parent_content_clip_rect();
+        assert(parent() && "GradientSlider must have parent");
+        set_clip_id(parent()->content_clip_id());
+        _grab_hit_rect.clip_id = clip_id();
 
         rebuild_track_visuals();
         rebuild_grab_visual();
@@ -611,7 +615,8 @@ namespace auik::v2
 
     void GradientSlider::rebuild_clip_rects()
     {
-        inherit_parent_content_clip_rect();
+        assert(parent() && "GradientSlider must have parent");
+        set_clip_id(parent()->content_clip_id());
         _track_visual.background_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
         _track_visual.fill_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
         _track_visual.border_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
@@ -775,9 +780,8 @@ namespace auik::v2
         _grab_rect.size.y = grab_h;
         _grab_hit_rect.bounds = _grab_rect;
         _grab_hit_rect.depth = detail::mid_depth(_grab_depth_range);
-        _grab_hit_rect.clip_id = parent() ? parent()->clip_id() : clip_id();
 
-        const u16 grab_clip_id = parent() ? parent()->clip_id() : clip_id();
+        const u16 grab_clip_id = clip_id();
         const f32 grab_z = detail::mid_depth(_grab_depth_range);
         _grab_visual.rect = _grab_rect;
         _grab_visual.z_order = grab_z;
@@ -917,7 +921,10 @@ namespace auik::v2
         set_position(pos);
         set_size(slider_size);
         Widget::update_layout(true);
-        inherit_parent_content_clip_rect();
+        assert(parent() && "RangeSlider must have parent");
+        set_clip_id(parent()->content_clip_id());
+        _from_hit_rect.clip_id = clip_id();
+        _to_hit_rect.clip_id = clip_id();
 
         rebuild_track_visuals();
         rebuild_grab_visuals();
@@ -940,7 +947,8 @@ namespace auik::v2
 
     void RangeSlider::rebuild_clip_rects()
     {
-        inherit_parent_content_clip_rect();
+        assert(parent() && "RangeSlider must have parent");
+        set_clip_id(parent()->content_clip_id());
         _track_visual.background_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
         _track_visual.fill_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
         _from_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
@@ -1102,7 +1110,7 @@ namespace auik::v2
         const f32 half_grab_w = grab_w * 0.5f;
         const f32 half_grab_h = grab_h * 0.5f;
         const f32 center_y = _track_rect.offset.y + _track_rect.size.y * 0.5f;
-        const u16 grab_clip_id = parent() ? parent()->clip_id() : clip_id();
+        const u16 grab_clip_id = clip_id();
 
         const f32 from_center_x = resolve_grab_center_x(*_from_value, half_grab_w);
         const f32 to_center_x = resolve_grab_center_x(*_to_value, half_grab_w);
@@ -1114,7 +1122,6 @@ namespace auik::v2
         _from_rect.size.y = grab_h;
         _from_hit_rect.bounds = _from_rect;
         _from_hit_rect.depth = detail::mid_depth(_grab_depth_range);
-        _from_hit_rect.clip_id = grab_clip_id;
         _from_visual.rect = _from_rect;
         _from_visual.z_order = detail::mid_depth(_grab_depth_range);
         fill_quads_instance_by_style(grab_style, grab_clip_id, _from_visual);
@@ -1126,7 +1133,6 @@ namespace auik::v2
         _to_rect.size.y = grab_h;
         _to_hit_rect.bounds = _to_rect;
         _to_hit_rect.depth = detail::mid_depth(_grab_depth_range);
-        _to_hit_rect.clip_id = grab_clip_id;
         _to_visual.rect = _to_rect;
         _to_visual.z_order = detail::mid_depth(_grab_depth_range);
         fill_quads_instance_by_style(grab_style, grab_clip_id, _to_visual);

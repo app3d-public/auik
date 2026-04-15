@@ -97,7 +97,8 @@ namespace auik::v2
         amal::vec2 text_size = resolve_text_size(*this, required_content);
         set_size(text_size);
         Widget::update_layout(true);
-        inherit_parent_content_clip_rect();
+        assert(parent() && "Text must have parent");
+        set_clip_id(parent()->content_clip_id());
 
         rebuild_text_buffers(text_size);
         update_content_bounds();
@@ -155,7 +156,11 @@ namespace auik::v2
             if (parent()) clip_rect = intersect_rect(clip_rect, parent()->get_content_clip_rect());
             ensure_own_clip_rect(clip_rect);
         }
-        else inherit_parent_content_clip_rect();
+        else
+        {
+            assert(parent() && "Text must have parent");
+            set_clip_id(parent()->content_clip_id());
+        }
         _draw_ids.clear();
         _hit_id = AUIK_INVALID_DRAW_DATA_ID;
     }

@@ -13,13 +13,15 @@ namespace auik::v2
         set_position(cursor);
         set_size(required_size());
         Widget::update_layout(true);
-        inherit_parent_content_clip_rect();
+        assert(parent() && "Image must have parent");
+        set_clip_id(parent()->content_clip_id());
         detail::get_context().screen_cursor = {cursor.x, cursor.y + size().y};
     }
 
     void Image::rebuild_clip_rects()
     {
-        inherit_parent_content_clip_rect();
+        assert(parent() && "Image must have parent");
+        set_clip_id(parent()->content_clip_id());
         _image = {};
     }
 

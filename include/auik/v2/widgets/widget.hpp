@@ -122,11 +122,6 @@ namespace auik::v2
         inline void remove_event_flags(EventFlags value) { event_flags &= ~value; }
         inline u16 clip_id() const { return _rect.clip_id; }
         inline void set_clip_id(u16 id) { _rect.clip_id = id; }
-        inline void inherit_parent_clip_rect() { _rect.clip_id = _parent ? _parent->clip_id() : 0xFFFFu; }
-        inline void inherit_parent_content_clip_rect()
-        {
-            _rect.clip_id = _parent ? _parent->content_clip_id() : 0xFFFFu;
-        }
         inline void ensure_own_clip_rect(const amal::vec4 &rect)
         {
             if (_rect.clip_id == 0xFFFFu) _rect.clip_id = auik::v2::push_clip_rect(rect);

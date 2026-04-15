@@ -30,6 +30,11 @@ namespace auik::v2
     };
 
     using WindowFlags = acul::flags<WindowFlagBits>;
+    enum class WindowChildLayout : u8
+    {
+        block = 0,
+        inline_layout
+    };
 
     constexpr inline WindowFlags get_default_window_flags()
     {
@@ -61,7 +66,7 @@ namespace auik::v2
                           Widget *parent = nullptr);
         APPLIB_API ~Window() override;
 
-        APPLIB_API void add_child(Widget *child);
+        APPLIB_API void add_child(Widget *child, WindowChildLayout layout = WindowChildLayout::block);
         APPLIB_API void add_children(const acul::vector<Widget *> &new_children);
 
         virtual StyleUpdateFlags update_style() override;
@@ -80,6 +85,7 @@ namespace auik::v2
         detail::Scrollbar *_drag_scrollbar = nullptr;
         detail::HitboxZone _resize_zone = detail::HitboxZoneBits::none;
         bool _move_drag_active = false;
+        acul::vector<WindowChildLayout> _child_layouts;
 
         virtual void update_depth(const amal::vec2 &depth_range) override;
         virtual void update_layout_min_size() override;

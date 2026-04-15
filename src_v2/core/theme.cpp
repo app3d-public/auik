@@ -1,5 +1,6 @@
 #include <acul/memory/alloc.hpp>
 #include <auik/v2/theme.hpp>
+#include <auik/v2/widgets/color_picker.hpp>
 #include <auik/v2/widgets/slider.hpp>
 #include <auik/v2/widgets/text_button.hpp>
 #include <auik/v2/widgets/tooltip.hpp>
@@ -217,7 +218,6 @@ namespace auik::v2
         theme->add_style(AUIK_TAG_RANGE_SLIDER_GRAB, make_style().background_color(c_white), StyleState::hover);
         theme->add_style(AUIK_TAG_RANGE_SLIDER_GRAB, make_style().background_color(c_white), StyleState::active);
         theme->add_style(AUIK_TAG_RANGE_SLIDER_GRAB, make_style().background_color(c_white), StyleState::focus);
-
         theme->add_style(AUIK_TAG_TOOLTIP, make_style()
                                                .margin(empty_vec2)
                                                .padding(amal::vec2{10.0f, 6.0f})

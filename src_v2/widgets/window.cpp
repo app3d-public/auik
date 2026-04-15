@@ -20,6 +20,14 @@ namespace auik::v2
         return {out_min, out_size};
     }
 
+    static amal::vec2 get_children_required_size(const acul::vector<Widget *> &children,
+                                                 const acul::vector<WindowChildLayout> &layouts,
+                                                 f32 wrap_width = 0.0f);
+    static WindowChildLayout get_effective_child_layout(const acul::vector<Widget *> &children,
+                                                        const acul::vector<WindowChildLayout> &layouts, size_t index);
+    static size_t count_inline_run(const acul::vector<Widget *> &children, const acul::vector<WindowChildLayout> &layouts,
+                                   size_t start_index);
+
     static constexpr detail::StylePropertyFlags AUIK_LAYOUT_STYLE_MASK =
         detail::StylePropertiesBits::padding | detail::StylePropertiesBits::margin |
         detail::StylePropertiesBits::text_size | detail::StylePropertiesBits::border_thickness |
@@ -250,13 +258,14 @@ namespace auik::v2
         if (_scrollbar_y) acul::release(_scrollbar_y);
     }
 
-    void Window::add_child(Widget *child)
+    void Window::add_child(Widget *child, WindowChildLayout layout)
     {
         assert(child && "child is null");
         child->set_parent(this);
         child->set_focus_parent(this);
         child->update_style();
         children.push_back(child);
+        _child_layouts.push_back(layout);
     }
 
     void Window::add_children(const acul::vector<Widget *> &new_children)
@@ -264,7 +273,7 @@ namespace auik::v2
         for (auto *child : new_children)
         {
             if (!child) continue;
-            add_child(child);
+            add_child(child, WindowChildLayout::block);
         }
     }
 
@@ -449,43 +458,186 @@ namespace auik::v2
         const auto &window_style = theme->get_style(_window_style.id);
         const auto &padding = window_style.padding();
 
-        f32 max_width = 0.0f;
-        f32 total_height = 0.0f;
         for (auto *child : children)
         {
             if (!child) continue;
             child->update_layout_min_size();
-            max_width = amal::max(max_width, child->required_size().x);
-            if (!child->is_fixed()) total_height += child->required_size().y;
         }
+        const amal::vec2 children_min_size = get_children_required_size(children, _child_layouts);
 
-        set_required_size({padding.x + padding.z + max_width, padding.y + padding.w + total_height + _header_height});
+        set_required_size(
+            {padding.x + padding.z + children_min_size.x, padding.y + padding.w + children_min_size.y + _header_height});
     }
 
-    static amal::vec2 get_children_required_size(const acul::vector<Widget *> &children)
+    static amal::vec2 get_children_required_size(const acul::vector<Widget *> &children,
+                                                 const acul::vector<WindowChildLayout> &layouts, f32 wrap_width)
     {
         f32 max_width = 0.0f;
         f32 total_height = 0.0f;
-        for (auto *child : children)
+        f32 row_width = 0.0f;
+        f32 row_height = 0.0f;
+        const bool wrap_enabled = wrap_width > 0.0f;
+        for (size_t i = 0; i < children.size(); ++i)
         {
+            auto *child = children[i];
             if (!child) continue;
-            max_width = amal::max(max_width, child->required_size().x);
-            if (!child->is_fixed()) total_height += child->required_size().y;
+            const WindowChildLayout layout = get_effective_child_layout(children, layouts, i);
+            const amal::vec2 req = child->required_size();
+            if (layout == WindowChildLayout::inline_layout)
+            {
+                if (wrap_enabled && row_height > 0.0f && row_width + req.x > wrap_width)
+                {
+                    max_width = amal::max(max_width, row_width);
+                    total_height += row_height;
+                    row_width = 0.0f;
+                    row_height = 0.0f;
+                }
+                if (wrap_enabled && req.x > wrap_width)
+                {
+                    if (row_height > 0.0f)
+                    {
+                        max_width = amal::max(max_width, row_width);
+                        total_height += row_height;
+                        row_width = 0.0f;
+                        row_height = 0.0f;
+                    }
+                    max_width = amal::max(max_width, req.x);
+                    total_height += req.y;
+                    continue;
+                }
+                row_width += req.x;
+                row_height = amal::max(row_height, req.y);
+            }
+            else
+            {
+                if (row_height > 0.0f)
+                {
+                    max_width = amal::max(max_width, row_width);
+                    total_height += row_height;
+                    row_width = 0.0f;
+                    row_height = 0.0f;
+                }
+                max_width = amal::max(max_width, req.x);
+                total_height += req.y;
+            }
+        }
+        if (row_height > 0.0f)
+        {
+            max_width = amal::max(max_width, row_width);
+            total_height += row_height;
         }
         return amal::vec2{max_width, total_height};
     };
 
+    static WindowChildLayout get_effective_child_layout(const acul::vector<Widget *> &children,
+                                                        const acul::vector<WindowChildLayout> &layouts, size_t index)
+    {
+        const WindowChildLayout current = index < layouts.size() ? layouts[index] : WindowChildLayout::block;
+        if (current == WindowChildLayout::inline_layout) return current;
+
+        for (size_t next = index + 1; next < children.size(); ++next)
+        {
+            if (!children[next]) continue;
+            const WindowChildLayout next_layout = next < layouts.size() ? layouts[next] : WindowChildLayout::block;
+            if (next_layout == WindowChildLayout::inline_layout) return WindowChildLayout::inline_layout;
+            break;
+        }
+        return WindowChildLayout::block;
+    }
+
+    static size_t count_inline_run(const acul::vector<Widget *> &children, const acul::vector<WindowChildLayout> &layouts,
+                                   size_t start_index)
+    {
+        size_t count = 0;
+        for (size_t i = start_index; i < children.size(); ++i)
+        {
+            if (!children[i]) continue;
+            if (get_effective_child_layout(children, layouts, i) != WindowChildLayout::inline_layout) break;
+            ++count;
+        }
+        return count;
+    }
+
     void Window::relayout_children(f32 available_width, const amal::vec2 &content_inset)
     {
-        const amal::vec2 cursor = position() + content_inset;
-        detail::get_context().screen_cursor = cursor - _content_offset;
+        const amal::vec2 content_cursor = position() + content_inset - _content_offset;
+        amal::vec2 cursor = content_cursor;
+        f32 inline_row_height = 0.0f;
+        f32 inline_row_width = 0.0f;
+        detail::get_context().screen_cursor = cursor;
 
-        for (auto *child : children)
+        for (size_t i = 0; i < children.size(); ++i)
         {
+            auto *child = children[i];
             if (!child) continue;
-            if (!child->is_fixed()) child->set_size({available_width, child->size().y});
+            const WindowChildLayout layout = get_effective_child_layout(children, _child_layouts, i);
+            if (layout == WindowChildLayout::block)
+            {
+                if (inline_row_height > 0.0f)
+                {
+                    cursor = {content_cursor.x, cursor.y + inline_row_height};
+                    inline_row_height = 0.0f;
+                    inline_row_width = 0.0f;
+                }
+
+                if (!child->is_fixed())
+                {
+                    child->set_size({available_width, child->size().y});
+                }
+                detail::get_context().screen_cursor = cursor;
+                child->update_layout(true);
+                cursor = {content_cursor.x, detail::get_context().screen_cursor.y};
+                continue;
+            }
+
+            const amal::vec2 req = child->required_size();
+            const size_t inline_remaining = count_inline_run(children, _child_layouts, i);
+            const f32 remaining_row_width = amal::max(available_width - inline_row_width, 0.0f);
+            const f32 inline_share =
+                inline_remaining > 0 ? (remaining_row_width / static_cast<f32>(inline_remaining)) : remaining_row_width;
+
+            f32 inline_width = amal::max(req.x, 0.0f);
+            if (!child->is_fixed()) inline_width = inline_share;
+            const bool has_inline_row = inline_row_height > 0.0f;
+            const bool needs_wrap = has_inline_row && inline_row_width + inline_width > available_width;
+            if (needs_wrap)
+            {
+                cursor = {content_cursor.x, cursor.y + inline_row_height};
+                inline_row_height = 0.0f;
+                inline_row_width = 0.0f;
+                const size_t wrapped_remaining = count_inline_run(children, _child_layouts, i);
+                const f32 wrapped_row_width = available_width;
+                const f32 wrapped_share =
+                    wrapped_remaining > 0 ? (wrapped_row_width / static_cast<f32>(wrapped_remaining)) : wrapped_row_width;
+                inline_width = !child->is_fixed() ? wrapped_share : amal::max(req.x, 0.0f);
+            }
+
+            // If inline item does not fit even on a fresh row, layout it as a block item.
+            if (inline_width > available_width)
+            {
+                if (!child->is_fixed())
+                {
+                    child->set_size({available_width, child->size().y});
+                }
+                detail::get_context().screen_cursor = cursor;
+                child->update_layout(true);
+                cursor = {content_cursor.x, detail::get_context().screen_cursor.y};
+                continue;
+            }
+
+            if (!child->is_fixed()) child->set_size({inline_width, child->size().y});
+            detail::get_context().screen_cursor = cursor;
             child->update_layout(true);
+
+            const f32 occupied_w = amal::max((child->position().x - cursor.x) + child->size().x, 0.0f);
+            const f32 occupied_h = amal::max((child->position().y - cursor.y) + child->size().y, 0.0f);
+            inline_row_height = amal::max(inline_row_height, occupied_h);
+            inline_row_width += occupied_w;
+            cursor = {content_cursor.x + inline_row_width, cursor.y};
         }
+
+        if (inline_row_height > 0.0f) cursor = {content_cursor.x, cursor.y + inline_row_height};
+        detail::get_context().screen_cursor = cursor;
     };
 
     void Window::update_layout(bool min_size_known)
@@ -504,7 +656,7 @@ namespace auik::v2
         const auto &padding = window_style.padding();
         _content_offset = amal::max(_content_offset, 0.0f);
 
-        const amal::vec2 children_min_size = get_children_required_size(children);
+        const amal::vec2 children_min_size = get_children_required_size(children, _child_layouts);
         const f32 required_height = padding.y + padding.w + children_min_size.y + _header_height;
         const f32 required_width = padding.x + padding.z + children_min_size.x;
         set_required_size({required_width, required_height});
@@ -521,14 +673,16 @@ namespace auik::v2
         const f32 bar_w = _scrollbar_y ? _scrollbar_y->get_min_track_thickness() : 0.0f;
         const f32 bar_h = _scrollbar_x ? _scrollbar_x->get_min_track_thickness() : 0.0f;
 
-        bool need_scroll_y = can_scroll_y && children_min_size.y > body_height;
-        bool need_scroll_x = can_scroll_x && children_min_size.x > body_width;
+        amal::vec2 children_layout_size = children_min_size;
+        bool need_scroll_y = can_scroll_y && children_layout_size.y > body_height;
+        bool need_scroll_x = can_scroll_x && children_layout_size.x > body_width;
         for (int i = 0; i < 2; ++i)
         {
             const f32 viewport_w = amal::max(body_width - (need_scroll_y ? bar_w : 0.0f), 0.0f);
             const f32 viewport_h = amal::max(body_height - (need_scroll_x ? bar_h : 0.0f), 0.0f);
-            const bool next_y = can_scroll_y && children_min_size.y > viewport_h;
-            const bool next_x = can_scroll_x && children_min_size.x > viewport_w;
+            children_layout_size = get_children_required_size(children, _child_layouts, viewport_w);
+            const bool next_y = can_scroll_y && children_layout_size.y > viewport_h;
+            const bool next_x = can_scroll_x && children_layout_size.x > viewport_w;
             if (next_y == need_scroll_y && next_x == need_scroll_x) break;
             need_scroll_y = next_y;
             need_scroll_x = next_x;
@@ -536,19 +690,20 @@ namespace auik::v2
 
         const f32 scroll_view_width = amal::max(body_width - (need_scroll_y ? bar_w : 0.0f), 0.0f);
         const f32 scroll_view_height = amal::max(body_height - (need_scroll_x ? bar_h : 0.0f), 0.0f);
-        const f32 clip_viewport_width = scroll_view_width;
+        // Policy: allow horizontal overlay across the whole window width,
+        // while keeping strict vertical clipping for scrolling.
+        const f32 clip_viewport_width = size().x;
         const f32 clip_viewport_height = scroll_view_height;
         const f32 content_layout_width = scroll_view_width;
         const amal::vec2 content_inset = {padding.x, padding.y + _header_height};
         const amal::vec2 content_size = {clip_viewport_width, clip_viewport_height};
-        const amal::vec4 content_clip = {position().x + content_inset.x, position().y + content_inset.y, content_size.x,
-                                         content_size.y};
+        const amal::vec4 content_clip = {position().x, position().y + content_inset.y, content_size.x, content_size.y};
         const amal::vec4 parent_clip = get_clip_rect(clip_id());
         _content_clip_rect = intersect_rect(parent_clip, content_clip);
         if (_content_clip_id == 0xFFFFu) _content_clip_id = push_clip_rect(_content_clip_rect);
         else update_clip_rect(_content_clip_id, _content_clip_rect);
-        if (_scrollbar_x) _scrollbar_x->set_metrics(children_min_size.x, scroll_view_width);
-        if (_scrollbar_y) _scrollbar_y->set_metrics(children_min_size.y, scroll_view_height);
+        if (_scrollbar_x) _scrollbar_x->set_metrics(children_layout_size.x, scroll_view_width);
+        if (_scrollbar_y) _scrollbar_y->set_metrics(children_layout_size.y, scroll_view_height);
         const amal::vec2 max_scroll = {_scrollbar_x ? _scrollbar_x->max_scroll() : 0.0f,
                                        _scrollbar_y ? _scrollbar_y->max_scroll() : 0.0f};
         _content_offset = amal::clamp(_content_offset, amal::vec2{0.0f}, max_scroll);
@@ -581,7 +736,7 @@ namespace auik::v2
             const amal::vec2 track_size = {track_w, track_area_size.y};
             _scrollbar_y->set_visible(true);
             _scrollbar_y->set_scroll_offset(_content_offset.y);
-            _scrollbar_y->configure(track_pos, track_size, children_min_size.y, scroll_view_height);
+            _scrollbar_y->configure(track_pos, track_size, children_layout_size.y, scroll_view_height);
             _content_offset.y = _scrollbar_y->scroll_offset();
             _scrollbar_y->set_clip_id(clip_id());
         }
@@ -603,7 +758,7 @@ namespace auik::v2
             const amal::vec2 track_size = {track_area_size.x, track_h};
             _scrollbar_x->set_visible(true);
             _scrollbar_x->set_scroll_offset(_content_offset.x);
-            _scrollbar_x->configure(track_pos, track_size, children_min_size.x, scroll_view_width);
+            _scrollbar_x->configure(track_pos, track_size, children_layout_size.x, scroll_view_width);
             _content_offset.x = _scrollbar_x->scroll_offset();
             _scrollbar_x->set_clip_id(clip_id());
         }
@@ -621,8 +776,7 @@ namespace auik::v2
         // scrolling.
         const amal::vec2 final_content_inset = {padding.x, padding.y + _header_height};
         const amal::vec2 final_content_size = {clip_viewport_width, clip_viewport_height};
-        const amal::vec4 final_content_clip = {position().x + final_content_inset.x,
-                                               position().y + final_content_inset.y, final_content_size.x,
+        const amal::vec4 final_content_clip = {position().x, position().y + final_content_inset.y, final_content_size.x,
                                                final_content_size.y};
         _content_clip_rect = intersect_rect(parent_clip, final_content_clip);
         update_clip_rect(_content_clip_id, _content_clip_rect);

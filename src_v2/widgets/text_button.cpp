@@ -66,7 +66,8 @@ namespace auik::v2
         set_position(pos);
         set_size(button_size);
         Widget::update_layout(true);
-        inherit_parent_content_clip_rect();
+        assert(parent() && "TextButton must have parent");
+        set_clip_id(parent()->content_clip_id());
 
         const amal::vec4 padding = style.padding();
         const amal::vec2 content_pos = {pos.x + padding.x, pos.y + padding.y};
@@ -90,7 +91,8 @@ namespace auik::v2
 
     void TextButton::rebuild_clip_rects()
     {
-        inherit_parent_content_clip_rect();
+        assert(parent() && "TextButton must have parent");
+        set_clip_id(parent()->content_clip_id());
         _bg.hit_id = AUIK_INVALID_DRAW_DATA_ID;
         _text->set_clip_id(clip_id());
         _text->rebuild_clip_rects();
