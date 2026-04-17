@@ -17,6 +17,8 @@ namespace auik::v2
     class APPLIB_API Text : public Widget
     {
     public:
+        TextFlags text_flags = TextFlagBits::none;
+
         Text(u32 id, acul::string text, amal::vec2 size, WidgetFlags flags, Widget *parent = nullptr,
              u32 style_tag_id = AUIK_TAG_NO_PAD)
             : Widget(id, flags, EventFlagBits::none, parent, {{0.0f}, size}),

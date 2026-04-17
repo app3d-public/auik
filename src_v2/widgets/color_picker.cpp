@@ -230,8 +230,8 @@ namespace auik::v2
         f32 hue = std::fmod(hue_deg, 360.0f);
         if (hue < 0.0f) hue += 360.0f;
         _hue_deg = hue;
-        _radius_t = amal::clamp(radius_t, 0.0f, 1.0f);
-        _resolved_color = detail::make_circle_color(_hue_deg, _radius_t);
+        _radius_norm = amal::clamp(radius_t, 0.0f, 1.0f);
+        _resolved_color = detail::make_circle_color(_hue_deg, _radius_norm);
         if (_value) *_value = _resolved_color;
     }
 
@@ -401,12 +401,11 @@ namespace auik::v2
         _wheel_indices.clear();
         sync_batch();
 
-        const amal::vec2 wheel_size = size();
-        const f32 wheel_radius_outer = amal::max(amal::min(wheel_size.x, wheel_size.y) * 0.5f, 0.0f);
-        const f32 wheel_radius = amal::max(wheel_radius_outer - AUIK_CIRCLE_WHEEL_FRINGE, 0.0f);
+        const f32 wheel_radius_outer = _layout.wheel_radius_outer;
+        const f32 wheel_radius = _layout.wheel_radius;
         if (wheel_radius <= 1e-4f) return;
 
-        const amal::vec2 center = position() + wheel_size * 0.5f;
+        const amal::vec2 center = _layout.center;
         const u32 segments = detail::calc_circle_auto_segment_count(wheel_radius_outer);
         const u32 fringe_segments =
             detail::calc_circle_auto_segment_count(wheel_radius_outer, AUIK_CIRCLE_FRINGE_TESSELLATION_MAX_ERROR);
@@ -514,12 +513,10 @@ namespace auik::v2
         const f32 grab_w = amal::max(amal::round(grab_size.x), 3.0f);
         const f32 grab_h = amal::max(amal::round(grab_size.y), 3.0f);
 
-        const amal::vec2 wheel_size = size();
-        const amal::vec2 center = position() + wheel_size * 0.5f;
-        const f32 wheel_radius =
-            amal::max(amal::min(wheel_size.x, wheel_size.y) * 0.5f - AUIK_CIRCLE_WHEEL_FRINGE, 0.0f);
+        const amal::vec2 center = _layout.center;
+        const f32 wheel_radius = _layout.wheel_radius;
         const f32 angle = (_hue_deg / 180.0f) * amal::pi<f32>();
-        const f32 pick_r = wheel_radius * amal::clamp(_radius_t, 0.0f, 1.0f);
+        const f32 pick_r = wheel_radius * amal::clamp(_radius_norm, 0.0f, 1.0f);
         const amal::vec2 pick_pos = {center.x + amal::cos(angle) * pick_r, center.y + amal::sin(angle) * pick_r};
 
         _grab_hit_rect.bounds.offset = {pick_pos.x - grab_w * 0.5f, pick_pos.y - grab_h * 0.5f};
@@ -546,8 +543,17 @@ namespace auik::v2
         }
     }
 
+    void CircleColorPicker::rebuild_layout_cache()
+    {
+        const amal::vec2 wheel_size = size();
+        _layout.center = position() + wheel_size * 0.5f;
+        _layout.wheel_radius_outer = amal::max(amal::min(wheel_size.x, wheel_size.y) * 0.5f, 0.0f);
+        _layout.wheel_radius = amal::max(_layout.wheel_radius_outer - AUIK_CIRCLE_WHEEL_FRINGE, 0.0f);
+    }
+
     void CircleColorPicker::rebuild_cached_visuals()
     {
+        rebuild_layout_cache();
         rebuild_wheel_visual();
         rebuild_grab_visual();
 
@@ -562,13 +568,12 @@ namespace auik::v2
 
     void CircleColorPicker::update_value_from_mouse()
     {
-        const amal::vec2 wheel_size = size();
-        const amal::vec2 center = position() + wheel_size * 0.5f;
+        if (_layout.wheel_radius <= 1e-5f) rebuild_layout_cache();
+        const amal::vec2 center = _layout.center;
         const amal::vec2 mouse = get_mouse_pos();
         const f32 dx = mouse.x - center.x;
         const f32 dy = mouse.y - center.y;
-        const f32 wheel_radius =
-            amal::max(amal::min(wheel_size.x, wheel_size.y) * 0.5f - AUIK_CIRCLE_WHEEL_FRINGE, 1e-5f);
+        const f32 wheel_radius = amal::max(_layout.wheel_radius, 1e-5f);
         const f32 dist = amal::sqrt(dx * dx + dy * dy);
         f32 hue = _hue_deg;
         if (dist > 1e-5f)
@@ -599,17 +604,8 @@ namespace auik::v2
     void CircleColorPicker::on_drag(const amal::vec2 &delta, KeyPressState state)
     {
         (void)delta;
-        if (state == KeyPressState::press)
-        {
-            _drag_started = true;
-            update_value_from_mouse();
-        }
-        else if (state == KeyPressState::repeat)
-        {
-            if (!_drag_started) _drag_started = true;
-            update_value_from_mouse();
-        }
-        else if (state == KeyPressState::release) _drag_started = false;
+        if (state == KeyPressState::press || state == KeyPressState::repeat) update_value_from_mouse();
+        else if (state == KeyPressState::release) {}
         else return;
 
         add_render_command<detail::DragEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
@@ -784,19 +780,22 @@ namespace auik::v2
         if (hue < 0.0f) hue += 360.0f;
         _hue_deg = hue;
         _saturation = amal::clamp(saturation, 0.0f, 1.0f);
-        _value_t = amal::clamp(value_t, 0.0f, 1.0f);
-        _resolved_color = detail::hsv_to_rgba(_hue_deg, _saturation, _value_t, _alpha);
+        _value_norm = amal::clamp(value_t, 0.0f, 1.0f);
+        const f32 alpha = amal::clamp(_resolved_color.w, 0.0f, 1.0f);
+        _resolved_color = detail::hsv_to_rgba(_hue_deg, _saturation, _value_norm, alpha);
         if (_value) *_value = _resolved_color;
     }
 
     void SquareColorPicker::set_color(const amal::vec4 &color)
     {
-        _alpha = amal::clamp(color.w, 0.0f, 1.0f);
+        const f32 alpha = amal::clamp(color.w, 0.0f, 1.0f);
         f32 hue = _hue_deg;
         f32 sat = _saturation;
-        f32 val = _value_t;
+        f32 val = _value_norm;
         detail::rgba_to_hsv(color, hue, sat, val);
         set_hsv(hue, sat, val);
+        _resolved_color.w = alpha;
+        if (_value) *_value = _resolved_color;
     }
 
     void SquareColorPicker::sync_batches()
@@ -816,17 +815,17 @@ namespace auik::v2
     {
         const amal::vec2 picker_size = size();
         const f32 side = amal::max(amal::min(picker_size.x, picker_size.y), 0.0f);
-        _center = position() + picker_size * 0.5f;
+        _layout.center = position() + picker_size * 0.5f;
 
-        _ring_outer_radius = side * 0.5f;
+        _layout.ring_outer_radius = side * 0.5f;
         const f32 ring_width = amal::clamp(side * AUIK_SQUARE_PICKER_RING_WIDTH_FACTOR,
                                            AUIK_SQUARE_PICKER_RING_WIDTH_MIN, AUIK_SQUARE_PICKER_RING_WIDTH_MAX);
-        _ring_inner_radius = amal::max(_ring_outer_radius - ring_width, 1.0f);
+        _layout.ring_inner_radius = amal::max(_layout.ring_outer_radius - ring_width, 1.0f);
 
-        const f32 inner_for_square = amal::max(_ring_inner_radius - AUIK_SQUARE_PICKER_INNER_PADDING, 1.0f);
+        const f32 inner_for_square = amal::max(_layout.ring_inner_radius - AUIK_SQUARE_PICKER_INNER_PADDING, 1.0f);
         const f32 half_square = inner_for_square * 0.70710678f;
-        _sv_rect.offset = {_center.x - half_square, _center.y - half_square};
-        _sv_rect.size = {half_square * 2.0f, half_square * 2.0f};
+        _layout.sv_rect.offset = {_layout.center.x - half_square, _layout.center.y - half_square};
+        _layout.sv_rect.size = {half_square * 2.0f, half_square * 2.0f};
     }
 
     void SquareColorPicker::rebuild_ring_visual()
@@ -835,17 +834,19 @@ namespace auik::v2
         _ring_indices.clear();
         sync_batches();
 
-        if (_ring_outer_radius <= 1e-4f || _ring_inner_radius <= 1e-4f || _ring_outer_radius <= _ring_inner_radius)
+        if (_layout.ring_outer_radius <= 1e-4f || _layout.ring_inner_radius <= 1e-4f ||
+            _layout.ring_outer_radius <= _layout.ring_inner_radius)
             return;
 
-        const f32 fringe = amal::min(AUIK_SQUARE_PICKER_RING_FRINGE, (_ring_outer_radius - _ring_inner_radius) * 0.49f);
-        const f32 main_inner = _ring_inner_radius + fringe;
-        const f32 main_outer = _ring_outer_radius - fringe;
+        const f32 fringe =
+            amal::min(AUIK_SQUARE_PICKER_RING_FRINGE, (_layout.ring_outer_radius - _layout.ring_inner_radius) * 0.49f);
+        const f32 main_inner = _layout.ring_inner_radius + fringe;
+        const f32 main_outer = _layout.ring_outer_radius - fringe;
         if (main_outer <= main_inner) return;
 
-        const u32 main_segments = detail::calc_circle_auto_segment_count(_ring_outer_radius);
+        const u32 main_segments = detail::calc_circle_auto_segment_count(_layout.ring_outer_radius);
         const u32 fringe_segments =
-            detail::calc_circle_auto_segment_count(_ring_outer_radius, AUIK_CIRCLE_FRINGE_TESSELLATION_MAX_ERROR);
+            detail::calc_circle_auto_segment_count(_layout.ring_outer_radius, AUIK_CIRCLE_FRINGE_TESSELLATION_MAX_ERROR);
 
         const u32 inner_fade_start = 0u;
         const u32 inner_main_start = inner_fade_start + (fringe_segments + 1u);
@@ -858,10 +859,12 @@ namespace auik::v2
 
         const f32 z = detail::mid_depth(_ring_depth_range);
         const u16 cid = clip_id();
-        detail::append_hue_ring_vertices(_ring_vertices, _center, _ring_inner_radius, fringe_segments, 0.0f, z, cid);
-        detail::append_hue_ring_vertices(_ring_vertices, _center, main_inner, main_segments, 1.0f, z, cid);
-        detail::append_hue_ring_vertices(_ring_vertices, _center, main_outer, main_segments, 1.0f, z, cid);
-        detail::append_hue_ring_vertices(_ring_vertices, _center, _ring_outer_radius, fringe_segments, 0.0f, z, cid);
+        detail::append_hue_ring_vertices(_ring_vertices, _layout.center, _layout.ring_inner_radius, fringe_segments, 0.0f,
+                                         z, cid);
+        detail::append_hue_ring_vertices(_ring_vertices, _layout.center, main_inner, main_segments, 1.0f, z, cid);
+        detail::append_hue_ring_vertices(_ring_vertices, _layout.center, main_outer, main_segments, 1.0f, z, cid);
+        detail::append_hue_ring_vertices(_ring_vertices, _layout.center, _layout.ring_outer_radius, fringe_segments,
+                                         0.0f, z, cid);
 
         detail::append_ring_strip_indices(_ring_indices, inner_fade_start, fringe_segments, inner_main_start,
                                           main_segments);
@@ -877,7 +880,7 @@ namespace auik::v2
         _sv_vertices.clear();
         _sv_indices.clear();
         sync_batches();
-        if (amal::is_rect_empty(_sv_rect)) return;
+        if (amal::is_rect_empty(_layout.sv_rect)) return;
 
         const amal::vec4 hue_color = detail::hsv_to_rgba(_hue_deg, 1.0f, 1.0f, 1.0f);
         const amal::vec4 white = {1.0f};
@@ -891,22 +894,23 @@ namespace auik::v2
 
         // Pass 1: horizontal gradient (white -> hue).
         VertexStreamVertex v0{};
-        v0.position = {_sv_rect.offset.x, _sv_rect.offset.y};
+        v0.position = {_layout.sv_rect.offset.x, _layout.sv_rect.offset.y};
         v0.z_order = z_base;
         v0.color = detail::pack_rgba8(white);
         v0.clip_id = cid;
         VertexStreamVertex v1{};
-        v1.position = {_sv_rect.offset.x + _sv_rect.size.x, _sv_rect.offset.y};
+        v1.position = {_layout.sv_rect.offset.x + _layout.sv_rect.size.x, _layout.sv_rect.offset.y};
         v1.z_order = z_base;
         v1.color = detail::pack_rgba8(hue_color);
         v1.clip_id = cid;
         VertexStreamVertex v2{};
-        v2.position = {_sv_rect.offset.x + _sv_rect.size.x, _sv_rect.offset.y + _sv_rect.size.y};
+        v2.position = {_layout.sv_rect.offset.x + _layout.sv_rect.size.x,
+                       _layout.sv_rect.offset.y + _layout.sv_rect.size.y};
         v2.z_order = z_base;
         v2.color = detail::pack_rgba8(hue_color);
         v2.clip_id = cid;
         VertexStreamVertex v3{};
-        v3.position = {_sv_rect.offset.x, _sv_rect.offset.y + _sv_rect.size.y};
+        v3.position = {_layout.sv_rect.offset.x, _layout.sv_rect.offset.y + _layout.sv_rect.size.y};
         v3.z_order = z_base;
         v3.color = detail::pack_rgba8(white);
         v3.clip_id = cid;
@@ -923,22 +927,23 @@ namespace auik::v2
 
         // Pass 2: vertical black overlay (transparent -> opaque).
         VertexStreamVertex o0{};
-        o0.position = {_sv_rect.offset.x, _sv_rect.offset.y};
+        o0.position = {_layout.sv_rect.offset.x, _layout.sv_rect.offset.y};
         o0.z_order = z_overlay;
         o0.color = detail::pack_rgba8(black_a0);
         o0.clip_id = cid;
         VertexStreamVertex o1{};
-        o1.position = {_sv_rect.offset.x + _sv_rect.size.x, _sv_rect.offset.y};
+        o1.position = {_layout.sv_rect.offset.x + _layout.sv_rect.size.x, _layout.sv_rect.offset.y};
         o1.z_order = z_overlay;
         o1.color = detail::pack_rgba8(black_a0);
         o1.clip_id = cid;
         VertexStreamVertex o2{};
-        o2.position = {_sv_rect.offset.x + _sv_rect.size.x, _sv_rect.offset.y + _sv_rect.size.y};
+        o2.position = {_layout.sv_rect.offset.x + _layout.sv_rect.size.x,
+                       _layout.sv_rect.offset.y + _layout.sv_rect.size.y};
         o2.z_order = z_overlay;
         o2.color = detail::pack_rgba8(black_a1);
         o2.clip_id = cid;
         VertexStreamVertex o3{};
-        o3.position = {_sv_rect.offset.x, _sv_rect.offset.y + _sv_rect.size.y};
+        o3.position = {_layout.sv_rect.offset.x, _layout.sv_rect.offset.y + _layout.sv_rect.size.y};
         o3.z_order = z_overlay;
         o3.color = detail::pack_rgba8(black_a1);
         o3.clip_id = cid;
@@ -971,12 +976,12 @@ namespace auik::v2
         const f32 grab_z = detail::mid_depth(_grab_depth_range);
         const u16 grab_clip = clip_id();
 
-        const f32 ring_mid = (_ring_inner_radius + _ring_outer_radius) * 0.5f;
+        const f32 ring_mid = (_layout.ring_inner_radius + _layout.ring_outer_radius) * 0.5f;
         const f32 ring_angle = (_hue_deg / 180.0f) * amal::pi<f32>();
-        const amal::vec2 ring_pos = {_center.x + amal::cos(ring_angle) * ring_mid,
-                                     _center.y + amal::sin(ring_angle) * ring_mid};
-        const amal::vec2 sv_pos = {_sv_rect.offset.x + _sv_rect.size.x * _saturation,
-                                   _sv_rect.offset.y + _sv_rect.size.y * (1.0f - _value_t)};
+        const amal::vec2 ring_pos = {_layout.center.x + amal::cos(ring_angle) * ring_mid,
+                                     _layout.center.y + amal::sin(ring_angle) * ring_mid};
+        const amal::vec2 sv_pos = {_layout.sv_rect.offset.x + _layout.sv_rect.size.x * _saturation,
+                                   _layout.sv_rect.offset.y + _layout.sv_rect.size.y * (1.0f - _value_norm)};
 
         _ring_grab_hit_rect.bounds.offset = {ring_pos.x - grab_w * 0.5f, ring_pos.y - grab_h * 0.5f};
         _ring_grab_hit_rect.bounds.size = {grab_w, grab_h};
@@ -1038,15 +1043,16 @@ namespace auik::v2
     SquareColorPicker::ActiveZone SquareColorPicker::pick_active_zone_from_mouse() const
     {
         const amal::vec2 mouse = get_mouse_pos();
-        if (mouse.x >= _sv_rect.offset.x && mouse.y >= _sv_rect.offset.y &&
-            mouse.x <= _sv_rect.offset.x + _sv_rect.size.x && mouse.y <= _sv_rect.offset.y + _sv_rect.size.y)
+        if (mouse.x >= _layout.sv_rect.offset.x && mouse.y >= _layout.sv_rect.offset.y &&
+            mouse.x <= _layout.sv_rect.offset.x + _layout.sv_rect.size.x &&
+            mouse.y <= _layout.sv_rect.offset.y + _layout.sv_rect.size.y)
             return ActiveZone::square;
 
-        const f32 dx = mouse.x - _center.x;
-        const f32 dy = mouse.y - _center.y;
+        const f32 dx = mouse.x - _layout.center.x;
+        const f32 dy = mouse.y - _layout.center.y;
         const f32 d2 = dx * dx + dy * dy;
-        const f32 inner2 = _ring_inner_radius * _ring_inner_radius;
-        const f32 outer2 = _ring_outer_radius * _ring_outer_radius;
+        const f32 inner2 = _layout.ring_inner_radius * _layout.ring_inner_radius;
+        const f32 outer2 = _layout.ring_outer_radius * _layout.ring_outer_radius;
         if (d2 >= inner2 && d2 <= outer2) return ActiveZone::ring;
         return ActiveZone::none;
     }
@@ -1056,17 +1062,18 @@ namespace auik::v2
         const amal::vec2 mouse = get_mouse_pos();
         if (_active_zone == ActiveZone::ring)
         {
-            const f32 dx = mouse.x - _center.x;
-            const f32 dy = mouse.y - _center.y;
+            const f32 dx = mouse.x - _layout.center.x;
+            const f32 dy = mouse.y - _layout.center.y;
             f32 hue = amal::atan2(dy, dx) * (180.0f / amal::pi<f32>());
             if (hue < 0.0f) hue += 360.0f;
-            set_hsv(hue, _saturation, _value_t);
+            set_hsv(hue, _saturation, _value_norm);
         }
         else if (_active_zone == ActiveZone::square)
         {
-            const f32 s = amal::clamp((mouse.x - _sv_rect.offset.x) / amal::max(_sv_rect.size.x, 1e-5f), 0.0f, 1.0f);
-            const f32 v =
-                amal::clamp(1.0f - (mouse.y - _sv_rect.offset.y) / amal::max(_sv_rect.size.y, 1e-5f), 0.0f, 1.0f);
+            const f32 s = amal::clamp((mouse.x - _layout.sv_rect.offset.x) / amal::max(_layout.sv_rect.size.x, 1e-5f),
+                                      0.0f, 1.0f);
+            const f32 v = amal::clamp(1.0f - (mouse.y - _layout.sv_rect.offset.y) / amal::max(_layout.sv_rect.size.y, 1e-5f),
+                                      0.0f, 1.0f);
             set_hsv(_hue_deg, s, v);
         }
         else return;

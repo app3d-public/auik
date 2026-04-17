@@ -31,7 +31,13 @@ namespace auik::v2
         amal::vec4 *_value = nullptr;
         amal::vec4 _resolved_color = {1.0f, 1.0f, 1.0f, 1.0f};
         f32 _hue_deg = 0.0f;
-        f32 _radius_t = 0.0f;
+        f32 _radius_norm = 0.0f;
+        struct LayoutCache
+        {
+            amal::vec2 center{0.0f, 0.0f};
+            f32 wheel_radius_outer = 0.0f;
+            f32 wheel_radius = 0.0f;
+        } _layout{};
 
         StyleSelector _grab_style{Theme::STYLE_ID_INVALID, AUIK_TAG_GRADIENT_SLIDER_GRAB};
         DrawDataID _wheel_draw_id{};
@@ -45,11 +51,11 @@ namespace auik::v2
         detail::RectData _grab_hit_rect{};
         amal::vec2 _track_depth_range{0.0f, 1.0f};
         amal::vec2 _grab_depth_range{0.0f, 1.0f};
-        bool _drag_started = false;
 
         void rebuild_wheel_visual();
         void rebuild_grab_visual();
         void rebuild_cached_visuals();
+        void rebuild_layout_cache();
         void update_value_from_mouse();
         void set_hue_radius(f32 hue_deg, f32 radius_t);
         void sync_batch();
@@ -104,13 +110,14 @@ namespace auik::v2
         amal::vec4 _resolved_color = {1.0f, 0.0f, 0.0f, 1.0f};
         f32 _hue_deg = 0.0f;
         f32 _saturation = 1.0f;
-        f32 _value_t = 1.0f;
-        f32 _alpha = 1.0f;
-
-        amal::vec2 _center{0.0f};
-        f32 _ring_outer_radius = 0.0f;
-        f32 _ring_inner_radius = 0.0f;
-        amal::rect _sv_rect{};
+        f32 _value_norm = 1.0f;
+        struct LayoutCache
+        {
+            amal::vec2 center{0.0f, 0.0f};
+            f32 ring_outer_radius = 0.0f;
+            f32 ring_inner_radius = 0.0f;
+            amal::rect sv_rect{};
+        } _layout{};
 
         StyleSelector _grab_style{Theme::STYLE_ID_INVALID, AUIK_TAG_GRADIENT_SLIDER_GRAB};
         DrawDataID _ring_draw_id{};

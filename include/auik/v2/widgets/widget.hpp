@@ -56,7 +56,6 @@ namespace auik::v2
     public:
         WidgetFlags widget_flags;
         EventFlags event_flags = EventFlagBits::none;
-        TextFlags text_flags = TextFlagBits::none;
 
         Widget(u32 id, WidgetFlags flags, EventFlags event_flags = EventFlagBits::none, Widget *parent = nullptr,
                amal::rect bounds = {}, u32 tag_id = 0)

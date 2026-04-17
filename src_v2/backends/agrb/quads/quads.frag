@@ -1,8 +1,10 @@
 #version 460
 #include <common/clip.glsl>
 
-#define AUIK_HAS_BORDER_BIT 0x1u
-#define AUIK_HAS_RADIUS_BIT 0x2u
+#define AUIK_HAS_BORDER_BIT  0x1u
+#define AUIK_HAS_RADIUS_BIT  0x2u
+#define AUIK_HAS_CHECKER_BIT 0x4u
+#define AUIK_CHECKER_ROWS    2.0
 
 layout(location = 0) in vec2 in_local_pos;
 layout(location = 1) flat in vec2 in_size;
@@ -40,6 +42,18 @@ float sd_rounded_rect(vec2 p, vec2 half_size, float radius)
     return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - radius;
 }
 
+vec4 fill_checker(vec2 local_pos, vec2 size, vec4 background_color)
+{
+    float checker_size = max(2.0, size.y / AUIK_CHECKER_ROWS);
+    const vec3 checker_light = vec3(0.85);
+    const vec3 checker_dark = vec3(0.65);
+    vec2 checker_pos = local_pos + 0.5 * size;
+    ivec2 cell = ivec2(floor(checker_pos / checker_size));
+    bool odd = ((cell.x + cell.y) & 1) != 0;
+    vec3 checker_rgb = odd ? checker_dark : checker_light;
+    return vec4(mix(checker_rgb, background_color.rgb, background_color.a), 1.0);
+}
+
 void main()
 {
     if (is_clipped(in_pixel_pos, clip_rects[in_clip_id])) discard;
@@ -47,19 +61,21 @@ void main()
     vec2 half_size = 0.5 * in_size;
     bool has_border = (in_flags & AUIK_HAS_BORDER_BIT) != 0u;
     bool has_radius = (in_flags & AUIK_HAS_RADIUS_BIT) != 0u;
+    bool has_checker = (in_flags & AUIK_HAS_CHECKER_BIT) != 0u;
     // Fast path: plain rect (no radius).
     if (!has_radius)
     {
         vec2 d = abs(in_local_pos) - half_size;
         if (d.x > 0.0 || d.y > 0.0) discard;
 
-        vec4 color = in_background_color;
+        vec4 fill_color = has_checker ? fill_checker(in_local_pos, in_size, in_background_color) : in_background_color;
+        vec4 color = fill_color;
         if (has_border)
         {
             float thickness = max(in_border_thickness, 0.0);
             vec2 inner_half = max(half_size - vec2(thickness), vec2(0.0));
             bool inside_inner = abs(in_local_pos.x) <= inner_half.x && abs(in_local_pos.y) <= inner_half.y;
-            color = inside_inner ? in_background_color : in_border_color;
+            color = inside_inner ? fill_color : in_border_color;
         }
 
         out_color = color;
@@ -79,13 +95,14 @@ void main()
 
     if (!has_border)
     {
-        vec4 color = in_background_color;
+        vec4 color = has_checker ? fill_checker(in_local_pos, in_size, in_background_color) : in_background_color;
         color.a *= fill_outer;
         out_color = color;
         return;
     }
 
-    vec4 color = in_background_color;
+    vec4 fill_color = has_checker ? fill_checker(in_local_pos, in_size, in_background_color) : in_background_color;
+    vec4 color = fill_color;
     float thickness = max(in_border_thickness, 0.0);
     vec2 inner_half = max(half_size - vec2(thickness), vec2(0.0));
     float inner_radius = max(corner_radius - thickness, 0.0);
@@ -94,11 +111,11 @@ void main()
     float fill_inner = 1.0 - smoothstep(0.0, aa_inner, dist_inner);
 
     float border_alpha = in_border_color.a * (1.0 - fill_inner);
-    float fill_alpha = in_background_color.a * fill_inner;
+    float fill_alpha = fill_color.a * fill_inner;
     float out_alpha = border_alpha + fill_alpha;
     if (out_alpha > 1e-5)
     {
-        vec3 premul_rgb = in_border_color.rgb * border_alpha + in_background_color.rgb * fill_alpha;
+        vec3 premul_rgb = in_border_color.rgb * border_alpha + fill_color.rgb * fill_alpha;
         color.rgb = premul_rgb / out_alpha;
         color.a = out_alpha;
     }

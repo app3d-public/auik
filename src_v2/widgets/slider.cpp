@@ -357,17 +357,8 @@ namespace auik::v2
     void Slider::on_drag(const amal::vec2 &delta, KeyPressState state)
     {
         (void)delta;
-        if (state == KeyPressState::press)
-        {
-            _drag_started = true;
-            update_value_from_mouse();
-        }
-        else if (state == KeyPressState::repeat)
-        {
-            if (!_drag_started) _drag_started = true;
-            update_value_from_mouse();
-        }
-        else if (state == KeyPressState::release) { _drag_started = false; }
+        if (state == KeyPressState::press || state == KeyPressState::repeat) update_value_from_mouse();
+        else if (state == KeyPressState::release) {}
         else return;
 
         add_render_command<detail::DragEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
@@ -729,17 +720,8 @@ namespace auik::v2
     void GradientSlider::on_drag(const amal::vec2 &delta, KeyPressState state)
     {
         (void)delta;
-        if (state == KeyPressState::press)
-        {
-            _drag_started = true;
-            update_value_from_mouse();
-        }
-        else if (state == KeyPressState::repeat)
-        {
-            if (!_drag_started) _drag_started = true;
-            update_value_from_mouse();
-        }
-        else if (state == KeyPressState::release) { _drag_started = false; }
+        if (state == KeyPressState::press || state == KeyPressState::repeat) update_value_from_mouse();
+        else if (state == KeyPressState::release) {}
         else return;
 
         add_render_command<detail::DragEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
@@ -806,6 +788,357 @@ namespace auik::v2
     }
 
     void GradientSlider::rebuild_cached_visuals()
+    {
+        rebuild_track_visuals();
+        rebuild_grab_visual();
+    }
+
+    TransparencySlider::TransparencySlider(u32 id, f32 *value, f32 min_value, f32 max_value, f32 width,
+                                           const amal::vec4 &color, WidgetFlags widget_flags, Widget *parent)
+        : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::drag, parent, {{0.0f, 0.0f}, {width, 0.0f}},
+                 AUIK_TAG_GRADIENT_SLIDER),
+          _value(value),
+          _min_value(min_value),
+          _max_value(max_value),
+          _color(color)
+    {
+        _track_style.tag_id = AUIK_TAG_GRADIENT_SLIDER;
+        _grab_style.tag_id = AUIK_TAG_GRADIENT_SLIDER_GRAB;
+        _grab_hit_rect = detail::make_rect_data(id, _grab_style.tag_id);
+        _colors.resize(2u);
+        rebuild_gradient_colors();
+        if (_max_value < _min_value) std::swap(_min_value, _max_value);
+        set_value(value ? *value : _min_value);
+    }
+
+    StyleUpdateFlags TransparencySlider::update_style()
+    {
+        const u32 parent_id = parent() ? parent()->id() : 0u;
+
+        StyleUpdateFlags out = StyleUpdateFlagBits::none;
+        bool track_changed = false;
+        bool grab_changed = false;
+
+        auto resolve_track_state = [&](StyleState state) -> StyleUpdateFlags {
+            const auto flags = resolve_style_selector(_track_style, _track_style.tag_id, parent_id, state);
+            if (flags & StyleUpdateFlagBits::redraw) track_changed = true;
+            return flags;
+        };
+
+        auto resolve_grab_state = [&](StyleState state) -> StyleUpdateFlags {
+            const auto flags = resolve_style_selector(_grab_style, _grab_style.tag_id, parent_id, state);
+            if (flags & StyleUpdateFlagBits::redraw) grab_changed = true;
+            return flags;
+        };
+
+        if (_track_style.id == Theme::STYLE_ID_INVALID) out |= resolve_track_state(StyleState::normal);
+        if (_grab_style.id == Theme::STYLE_ID_INVALID) out |= resolve_grab_state(StyleState::normal);
+
+        const auto transition = detail::get_widget_style_selector_transition(id());
+        if (transition.prev_tag_id == _grab_style.tag_id &&
+            (transition.current_tag_id != _grab_style.tag_id || transition.prev_state != transition.current_state))
+            out |= resolve_grab_state(StyleState::normal);
+        if (transition.current_tag_id == _grab_style.tag_id) out |= resolve_grab_state(transition.current_state);
+
+        const StyleState widget_grab_state = detail::resolve_grab_visual_state(style_state());
+        if (widget_grab_state == StyleState::active || widget_grab_state == StyleState::focus)
+            out |= resolve_grab_state(widget_grab_state);
+
+        if (track_changed) rebuild_track_visuals();
+        if (grab_changed) rebuild_grab_visual();
+        return out;
+    }
+
+    amal::vec2 TransparencySlider::resolve_grab_size(const Style &grab_style) const
+    {
+        const amal::vec4 grab_padding = grab_style.padding();
+        return {amal::max(grab_padding.x + grab_padding.z, 1.0f), amal::max(grab_padding.y + grab_padding.w, 1.0f)};
+    }
+
+    amal::vec4 TransparencySlider::resolve_active_color(f32 factor) const
+    {
+        return {_color.r, _color.g, _color.b, factor};
+    }
+
+    void TransparencySlider::rebuild_gradient_colors()
+    {
+        if (_colors.size() < 2u) _colors.resize(2u);
+        _colors[0] = {_color.r, _color.g, _color.b, 0.0f};
+        _colors[1] = {_color.r, _color.g, _color.b, 1.0f};
+    }
+
+    void TransparencySlider::update_layout_min_size()
+    {
+        const auto &track_style = get_theme()->get_style(_track_style.id);
+        const amal::vec4 margin = track_style.margin();
+        const amal::vec4 padding = track_style.padding();
+
+        amal::vec2 min_size = size();
+        if (!is_fixed()) min_size.x = 0.0f;
+        else if (min_size.x <= 0.0f) min_size.x = 160.0f;
+
+        const f32 min_track_h =
+            amal::max(6.0f, track_style.border_radius() > 0.0f ? track_style.border_radius() * 2.0f : 0.0f);
+        const f32 padded_h = padding.y + padding.w;
+        const f32 total_h = padded_h > 0.0f ? padded_h : min_track_h;
+
+        if (min_size.y <= 0.0f) min_size.y = total_h;
+        else min_size.y = amal::max(min_size.y, total_h);
+        if (min_size.x > 0.0f) min_size.x = amal::max(min_size.x, 24.0f + margin.x + margin.z);
+        set_required_size({min_size.x + margin.x + margin.z, min_size.y + margin.y + margin.w});
+    }
+
+    void TransparencySlider::update_layout(bool min_size_known)
+    {
+        if (!min_size_known) update_layout_min_size();
+
+        const auto &style = get_theme()->get_style(_track_style.id);
+        const amal::vec2 cursor = detail::get_context().screen_cursor;
+        const amal::vec4 margin = style.margin();
+        const amal::vec2 min_required = required_size();
+        amal::vec2 slider_size = size();
+        if (!is_fixed())
+            slider_size.x = amal::max(slider_size.x - margin.x - margin.z, min_required.x - margin.x - margin.z);
+        else slider_size.x = amal::max(slider_size.x, min_required.x - margin.x - margin.z);
+        slider_size.y = amal::max(slider_size.y, min_required.y - margin.y - margin.w);
+
+        const amal::vec2 pos = {cursor.x + margin.x, cursor.y + margin.y};
+        set_position(pos);
+        set_size(slider_size);
+        Widget::update_layout(true);
+        assert(parent() && "TransparencySlider must have parent");
+        set_clip_id(parent()->content_clip_id());
+        _grab_hit_rect.clip_id = clip_id();
+
+        rebuild_track_visuals();
+        rebuild_grab_visual();
+        detail::get_context().screen_cursor = {cursor.x, pos.y + slider_size.y + margin.w};
+    }
+
+    void TransparencySlider::translate(const amal::vec2 &delta)
+    {
+        if (delta.x == 0.0f && delta.y == 0.0f) return;
+        Widget::translate(delta);
+        detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
+        _track_rect.offset += delta;
+        _grab_rect.offset += delta;
+        _grab_hit_rect.bounds.offset += delta;
+        rebuild_track_visuals();
+        rebuild_grab_visual();
+    }
+
+    void TransparencySlider::rebuild_clip_rects()
+    {
+        assert(parent() && "TransparencySlider must have parent");
+        set_clip_id(parent()->content_clip_id());
+        _track_visual.background_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+        _track_visual.fill_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+        _track_visual.border_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+        _gradient_visual.draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+        _grab_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+        _grab_back_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+        _grab_hit_rect.clip_id = clip_id();
+        rebuild_track_visuals();
+        rebuild_grab_visual();
+    }
+
+    void TransparencySlider::update_depth(const amal::vec2 &depth_range)
+    {
+        Widget::update_depth(depth_range);
+        assign_next_depth(this->depth_range(), _track_depth_range);
+        assign_next_depth(_track_depth_range, _grab_depth_range);
+        rebuild_track_visuals();
+        rebuild_grab_visual();
+    }
+
+    void TransparencySlider::draw(DrawCtx &ctx)
+    {
+        auto *quad_stream = get_primary_quads_stream();
+        auto *overlay_quad_stream = get_overlay_quads_stream();
+        auto *vertex_stream = get_primary_vertex_stream();
+        bool hit_pending = ctx.emit_hit_rect;
+
+        if (_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::background))
+        {
+            ctx.emit(quad_stream, _track_visual.background_draw_id, &_track_visual.background, get_rect(), hit_pending);
+            hit_pending = false;
+        }
+        if (_gradient_visual.valid)
+        {
+            ctx.emit(vertex_stream, _gradient_visual.draw_id, &_gradient_visual.data.batch, get_rect(), hit_pending);
+            hit_pending = false;
+        }
+        if (_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::border))
+        {
+            ctx.emit(quad_stream, _track_visual.border_draw_id, &_track_visual.border, get_rect(), hit_pending);
+            hit_pending = false;
+        }
+        if (_grab_back_visual.rect.size.x > 0.0f && _grab_back_visual.rect.size.y > 0.0f)
+            ctx.emit(overlay_quad_stream, _grab_back_draw_id, &_grab_back_visual, _grab_hit_rect, false);
+        ctx.emit(overlay_quad_stream, _grab_draw_id, &_grab_visual, _grab_hit_rect, ctx.emit_hit_rect);
+    }
+
+    bool TransparencySlider::has_draw_record() const
+    {
+        if (_grab_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
+        if (_grab_back_visual.rect.size.x > 0.0f && _grab_back_visual.rect.size.y > 0.0f &&
+            _grab_back_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID)
+            return false;
+        if (_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::background) &&
+            _track_visual.background_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID)
+            return false;
+        if (_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::border) &&
+            _track_visual.border_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID)
+            return false;
+        if (_gradient_visual.valid && _gradient_visual.draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
+        return true;
+    }
+
+    void TransparencySlider::set_value(f32 new_value)
+    {
+        if (!_value) return;
+        f32 clamped = amal::clamp(new_value, _min_value, _max_value);
+        if (_step > 0.0f)
+        {
+            const f32 normalized = (clamped - _min_value) / _step;
+            clamped = _min_value + amal::round(normalized) * _step;
+            clamped = amal::clamp(clamped, _min_value, _max_value);
+        }
+        if (*_value == clamped) return;
+        *_value = clamped;
+        detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
+        rebuild_grab_visual();
+    }
+
+    void TransparencySlider::set_step(f32 step)
+    {
+        _step = amal::max(step, 0.0f);
+        if (_value) set_value(*_value);
+    }
+
+    void TransparencySlider::set_color(const amal::vec4 &color)
+    {
+        if (_color == color) return;
+        _color = color;
+        rebuild_gradient_colors();
+        rebuild_track_visuals();
+        rebuild_grab_visual();
+    }
+
+    void TransparencySlider::update_value_from_mouse()
+    {
+        if (!_value) return;
+        const f32 width = amal::max(_track_rect.size.x, 1e-5f);
+        const f32 t = amal::clamp((get_mouse_pos().x - _track_rect.offset.x) / width, 0.0f, 1.0f);
+        set_value(_min_value + (_max_value - _min_value) * t);
+    }
+
+    void TransparencySlider::on_click(MouseKey key, KeyPressState state, u32 click_count)
+    {
+        (void)click_count;
+        if (key != MouseKey::left) return;
+
+        if (state == KeyPressState::press)
+        {
+            update_value_from_mouse();
+            add_render_command<detail::ClickEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
+            return;
+        }
+
+        if (state == KeyPressState::release)
+            add_render_command<detail::ClickEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
+    }
+
+    void TransparencySlider::on_drag(const amal::vec2 &delta, KeyPressState state)
+    {
+        (void)delta;
+        if (state == KeyPressState::press || state == KeyPressState::repeat) update_value_from_mouse();
+        else if (state == KeyPressState::release) {}
+        else return;
+
+        add_render_command<detail::DragEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
+    }
+
+    void TransparencySlider::rebuild_track_visuals()
+    {
+        if (_track_style.id == Theme::STYLE_ID_INVALID || _grab_style.id == Theme::STYLE_ID_INVALID) return;
+        const auto &track_style = get_theme()->get_style(_track_style.id);
+        _track_rect = detail::resolve_slider_track_rect(bounds(), track_style);
+        detail::build_quad_slider_track_visual(_track_visual, track_style, _track_rect, _track_depth_range, clip_id());
+        _track_visual.background.mask |= (static_cast<u32>(AUIK_HAS_CHECKER_BIT) << 20u);
+        _track_visual.background.background_color = detail::pack_rgba8(0, 0, 0, 0);
+
+        _gradient_visual.clear_payload();
+        if (!amal::is_rect_empty(_track_rect) && _colors.size() >= 2u)
+        {
+            _gradient_visual.valid =
+                build_gradient_rect_vertex_data(_gradient_visual.data, _track_rect, detail::mid_depth(_track_depth_range),
+                                                clip_id(), _colors.data(), static_cast<u32>(_colors.size()),
+                                                track_style.border_radius(), track_style.corner_mask(), 1.0f);
+        }
+
+        if (track_style.has_visible_border())
+        {
+            _track_visual.set_layer(detail::SliderTrackVisual::LayerBits::border);
+            amal::vec2 border_range{};
+            assign_next_depth(_track_depth_range, border_range);
+            detail::fill_border_only_instance(track_style, _track_rect, detail::mid_depth(border_range), clip_id(),
+                                              _track_visual.border);
+        }
+        else _track_visual.clear_layer(detail::SliderTrackVisual::LayerBits::border);
+    }
+
+    void TransparencySlider::rebuild_grab_visual()
+    {
+        if (_track_style.id == Theme::STYLE_ID_INVALID || _grab_style.id == Theme::STYLE_ID_INVALID) return;
+
+        const auto &grab_style = get_theme()->get_style(_grab_style.id);
+        const amal::vec2 grab_size = resolve_grab_size(grab_style);
+        const f32 grab_w = amal::max(amal::round(grab_size.x), 3.0f);
+        const f32 grab_h = amal::max(amal::round(grab_size.y), 3.0f);
+        const f32 range = amal::max(_max_value - _min_value, 1e-5f);
+        const f32 factor = amal::clamp((value() - _min_value) / range, 0.0f, 1.0f);
+        const f32 half_grab_w = grab_w * 0.5f;
+        const f32 half_grab_h = grab_h * 0.5f;
+        const f32 min_center_x = _track_rect.offset.x + half_grab_w;
+        const f32 max_center_x = _track_rect.offset.x + _track_rect.size.x - half_grab_w;
+        f32 center_x = _track_rect.offset.x + _track_rect.size.x * factor;
+        if (max_center_x > min_center_x) center_x = min_center_x + (max_center_x - min_center_x) * factor;
+        else center_x = _track_rect.offset.x + _track_rect.size.x * 0.5f;
+        center_x = detail::apply_edge_grab_bias(center_x, factor);
+        const f32 center_y = _track_rect.offset.y + _track_rect.size.y * 0.5f;
+        _grab_rect.offset.x = center_x - half_grab_w;
+        _grab_rect.offset.y = amal::round(center_y - half_grab_h);
+        _grab_rect.size.x = grab_w;
+        _grab_rect.size.y = grab_h;
+        _grab_hit_rect.bounds = _grab_rect;
+        _grab_hit_rect.depth = detail::mid_depth(_grab_depth_range);
+
+        const u16 grab_clip_id = clip_id();
+        const f32 grab_z = detail::mid_depth(_grab_depth_range);
+        _grab_visual.rect = _grab_rect;
+        _grab_visual.z_order = grab_z;
+        _grab_back_visual = {};
+
+        if (const Style *border_style = get_theme()->get_desc_style(AUIK_TAG_GRADIENT_SLIDER_GRAB_BORDER))
+        {
+            const amal::vec2 border_size = resolve_grab_size(*border_style);
+            const f32 border_w = amal::max(amal::round(border_size.x), _grab_rect.size.x);
+            const f32 border_h = amal::max(amal::round(border_size.y), _grab_rect.size.y);
+            amal::rect border_rect{};
+            border_rect.size = {border_w, border_h};
+            border_rect.offset.x = center_x - border_w * 0.5f;
+            border_rect.offset.y = amal::round(center_y - border_h * 0.5f);
+            detail::fill_gradient_grab_instance(*border_style, border_rect, grab_z, grab_clip_id,
+                                                border_style->background_color(), border_style->border_thickness(),
+                                                _grab_back_visual);
+        }
+
+        detail::fill_gradient_grab_instance(grab_style, _grab_rect, grab_z, grab_clip_id, resolve_active_color(factor),
+                                            grab_style.border_thickness(), _grab_visual);
+    }
+
+    void TransparencySlider::rebuild_cached_visuals()
     {
         rebuild_track_visuals();
         rebuild_grab_visual();
