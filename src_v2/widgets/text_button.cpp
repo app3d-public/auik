@@ -6,7 +6,7 @@ namespace auik::v2
 {
     static inline bool is_style_only_draw_update(const DrawCtx &ctx)
     {
-        if (ctx.emit != &emit_draw_update) return false;
+        if (!ctx.is_updating()) return false;
         if (!(ctx.reason & DrawReasonBits::style)) return false;
         if (ctx.reason & DrawReasonBits::layout) return false;
         if (ctx.reason & DrawReasonBits::full_redraw) return false;

@@ -122,8 +122,8 @@ namespace auik::v2
             detail::g_context = nullptr;
             return false;
         }
-        ctx.host_refresh_request = create_info.host_refresh_request;
-        ctx.pending_filter = create_info.pending_filter;
+        ctx.host_refresh_request = create_info.sync_options.host_refresh_request;
+        ctx.pending_filter = create_info.sync_options.pending_filter;
         detail::init_atlas_state(ctx.atlas_state);
         ctx.raw_mouse_mode = false;
         ctx.frames_in_flight = create_info.frames_in_flight;
@@ -170,6 +170,12 @@ namespace auik::v2
         for (auto *widget : detail::g_context->widget_tree) acul::release(widget);
         detail::destroy_atlas_state(detail::g_context->atlas_state);
         destroy_cached_images(*detail::g_context);
+        for (auto *effect : detail::g_context->post_effects)
+        {
+            if (!effect) continue;
+            destroy_post_effect(effect);
+        }
+        detail::g_context->post_effects.clear();
         detail::destroy_shared_buffer_sync_state(detail::g_context->shared_sync_state[AUIK_SYNC_CLIP_RECT]);
         detail::destroy_shared_buffer_sync_state(detail::g_context->shared_sync_state[AUIK_SYNC_HIT_RECT]);
         if (detail::g_context->ft_library)
@@ -333,9 +339,35 @@ namespace auik::v2
         compact_delayed_tasks(ctx);
     }
 
+    APPLIB_API void pause_delayed_tasks(f64 now)
+    {
+        auto &ctx = detail::get_context();
+        if (ctx.delayed_tasks_pause_time >= 0.0) return;
+        ctx.delayed_tasks_pause_time = now;
+    }
+
+    APPLIB_API void resume_delayed_tasks(f64 now)
+    {
+        auto &ctx = detail::get_context();
+        if (ctx.delayed_tasks_pause_time < 0.0) return;
+        const f64 paused_dt = now - ctx.delayed_tasks_pause_time;
+        ctx.delayed_tasks_pause_time = -1.0;
+        if (paused_dt <= 0.0) return;
+
+        bool has_live_tasks = false;
+        for (auto &task : ctx.delayed_tasks)
+        {
+            if (!task.fn) continue;
+            task.due_time += paused_dt;
+            has_live_tasks = true;
+        }
+        if (has_live_tasks) detail::mark_host_refresh_request();
+    }
+
     APPLIB_API f64 next_delayed_task_in(f64 now)
     {
         auto &ctx = detail::get_context();
+        if (ctx.delayed_tasks_pause_time >= 0.0) return -1.0;
         f64 next = -1.0;
         for (const auto &task : ctx.delayed_tasks)
         {
@@ -350,6 +382,7 @@ namespace auik::v2
     APPLIB_API bool dispatch_delayed_tasks(f64 now)
     {
         auto &ctx = detail::get_context();
+        if (ctx.delayed_tasks_pause_time >= 0.0) return false;
         acul::vector<acul::unique_function<void()>> due_tasks;
         for (auto &task : ctx.delayed_tasks)
         {

@@ -3,12 +3,45 @@
 #include <acul/api.hpp>
 #include <acul/enum.hpp>
 #include <acul/scalars.hpp>
-#include <cassert>
-#include <cstddef>
 #include "detail/context.hpp"
 
 namespace auik::v2
 {
+    using PostEffectRecordFn = DrawDataID (*)(void *effect_data, DrawStream *, const void *draw_data,
+                                              const void *post_data);
+    using PostEffectUpdateFn = void (*)(void *effect_data, DrawStream *, DrawDataID draw_id, const void *draw_data,
+                                        const void *post_data);
+    using PostEffectDestroyFn = void (*)(void *effect_data);
+    using PostEffectRuntimeClearFn = void (*)(void *runtime_data);
+    using PostEffectRuntimeDestroyFn = void (*)(void *runtime_data);
+    using PostEffectPushInstanceFn = u32 (*)(PostEffect *, Widget *, const void *);
+    using PostEffectUpdateInstanceFn = void (*)(PostEffect *, u32, Widget *, const void *);
+    using PostEffectRetainInstanceFn = void (*)(PostEffect *, u32);
+    using PostEffectReleaseInstanceFn = void (*)(PostEffect *, u32);
+    using PostEffectIsInstanceValidFn = bool (*)(const PostEffect *, u32);
+
+    struct PostEffectNode
+    {
+        void *data = nullptr;
+        PostEffectRecordFn record = nullptr;
+        PostEffectUpdateFn update = nullptr;
+        PostEffectDestroyFn destroy = nullptr;
+    };
+
+    struct PostEffect
+    {
+        PostEffectNode **slots = nullptr;
+        u32 slot_count = 0;
+        void *runtime_data = nullptr;
+        PostEffectRuntimeClearFn clear_runtime = nullptr;
+        PostEffectRuntimeDestroyFn destroy_runtime = nullptr;
+        PostEffectPushInstanceFn push_instance = nullptr;
+        PostEffectUpdateInstanceFn update_instance = nullptr;
+        PostEffectRetainInstanceFn retain_instance = nullptr;
+        PostEffectReleaseInstanceFn release_instance = nullptr;
+        PostEffectIsInstanceValidFn is_instance_valid = nullptr;
+    };
+
     struct DrawReasonBits
     {
         enum enum_type : u16
@@ -49,6 +82,7 @@ namespace auik::v2
         DrawPipeline *pipeline = nullptr;
         u32 *draw_sizes = nullptr;
         u8 flags = StreamFlagBits::none;
+        u16 post_slot_id = 0xFFFFu;
     };
 
     inline DrawDataID push_data_to_stream(DrawStream *stream, void *data)
@@ -100,11 +134,31 @@ namespace auik::v2
         stream->destroy(stream);
     }
 
+    struct DrawCtx;
+    using PFN_DrawEmit = DrawDataID (*)(const DrawCtx &, DrawStream *, DrawDataID &, const void *,
+                                        const detail::RectData &, bool);
+    APPLIB_API DrawDataID emit_draw_record(const DrawCtx &ctx, DrawStream *stream, DrawDataID &draw_id, const void *data,
+                                           const detail::RectData &rect, bool emit_hit_rect);
+    APPLIB_API DrawDataID emit_draw_update(const DrawCtx &ctx, DrawStream *stream, DrawDataID &draw_id, const void *data,
+                                           const detail::RectData &rect, bool emit_hit_rect);
+
     struct DrawCtx
     {
-        DrawDataID (*emit)(DrawStream *, DrawDataID &, const void *, const detail::RectData &, bool) = nullptr;
+        PFN_DrawEmit emit_fn = nullptr;
         bool emit_hit_rect = true;
         DrawReasonFlags reason = DrawReasonBits::none;
+        PostEffect *post_effect = nullptr;
+        const void *post_data = nullptr;
+
+        DrawDataID emit(DrawStream *stream, DrawDataID &draw_id, const void *data, const detail::RectData &rect,
+                        bool emit_hit_rect_value) const
+        {
+            assert(emit_fn && "DrawCtx emitter is not configured");
+            return emit_fn(*this, stream, draw_id, data, rect, emit_hit_rect_value);
+        }
+
+        bool is_recording() const { return emit_fn == &emit_draw_record; }
+        bool is_updating() const { return emit_fn == &emit_draw_update; }
     };
 
     inline void update_hit_rect(u32 &hit_id, const detail::RectData &rect, bool force_update)
@@ -125,28 +179,7 @@ namespace auik::v2
         }
     }
 
-    inline DrawDataID emit_draw_record(DrawStream *stream, DrawDataID &draw_id, const void *data,
-                                       const detail::RectData &rect, bool emit_hit_rect)
-    {
-        assert(stream);
-        const DrawDataID stream_id = stream->push_data_to_stream(stream, data);
-        draw_id.render_id = stream_id.render_id;
-        if (emit_hit_rect) update_hit_rect(draw_id.hit_id, rect, true);
-        return draw_id;
-    }
-
-    inline DrawDataID emit_draw_update(DrawStream *stream, DrawDataID &draw_id, const void *data,
-                                       const detail::RectData &rect, bool emit_hit_rect)
-    {
-        assert(stream);
-        assert(draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID && "Update called before record");
-        stream->update_data_in_stream(stream, draw_id, data);
-        if (emit_hit_rect)
-        {
-            const bool is_dirty_hit_rect_update = detail::get_context().dirty_flags & DirtyFlagBits::hit_rect_update;
-            update_hit_rect(draw_id.hit_id, rect, is_dirty_hit_rect_update);
-        }
-        return draw_id;
-    }
+    APPLIB_API bool is_post_effect_supported(const DrawStream *stream, const PostEffect *effect);
+    APPLIB_API void destroy_post_effect(PostEffect *effect);
 
 } // namespace auik::v2

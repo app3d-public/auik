@@ -172,7 +172,7 @@ namespace auik::v2
             detail::RectData hit_rect = get_rect();
             hit_rect.bounds = _content_bounds;
             const bool force_update =
-                (ctx.emit == &emit_draw_record) || (detail::get_context().dirty_flags & DirtyFlagBits::hit_rect_update);
+                ctx.is_recording() || (detail::get_context().dirty_flags & DirtyFlagBits::hit_rect_update);
             update_hit_rect(_hit_id, hit_rect, force_update);
         }
 
@@ -196,7 +196,7 @@ namespace auik::v2
             }
         }
 
-        if (ctx.emit == &emit_draw_record)
+        if (ctx.is_recording())
         {
             _draw_ids.resize(_instances.size());
             push_textured_quads_batch_to_stream(textured_quads_stream, _instances.data(),

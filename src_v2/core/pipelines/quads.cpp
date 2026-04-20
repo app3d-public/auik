@@ -178,5 +178,6 @@ namespace auik::v2
         stream.flags = StreamFlagBits::none;
         stream.render = &detail::render_quads_stream;
         stream.sync_stream = &detail::sync_quads_stream;
+        stream.post_slot_id = 0u;
     }
 } // namespace auik::v2

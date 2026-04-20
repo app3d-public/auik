@@ -4,13 +4,20 @@
 #include <acul/vector.hpp>
 #include "slider.hpp"
 
+#define AUIK_VAR_COLOR_PICKER_SIZE        0x81C54C6Eu
+#define AUIK_TAG_CIRCLE_COLOR_PICKER      0xD3C6A92Fu
+#define AUIK_TAG_CIRCLE_COLOR_PICKER_GRAB 0x5A9E10C4u
+#define AUIK_TAG_SQUARE_COLOR_PICKER      0x18D73B9Au
+#define AUIK_TAG_SQUARE_COLOR_PICKER_GRAB 0x9B41E062u
+
 namespace auik::v2
 {
     class APPLIB_API CircleColorPicker final : public Widget
     {
     public:
         CircleColorPicker(u32 id, amal::vec4 *value, f32 diameter = 0.0f,
-                          WidgetFlags widget_flags = get_default_widget_flags() | WidgetFlagBits::hittable,
+                          WidgetFlags widget_flags = get_default_widget_flags() | WidgetFlagBits::hittable |
+                                                     WidgetFlagBits::fixed,
                           Widget *parent = nullptr);
 
         StyleUpdateFlags update_style() override;
@@ -28,6 +35,7 @@ namespace auik::v2
         bool has_draw_record() const;
 
     private:
+        f32 _preferred_side = 0.0f;
         amal::vec4 *_value = nullptr;
         amal::vec4 _resolved_color = {1.0f, 1.0f, 1.0f, 1.0f};
         f32 _hue_deg = 0.0f;
@@ -51,10 +59,12 @@ namespace auik::v2
         detail::RectData _grab_hit_rect{};
         amal::vec2 _track_depth_range{0.0f, 1.0f};
         amal::vec2 _grab_depth_range{0.0f, 1.0f};
+        bool _cache_valid = false;
 
         void rebuild_wheel_visual();
         void rebuild_grab_visual();
         void rebuild_cached_visuals();
+        void translate_cached_visuals(const amal::vec2 &delta);
         void rebuild_layout_cache();
         void update_value_from_mouse();
         void set_hue_radius(f32 hue_deg, f32 radius_t);
@@ -64,12 +74,17 @@ namespace auik::v2
 
     inline CircleColorPicker *make_circle_color_picker(u32 id, amal::vec4 *value, Widget *parent = nullptr)
     {
-        return acul::alloc<CircleColorPicker>(id, value, 0.0f, get_default_widget_flags() | WidgetFlagBits::hittable,
+        auto *theme = get_theme();
+        assert(theme && "theme is null");
+        f32 diameter = theme->get_var<f32>(AUIK_VAR_COLOR_PICKER_SIZE);
+        return acul::alloc<CircleColorPicker>(id, value, diameter,
+                                              get_default_widget_flags() | WidgetFlagBits::hittable |
+                                                  WidgetFlagBits::fixed,
                                               parent);
     }
 
-    inline CircleColorPicker *make_fixed_circle_color_picker(u32 id, amal::vec4 *value, f32 diameter,
-                                                              Widget *parent = nullptr)
+    inline CircleColorPicker *make_circle_color_picker(u32 id, amal::vec4 *value, f32 diameter,
+                                                       Widget *parent = nullptr)
     {
         return acul::alloc<CircleColorPicker>(id, value, diameter,
                                               get_default_widget_flags() | WidgetFlagBits::hittable |
@@ -81,7 +96,8 @@ namespace auik::v2
     {
     public:
         SquareColorPicker(u32 id, amal::vec4 *value, f32 size = 0.0f,
-                          WidgetFlags widget_flags = get_default_widget_flags() | WidgetFlagBits::hittable,
+                          WidgetFlags widget_flags = get_default_widget_flags() | WidgetFlagBits::hittable |
+                                                     WidgetFlagBits::fixed,
                           Widget *parent = nullptr);
 
         StyleUpdateFlags update_style() override;
@@ -106,6 +122,7 @@ namespace auik::v2
             square
         };
 
+        f32 _preferred_side = 0.0f;
         amal::vec4 *_value = nullptr;
         amal::vec4 _resolved_color = {1.0f, 0.0f, 0.0f, 1.0f};
         f32 _hue_deg = 0.0f;
@@ -143,12 +160,14 @@ namespace auik::v2
         amal::vec2 _square_overlay_depth_range{0.0f, 1.0f};
         amal::vec2 _grab_depth_range{0.0f, 1.0f};
         ActiveZone _active_zone = ActiveZone::none;
+        bool _cache_valid = false;
 
         void rebuild_layout_geometry();
         void rebuild_ring_visual();
         void rebuild_square_visual();
         void rebuild_grab_visuals();
         void rebuild_cached_visuals();
+        void translate_cached_visuals(const amal::vec2 &delta);
         void update_value_from_mouse();
         void set_hsv(f32 hue_deg, f32 saturation, f32 value_t);
         void sync_batches();
@@ -158,12 +177,13 @@ namespace auik::v2
 
     inline SquareColorPicker *make_square_color_picker(u32 id, amal::vec4 *value, Widget *parent = nullptr)
     {
-        return acul::alloc<SquareColorPicker>(id, value, 0.0f, get_default_widget_flags() | WidgetFlagBits::hittable,
+        return acul::alloc<SquareColorPicker>(id, value, 0.0f,
+                                              get_default_widget_flags() | WidgetFlagBits::hittable |
+                                                  WidgetFlagBits::fixed,
                                               parent);
     }
 
-    inline SquareColorPicker *make_fixed_square_color_picker(u32 id, amal::vec4 *value, f32 size,
-                                                              Widget *parent = nullptr)
+    inline SquareColorPicker *make_square_color_picker(u32 id, amal::vec4 *value, f32 size, Widget *parent = nullptr)
     {
         return acul::alloc<SquareColorPicker>(id, value, size,
                                               get_default_widget_flags() | WidgetFlagBits::hittable |

@@ -46,7 +46,7 @@ namespace auik::v2
             data.z_order = z_order;
             fill_quads_instance_by_style(style, clip_id, data);
             data.background_color = pack_rgba8(background_color);
-            data.border_color = pack_rgba8(0, 0, 0, 255);
+            data.border_color = pack_rgba8(style.border_color());
             data.border_thickness = border_thickness;
             data.border_radius = amal::max(0.0f, amal::min(rect.size.x, rect.size.y) * 0.5f);
             data.mask |= (static_cast<u32>(AUIK_HAS_BORDER_BIT) << 20u);
@@ -465,26 +465,19 @@ namespace auik::v2
     }
 
     GradientSlider::GradientSlider(u32 id, f32 *value, f32 min_value, f32 max_value, f32 width,
-                                   const amal::vec4 *colors, u32 color_count, WidgetFlags widget_flags, Widget *parent,
-                                   GradientTrackKind gradient_kind)
+                                   const amal::vec4 *colors, u32 color_count, WidgetFlags widget_flags,
+                                   Widget *parent)
         : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::drag, parent, {{0.0f, 0.0f}, {width, 0.0f}},
                  AUIK_TAG_GRADIENT_SLIDER),
           _value(value),
           _min_value(min_value),
-          _max_value(max_value),
-          _gradient_kind(gradient_kind)
+          _max_value(max_value)
     {
         _track_style.tag_id = AUIK_TAG_GRADIENT_SLIDER;
         _grab_style.tag_id = AUIK_TAG_GRADIENT_SLIDER_GRAB;
         _grab_hit_rect = detail::make_rect_data(id, _grab_style.tag_id);
         _colors.reserve(color_count);
         for (u32 i = 0; i < color_count; ++i) _colors.push_back(colors[i]);
-        if (_gradient_kind == GradientTrackKind::hsl)
-        {
-            constexpr u32 width_hsl = 360u;
-            _hsl_cache.resize(width_hsl);
-            for (u32 i = 0; i < width_hsl; ++i) _hsl_cache[i] = amal::hsl_to_rgba(static_cast<f32>(i), 1.0f, 0.5f);
-        }
         if (_max_value < _min_value) std::swap(_min_value, _max_value);
         set_value(value ? *value : _min_value);
     }
@@ -537,11 +530,7 @@ namespace auik::v2
 
     amal::vec4 GradientSlider::resolve_active_color(f32 factor) const
     {
-        amal::vec4 color = detail::sample_gradient_color(_colors.data(), static_cast<u32>(_colors.size()), factor);
-        if (_gradient_kind != GradientTrackKind::hsl) return color;
-        if (_hsl_cache.empty()) return color;
-        const u32 index = amal::clamp(static_cast<u32>(amal::round(factor * 359.0f)), 0u, 359u);
-        return _hsl_cache[index];
+        return detail::sample_gradient_color(_colors.data(), static_cast<u32>(_colors.size()), factor);
     }
 
     void GradientSlider::update_layout_min_size()

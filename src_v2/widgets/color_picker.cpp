@@ -8,22 +8,22 @@
 #define AUIK_CIRCLE_FRINGE_TESSELLATION_MAX_ERROR 0.15f
 #define AUIK_CIRCLE_SEGMENTS_MIN                  4u
 #define AUIK_CIRCLE_SEGMENTS_MAX                  512u
-#define AUIK_CIRCLE_PICKER_MIN_SIDE               120.0f
-#define AUIK_SQUARE_PICKER_MIN_SIDE               120.0f
 #define AUIK_SQUARE_PICKER_RING_WIDTH_FACTOR      (16.0f / 180.0f)
 #define AUIK_SQUARE_PICKER_RING_WIDTH_MIN         8.0f
 #define AUIK_SQUARE_PICKER_RING_WIDTH_MAX         18.0f
 #define AUIK_SQUARE_PICKER_RING_FRINGE            2.0f
 #define AUIK_SQUARE_PICKER_INNER_PADDING          4.0f
-#define AUIK_TAG_CIRCLE_COLOR_PICKER              0xD3C6A92Fu
-#define AUIK_TAG_CIRCLE_COLOR_PICKER_GRAB         0x5A9E10C4u
-#define AUIK_TAG_SQUARE_COLOR_PICKER              0x18D73B9Au
-#define AUIK_TAG_SQUARE_COLOR_PICKER_GRAB         0x9B41E062u
 
 namespace auik::v2
 {
     namespace detail
     {
+        static inline f32 resolve_color_picker_size()
+        {
+            const f32 size = get_theme()->get_var<f32>(AUIK_VAR_COLOR_PICKER_SIZE);
+            return amal::max(size > 0.0f ? size : 120.0f, 1.0f);
+        }
+
         static inline u32 calc_circle_auto_segment_count(f32 radius, f32 max_error = AUIK_CIRCLE_TESSELLATION_MAX_ERROR)
         {
             const f32 r = amal::max(radius, 1e-5f);
@@ -37,6 +37,14 @@ namespace auik::v2
             return amal::clamp(segments, AUIK_CIRCLE_SEGMENTS_MIN, AUIK_CIRCLE_SEGMENTS_MAX);
         }
 
+        static inline u32 calc_stable_color_picker_segment_count(f32 max_error = AUIK_CIRCLE_TESSELLATION_MAX_ERROR)
+        {
+            // Keep vertex batch topology stable across layout/scroll updates.
+            // The draw update path can rewrite vertex data in place, but not resize batches.
+            constexpr f32 reference_radius = 96.0f;
+            return calc_circle_auto_segment_count(reference_radius, max_error);
+        }
+
         static inline void fill_circle_grab_instance(const Style &style, const amal::rect &rect, f32 z_order,
                                                      u16 clip_id, const amal::vec4 &background_color,
                                                      QuadsInstanceData &data)
@@ -45,7 +53,7 @@ namespace auik::v2
             data.z_order = z_order;
             fill_quads_instance_by_style(style, clip_id, data);
             data.background_color = pack_rgba8(background_color);
-            data.border_color = pack_rgba8(0, 0, 0, 255);
+            data.border_color = pack_rgba8(style.border_color());
             data.border_thickness = style.has_visible_border() ? style.border_thickness() : 1.0f;
             data.border_radius = amal::max(0.0f, amal::min(rect.size.x, rect.size.y) * 0.5f);
             data.mask |= (static_cast<u32>(AUIK_HAS_BORDER_BIT) << 20u);
@@ -206,8 +214,9 @@ namespace auik::v2
 
     CircleColorPicker::CircleColorPicker(u32 id, amal::vec4 *value, f32 diameter, WidgetFlags widget_flags,
                                          Widget *parent)
-        : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::drag, parent,
+        : Widget(id, widget_flags | WidgetFlagBits::fixed, EventFlagBits::click | EventFlagBits::drag, parent,
                  {{0.0f, 0.0f}, {diameter, diameter}}, AUIK_TAG_CIRCLE_COLOR_PICKER),
+          _preferred_side(diameter),
           _value(value)
     {
         _grab_hit_rect = detail::make_rect_data(id, AUIK_TAG_CIRCLE_COLOR_PICKER_GRAB);
@@ -288,12 +297,8 @@ namespace auik::v2
     {
         const Style *picker_style = get_theme()->get_desc_style(AUIK_TAG_CIRCLE_COLOR_PICKER);
         const amal::vec4 margin = picker_style ? picker_style->margin() : amal::vec4{0.0f};
-        amal::vec2 min_size = size();
-        const f32 min_side = AUIK_CIRCLE_PICKER_MIN_SIDE;
-        if (!is_fixed()) min_size.x = 0.0f;
-        else if (min_size.x <= 0.0f) min_size.x = min_side;
-        if (min_size.y <= 0.0f) min_size.y = min_size.x > 0.0f ? min_size.x : min_side;
-        const f32 side = amal::max(min_size.x, min_size.y);
+        const f32 theme_side = detail::resolve_color_picker_size();
+        const f32 side = amal::max(_preferred_side > 0.0f ? _preferred_side : theme_side, 1.0f);
         set_required_size({side + margin.x + margin.z, side + margin.y + margin.w});
     }
 
@@ -303,36 +308,21 @@ namespace auik::v2
         const Style *picker_style = get_theme()->get_desc_style(AUIK_TAG_CIRCLE_COLOR_PICKER);
         const amal::vec4 margin = picker_style ? picker_style->margin() : amal::vec4{0.0f};
         const amal::vec2 cursor = detail::get_context().screen_cursor;
-        const amal::vec2 min_required = required_size();
-        const f32 min_side = amal::max(min_required.x - margin.x - margin.z, min_required.y - margin.y - margin.w);
+        const f32 theme_side = detail::resolve_color_picker_size();
+        const f32 side = amal::max(_preferred_side > 0.0f ? _preferred_side : theme_side, 1.0f);
+        const amal::vec2 next_pos = {cursor.x + margin.x, cursor.y + margin.y};
+        const amal::vec2 prev_pos = position();
+        const amal::vec2 prev_size = size();
 
-        f32 side = 0.0f;
-        if (!is_fixed() && parent())
-        {
-            const amal::vec4 parent_clip = parent()->get_content_clip_rect();
-            const f32 available_w = amal::max((parent_clip.x + parent_clip.z) - (cursor.x + margin.x + margin.z), 0.0f);
-            const f32 available_h = amal::max((parent_clip.y + parent_clip.w) - (cursor.y + margin.y + margin.w), 0.0f);
-            const f32 allocated_w = size().x > 0.0f ? amal::max(size().x - margin.x - margin.z, 0.0f) : available_w;
-            const f32 allocated_h = available_h;
-            side = amal::min(amal::min(allocated_w, allocated_h), amal::min(available_w, available_h));
-        }
-        else
-        {
-            side = size().x;
-            if (side > 0.0f) side -= (margin.x + margin.z);
-            if (side <= 0.0f) side = min_required.x - margin.x - margin.z;
-            if (size().y > 0.0f) side = amal::min(side, size().y - margin.y - margin.w);
-            side = amal::max(side, min_side);
-        }
-        side = amal::max(side, 1.0f);
-
-        set_position({cursor.x + margin.x, cursor.y + margin.y});
+        set_position(next_pos);
         set_size({side, side});
+        set_required_size({side + margin.x + margin.z, side + margin.y + margin.w});
         Widget::update_layout(true);
         assert(parent() && "CircleColorPicker must have parent");
         set_clip_id(parent()->content_clip_id());
         _grab_hit_rect.clip_id = clip_id();
-        rebuild_cached_visuals();
+        if (!_cache_valid || prev_size.x != side || prev_size.y != side) rebuild_cached_visuals();
+        else translate_cached_visuals(next_pos - prev_pos);
         detail::get_context().screen_cursor = {cursor.x, cursor.y + side + margin.y + margin.w};
     }
 
@@ -341,7 +331,8 @@ namespace auik::v2
         if (delta.x == 0.0f && delta.y == 0.0f) return;
         Widget::translate(delta);
         detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
-        rebuild_cached_visuals();
+        if (!_cache_valid) rebuild_cached_visuals();
+        else translate_cached_visuals(delta);
     }
 
     void CircleColorPicker::rebuild_clip_rects()
@@ -406,9 +397,9 @@ namespace auik::v2
         if (wheel_radius <= 1e-4f) return;
 
         const amal::vec2 center = _layout.center;
-        const u32 segments = detail::calc_circle_auto_segment_count(wheel_radius_outer);
+        const u32 segments = detail::calc_stable_color_picker_segment_count();
         const u32 fringe_segments =
-            detail::calc_circle_auto_segment_count(wheel_radius_outer, AUIK_CIRCLE_FRINGE_TESSELLATION_MAX_ERROR);
+            detail::calc_stable_color_picker_segment_count(AUIK_CIRCLE_FRINGE_TESSELLATION_MAX_ERROR);
         constexpr bool use_fringe_aa = true;
 
         _wheel_vertices.reserve(1u + (segments + 1u) + (use_fringe_aa ? (fringe_segments + 1u) * 2u : 0u));
@@ -556,14 +547,18 @@ namespace auik::v2
         rebuild_layout_cache();
         rebuild_wheel_visual();
         rebuild_grab_visual();
+        _cache_valid = true;
+    }
 
-        static u32 s_prev_vtx = 0u;
-        static u32 s_prev_idx = 0u;
-        if (s_prev_vtx != _wheel_batch.vertex_count || s_prev_idx != _wheel_batch.index_count)
-        {
-            s_prev_vtx = _wheel_batch.vertex_count;
-            s_prev_idx = _wheel_batch.index_count;
-        }
+    void CircleColorPicker::translate_cached_visuals(const amal::vec2 &delta)
+    {
+        if (delta.x == 0.0f && delta.y == 0.0f) return;
+        _layout.center += delta;
+        _grab_hit_rect.bounds.offset += delta;
+        _grab_visual.rect.offset += delta;
+        _grab_back_visual.rect.offset += delta;
+        for (auto &vertex : _wheel_vertices)
+            vertex.position += delta;
     }
 
     void CircleColorPicker::update_value_from_mouse()
@@ -612,8 +607,10 @@ namespace auik::v2
     }
 
     SquareColorPicker::SquareColorPicker(u32 id, amal::vec4 *value, f32 size, WidgetFlags widget_flags, Widget *parent)
-        : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::drag, parent, {{0.0f, 0.0f}, {size, size}},
+        : Widget(id, widget_flags | WidgetFlagBits::fixed, EventFlagBits::click | EventFlagBits::drag, parent,
+                 {{0.0f, 0.0f}, {size, size}},
                  AUIK_TAG_SQUARE_COLOR_PICKER),
+          _preferred_side(size),
           _value(value)
     {
         _ring_grab_hit_rect = detail::make_rect_data(id, AUIK_TAG_SQUARE_COLOR_PICKER_GRAB);
@@ -651,12 +648,8 @@ namespace auik::v2
     {
         const Style *picker_style = get_theme()->get_desc_style(AUIK_TAG_SQUARE_COLOR_PICKER);
         const amal::vec4 margin = picker_style ? picker_style->margin() : amal::vec4{0.0f};
-        amal::vec2 min_size = size();
-        const f32 min_side = AUIK_SQUARE_PICKER_MIN_SIDE;
-        if (!is_fixed()) min_size.x = 0.0f;
-        else if (min_size.x <= 0.0f) min_size.x = min_side;
-        if (min_size.y <= 0.0f) min_size.y = min_size.x > 0.0f ? min_size.x : min_side;
-        const f32 side = amal::max(min_size.x, min_size.y);
+        const f32 theme_side = detail::resolve_color_picker_size();
+        const f32 side = amal::max(_preferred_side > 0.0f ? _preferred_side : theme_side, 1.0f);
         set_required_size({side + margin.x + margin.z, side + margin.y + margin.w});
     }
 
@@ -666,37 +659,22 @@ namespace auik::v2
         const Style *picker_style = get_theme()->get_desc_style(AUIK_TAG_SQUARE_COLOR_PICKER);
         const amal::vec4 margin = picker_style ? picker_style->margin() : amal::vec4{0.0f};
         const amal::vec2 cursor = detail::get_context().screen_cursor;
-        const amal::vec2 min_required = required_size();
-        const f32 min_side = amal::max(min_required.x - margin.x - margin.z, min_required.y - margin.y - margin.w);
+        const f32 theme_side = detail::resolve_color_picker_size();
+        const f32 side = amal::max(_preferred_side > 0.0f ? _preferred_side : theme_side, 1.0f);
+        const amal::vec2 next_pos = {cursor.x + margin.x, cursor.y + margin.y};
+        const amal::vec2 prev_pos = position();
+        const amal::vec2 prev_size = size();
 
-        f32 side = 0.0f;
-        if (!is_fixed() && parent())
-        {
-            const amal::vec4 parent_clip = parent()->get_content_clip_rect();
-            const f32 available_w = amal::max((parent_clip.x + parent_clip.z) - (cursor.x + margin.x + margin.z), 0.0f);
-            const f32 available_h = amal::max((parent_clip.y + parent_clip.w) - (cursor.y + margin.y + margin.w), 0.0f);
-            const f32 allocated_w = size().x > 0.0f ? amal::max(size().x - margin.x - margin.z, 0.0f) : available_w;
-            const f32 allocated_h = available_h;
-            side = amal::min(amal::min(allocated_w, allocated_h), amal::min(available_w, available_h));
-        }
-        else
-        {
-            side = size().x;
-            if (side > 0.0f) side -= (margin.x + margin.z);
-            if (side <= 0.0f) side = min_required.x - margin.x - margin.z;
-            if (size().y > 0.0f) side = amal::min(side, size().y - margin.y - margin.w);
-            side = amal::max(side, min_side);
-        }
-        side = amal::max(side, 1.0f);
-
-        set_position({cursor.x + margin.x, cursor.y + margin.y});
+        set_position(next_pos);
         set_size({side, side});
+        set_required_size({side + margin.x + margin.z, side + margin.y + margin.w});
         Widget::update_layout(true);
         assert(parent() && "SquareColorPicker must have parent");
         set_clip_id(parent()->content_clip_id());
         _ring_grab_hit_rect.clip_id = clip_id();
         _sv_grab_hit_rect.clip_id = clip_id();
-        rebuild_cached_visuals();
+        if (!_cache_valid || prev_size.x != side || prev_size.y != side) rebuild_cached_visuals();
+        else translate_cached_visuals(next_pos - prev_pos);
         detail::get_context().screen_cursor = {cursor.x, cursor.y + side + margin.y + margin.w};
     }
 
@@ -705,7 +683,8 @@ namespace auik::v2
         if (delta.x == 0.0f && delta.y == 0.0f) return;
         Widget::translate(delta);
         detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
-        rebuild_cached_visuals();
+        if (!_cache_valid) rebuild_cached_visuals();
+        else translate_cached_visuals(delta);
     }
 
     void SquareColorPicker::rebuild_clip_rects()
@@ -844,9 +823,9 @@ namespace auik::v2
         const f32 main_outer = _layout.ring_outer_radius - fringe;
         if (main_outer <= main_inner) return;
 
-        const u32 main_segments = detail::calc_circle_auto_segment_count(_layout.ring_outer_radius);
+        const u32 main_segments = detail::calc_stable_color_picker_segment_count();
         const u32 fringe_segments =
-            detail::calc_circle_auto_segment_count(_layout.ring_outer_radius, AUIK_CIRCLE_FRINGE_TESSELLATION_MAX_ERROR);
+            detail::calc_stable_color_picker_segment_count(AUIK_CIRCLE_FRINGE_TESSELLATION_MAX_ERROR);
 
         const u32 inner_fade_start = 0u;
         const u32 inner_main_start = inner_fade_start + (fringe_segments + 1u);
@@ -1025,19 +1004,24 @@ namespace auik::v2
         rebuild_ring_visual();
         rebuild_square_visual();
         rebuild_grab_visuals();
+        _cache_valid = true;
+    }
 
-        static u32 s_prev_ring_vtx = 0u;
-        static u32 s_prev_ring_idx = 0u;
-        static u32 s_prev_sv_vtx = 0u;
-        static u32 s_prev_sv_idx = 0u;
-        if (s_prev_ring_vtx != _ring_batch.vertex_count || s_prev_ring_idx != _ring_batch.index_count ||
-            s_prev_sv_vtx != _sv_batch.vertex_count || s_prev_sv_idx != _sv_batch.index_count)
-        {
-            s_prev_ring_vtx = _ring_batch.vertex_count;
-            s_prev_ring_idx = _ring_batch.index_count;
-            s_prev_sv_vtx = _sv_batch.vertex_count;
-            s_prev_sv_idx = _sv_batch.index_count;
-        }
+    void SquareColorPicker::translate_cached_visuals(const amal::vec2 &delta)
+    {
+        if (delta.x == 0.0f && delta.y == 0.0f) return;
+        _layout.center += delta;
+        _layout.sv_rect.offset += delta;
+        _ring_grab_hit_rect.bounds.offset += delta;
+        _sv_grab_hit_rect.bounds.offset += delta;
+        _ring_grab_visual.rect.offset += delta;
+        _ring_grab_back_visual.rect.offset += delta;
+        _sv_grab_visual.rect.offset += delta;
+        _sv_grab_back_visual.rect.offset += delta;
+        for (auto &vertex : _ring_vertices)
+            vertex.position += delta;
+        for (auto &vertex : _sv_vertices)
+            vertex.position += delta;
     }
 
     SquareColorPicker::ActiveZone SquareColorPicker::pick_active_zone_from_mouse() const

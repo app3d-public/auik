@@ -67,7 +67,7 @@ namespace auik::v2
 
     static inline bool is_style_only_draw_update(const DrawCtx &ctx)
     {
-        if (ctx.emit != &emit_draw_update) return false;
+        if (!ctx.is_updating()) return false;
         if (!(ctx.reason & DrawReasonBits::style)) return false;
         if (ctx.reason & DrawReasonBits::layout) return false;
         if (ctx.reason & DrawReasonBits::full_redraw) return false;
@@ -629,8 +629,9 @@ namespace auik::v2
             detail::get_context().screen_cursor = cursor;
             child->update_layout(true);
 
-            const f32 occupied_w = amal::max((child->position().x - cursor.x) + child->size().x, 0.0f);
-            const f32 occupied_h = amal::max((child->position().y - cursor.y) + child->size().y, 0.0f);
+            const amal::vec2 occupied = child->required_size();
+            const f32 occupied_w = amal::max(occupied.x, 0.0f);
+            const f32 occupied_h = amal::max(occupied.y, 0.0f);
             inline_row_height = amal::max(inline_row_height, occupied_h);
             inline_row_width += occupied_w;
             cursor = {content_cursor.x + inline_row_width, cursor.y};
@@ -688,8 +689,8 @@ namespace auik::v2
             need_scroll_x = next_x;
         }
 
-        const f32 scroll_view_width = amal::max(body_width - (need_scroll_y ? bar_w : 0.0f), 0.0f);
-        const f32 scroll_view_height = amal::max(body_height - (need_scroll_x ? bar_h : 0.0f), 0.0f);
+        f32 scroll_view_width = amal::max(body_width - (need_scroll_y ? bar_w : 0.0f), 0.0f);
+        f32 scroll_view_height = amal::max(body_height - (need_scroll_x ? bar_h : 0.0f), 0.0f);
         // Policy: allow horizontal overlay across the whole window width,
         // while keeping strict vertical clipping for scrolling.
         const f32 clip_viewport_width = size().x;
@@ -707,7 +708,54 @@ namespace auik::v2
         const amal::vec2 max_scroll = {_scrollbar_x ? _scrollbar_x->max_scroll() : 0.0f,
                                        _scrollbar_y ? _scrollbar_y->max_scroll() : 0.0f};
         _content_offset = amal::clamp(_content_offset, amal::vec2{0.0f}, max_scroll);
+        const amal::vec2 pre_layout_children_size = children_layout_size;
         relayout_children(content_layout_width, content_inset);
+
+        // Adaptive children can refine required_size() only after width allocation.
+        // Recompute the wrapped content size once from the actual laid out widgets so
+        // scrollbars and row wrapping decisions stabilize in the same frame.
+        const amal::vec2 laid_out_children_size = get_children_required_size(children, _child_layouts, content_layout_width);
+        if (laid_out_children_size != pre_layout_children_size)
+        {
+            children_layout_size = laid_out_children_size;
+
+            bool refined_need_scroll_y = can_scroll_y && children_layout_size.y > body_height;
+            bool refined_need_scroll_x = can_scroll_x && children_layout_size.x > body_width;
+            for (int i = 0; i < 2; ++i)
+            {
+                const f32 refined_viewport_w = amal::max(body_width - (refined_need_scroll_y ? bar_w : 0.0f), 0.0f);
+                const f32 refined_viewport_h = amal::max(body_height - (refined_need_scroll_x ? bar_h : 0.0f), 0.0f);
+
+                relayout_children(refined_viewport_w, content_inset);
+                children_layout_size = get_children_required_size(children, _child_layouts, refined_viewport_w);
+                const bool next_refined_y = can_scroll_y && children_layout_size.y > refined_viewport_h;
+                const bool next_refined_x = can_scroll_x && children_layout_size.x > refined_viewport_w;
+                if (next_refined_y == refined_need_scroll_y && next_refined_x == refined_need_scroll_x) break;
+                refined_need_scroll_y = next_refined_y;
+                refined_need_scroll_x = next_refined_x;
+            }
+
+            if (refined_need_scroll_y != need_scroll_y || refined_need_scroll_x != need_scroll_x)
+            {
+                need_scroll_y = refined_need_scroll_y;
+                need_scroll_x = refined_need_scroll_x;
+                scroll_view_width = amal::max(body_width - (need_scroll_y ? bar_w : 0.0f), 0.0f);
+                scroll_view_height = amal::max(body_height - (need_scroll_x ? bar_h : 0.0f), 0.0f);
+                relayout_children(scroll_view_width, content_inset);
+                children_layout_size = get_children_required_size(children, _child_layouts, scroll_view_width);
+                const amal::vec4 refined_content_clip = {position().x, position().y + content_inset.y, scroll_view_width,
+                                                         scroll_view_height};
+                _content_clip_rect = intersect_rect(parent_clip, refined_content_clip);
+                update_clip_rect(_content_clip_id, _content_clip_rect);
+                if (_scrollbar_x) _scrollbar_x->set_metrics(children_layout_size.x, scroll_view_width);
+                if (_scrollbar_y) _scrollbar_y->set_metrics(children_layout_size.y, scroll_view_height);
+                const amal::vec2 refined_max_scroll = {_scrollbar_x ? _scrollbar_x->max_scroll() : 0.0f,
+                                                       _scrollbar_y ? _scrollbar_y->max_scroll() : 0.0f};
+                _content_offset = amal::clamp(_content_offset, amal::vec2{0.0f}, refined_max_scroll);
+                relayout_children(scroll_view_width, content_inset);
+            }
+            else relayout_children(content_layout_width, content_inset);
+        }
 
         if (_header)
         {

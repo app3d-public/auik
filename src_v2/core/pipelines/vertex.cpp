@@ -175,5 +175,6 @@ namespace auik::v2
         stream.flags = StreamFlagBits::none;
         stream.render = &detail::render_vertex_stream;
         stream.sync_stream = &detail::sync_vertex_stream;
+        stream.post_slot_id = 2u;
     }
 } // namespace auik::v2

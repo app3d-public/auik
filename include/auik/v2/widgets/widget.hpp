@@ -132,7 +132,7 @@ namespace auik::v2
         void record_draw_commands(DrawReasonFlags reason = DrawReasonBits::none)
         {
             DrawCtx draw_ctx{};
-            draw_ctx.emit = &emit_draw_record;
+            draw_ctx.emit_fn = &emit_draw_record;
             draw_ctx.emit_hit_rect = is_hittable();
             draw_ctx.reason = reason;
             draw(draw_ctx);
@@ -141,7 +141,7 @@ namespace auik::v2
         void update_draw_commands(DrawReasonFlags reason = DrawReasonBits::none)
         {
             DrawCtx draw_ctx{};
-            draw_ctx.emit = &emit_draw_update;
+            draw_ctx.emit_fn = &emit_draw_update;
             draw_ctx.emit_hit_rect = is_hittable();
             draw_ctx.reason = reason;
             draw(draw_ctx);

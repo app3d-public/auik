@@ -174,5 +174,6 @@ namespace auik::v2
         stream.flags = StreamFlagBits::none;
         stream.render = &detail::render_textures_stream;
         stream.sync_stream = &detail::sync_textures_stream;
+        stream.post_slot_id = 1u;
     }
 } // namespace auik::v2

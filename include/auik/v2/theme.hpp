@@ -251,12 +251,15 @@ namespace auik::v2
         void set_var(u32 key, const T &value)
         {
             _var_store[key] = value;
+            clear_resolved_cache();
         }
 
         template <typename T>
-        T &get_var(u32 key)
+        T get_var(u32 key) const
         {
-            return _var_store[key].get<T>();
+            const auto it = _var_store.find(key);
+            if (it == _var_store.end()) return T{};
+            return it->second.get<T>();
         }
 
     private:

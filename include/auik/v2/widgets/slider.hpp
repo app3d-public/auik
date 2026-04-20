@@ -20,11 +20,6 @@ namespace auik::v2
     class GradientSlider;
     class TransparencySlider;
     class RangeSlider;
-    enum class GradientTrackKind : u8
-    {
-        custom = 0,
-        hsl = 1
-    };
 
     namespace detail
     {
@@ -163,8 +158,8 @@ namespace auik::v2
     public:
         ~GradientSlider() override;
         GradientSlider(u32 id, f32 *value, f32 min_value, f32 max_value, f32 width, const amal::vec4 *colors,
-                       u32 color_count, WidgetFlags widget_flags = get_default_slider_flags(), Widget *parent = nullptr,
-                       GradientTrackKind gradient_kind = GradientTrackKind::custom);
+                       u32 color_count, WidgetFlags widget_flags = get_default_slider_flags(),
+                       Widget *parent = nullptr);
 
         StyleUpdateFlags update_style() override;
         void update_layout_min_size() override;
@@ -189,7 +184,6 @@ namespace auik::v2
         StyleSelector _track_style{Theme::STYLE_ID_INVALID, AUIK_TAG_GRADIENT_SLIDER};
         StyleSelector _grab_style{Theme::STYLE_ID_INVALID, AUIK_TAG_GRADIENT_SLIDER_GRAB};
         acul::vector<amal::vec4> _colors;
-        acul::vector<amal::vec4> _hsl_cache;
         detail::SliderTrackVisual _track_visual;
         detail::GradientTrackVisual _gradient_visual;
         DrawDataID _grab_draw_id{};
@@ -202,7 +196,6 @@ namespace auik::v2
         amal::vec2 _track_depth_range{0.0f, 1.0f};
         amal::vec2 _grab_depth_range{0.0f, 1.0f};
         f32 _step = 0.0f;
-        GradientTrackKind _gradient_kind = GradientTrackKind::custom;
 
         void rebuild_track_visuals();
         void rebuild_grab_visual();
@@ -374,7 +367,7 @@ namespace auik::v2
             {0.0f, 0.0f, 1.0f, 1.0f}, {1.0f, 0.0f, 1.0f, 1.0f}, {1.0f, 0.0f, 0.0f, 1.0f},
         };
         return acul::alloc<GradientSlider>(id, value, 0.0f, 360.0f, 0.0f, hsl_colors, 7u, get_default_slider_flags(),
-                                           parent, GradientTrackKind::hsl);
+                                           parent);
     }
 
     inline GradientSlider *make_fixed_hsl_slider(u32 id, f32 *value, f32 width, Widget *parent = nullptr)
@@ -384,7 +377,7 @@ namespace auik::v2
             {0.0f, 0.0f, 1.0f, 1.0f}, {1.0f, 0.0f, 1.0f, 1.0f}, {1.0f, 0.0f, 0.0f, 1.0f},
         };
         return acul::alloc<GradientSlider>(id, value, 0.0f, 360.0f, width, hsl_colors, 7u,
-                                           get_default_fixed_slider_flags(), parent, GradientTrackKind::hsl);
+                                           get_default_fixed_slider_flags(), parent);
     }
 
     inline TransparencySlider *make_transparency_slider(u32 id, f32 *value, const amal::vec4 &color,

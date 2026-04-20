@@ -139,9 +139,10 @@ namespace auik::v2
         constexpr auto c_active = amal::rgba8_to_vec4(31, 31, 31, 255);
         constexpr auto c_border = amal::rgba8_to_vec4(51, 51, 51, 255);
         constexpr auto c_ascent = amal::rgba8_to_vec4(72, 114, 255, 255);
-        constexpr amal::vec4 c_light = {0.8f, 0.8f, 0.8f, 1.0f};
-        constexpr amal::vec4 c_white = {1.0f};
-        constexpr amal::vec2 empty_vec2{0.0f};
+        const amal::vec4 c_light = {0.8f, 0.8f, 0.8f, 1.0f};
+        const amal::vec4 c_white = {1.0f};
+        const amal::vec4 c_semi_transparent = {0.0f, 0.0f, 0.0f, 0.5f};
+        const amal::vec2 empty_vec2{0.0f};
 
         // Global settings.
         theme->add_style(AUIK_TAG_GLOBAL, make_style()
@@ -150,6 +151,7 @@ namespace auik::v2
                                               .font(default_font)
                                               .margin(amal::vec2{0.0f, 5.0f}));
         theme->add_style(AUIK_TAG_NO_PAD, make_style().margin(empty_vec2).padding(empty_vec2));
+        theme->set_var(AUIK_VAR_COLOR_PICKER_SIZE, 185.0f);
 
         // Window body.
         theme->add_style(AUIK_TAG_WINDOW, make_style()
@@ -197,14 +199,14 @@ namespace auik::v2
         theme->add_style(AUIK_TAG_GRADIENT_SLIDER_GRAB, make_style()
                                                             .padding(amal::vec2{7.0f})
                                                             .background_color(c_white)
-                                                            .border_color(c_surface)
-                                                            .border_thickness(2.f)
+                                                            .border_color(c_semi_transparent)
+                                                            .border_thickness(2.0f)
                                                             .border_radius(7.0f));
         theme->add_style(AUIK_TAG_GRADIENT_SLIDER_GRAB_BORDER, make_style()
                                                                    .padding(amal::vec2{9.0f})
                                                                    .background_color(c_white)
                                                                    .border_thickness(1.5f)
-                                                                   .border_color(c_surface)
+                                                                   .border_color(c_semi_transparent)
                                                                    .border_radius(9.0f));
         theme->add_style(
             AUIK_TAG_GRADIENT_SLIDER,
@@ -226,10 +228,8 @@ namespace auik::v2
                                                .border_radius(3.0f)
                                                .text_color({0.92f, 0.92f, 0.92f, 1.0f}));
 
-        theme->add_style(AUIK_TAG_SCROLLBAR_TRACK, make_style()
-                                                       .background_color(c_active)
-                                                       .margin(empty_vec2)
-                                                       .padding(amal::vec2{2.0f}));
+        theme->add_style(AUIK_TAG_SCROLLBAR_TRACK,
+                         make_style().background_color(c_active).margin(empty_vec2).padding(amal::vec2{2.0f}));
         theme->add_style(AUIK_TAG_SCROLLBAR_THUMB, make_style()
                                                        .background_color(amal::vec4{0.35f, 0.35f, 0.35f, 1.0f})
                                                        .margin(empty_vec2)

@@ -119,14 +119,16 @@ auto pool = agrb::descriptor_pool::builder()
                 .build(device);
 
 auik::v2::CreateInfo create_info;
+auik::v2::SyncOptions sync_options;
+sync_options.set_host_refresh_request(&env::get_window_refresh_request())
+            .set_pending_filter(&env::get_pending_filter());
 create_info.set_event_dispatcher(&env::get_event_dispatcher())
     .set_draw_streams(streams.data(), static_cast<u32>(streams.size()))
     .set_gpu_backend(auik::v2::create_agrb_backend(device, pool.get()))
     .set_window_backend(auik::v2::create_awin_backend(env::get_main_window()))
     .set_frames_in_flight(FRAMES_IN_FLIGHT)
     .set_max_textures_size(32)
-    .set_host_refresh_request(&env::get_window_refresh_request())
-    .set_pending_filter(&env::get_pending_filter());
+    .set_sync_options(sync_options);
 auik::v2::init_library(create_info);
 
 agrb::graphics_pipeline_batch batch;
@@ -136,6 +138,7 @@ auik::v2::configure_default_streams(batch, streams_pipelines, streams.data(), 0,
 if (!batch.allocate_pipelines(env::get_device(), pipelines.size()))
     throw acul::runtime_error("Failed to allocate ui pipelines");
 auik::v2::clear_shader_cache(device);
+auik::v2::create_default_post_effects();
 ```
 
 ### Theme configuration

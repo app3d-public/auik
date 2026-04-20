@@ -652,10 +652,7 @@ namespace auik::v2
             u32 size;
             acul::vector<u32> codepoints;
             acul::vector<u32> ids;
-        } specs[3] = {
-            {.size = round_font_px(10.0f * dpi),
-             .codepoints = {0xE921u, 0xE922u, 0xE923u, 0xE8BBu},
-             .ids = {AUIK_ICON_MINIMIZE, AUIK_ICON_MAXIMIZE, AUIK_ICON_RESTORE, AUIK_ICON_CLOSE}},
+        } specs[2] = {
             {.size = round_font_px(11.5f * dpi), .codepoints = {0xE700u}, .ids = {AUIK_ICON_MENU}},
             {.size = round_font_px(pt_to_px(11.0f, dpi)),
              .codepoints = {0xE76Cu, 0xE70Du, 0xE73Eu, 0xE721u, 0xE71Cu},
@@ -663,7 +660,7 @@ namespace auik::v2
                      AUIK_ICON_FILTER}},
         };
 
-        for (u32 i = 0; i < 3; ++i)
+        for (u32 i = 0; i < 2; ++i)
         {
             auto &font = specs[i].font;
             if (!font.load(font_info->path)) return false;

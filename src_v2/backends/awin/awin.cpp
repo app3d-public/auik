@@ -148,7 +148,16 @@ namespace auik::v2
         });
         ed.bind_event(backend, awin::event_id::focus, [&window](const awin::FocusEvent &event) {
             if (event.window != &window) return;
-            if (!event.focused) detail::reset_event_state();
+            auto &ctx = detail::get_context();
+            detail::update_window_time(ctx.window_ctx);
+            if (!event.focused)
+            {
+                pause_delayed_tasks(ctx.window_ctx->time);
+                detail::reset_event_state();
+                return;
+            }
+            resume_delayed_tasks(ctx.window_ctx->time);
+            detail::mark_host_refresh_request();
         });
         ed.bind_event(backend, awin::event_id::char_input, [&window](const awin::CharInputEvent &e) {
             if (e.window != &window) return;

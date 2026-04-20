@@ -36,6 +36,24 @@ namespace auik::v2
     using FT_Library = ::FT_LibraryRec_ *;
     using FT_Face = ::FT_FaceRec_ *;
 
+    struct SyncOptions
+    {
+        PendingFilter *pending_filter = nullptr;
+        bool *host_refresh_request = nullptr;
+
+        SyncOptions &set_pending_filter(PendingFilter *value)
+        {
+            pending_filter = value;
+            return *this;
+        }
+
+        SyncOptions &set_host_refresh_request(bool *value)
+        {
+            host_refresh_request = value;
+            return *this;
+        }
+    };
+
     struct CreateInfo
     {
         acul::events::dispatcher *ed = nullptr;
@@ -45,8 +63,7 @@ namespace auik::v2
         detail::WindowContext *window_ctx = nullptr;
         u32 frames_in_flight = 0;
         u32 max_textures_size = 32;
-        bool *host_refresh_request = nullptr;
-        PendingFilter *pending_filter = nullptr;
+        SyncOptions sync_options{};
 
         CreateInfo &set_event_dispatcher(acul::events::dispatcher *ed)
         {
@@ -85,15 +102,21 @@ namespace auik::v2
             return *this;
         }
 
+        CreateInfo &set_sync_options(const SyncOptions &value)
+        {
+            sync_options = value;
+            return *this;
+        }
+
         CreateInfo &set_host_refresh_request(bool *host_refresh_request)
         {
-            this->host_refresh_request = host_refresh_request;
+            sync_options.host_refresh_request = host_refresh_request;
             return *this;
         }
 
         CreateInfo &set_pending_filter(PendingFilter *pending_filter)
         {
-            this->pending_filter = pending_filter;
+            sync_options.pending_filter = pending_filter;
             return *this;
         }
     };
@@ -107,6 +130,8 @@ namespace auik::v2
     APPLIB_API bool erase_widget_from_transient_cache(Widget *widget);
     APPLIB_API void cancel_all_delayed_tasks();
     APPLIB_API void cancel_delayed_tasks(u64 owner_id);
+    APPLIB_API void pause_delayed_tasks(f64 now);
+    APPLIB_API void resume_delayed_tasks(f64 now);
     APPLIB_API f64 next_delayed_task_in(f64 now);
     APPLIB_API bool dispatch_delayed_tasks(f64 now);
     APPLIB_API void show_tooltip(f32 x, const acul::string *text_source);
@@ -218,6 +243,12 @@ namespace auik::v2
 
     inline HostWindowState get_host_window_state() { return detail::get_window_context()->host_state; }
 
+    inline f64 get_max_animation_delay()
+    {
+        auto *pf = detail::get_context().pending_filter;
+        return pf ? pf->get_frame_rate() : 1.0 / 60.0;
+    }
+
     template <class F>
     inline void register_shortcut(const Shortcut &shortcut, F &&fn)
     {
@@ -298,8 +329,7 @@ namespace auik::v2
     template <class F>
     inline u64 schedule_delayed_host_task(u64 owner_id, f64 due_time, F &&fn)
     {
-        return detail::schedule_delayed_task_fn(owner_id, due_time,
-                                                     acul::unique_function<void()>(std::forward<F>(fn)));
+        return detail::schedule_delayed_task_fn(owner_id, due_time, acul::unique_function<void()>(std::forward<F>(fn)));
     }
 
     APPLIB_API u32 get_service_pipelines_count();

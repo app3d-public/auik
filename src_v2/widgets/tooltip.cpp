@@ -225,7 +225,7 @@ namespace auik::v2
             }
         }
 
-        if (ctx.emit == &emit_draw_record)
+        if (ctx.is_recording())
         {
             _draw_ids.resize(_instances.size());
             push_textured_quads_batch_to_stream(textured_quads_stream, _instances.data(),

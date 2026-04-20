@@ -27,6 +27,8 @@ struct FT_LibraryRec_;
 
 namespace auik::v2
 {
+    struct PostEffect;
+
     struct DirtyFlagBits
     {
         enum enum_type
@@ -156,6 +158,8 @@ namespace auik::v2
             FrameCache frame_cache;
             acul::vector<DelayedHostTask> delayed_tasks;
             u64 next_delayed_task_id = 1;
+            f64 delayed_tasks_pause_time = -1.0;
+            acul::vector<PostEffect *> post_effects;
             bool raw_mouse_mode = false;
             struct
             {
