@@ -1,6 +1,7 @@
 #include <agrb/texture.hpp>
 #include <auik/v2/backends/agrb/agrb.hpp>
 #include <auik/v2/backends/agrb/quads_pipeline.hpp>
+#include <auik/v2/backends/agrb/textured_vertex_pipeline.hpp>
 #include <auik/v2/backends/agrb/textures_pipeline.hpp>
 #include <auik/v2/backends/agrb/vertex_pipeline.hpp>
 #include <auik/v2/detail/context.hpp>
@@ -17,6 +18,7 @@ namespace auik::v2
         void init_quads_pipeline_calls(StreamGPUDispatch &dispatch);
         void init_textures_pipeline_calls(StreamGPUDispatch &dispatch);
         void init_vertex_stream_pipeline_calls(StreamGPUDispatch &dispatch);
+        void init_textured_vertex_stream_pipeline_calls(StreamGPUDispatch &dispatch);
 
         static bool create_text_atlas_sampler(agrb::texture &texture, agrb::device &device)
         {
@@ -389,6 +391,7 @@ namespace auik::v2
         detail::init_quads_pipeline_calls(agrb_ctx->quads);
         detail::init_textures_pipeline_calls(agrb_ctx->textures);
         detail::init_vertex_stream_pipeline_calls(agrb_ctx->vertex_stream);
+        detail::init_textured_vertex_stream_pipeline_calls(agrb_ctx->textured_vertex_stream);
         return agrb_ctx;
     }
 
@@ -509,7 +512,19 @@ namespace auik::v2
         construct_pipeline_artifact(vertex_artifact, subpass, &vertex_stream_pipeline);
         if (!configure_vertex_pipeline(vertex_artifact, render_pass, vertex_stream_pipeline, device)) return false;
 
-        auto &overlay_quads_stream = streams[3];
+        auto &textured_vertex_stream = streams[3];
+        create_textured_vertex_stream(textured_vertex_stream);
+        set_primary_textured_vertex_stream(&textured_vertex_stream);
+        auto &textured_vertex_pipeline = pipelines[3];
+        if (!construct_textured_vertex_pipeline(textured_vertex_pipeline, device)) return false;
+        textured_vertex_stream.pipeline = &textured_vertex_pipeline;
+        auto &textured_vertex_artifact = batch.artifacts.emplace_back();
+        construct_pipeline_artifact(textured_vertex_artifact, subpass, &textured_vertex_pipeline);
+        if (!configure_textured_vertex_pipeline(textured_vertex_artifact, render_pass, textured_vertex_pipeline,
+                                                device))
+            return false;
+
+        auto &overlay_quads_stream = streams[4];
         create_quads_stream(overlay_quads_stream);
         set_overlay_quads_stream(&overlay_quads_stream);
         overlay_quads_stream.pipeline = &quads_pipeline;

@@ -87,6 +87,7 @@ namespace auik::v2::detail
         StreamGPUDispatch quads{};
         StreamGPUDispatch textures{};
         StreamGPUDispatch vertex_stream{};
+        StreamGPUDispatch textured_vertex_stream{};
     };
 
     inline u32 push_hit_rect(GPUContext *gpu_context, const RectData &rect)

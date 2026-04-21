@@ -17,6 +17,10 @@ It is not a windowing framework and does not own your main loop. Instead, it pro
   Resolution-independent vector shapes, borders, and effects using signed distance fields.
 - **Advanced Typography**  
   Full Unicode-aware text shaping and layout.
+- **Animations and Delayed UI Tasks**  
+  Supports host-paced UI animations and delayed tasks for time-based widget updates.
+- **Post Effects Pipeline**  
+  Supports slot-based post effects between CPU draw data and GPU streams.
 
 ## Data streams
 Auik uses a single stream recording model:

@@ -14,6 +14,11 @@ auik:
     stages:
       - vs: "vertex/vertex.vert"
       - fs: "vertex/vertex.frag"
+  textured_vertex_stream:
+    id: 0x7C5D8E21
+    stages:
+      - vs: "vertex/textured_vertex.vert"
+      - fs: "vertex/textured_vertex.frag"
   picker:
     id: 0xE6B1C4A2
     stages:

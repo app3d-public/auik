@@ -23,7 +23,8 @@ struct FT_LibraryRec_;
 #define AUIK_PRIMARY_QUAD_STREAM  0
 #define AUIK_PRIMARY_TEXTURED_QUADS_STREAM 1
 #define AUIK_PRIMARY_VERTEX_STREAM 2
-#define AUIK_PRIMARY_OVERLAY_QUADS_STREAM 3
+#define AUIK_PRIMARY_TEXTURED_VERTEX_STREAM 3
+#define AUIK_PRIMARY_OVERLAY_QUADS_STREAM 4
 
 namespace auik::v2
 {
@@ -385,6 +386,20 @@ namespace auik::v2
 
     inline DrawStream *get_primary_image_stream() { return get_primary_textured_quads_stream(); }
     inline void set_primary_image_stream(DrawStream *stream) { set_primary_textured_quads_stream(stream); }
+
+    inline DrawStream *get_primary_textured_vertex_stream()
+    {
+        auto *defaults = detail::get_context().streams.default_streams;
+        assert(defaults && "Default streams are not initialized");
+        return defaults[AUIK_PRIMARY_TEXTURED_VERTEX_STREAM];
+    }
+
+    inline void set_primary_textured_vertex_stream(DrawStream *stream)
+    {
+        auto *defaults = detail::get_context().streams.default_streams;
+        assert(defaults && "Default streams are not initialized");
+        defaults[AUIK_PRIMARY_TEXTURED_VERTEX_STREAM] = stream;
+    }
 
     inline u16 push_clip_rect(const amal::vec4 &rect)
     {

@@ -75,6 +75,37 @@ namespace auik::v2
             }
         }
 
+        static void apply_rotate_to_textured_vertex_batch(TexturedVertexStreamBatchData &batch,
+                                                          const RotatePostData &rotate)
+        {
+            auto *vertices = const_cast<TexturedVertexStreamVertex *>(batch.vertices);
+            if (!vertices) return;
+
+            const f32 c = std::cos(rotate.angle);
+            const f32 s = std::sin(rotate.angle);
+            for (u32 i = 0; i < batch.vertex_count; ++i)
+            {
+                amal::vec2 local = vertices[i].position - rotate.center;
+                vertices[i].position = {rotate.center.x + local.x * c - local.y * s,
+                                        rotate.center.y + local.x * s + local.y * c};
+            }
+        }
+
+        template <class Batch, class Vertex, class Mutate, class Use>
+        static auto with_mutated_batch_copy(const void *draw_data, Mutate &&mutate, Use &&use)
+        {
+            auto copy = *static_cast<const Batch *>(draw_data);
+            acul::vector<Vertex> scratch;
+            if (copy.vertices && copy.vertex_count > 0u)
+            {
+                scratch.resize(copy.vertex_count);
+                std::memcpy(scratch.data(), copy.vertices, sizeof(Vertex) * copy.vertex_count);
+                copy.vertices = scratch.data();
+            }
+            mutate(copy);
+            return use(copy);
+        }
+
         template <class T>
         static void destroy_typed_effect_data(void *effect_data)
         {
@@ -367,28 +398,21 @@ namespace auik::v2
             return make_node(
                 data,
                 [](void *effect_data, DrawStream *stream, const void *draw_data, const void *) -> DrawDataID {
-                    auto copy = *static_cast<const VertexStreamBatchData *>(draw_data);
-                    acul::vector<VertexStreamVertex> scratch;
-                    if (copy.vertices && copy.vertex_count > 0u)
-                    {
-                        scratch.resize(copy.vertex_count);
-                        std::memcpy(scratch.data(), copy.vertices, sizeof(VertexStreamVertex) * copy.vertex_count);
-                        copy.vertices = scratch.data();
-                        apply_alpha_to_vertex_batch(copy, static_cast<AlphaHandlerData *>(effect_data)->alpha);
-                    }
-                    return stream->push_data_to_stream(stream, &copy);
+                    return with_mutated_batch_copy<VertexStreamBatchData, VertexStreamVertex>(
+                        draw_data, [&](auto &batch) {
+                            apply_alpha_to_vertex_batch(batch, static_cast<AlphaHandlerData *>(effect_data)->alpha);
+                        },
+                        [&](auto &copy) { return stream->push_data_to_stream(stream, &copy); });
                 },
                 [](void *effect_data, DrawStream *stream, DrawDataID draw_id, const void *draw_data, const void *) {
-                    auto copy = *static_cast<const VertexStreamBatchData *>(draw_data);
-                    acul::vector<VertexStreamVertex> scratch;
-                    if (copy.vertices && copy.vertex_count > 0u)
-                    {
-                        scratch.resize(copy.vertex_count);
-                        std::memcpy(scratch.data(), copy.vertices, sizeof(VertexStreamVertex) * copy.vertex_count);
-                        copy.vertices = scratch.data();
-                        apply_alpha_to_vertex_batch(copy, static_cast<AlphaHandlerData *>(effect_data)->alpha);
-                    }
-                    stream->update_data_in_stream(stream, draw_id, &copy);
+                    with_mutated_batch_copy<VertexStreamBatchData, VertexStreamVertex>(
+                        draw_data, [&](auto &batch) {
+                            apply_alpha_to_vertex_batch(batch, static_cast<AlphaHandlerData *>(effect_data)->alpha);
+                        },
+                        [&](auto &copy) {
+                            stream->update_data_in_stream(stream, draw_id, &copy);
+                            return 0;
+                        });
                 },
                 &destroy_typed_effect_data<AlphaHandlerData>);
         }
@@ -410,16 +434,9 @@ namespace auik::v2
                     const auto &entry = handler->runtime->entries[rotate_post->id];
                     if (!entry.valid || entry.ref_count == 0u) return stream->push_data_to_stream(stream, draw_data);
 
-                    auto copy = *static_cast<const VertexStreamBatchData *>(draw_data);
-                    acul::vector<VertexStreamVertex> scratch;
-                    if (copy.vertices && copy.vertex_count > 0u)
-                    {
-                        scratch.resize(copy.vertex_count);
-                        std::memcpy(scratch.data(), copy.vertices, sizeof(VertexStreamVertex) * copy.vertex_count);
-                        copy.vertices = scratch.data();
-                        apply_rotate_to_vertex_batch(copy, entry.payload);
-                    }
-                    return stream->push_data_to_stream(stream, &copy);
+                    return with_mutated_batch_copy<VertexStreamBatchData, VertexStreamVertex>(
+                        draw_data, [&](auto &batch) { apply_rotate_to_vertex_batch(batch, entry.payload); },
+                        [&](auto &copy) { return stream->push_data_to_stream(stream, &copy); });
                 },
                 [](void *effect_data, DrawStream *stream, DrawDataID draw_id, const void *draw_data,
                    const void *post_data) {
@@ -444,16 +461,66 @@ namespace auik::v2
                         return;
                     }
 
-                    auto copy = *static_cast<const VertexStreamBatchData *>(draw_data);
-                    acul::vector<VertexStreamVertex> scratch;
-                    if (copy.vertices && copy.vertex_count > 0u)
+                    with_mutated_batch_copy<VertexStreamBatchData, VertexStreamVertex>(
+                        draw_data, [&](auto &batch) { apply_rotate_to_vertex_batch(batch, entry.payload); },
+                        [&](auto &copy) {
+                            stream->update_data_in_stream(stream, draw_id, &copy);
+                            return 0;
+                        });
+                },
+                &destroy_typed_effect_data<RotateHandlerData>);
+        }
+
+        static PostEffectNode *make_rotate_textured_vertex_node(PostEffect *effect)
+        {
+            auto *data = acul::alloc<RotateHandlerData>();
+            data->runtime = as_runtime<RotateEffectRuntime>(effect);
+            return make_node(
+                data,
+                [](void *effect_data, DrawStream *stream, const void *draw_data, const void *post_data) -> DrawDataID {
+                    const auto *handler = static_cast<const RotateHandlerData *>(effect_data);
+                    const auto *rotate_post = static_cast<const RotatePostData *>(post_data);
+                    if (!handler || !handler->runtime || !rotate_post) return stream->push_data_to_stream(stream, draw_data);
+                    if (rotate_post->id == AUIK_INVALID_POST_EFFECT_DATA_ID ||
+                        rotate_post->id >= handler->runtime->entries.size())
+                        return stream->push_data_to_stream(stream, draw_data);
+
+                    const auto &entry = handler->runtime->entries[rotate_post->id];
+                    if (!entry.valid || entry.ref_count == 0u) return stream->push_data_to_stream(stream, draw_data);
+
+                    return with_mutated_batch_copy<TexturedVertexStreamBatchData, TexturedVertexStreamVertex>(
+                        draw_data, [&](auto &batch) { apply_rotate_to_textured_vertex_batch(batch, entry.payload); },
+                        [&](auto &copy) { return stream->push_data_to_stream(stream, &copy); });
+                },
+                [](void *effect_data, DrawStream *stream, DrawDataID draw_id, const void *draw_data,
+                   const void *post_data) {
+                    const auto *handler = static_cast<const RotateHandlerData *>(effect_data);
+                    const auto *rotate_post = static_cast<const RotatePostData *>(post_data);
+                    if (!handler || !handler->runtime || !rotate_post)
                     {
-                        scratch.resize(copy.vertex_count);
-                        std::memcpy(scratch.data(), copy.vertices, sizeof(VertexStreamVertex) * copy.vertex_count);
-                        copy.vertices = scratch.data();
-                        apply_rotate_to_vertex_batch(copy, entry.payload);
+                        stream->update_data_in_stream(stream, draw_id, draw_data);
+                        return;
                     }
-                    stream->update_data_in_stream(stream, draw_id, &copy);
+                    if (rotate_post->id == AUIK_INVALID_POST_EFFECT_DATA_ID ||
+                        rotate_post->id >= handler->runtime->entries.size())
+                    {
+                        stream->update_data_in_stream(stream, draw_id, draw_data);
+                        return;
+                    }
+
+                    const auto &entry = handler->runtime->entries[rotate_post->id];
+                    if (!entry.valid || entry.ref_count == 0u)
+                    {
+                        stream->update_data_in_stream(stream, draw_id, draw_data);
+                        return;
+                    }
+
+                    with_mutated_batch_copy<TexturedVertexStreamBatchData, TexturedVertexStreamVertex>(
+                        draw_data, [&](auto &batch) { apply_rotate_to_textured_vertex_batch(batch, entry.payload); },
+                        [&](auto &copy) {
+                            stream->update_data_in_stream(stream, draw_id, &copy);
+                            return 0;
+                        });
                 },
                 &destroy_typed_effect_data<RotateHandlerData>);
         }
@@ -538,41 +605,38 @@ namespace auik::v2
                 [](void *effect_data, DrawStream *stream, const void *draw_data, const void *post_data) -> DrawDataID {
                     const auto *handler = static_cast<const FadeHandlerData *>(effect_data);
                     const auto *fade_post = static_cast<const FadePostData *>(post_data);
-                    auto copy = *static_cast<const VertexStreamBatchData *>(draw_data);
-                    acul::vector<VertexStreamVertex> scratch;
-                    if (copy.vertices && copy.vertex_count > 0u)
-                    {
-                        scratch.resize(copy.vertex_count);
-                        std::memcpy(scratch.data(), copy.vertices, sizeof(VertexStreamVertex) * copy.vertex_count);
-                        copy.vertices = scratch.data();
-                        if (handler && handler->runtime && fade_post && fade_post->id < handler->runtime->entries.size())
-                        {
-                            const auto &entry = handler->runtime->entries[fade_post->id];
-                            if (entry.valid && entry.ref_count > 0u)
-                                apply_alpha_to_vertex_batch(copy, resolve_fade_alpha(entry.payload, handler->is_fade_in));
-                        }
-                    }
-                    return stream->push_data_to_stream(stream, &copy);
+                    return with_mutated_batch_copy<VertexStreamBatchData, VertexStreamVertex>(
+                        draw_data, [&](auto &batch) {
+                            if (handler && handler->runtime && fade_post &&
+                                fade_post->id < handler->runtime->entries.size())
+                            {
+                                const auto &entry = handler->runtime->entries[fade_post->id];
+                                if (entry.valid && entry.ref_count > 0u)
+                                    apply_alpha_to_vertex_batch(batch,
+                                                                resolve_fade_alpha(entry.payload, handler->is_fade_in));
+                            }
+                        },
+                        [&](auto &copy) { return stream->push_data_to_stream(stream, &copy); });
                 },
                 [](void *effect_data, DrawStream *stream, DrawDataID draw_id, const void *draw_data,
                    const void *post_data) {
                     const auto *handler = static_cast<const FadeHandlerData *>(effect_data);
                     const auto *fade_post = static_cast<const FadePostData *>(post_data);
-                    auto copy = *static_cast<const VertexStreamBatchData *>(draw_data);
-                    acul::vector<VertexStreamVertex> scratch;
-                    if (copy.vertices && copy.vertex_count > 0u)
-                    {
-                        scratch.resize(copy.vertex_count);
-                        std::memcpy(scratch.data(), copy.vertices, sizeof(VertexStreamVertex) * copy.vertex_count);
-                        copy.vertices = scratch.data();
-                        if (handler && handler->runtime && fade_post && fade_post->id < handler->runtime->entries.size())
-                        {
-                            const auto &entry = handler->runtime->entries[fade_post->id];
-                            if (entry.valid && entry.ref_count > 0u)
-                                apply_alpha_to_vertex_batch(copy, resolve_fade_alpha(entry.payload, handler->is_fade_in));
-                        }
-                    }
-                    stream->update_data_in_stream(stream, draw_id, &copy);
+                    with_mutated_batch_copy<VertexStreamBatchData, VertexStreamVertex>(
+                        draw_data, [&](auto &batch) {
+                            if (handler && handler->runtime && fade_post &&
+                                fade_post->id < handler->runtime->entries.size())
+                            {
+                                const auto &entry = handler->runtime->entries[fade_post->id];
+                                if (entry.valid && entry.ref_count > 0u)
+                                    apply_alpha_to_vertex_batch(batch,
+                                                                resolve_fade_alpha(entry.payload, handler->is_fade_in));
+                            }
+                        },
+                        [&](auto &copy) {
+                            stream->update_data_in_stream(stream, draw_id, &copy);
+                            return 0;
+                        });
                 },
                 &destroy_typed_effect_data<FadeHandlerData>);
         }
@@ -687,6 +751,8 @@ namespace auik::v2
         effect->release_instance = &release_instance_impl<RotateEffectRuntime>;
         effect->is_instance_valid = &is_instance_valid_impl<RotateEffectRuntime>;
         set_handler_impl(effect, get_default_stream(AUIK_PRIMARY_VERTEX_STREAM), make_rotate_vertex_node(effect));
+        set_handler_impl(effect, get_default_stream(AUIK_PRIMARY_TEXTURED_VERTEX_STREAM),
+                         make_rotate_textured_vertex_node(effect));
         return effect;
     }
 

@@ -125,4 +125,59 @@ namespace auik::v2
     {
         update_data_batch_in_stream(stream, draw_data_ids, data, count);
     }
+
+    struct TexturedVertexStreamVertex
+    {
+        amal::vec2 position;
+        f32 z_order = 0.0f;
+        f32 _unused0 = 0.0f;
+        amal::vec2 uv;
+        u32 clip_id = 0;
+        u32 _unused1 = 0u;
+    };
+
+    static_assert(offsetof(TexturedVertexStreamVertex, position) == 0,
+                  "TexturedVertexStreamVertex::position offset mismatch");
+    static_assert(offsetof(TexturedVertexStreamVertex, z_order) == 8,
+                  "TexturedVertexStreamVertex::z_order offset mismatch");
+    static_assert(offsetof(TexturedVertexStreamVertex, uv) == 16, "TexturedVertexStreamVertex::uv offset mismatch");
+    static_assert(offsetof(TexturedVertexStreamVertex, clip_id) == 24,
+                  "TexturedVertexStreamVertex::clip_id offset mismatch");
+    static_assert(sizeof(TexturedVertexStreamVertex) == 32, "TexturedVertexStreamVertex must be exactly 32 bytes");
+
+    using TexturedVertexStreamIndex = u32;
+
+    struct TexturedVertexStreamBatchData
+    {
+        const TexturedVertexStreamVertex *vertices = nullptr;
+        const TexturedVertexStreamIndex *indices = nullptr;
+        u32 vertex_count = 0;
+        u32 index_count = 0;
+        TextureID texture_id = AUIK_INVALID_TEXTURE_ID;
+    };
+
+    APPLIB_API void create_textured_vertex_stream(DrawStream &stream);
+
+    inline DrawDataID push_textured_vertex_stream_batch(DrawStream *stream, const TexturedVertexStreamBatchData &data)
+    {
+        return push_data_to_stream(stream, const_cast<TexturedVertexStreamBatchData *>(&data));
+    }
+
+    inline void push_textured_vertex_stream_batch_list(DrawStream *stream, const TexturedVertexStreamBatchData *data,
+                                                       u32 count, DrawDataID *out_draw_ids = nullptr)
+    {
+        push_data_batch_to_stream(stream, data, count, out_draw_ids);
+    }
+
+    inline void update_textured_vertex_stream_batch(DrawStream *stream, DrawDataID draw_data_id,
+                                                    const TexturedVertexStreamBatchData &data)
+    {
+        update_data_in_stream(stream, draw_data_id, const_cast<TexturedVertexStreamBatchData *>(&data));
+    }
+
+    inline void update_textured_vertex_stream_batch_list(DrawStream *stream, const DrawDataID *draw_data_ids,
+                                                         const TexturedVertexStreamBatchData *data, u32 count)
+    {
+        update_data_batch_in_stream(stream, draw_data_ids, data, count);
+    }
 } // namespace auik::v2

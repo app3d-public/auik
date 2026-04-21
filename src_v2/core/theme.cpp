@@ -1,5 +1,6 @@
 #include <acul/memory/alloc.hpp>
 #include <auik/v2/theme.hpp>
+#include <auik/v2/widgets/checkbox.hpp>
 #include <auik/v2/widgets/color_picker.hpp>
 #include <auik/v2/widgets/slider.hpp>
 #include <auik/v2/widgets/text_button.hpp>
@@ -180,6 +181,16 @@ namespace auik::v2
                                                    .border_thickness(1.0f));
         theme->add_style(AUIK_TAG_TEXT_BUTTON, make_style().background_color(c_hover), StyleState::hover);
         theme->add_style(AUIK_TAG_TEXT_BUTTON, make_style().background_color(c_surface_light), StyleState::active);
+
+        theme->add_style(AUIK_TAG_CHECKBOX, make_style()
+                                               .padding(amal::vec2{3.0f})
+                                               .background_color(c_surface_light)
+                                               .border_radius(3.0f));
+        theme->add_style(AUIK_TAG_CHECKBOX, make_style().background_color(c_hover), StyleState::hover);
+        theme->add_style(AUIK_TAG_CHECKBOX,
+                         make_style().background_color(c_surface_light).border_color(c_border), StyleState::active);
+        theme->add_style(AUIK_TAG_CHECKBOX,
+                         make_style().background_color(c_surface_light).border_color(c_border), StyleState::focus);
 
         theme->add_style(
             AUIK_TAG_SLIDER,
