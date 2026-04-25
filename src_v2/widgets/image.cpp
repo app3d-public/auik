@@ -9,13 +9,12 @@ namespace auik::v2
     void Image::update_layout(bool min_size_known)
     {
         if (!min_size_known) update_layout_min_size();
-        const amal::vec2 cursor = detail::get_context().screen_cursor;
-        set_position(cursor);
+        const amal::vec2 layout_origin = position();
+        set_position(layout_origin);
         set_size(required_size());
         Widget::update_layout(true);
         assert(parent() && "Image must have parent");
         set_clip_id(parent()->content_clip_id());
-        detail::get_context().screen_cursor = {cursor.x, cursor.y + size().y};
     }
 
     void Image::rebuild_clip_rects()

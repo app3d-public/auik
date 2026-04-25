@@ -157,6 +157,9 @@ namespace auik::v2
         virtual void update_depth(const amal::vec2 &depth_range);
         virtual StyleUpdateFlags update_style() = 0;
         virtual void draw(DrawCtx &) = 0;
+        // Controls whether a mouse press on this hit target replaces ctx.focus_id.
+        // Return false for technical targets that should preserve the current focus leaf.
+        virtual bool accepts_focus_on_mouse_press(detail::ElementID) const { return true; }
         virtual u16 content_clip_id() const { return clip_id(); }
         virtual amal::vec4 get_content_clip_rect() const { return get_clip_rect(content_clip_id()); }
         virtual void on_attach()

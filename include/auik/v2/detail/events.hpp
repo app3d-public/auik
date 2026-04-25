@@ -101,25 +101,21 @@ namespace auik::v2::detail
     {
         u32 widget_id = 0;
         u32 tag_id = 0;
+        u32 element_id = 0;
 
         constexpr bool is_valid() const { return widget_id != 0; }
         constexpr explicit operator bool() const { return is_valid(); }
         constexpr bool operator==(const ElementID &other) const
         {
-            return widget_id == other.widget_id && tag_id == other.tag_id;
+            return widget_id == other.widget_id && tag_id == other.tag_id && element_id == other.element_id;
         }
         constexpr bool operator!=(const ElementID &other) const { return !(*this == other); }
-        constexpr explicit operator u64() const
-        {
-            return (static_cast<u64>(widget_id) << 32u) | static_cast<u64>(tag_id);
-        }
     };
 
-    inline constexpr ElementID make_element_id(u64 encoded)
+    inline constexpr ElementID make_element_id(u32 widget_id = 0, u32 tag_id = 0, u32 element_id = 0)
     {
-        return {static_cast<u32>(encoded >> 32u), static_cast<u32>(encoded & 0xFFFFFFFFu)};
+        return {widget_id, tag_id, element_id};
     }
-    inline constexpr ElementID make_element_id(u32 widget_id = 0, u32 tag_id = 0) { return {widget_id, tag_id}; }
 
     struct WindowContext
     {
@@ -141,7 +137,7 @@ namespace auik::v2::detail
     void deregister_widget_shortcuts(u32 widget_id);
     APPLIB_API void flush_frame_changes();
     APPLIB_API void reset_event_state();
-    APPLIB_API void on_hover_id_updated(u64 prev_hover_id, u64 hover_id);
+    APPLIB_API void on_hover_id_updated(const ElementID &prev_hover_id, const ElementID &hover_id);
     HitboxZone get_hitbox_zone(const RectData &rect, const amal::vec2 &mouse_pos);
     CursorID::enum_type get_cursor_for_hitbox_zone(HitboxZone zone);
 
@@ -178,19 +174,22 @@ namespace auik::v2::detail
     {
         u32 widget_id = 0;
         u32 tag_id = 0;
+        u32 element_id = 0;
+        u32 reserved = 0;
         amal::rect bounds;
         f32 depth = 0.0f;
         u16 clip_id = 0xFFFFu;
         u16 flags = 0;
     };
-    static_assert(sizeof(RectData) == 32, "RectData must match picker std430 layout");
+    static_assert(sizeof(RectData) == 40, "RectData must match picker std430 layout");
 
     inline RectData make_rect_data(u32 widget_id, u32 tag_id, amal::rect bounds = {}, u16 clip_id = 0xFFFFu,
-                                   f32 depth = 0.0f, u16 flags = 0)
+                                   f32 depth = 0.0f, u16 flags = 0, u32 element_id = 0)
     {
         RectData rect{};
         rect.widget_id = widget_id;
         rect.tag_id = tag_id;
+        rect.element_id = element_id;
         rect.bounds = bounds;
         rect.depth = depth;
         rect.clip_id = clip_id;

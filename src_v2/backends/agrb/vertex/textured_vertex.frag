@@ -15,10 +15,12 @@ layout(push_constant) uniform Push
 {
     vec2 window_size;
     uint texture_id;
+    uint flags;
 };
 
 void main()
 {
     if (is_clipped(in_pixel_pos, clip_rects[in_clip_id])) discard;
-    out_color = texture(ui_textures[nonuniformEXT(texture_id)], in_uv);
+    vec4 sampled = texture(ui_textures[nonuniformEXT(texture_id)], in_uv);
+    out_color = ((flags & 1u) != 0u) ? vec4(1.0, 1.0, 1.0, sampled.r) : sampled;
 }

@@ -27,6 +27,15 @@ Auik uses a single stream recording model:
 - GPU data remains stable between frames and is updated only when widget state changes.
 - Widgets that require per-frame refresh can be registered in the library transient cache and are re-synced during `sync_frame()`.
 
+### Limitations
+
+Auik supports alpha blending, including composition between UI and non-UI content. It does not guarantee
+order-independent transparency (OIT).
+
+Draw commands are grouped into multiple streams and pipelines. Transparent primitives are blended in the order in which their streams and draw commands are rendered. This means alpha blending is reliable for simple cases with a well-defined draw order, but transparency between overlapping widgets from different streams is not guaranteed to match strict painter-order composition.
+
+Widgets and themes should not rely on semi-transparent container backgrounds blending correctly with all descendants when those descendants are rendered through different streams.
+
 
 ## Theme and styling
 Auik provides a declarative theme system inspired by CSS-like cascading, resolved explicitly during build/update stages.

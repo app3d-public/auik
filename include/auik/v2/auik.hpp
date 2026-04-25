@@ -205,7 +205,6 @@ namespace auik::v2
         auto &ctx = detail::get_context();
         detail::update_hover_id(ctx.gpu_ctx, sync_ctx);
         detail::new_window_frame(ctx.window_ctx);
-        ctx.screen_cursor = {0.0f, 0.0f};
         ctx.frame_id = (ctx.frame_id + 1) % ctx.frames_in_flight;
         if (!(ctx.dirty_flags & DirtyFlagBits::hover_update)) ctx.dirty_flags &= ~DirtyFlagBits::redraw;
         ctx.dirty_flags &= ~(DirtyFlagBits::hover_update | DirtyFlagBits::host_update | DirtyFlagBits::hit_rect_update |

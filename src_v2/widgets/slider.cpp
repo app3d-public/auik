@@ -143,11 +143,11 @@ namespace auik::v2
                                                          grab_changed);
 
         const auto transition = detail::get_widget_style_selector_transition(id());
-        if (transition.prev_tag_id == _grab_style.tag_id &&
-            (transition.current_tag_id != _grab_style.tag_id || transition.prev_state != transition.current_state))
+        if (transition.prev_id.tag_id == _grab_style.tag_id &&
+            (transition.current_id.tag_id != _grab_style.tag_id || transition.prev_state != transition.current_state))
             out |= detail::resolve_style_and_mark_redraw(_grab_style, _grab_style.tag_id, parent_id, StyleState::normal,
                                                          grab_changed);
-        if (transition.current_tag_id == _grab_style.tag_id)
+        if (transition.current_id.tag_id == _grab_style.tag_id)
             out |= detail::resolve_style_and_mark_redraw(_grab_style, _grab_style.tag_id, parent_id,
                                                          transition.current_state, grab_changed);
 
@@ -207,7 +207,7 @@ namespace auik::v2
         if (!min_size_known) update_layout_min_size();
 
         const auto &style = get_theme()->get_style(_track_style.id);
-        const amal::vec2 cursor = detail::get_context().screen_cursor;
+        const amal::vec2 layout_origin = position();
         const amal::vec4 margin = style.margin();
         const amal::vec2 min_required = required_size();
         amal::vec2 slider_size = size();
@@ -216,7 +216,7 @@ namespace auik::v2
         else slider_size.x = amal::max(slider_size.x, min_required.x - margin.x - margin.z);
         slider_size.y = amal::max(slider_size.y, min_required.y - margin.y - margin.w);
 
-        const amal::vec2 pos = {cursor.x + margin.x, cursor.y + margin.y};
+        const amal::vec2 pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
         set_position(pos);
         set_size(slider_size);
         Widget::update_layout(true);
@@ -226,7 +226,6 @@ namespace auik::v2
 
         rebuild_track_visuals();
         rebuild_grab_visual();
-        detail::get_context().screen_cursor = {cursor.x, pos.y + slider_size.y + margin.w};
     }
 
     void Slider::translate(const amal::vec2 &delta)
@@ -508,10 +507,10 @@ namespace auik::v2
         if (_grab_style.id == Theme::STYLE_ID_INVALID) out |= resolve_grab_state(StyleState::normal);
 
         const auto transition = detail::get_widget_style_selector_transition(id());
-        if (transition.prev_tag_id == _grab_style.tag_id &&
-            (transition.current_tag_id != _grab_style.tag_id || transition.prev_state != transition.current_state))
+        if (transition.prev_id.tag_id == _grab_style.tag_id &&
+            (transition.current_id.tag_id != _grab_style.tag_id || transition.prev_state != transition.current_state))
             out |= resolve_grab_state(StyleState::normal);
-        if (transition.current_tag_id == _grab_style.tag_id) out |= resolve_grab_state(transition.current_state);
+        if (transition.current_id.tag_id == _grab_style.tag_id) out |= resolve_grab_state(transition.current_state);
 
         const StyleState widget_grab_state = detail::resolve_grab_visual_state(style_state());
         if (widget_grab_state == StyleState::active || widget_grab_state == StyleState::focus)
@@ -559,7 +558,7 @@ namespace auik::v2
         if (!min_size_known) update_layout_min_size();
 
         const auto &style = get_theme()->get_style(_track_style.id);
-        const amal::vec2 cursor = detail::get_context().screen_cursor;
+        const amal::vec2 layout_origin = position();
         const amal::vec4 margin = style.margin();
         const amal::vec2 min_required = required_size();
         amal::vec2 slider_size = size();
@@ -568,7 +567,7 @@ namespace auik::v2
         else slider_size.x = amal::max(slider_size.x, min_required.x - margin.x - margin.z);
         slider_size.y = amal::max(slider_size.y, min_required.y - margin.y - margin.w);
 
-        const amal::vec2 pos = {cursor.x + margin.x, cursor.y + margin.y};
+        const amal::vec2 pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
         set_position(pos);
         set_size(slider_size);
         Widget::update_layout(true);
@@ -578,7 +577,6 @@ namespace auik::v2
 
         rebuild_track_visuals();
         rebuild_grab_visual();
-        detail::get_context().screen_cursor = {cursor.x, pos.y + slider_size.y + margin.w};
     }
 
     void GradientSlider::translate(const amal::vec2 &delta)
@@ -824,10 +822,10 @@ namespace auik::v2
         if (_grab_style.id == Theme::STYLE_ID_INVALID) out |= resolve_grab_state(StyleState::normal);
 
         const auto transition = detail::get_widget_style_selector_transition(id());
-        if (transition.prev_tag_id == _grab_style.tag_id &&
-            (transition.current_tag_id != _grab_style.tag_id || transition.prev_state != transition.current_state))
+        if (transition.prev_id.tag_id == _grab_style.tag_id &&
+            (transition.current_id.tag_id != _grab_style.tag_id || transition.prev_state != transition.current_state))
             out |= resolve_grab_state(StyleState::normal);
-        if (transition.current_tag_id == _grab_style.tag_id) out |= resolve_grab_state(transition.current_state);
+        if (transition.current_id.tag_id == _grab_style.tag_id) out |= resolve_grab_state(transition.current_state);
 
         const StyleState widget_grab_state = detail::resolve_grab_visual_state(style_state());
         if (widget_grab_state == StyleState::active || widget_grab_state == StyleState::focus)
@@ -882,7 +880,7 @@ namespace auik::v2
         if (!min_size_known) update_layout_min_size();
 
         const auto &style = get_theme()->get_style(_track_style.id);
-        const amal::vec2 cursor = detail::get_context().screen_cursor;
+        const amal::vec2 layout_origin = position();
         const amal::vec4 margin = style.margin();
         const amal::vec2 min_required = required_size();
         amal::vec2 slider_size = size();
@@ -891,7 +889,7 @@ namespace auik::v2
         else slider_size.x = amal::max(slider_size.x, min_required.x - margin.x - margin.z);
         slider_size.y = amal::max(slider_size.y, min_required.y - margin.y - margin.w);
 
-        const amal::vec2 pos = {cursor.x + margin.x, cursor.y + margin.y};
+        const amal::vec2 pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
         set_position(pos);
         set_size(slider_size);
         Widget::update_layout(true);
@@ -901,7 +899,6 @@ namespace auik::v2
 
         rebuild_track_visuals();
         rebuild_grab_visual();
-        detail::get_context().screen_cursor = {cursor.x, pos.y + slider_size.y + margin.w};
     }
 
     void TransparencySlider::translate(const amal::vec2 &delta)
@@ -1184,14 +1181,14 @@ namespace auik::v2
             out |= resolve_grab_state(AUIK_TAG_RANGE_SLIDER_GRAB_FROM, StyleState::normal);
 
         const auto transition = detail::get_widget_style_selector_transition(id());
-        const bool prev_is_grab = transition.prev_tag_id == AUIK_TAG_RANGE_SLIDER_GRAB_FROM ||
-                                  transition.prev_tag_id == AUIK_TAG_RANGE_SLIDER_GRAB_TO;
-        const bool curr_is_grab = transition.current_tag_id == AUIK_TAG_RANGE_SLIDER_GRAB_FROM ||
-                                  transition.current_tag_id == AUIK_TAG_RANGE_SLIDER_GRAB_TO;
-        if (prev_is_grab && (!curr_is_grab || transition.current_tag_id != transition.prev_tag_id ||
+        const bool prev_is_grab = transition.prev_id.tag_id == AUIK_TAG_RANGE_SLIDER_GRAB_FROM ||
+                                  transition.prev_id.tag_id == AUIK_TAG_RANGE_SLIDER_GRAB_TO;
+        const bool curr_is_grab = transition.current_id.tag_id == AUIK_TAG_RANGE_SLIDER_GRAB_FROM ||
+                                  transition.current_id.tag_id == AUIK_TAG_RANGE_SLIDER_GRAB_TO;
+        if (prev_is_grab && (!curr_is_grab || transition.current_id.tag_id != transition.prev_id.tag_id ||
                              transition.current_state != transition.prev_state))
-            out |= resolve_grab_state(transition.prev_tag_id, StyleState::normal);
-        if (curr_is_grab) out |= resolve_grab_state(transition.current_tag_id, transition.current_state);
+            out |= resolve_grab_state(transition.prev_id.tag_id, StyleState::normal);
+        if (curr_is_grab) out |= resolve_grab_state(transition.current_id.tag_id, transition.current_state);
 
         if (_active_grab != ActiveGrab::none)
         {
@@ -1230,7 +1227,7 @@ namespace auik::v2
         if (!min_size_known) update_layout_min_size();
 
         const auto &style = get_theme()->get_style(_track_style.id);
-        const amal::vec2 cursor = detail::get_context().screen_cursor;
+        const amal::vec2 layout_origin = position();
         const amal::vec4 margin = style.margin();
         const amal::vec2 min_required = required_size();
         amal::vec2 slider_size = size();
@@ -1239,7 +1236,7 @@ namespace auik::v2
         else slider_size.x = amal::max(slider_size.x, min_required.x - margin.x - margin.z);
         slider_size.y = amal::max(slider_size.y, min_required.y - margin.y - margin.w);
 
-        const amal::vec2 pos = {cursor.x + margin.x, cursor.y + margin.y};
+        const amal::vec2 pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
         set_position(pos);
         set_size(slider_size);
         Widget::update_layout(true);
@@ -1250,7 +1247,6 @@ namespace auik::v2
 
         rebuild_track_visuals();
         rebuild_grab_visuals();
-        detail::get_context().screen_cursor = {cursor.x, pos.y + slider_size.y + margin.w};
     }
 
     void RangeSlider::translate(const amal::vec2 &delta)

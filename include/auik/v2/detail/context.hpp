@@ -150,7 +150,6 @@ namespace auik::v2
             u32 max_textures_size = 32;
             SharedBufferSyncState shared_sync_state[2];
             AtlasState atlas_state;
-            amal::vec2 screen_cursor{0.0f, 0.0f};
             amal::vec4 main_viewport{0.0f, 0.0f, 0.0f, 0.0f};
             DirtyFlags dirty_flags = DirtyFlagBits::none;
             Theme *theme = nullptr;
@@ -270,12 +269,12 @@ namespace auik::v2
             return static_cast<StyleState>(get_style_selector_transition().current_state);
         }
 
-        inline bool set_style_selector(ElementID id, StyleState state)
+        inline bool set_style_selector(const ElementID &id, StyleState state)
         {
             auto &transition = get_context().style_selector;
             const u8 encoded_state = static_cast<u8>(state);
             if (transition.current_id.widget_id == id.widget_id && transition.current_id.tag_id == id.tag_id &&
-                transition.current_state == encoded_state)
+                transition.current_id.element_id == id.element_id && transition.current_state == encoded_state)
                 return false;
             transition.prev_id = transition.current_id;
             transition.prev_state = transition.current_state;
@@ -284,7 +283,7 @@ namespace auik::v2
             return true;
         }
 
-        inline void reset_style_selector(ElementID id = {}, StyleState state = static_cast<StyleState>(0))
+        inline void reset_style_selector(const ElementID &id = {}, StyleState state = static_cast<StyleState>(0))
         {
             auto &transition = get_context().style_selector;
             transition.prev_id = id;
@@ -295,8 +294,8 @@ namespace auik::v2
 
         struct WidgetStyleSelectorTransition
         {
-            u32 prev_tag_id = 0;
-            u32 current_tag_id = 0;
+            ElementID prev_id{};
+            ElementID current_id{};
             StyleState prev_state = static_cast<StyleState>(0);
             StyleState current_state = static_cast<StyleState>(0);
         };
@@ -307,12 +306,12 @@ namespace auik::v2
             WidgetStyleSelectorTransition out{};
             if (transition.prev_id.widget_id == widget_id)
             {
-                out.prev_tag_id = transition.prev_id.tag_id;
+                out.prev_id = transition.prev_id;
                 out.prev_state = static_cast<StyleState>(transition.prev_state);
             }
             if (transition.current_id.widget_id == widget_id)
             {
-                out.current_tag_id = transition.current_id.tag_id;
+                out.current_id = transition.current_id;
                 out.current_state = static_cast<StyleState>(transition.current_state);
             }
             return out;

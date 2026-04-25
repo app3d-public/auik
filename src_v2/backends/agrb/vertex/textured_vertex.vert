@@ -8,6 +8,7 @@ layout(push_constant) uniform Push
 {
     vec2 window_size;
     uint texture_id;
+    uint flags;
 };
 
 layout(location = 0) out vec2 out_uv;

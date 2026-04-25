@@ -20,7 +20,7 @@ namespace auik::v2
         };
 
         using FadeEffectRuntime = PostEffectRuntimeState<FadeInstanceData>;
-        using RotateEffectRuntime = PostEffectRuntimeState<RotatePostData>;
+        using RotateEffectRuntime = PostEffectRuntimeState<RotatePostRuntimeData>;
 
         struct FadeHandlerData
         {
@@ -60,7 +60,7 @@ namespace auik::v2
                 vertices[i].color = scale_packed_alpha(vertices[i].color, alpha);
         }
 
-        static void apply_rotate_to_vertex_batch(VertexStreamBatchData &batch, const RotatePostData &rotate)
+        static void apply_rotate_to_vertex_batch(VertexStreamBatchData &batch, const RotatePostRuntimeData &rotate)
         {
             auto *vertices = const_cast<VertexStreamVertex *>(batch.vertices);
             if (!vertices) return;
@@ -76,7 +76,7 @@ namespace auik::v2
         }
 
         static void apply_rotate_to_textured_vertex_batch(TexturedVertexStreamBatchData &batch,
-                                                          const RotatePostData &rotate)
+                                                          const RotatePostRuntimeData &rotate)
         {
             auto *vertices = const_cast<TexturedVertexStreamVertex *>(batch.vertices);
             if (!vertices) return;
@@ -745,8 +745,8 @@ namespace auik::v2
             if (!rotate_runtime) return;
             acul::release(rotate_runtime);
         };
-        effect->push_instance = &push_instance_impl<RotateEffectRuntime, RotatePostData>;
-        effect->update_instance = &update_instance_impl<RotateEffectRuntime, RotatePostData>;
+        effect->push_instance = &push_instance_impl<RotateEffectRuntime, RotatePostRuntimeData>;
+        effect->update_instance = &update_instance_impl<RotateEffectRuntime, RotatePostRuntimeData>;
         effect->retain_instance = &retain_instance_impl<RotateEffectRuntime>;
         effect->release_instance = &release_instance_impl<RotateEffectRuntime>;
         effect->is_instance_valid = &is_instance_valid_impl<RotateEffectRuntime>;
@@ -757,6 +757,44 @@ namespace auik::v2
     }
 
     PostEffect *get_disabled_post_effect() { return get_post_effect_by_index(AUIK_POST_EFFECT_DISABLED); }
+
+    u32 create_rotate_post_effect_data(PostEffect *effect, Widget *owner)
+    {
+        return push_instance_impl<RotateEffectRuntime, RotatePostRuntimeData>(effect, owner, nullptr);
+    }
+
+    RotatePostRuntimeData *get_rotate_post_effect_data(PostEffect *effect, u32 id)
+    {
+        auto *runtime = as_runtime<RotateEffectRuntime>(effect);
+        if (!runtime || id >= runtime->entries.size()) return nullptr;
+        auto &entry = runtime->entries[id];
+        if (!entry.valid || entry.ref_count == 0u) return nullptr;
+        return &entry.payload;
+    }
+
+    const RotatePostRuntimeData *get_rotate_post_effect_data(const PostEffect *effect, u32 id)
+    {
+        const auto *runtime = as_runtime<RotateEffectRuntime>(effect);
+        if (!runtime || id >= runtime->entries.size()) return nullptr;
+        const auto &entry = runtime->entries[id];
+        if (!entry.valid || entry.ref_count == 0u) return nullptr;
+        return &entry.payload;
+    }
+
+    void retain_rotate_post_effect_data(PostEffect *effect, u32 id)
+    {
+        retain_instance_impl<RotateEffectRuntime>(effect, id);
+    }
+
+    void release_rotate_post_effect_data(PostEffect *effect, u32 id)
+    {
+        release_instance_impl<RotateEffectRuntime>(effect, id);
+    }
+
+    bool is_rotate_post_effect_data_valid(PostEffect *effect, u32 id)
+    {
+        return is_instance_valid_impl<RotateEffectRuntime>(effect, id);
+    }
 
     PostEffect *create_default_fade_in_post_effect()
     {

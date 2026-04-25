@@ -151,7 +151,6 @@ namespace auik::v2
         ctx.hover_hitbox_zone = detail::HitboxZoneBits::none;
         ctx.active_id = 0;
         ctx.focus_id = 0;
-        ctx.screen_cursor = {0.0f, 0.0f};
         ctx.main_viewport = {0.0f, 0.0f, 0.0f, 0.0f};
         ctx.window_ctx = create_info.window_ctx;
         detail::construct_window_backend(ctx.window_ctx);
@@ -196,6 +195,7 @@ namespace auik::v2
         if (!(ctx.dirty_flags & DirtyFlagBits::layout)) return;
         ctx.dirty_flags |= DirtyFlagBits::redraw;
         const bool need_hit_rect_draw = ctx.dirty_flags & DirtyFlagBits::hit_rect_draw;
+        if (!detail::is_hit_rects_frame_synced(ctx.frame_id)) sync_hit_rect_cache();
         assert(detail::is_hit_rects_frame_synced(ctx.frame_id) &&
                "record_layout_commands() started with stale current-frame hit rect cache");
         reset_main_viewport();
@@ -219,6 +219,7 @@ namespace auik::v2
         auto &ctx = detail::get_context();
         if (ctx.dirty_flags & DirtyFlagBits::layout) return;
         ctx.dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_draw;
+        if (!detail::is_hit_rects_frame_synced(ctx.frame_id)) sync_hit_rect_cache();
         assert(detail::is_hit_rects_frame_synced(ctx.frame_id) &&
                "redraw_all_commands() started with stale current-frame hit rect cache");
         clear_hit_rects();

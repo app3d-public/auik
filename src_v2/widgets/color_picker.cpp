@@ -280,10 +280,10 @@ namespace auik::v2
         if (_grab_style.id == Theme::STYLE_ID_INVALID) out |= resolve_grab_state(StyleState::normal);
 
         const auto transition = detail::get_widget_style_selector_transition(id());
-        if (transition.prev_tag_id == _grab_hit_rect.tag_id &&
-            (transition.current_tag_id != _grab_hit_rect.tag_id || transition.prev_state != transition.current_state))
+        if (transition.prev_id.tag_id == _grab_hit_rect.tag_id &&
+            (transition.current_id.tag_id != _grab_hit_rect.tag_id || transition.prev_state != transition.current_state))
             out |= resolve_grab_state(StyleState::normal);
-        if (transition.current_tag_id == _grab_hit_rect.tag_id) out |= resolve_grab_state(transition.current_state);
+        if (transition.current_id.tag_id == _grab_hit_rect.tag_id) out |= resolve_grab_state(transition.current_state);
 
         const StyleState widget_grab_state = detail::resolve_grab_visual_state(style_state());
         if (widget_grab_state == StyleState::active || widget_grab_state == StyleState::focus)
@@ -307,10 +307,10 @@ namespace auik::v2
         if (!min_size_known) update_layout_min_size();
         const Style *picker_style = get_theme()->get_desc_style(AUIK_TAG_CIRCLE_COLOR_PICKER);
         const amal::vec4 margin = picker_style ? picker_style->margin() : amal::vec4{0.0f};
-        const amal::vec2 cursor = detail::get_context().screen_cursor;
+        const amal::vec2 layout_origin = position();
         const f32 theme_side = detail::resolve_color_picker_size();
         const f32 side = amal::max(_preferred_side > 0.0f ? _preferred_side : theme_side, 1.0f);
-        const amal::vec2 next_pos = {cursor.x + margin.x, cursor.y + margin.y};
+        const amal::vec2 next_pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
         const amal::vec2 prev_pos = position();
         const amal::vec2 prev_size = size();
 
@@ -323,7 +323,6 @@ namespace auik::v2
         _grab_hit_rect.clip_id = clip_id();
         if (!_cache_valid || prev_size.x != side || prev_size.y != side) rebuild_cached_visuals();
         else translate_cached_visuals(next_pos - prev_pos);
-        detail::get_context().screen_cursor = {cursor.x, cursor.y + side + margin.y + margin.w};
     }
 
     void CircleColorPicker::translate(const amal::vec2 &delta)
@@ -658,10 +657,10 @@ namespace auik::v2
         if (!min_size_known) update_layout_min_size();
         const Style *picker_style = get_theme()->get_desc_style(AUIK_TAG_SQUARE_COLOR_PICKER);
         const amal::vec4 margin = picker_style ? picker_style->margin() : amal::vec4{0.0f};
-        const amal::vec2 cursor = detail::get_context().screen_cursor;
+        const amal::vec2 layout_origin = position();
         const f32 theme_side = detail::resolve_color_picker_size();
         const f32 side = amal::max(_preferred_side > 0.0f ? _preferred_side : theme_side, 1.0f);
-        const amal::vec2 next_pos = {cursor.x + margin.x, cursor.y + margin.y};
+        const amal::vec2 next_pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
         const amal::vec2 prev_pos = position();
         const amal::vec2 prev_size = size();
 
@@ -675,7 +674,6 @@ namespace auik::v2
         _sv_grab_hit_rect.clip_id = clip_id();
         if (!_cache_valid || prev_size.x != side || prev_size.y != side) rebuild_cached_visuals();
         else translate_cached_visuals(next_pos - prev_pos);
-        detail::get_context().screen_cursor = {cursor.x, cursor.y + side + margin.y + margin.w};
     }
 
     void SquareColorPicker::translate(const amal::vec2 &delta)

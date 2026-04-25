@@ -43,6 +43,7 @@ namespace auik::v2
         const DrawDataID stream_id = (handler && handler->record) ? handler->record(handler->data, stream, data, ctx.post_data)
                                                                   : stream->push_data_to_stream(stream, data);
         draw_id.render_id = stream_id.render_id;
+        draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
         if (emit_hit_rect) update_hit_rect(draw_id.hit_id, rect, true);
         return draw_id;
     }

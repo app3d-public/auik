@@ -51,9 +51,10 @@ namespace auik::v2
         bool _text_draw_dirty = true;
     };
 
-    inline TextButton *make_text_button(u32 id, const acul::string &text = "", amal::vec2 size = {0.0f, 0.0f})
+    inline TextButton *make_text_button(u32 id, const acul::string &text = "")
     {
-        return acul::alloc<TextButton>(id, text, size, get_default_text_button_flags(), EventFlagBits::none, nullptr);
+        return acul::alloc<TextButton>(id, text, amal::vec2{0.0f, 0.0f}, get_default_text_button_flags(),
+                                       EventFlagBits::none, nullptr);
     }
 
     inline TextButton *make_fixed_text_button(u32 id, const acul::string &text = "", amal::vec2 size = {120.0f, 0.0f})

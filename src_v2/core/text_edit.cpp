@@ -2,7 +2,7 @@
 // (https://github.com/ocornut/imgui/blob/master/imstb_textedit.h)
 
 #include <algorithm>
-#include <auik/detail/text_edit.hpp>
+#include <auik/v2/detail/text_edit.hpp>
 
 namespace auik::detail
 {

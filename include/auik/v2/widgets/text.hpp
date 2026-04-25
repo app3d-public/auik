@@ -5,6 +5,8 @@
 #include <auik/v2/theme.hpp>
 #include "widget.hpp"
 
+#define AUIK_TAG_TEXT 0x60F46B05u
+
 namespace auik::v2
 {
     constexpr inline WidgetFlags get_default_text_flags() { return get_default_widget_flags(); }
@@ -36,6 +38,7 @@ namespace auik::v2
 
         const acul::string &text() const { return _text; }
         void set_text(const acul::string &text);
+        const detail::TextLayoutResult &layout_result() const { return _layout_result; }
 
         bool multiline() const { return _layout_config.wrap == detail::TextWrapMode::word; }
         void set_multiline(bool value);
@@ -52,15 +55,14 @@ namespace auik::v2
         u32 max_lines() const { return _layout_config.max_lines; }
         void set_max_lines(u32 value);
 
-        const amal::vec4 &color() const { return _render_config.tint_color; }
-        void set_color(const amal::vec4 &color);
+        bool tight_content_height() const { return _tight_content_height; }
+        void set_tight_content_height(bool value);
 
     protected:
         void mark_layout_dirty();
         void update_content_bounds();
         acul::string _text;
         StyleSelector _style;
-        bool _use_style_text_color = true;
         detail::TextLayoutConfig _layout_config{};
         detail::TextRenderConfig _render_config{};
         detail::TextLayoutResult _layout_result{};
@@ -69,6 +71,7 @@ namespace auik::v2
         acul::vector<DrawDataID> _draw_ids;
         u32 _hit_id = AUIK_INVALID_DRAW_DATA_ID;
         bool _instances_gpu_dirty = true;
+        bool _tight_content_height = false;
         u16 _applied_clip_id = 0xFFFFu;
 
     private:
@@ -96,9 +99,10 @@ namespace auik::v2
         acul::string _tooltip_text;
     };
 
-    inline Text *make_text(u32 id, const acul::string &text = "", amal::vec2 size = {0.0f, 0.0f})
+    inline Text *make_text(u32 id, const acul::string &text = "")
     {
-        return acul::alloc<Text>(id, text, size, get_default_text_flags(), nullptr, Theme::STYLE_ID_INVALID);
+        return acul::alloc<Text>(id, text, amal::vec2{0.0f, 0.0f}, get_default_text_flags(), nullptr,
+                                 Theme::STYLE_ID_INVALID);
     }
 
     inline Text *make_fixed_text(u32 id, const acul::string &text = "", amal::vec2 size = {0.0f, 0.0f})
@@ -107,11 +111,10 @@ namespace auik::v2
     }
 
     inline TextWithTooltip *make_text_with_tooltip(u32 id, const acul::string &text = "",
-                                                   const acul::string &tooltip_text = "",
-                                                   amal::vec2 size = {0.0f, 0.0f})
+                                                   const acul::string &tooltip_text = "")
     {
-        return acul::alloc<TextWithTooltip>(id, text, tooltip_text, size, get_default_text_flags(), nullptr,
-                                            Theme::STYLE_ID_INVALID);
+        return acul::alloc<TextWithTooltip>(id, text, tooltip_text, amal::vec2{0.0f, 0.0f}, get_default_text_flags(),
+                                            nullptr, Theme::STYLE_ID_INVALID);
     }
 
     inline TextWithTooltip *make_fixed_text_with_tooltip(u32 id, const acul::string &text = "",

@@ -88,18 +88,16 @@ namespace auik::v2
             detail::mark_host_refresh_request();
         }
 
-        APPLIB_API void on_hover_id_updated(u64 prev_hover_id, u64 hover_id)
+        APPLIB_API void on_hover_id_updated(const ElementID &prev_hover, const ElementID &hover)
         {
             auto &ctx = get_context();
-            const ElementID prev_hover = make_element_id(prev_hover_id);
-            const ElementID hover = make_element_id(hover_id);
-            const u32 prev_widget_id = prev_hover.widget_id;
-            const u32 prev_tag_id = prev_hover.tag_id;
-            const u32 widget_id = hover.widget_id;
-            const u32 tag_id = hover.tag_id;
             const bool is_dragging = ctx.io.mouse_down && ctx.io.drag_id;
-            const bool hover_changed = prev_hover_id != hover_id;
-            if (!is_dragging) detail::set_style_selector(hover, hover ? StyleState::hover : StyleState::normal);
+            const u32 prev_widget_id = prev_hover.widget_id;
+            const u32 widget_id = hover.widget_id;
+            const bool widget_changed = prev_widget_id != widget_id;
+            const bool element_changed = prev_hover != hover;
+            const bool selector_changed =
+                !is_dragging && detail::set_style_selector(hover, hover ? StyleState::hover : StyleState::normal);
             auto dispatch_hover = [&](u32 id, HoverState state) {
                 if (id == 0) return;
                 auto it = ctx.id_map.find(id);
@@ -116,36 +114,18 @@ namespace auik::v2
 
             if (!is_dragging)
             {
-                if (!hover_changed) dispatch_hover(widget_id, HoverState::active);
-                else if (prev_widget_id != widget_id)
+                if (widget_changed)
                 {
                     dispatch_hover(prev_widget_id, HoverState::leave);
                     dispatch_hover(widget_id, HoverState::enter);
                 }
-                else
+                else if (selector_changed)
                 {
-                    dispatch_hover(widget_id, HoverState::active);
+                    if (element_changed) dispatch_hover(widget_id, HoverState::active);
                     auto it = ctx.id_map.find(widget_id);
                     if (it != ctx.id_map.end()) enqueue_style_refresh<detail::HoverEventTraits>(it->second);
                 }
             }
-
-            ctx.hover_hitbox_zone = HitboxZoneBits::none;
-            if (tag_id == AUIK_TAG_HITBOX && widget_id != 0)
-            {
-                auto it = ctx.id_map.find(widget_id);
-                if (it != ctx.id_map.end())
-                {
-                    const auto &rect = it->second->get_rect();
-                    ctx.hover_hitbox_zone = get_hitbox_zone(rect, ctx.io.mouse_pos);
-                    if (!is_dragging)
-                        set_window_cursor(get_cursor_for_hitbox_zone(ctx.hover_hitbox_zone), ctx.window_ctx);
-                    return;
-                }
-            }
-
-            if (prev_tag_id == AUIK_TAG_HITBOX && tag_id != AUIK_TAG_HITBOX && !is_dragging)
-                set_window_cursor(CursorID::arrow, ctx.window_ctx);
         }
 
         static inline Widget *resolve_input_root(Context &ctx)
@@ -511,7 +491,7 @@ namespace auik::v2
             auto it = ctx.id_map.find(ctx.hover_id.widget_id);
             if (it != ctx.id_map.end())
             {
-                set_focus_target(ctx, it->second);
+                if (it->second->accepts_focus_on_mouse_press(ctx.hover_id)) set_focus_target(ctx, it->second);
                 // Press transfers visual state from hover -> active immediately.
                 // Hover re-enter is restored later by hover update/release path.
                 if (it->second->has_event_handler(EventFlagBits::hover)) it->second->on_hover(HoverState::leave);
@@ -599,7 +579,7 @@ namespace auik::v2
                 }
             }
 
-            if (clicked_id || hover_id) on_hover_id_updated(static_cast<u64>(clicked_id), static_cast<u64>(hover_id));
+            if (clicked_id || hover_id) on_hover_id_updated(clicked_id, hover_id);
 
             io.clicked_id = {};
             io.drag_id = {};

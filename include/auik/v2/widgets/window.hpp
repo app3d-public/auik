@@ -66,11 +66,22 @@ namespace auik::v2
                           Widget *parent = nullptr);
         APPLIB_API ~Window() override;
 
+        APPLIB_API void clear_children();
         APPLIB_API void add_child(Widget *child, WindowChildLayout layout = WindowChildLayout::block);
         APPLIB_API void add_children(const acul::vector<Widget *> &new_children);
+        void set_window_style_tag(u32 tag_id)
+        {
+            _window_style = {Theme::STYLE_ID_INVALID, tag_id};
+            set_rect_tag_id(tag_id);
+        }
 
         virtual StyleUpdateFlags update_style() override;
         void rebuild_clip_rects() override;
+        virtual void translate(const amal::vec2 &delta) override;
+        virtual void update_depth(const amal::vec2 &depth_range) override;
+        virtual void update_layout_min_size() override;
+        virtual void update_layout(bool min_size_known) override;
+        virtual void draw(DrawCtx &ctx) override;
 
     private:
         DrawDataID _bg;
@@ -87,12 +98,7 @@ namespace auik::v2
         bool _move_drag_active = false;
         acul::vector<WindowChildLayout> _child_layouts;
 
-        virtual void update_depth(const amal::vec2 &depth_range) override;
-        virtual void update_layout_min_size() override;
-        virtual void update_layout(bool min_size_known) override;
-        virtual void translate(const amal::vec2 &delta) override;
-
-        virtual void draw(DrawCtx &ctx) override;
+        virtual bool accepts_focus_on_mouse_press(detail::ElementID hit_id) const override;
         virtual u16 content_clip_id() const override { return _content_clip_id; }
         virtual amal::vec4 get_content_clip_rect() const override { return _content_clip_rect; }
         virtual void on_attach() override

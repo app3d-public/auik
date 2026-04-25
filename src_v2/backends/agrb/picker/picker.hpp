@@ -42,6 +42,8 @@ namespace auik::v2::detail
         {
             u32 widget_id = 0;
             u32 tag_id = 0;
+            u32 element_id = 0;
+            u32 reserved = 0;
         };
 
         DrawPipeline *_pipeline = nullptr;

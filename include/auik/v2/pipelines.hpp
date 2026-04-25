@@ -154,6 +154,7 @@ namespace auik::v2
         u32 vertex_count = 0;
         u32 index_count = 0;
         TextureID texture_id = AUIK_INVALID_TEXTURE_ID;
+        u32 flags = 0u;
     };
 
     APPLIB_API void create_textured_vertex_stream(DrawStream &stream);

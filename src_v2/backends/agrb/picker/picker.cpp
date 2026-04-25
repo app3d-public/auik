@@ -9,13 +9,13 @@
 
 namespace auik::v2::detail
 {
-    static constexpr vk::DeviceSize AUIK_PICK_RESULT_SIZE = sizeof(u32) * 2;
+    static constexpr vk::DeviceSize AUIK_PICK_RESULT_SIZE = sizeof(u32) * 4;
 
     void GPUPicker::create_render_pass(agrb::device &device)
     {
         vk::AttachmentDescription2 attachments[2];
         attachments[0]
-            .setFormat(vk::Format::eR32G32Uint)
+            .setFormat(vk::Format::eR32G32B32A32Uint)
             .setSamples(vk::SampleCountFlagBits::e1)
             .setLoadOp(vk::AttachmentLoadOp::eClear)
             .setStoreOp(vk::AttachmentStoreOp::eStore)
@@ -89,7 +89,7 @@ namespace auik::v2::detail
             .setExtent({1, 1, 1})
             .setMipLevels(1)
             .setArrayLayers(1)
-            .setFormat(vk::Format::eR32G32Uint)
+            .setFormat(vk::Format::eR32G32B32A32Uint)
             .setTiling(vk::ImageTiling::eOptimal)
             .setInitialLayout(vk::ImageLayout::eUndefined)
             .setUsage(vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferSrc)
@@ -102,7 +102,7 @@ namespace auik::v2::detail
         vk::ImageViewCreateInfo view_info;
         view_info.setImage(image.image)
             .setViewType(vk::ImageViewType::e2D)
-            .setFormat(vk::Format::eR32G32Uint)
+            .setFormat(vk::Format::eR32G32B32A32Uint)
             .setSubresourceRange(agrb::defaults::subresource_range_color);
         return device.vk_device.createImageView(&view_info, nullptr, &image.get_view(), device.loader) ==
                vk::Result::eSuccess;
@@ -412,8 +412,8 @@ namespace auik::v2::detail
         if (!data) return;
         auto &global_ctx = get_context();
         const auto prev_hover = global_ctx.hover_id;
-        global_ctx.hover_id = make_element_id(data->widget_id, data->tag_id);
-        on_hover_id_updated(static_cast<u64>(prev_hover), static_cast<u64>(global_ctx.hover_id));
+        global_ctx.hover_id = make_element_id(data->widget_id, data->tag_id, data->element_id);
+        on_hover_id_updated(prev_hover, global_ctx.hover_id);
     }
 
     u32 GPUPicker::push_hit_rect(const RectData &rect)
@@ -453,7 +453,7 @@ namespace auik::v2::detail
         {
             const auto prev_hover = global_ctx.hover_id;
             global_ctx.hover_id = {};
-            on_hover_id_updated(static_cast<u64>(prev_hover), 0);
+            on_hover_id_updated(prev_hover, {});
             return;
         }
         auto *agrb_ctx = get_agrb_context(gpu_context);

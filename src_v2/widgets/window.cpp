@@ -151,7 +151,7 @@ namespace auik::v2
             if (parent())
             {
                 const auto transition = detail::get_widget_style_selector_transition(parent_id);
-                if (transition.current_tag_id == AUIK_TAG_WINDOW_HEADER) state = transition.current_state;
+                if (transition.current_id.tag_id == AUIK_TAG_WINDOW_HEADER) state = transition.current_state;
                 const auto ps = parent()->style_state();
                 if (ps == StyleState::active || ps == StyleState::focus) state = ps;
             }
@@ -162,7 +162,6 @@ namespace auik::v2
             if (_resolved_text_color != style.text_color())
             {
                 _resolved_text_color = style.text_color();
-                _title->set_color(_resolved_text_color);
                 _title_draw_dirty = true;
             }
             return flags;
@@ -177,11 +176,9 @@ namespace auik::v2
             const amal::vec2 content_pos = {position().x + padding.x, position().y + padding.y};
             const amal::vec2 content_size = {amal::max(size().x - padding.x - padding.z, 0.0f),
                                              amal::max(size().y - padding.y - padding.w, 0.0f)};
+            _title->set_position(content_pos);
             _title->set_size(content_size);
-            const amal::vec2 prev_cursor = detail::get_context().screen_cursor;
-            detail::get_context().screen_cursor = content_pos;
             _title->update_layout(true);
-            detail::get_context().screen_cursor = prev_cursor;
             _title->set_clip_id(clip_id());
         }
 
@@ -249,13 +246,24 @@ namespace auik::v2
 
     Window::~Window()
     {
-        for (auto *child : children)
-            if (child) acul::release(child);
-        children.clear();
+        clear_children();
 
         if (_header) acul::release(_header);
         if (_scrollbar_x) acul::release(_scrollbar_x);
         if (_scrollbar_y) acul::release(_scrollbar_y);
+    }
+
+    void Window::clear_children()
+    {
+        for (auto *child : children)
+        {
+            if (!child) continue;
+            if (child->widget_flags & WidgetFlagBits::attachable) child->on_detach();
+            acul::release(child);
+        }
+        children.clear();
+        _child_layouts.clear();
+        _content_offset = {0.0f, 0.0f};
     }
 
     void Window::add_child(Widget *child, WindowChildLayout layout)
@@ -299,15 +307,9 @@ namespace auik::v2
         {
             const auto transition = detail::get_widget_style_selector_transition(id());
             const bool is_scrollbar_transition =
-                detail::is_scrollbar_tag(transition.current_tag_id) || detail::is_scrollbar_tag(transition.prev_tag_id);
+                detail::is_scrollbar_tag(transition.current_id.tag_id) || detail::is_scrollbar_tag(transition.prev_id.tag_id);
             if (!is_scrollbar_transition) return;
         }
-
-        const amal::vec2 prev_cursor = detail::get_context().screen_cursor;
-        const auto &padding = window_style.padding();
-        amal::vec2 cursor = position() + amal::vec2{padding.x, padding.y};
-        if (_header_height > 0.0f) cursor.y += _header_height;
-        detail::get_context().screen_cursor = cursor;
 
         for (auto *child : children)
         {
@@ -329,8 +331,14 @@ namespace auik::v2
             scrollbar_ctx.emit_hit_rect = _scrollbar_x->is_hittable();
             _scrollbar_x->draw(scrollbar_ctx);
         }
+    }
 
-        detail::get_context().screen_cursor = prev_cursor;
+    bool Window::accepts_focus_on_mouse_press(detail::ElementID hit_id) const
+    {
+        if (hit_id.tag_id == AUIK_TAG_WINDOW_HEADER) return !(window_flags & WindowFlagBits::movable);
+        if (hit_id.tag_id == AUIK_TAG_HITBOX) return !(window_flags & WindowFlagBits::resizable) || (window_flags & WindowFlagBits::docked);
+        if (detail::is_scrollbar_tag(hit_id.tag_id)) return false;
+        return true;
     }
 
     void Window::update_depth(const amal::vec2 &depth_range)
@@ -564,7 +572,6 @@ namespace auik::v2
         amal::vec2 cursor = content_cursor;
         f32 inline_row_height = 0.0f;
         f32 inline_row_width = 0.0f;
-        detail::get_context().screen_cursor = cursor;
 
         for (size_t i = 0; i < children.size(); ++i)
         {
@@ -584,9 +591,9 @@ namespace auik::v2
                 {
                     child->set_size({available_width, child->size().y});
                 }
-                detail::get_context().screen_cursor = cursor;
+                child->set_position(cursor);
                 child->update_layout(true);
-                cursor = {content_cursor.x, detail::get_context().screen_cursor.y};
+                cursor = {content_cursor.x, cursor.y + child->required_size().y};
                 continue;
             }
 
@@ -619,14 +626,14 @@ namespace auik::v2
                 {
                     child->set_size({available_width, child->size().y});
                 }
-                detail::get_context().screen_cursor = cursor;
+                child->set_position(cursor);
                 child->update_layout(true);
-                cursor = {content_cursor.x, detail::get_context().screen_cursor.y};
+                cursor = {content_cursor.x, cursor.y + child->required_size().y};
                 continue;
             }
 
             if (!child->is_fixed()) child->set_size({inline_width, child->size().y});
-            detail::get_context().screen_cursor = cursor;
+            child->set_position(cursor);
             child->update_layout(true);
 
             const amal::vec2 occupied = child->required_size();
@@ -638,7 +645,6 @@ namespace auik::v2
         }
 
         if (inline_row_height > 0.0f) cursor = {content_cursor.x, cursor.y + inline_row_height};
-        detail::get_context().screen_cursor = cursor;
     };
 
     void Window::update_layout(bool min_size_known)
@@ -651,7 +657,6 @@ namespace auik::v2
             intersect_rect({position().x, position().y, size().x, size().y}, parent_bounds);
         ensure_own_clip_rect(self_clip_rect);
 
-        const amal::vec2 prev_cursor = detail::get_context().screen_cursor;
         auto *theme = get_theme();
         const auto &window_style = theme->get_style(_window_style.id);
         const auto &padding = window_style.padding();
@@ -814,9 +819,13 @@ namespace auik::v2
 
         const bool is_scrollbar_y_visible = _scrollbar_y && _scrollbar_y->is_visible();
         const bool is_scrollbar_x_visible = _scrollbar_x && _scrollbar_x->is_visible();
-        if (is_scrollbar_y_visible || is_scrollbar_x_visible)
-            add_event_flags(EventFlagBits::scroll | EventFlagBits::hover);
-        else remove_event_flags(EventFlagBits::scroll | EventFlagBits::hover);
+        const bool needs_scroll_events = is_scrollbar_y_visible || is_scrollbar_x_visible;
+        const bool needs_hover_events =
+            needs_scroll_events || ((window_flags & WindowFlagBits::resizable) && !(window_flags & WindowFlagBits::docked));
+        if (needs_scroll_events) add_event_flags(EventFlagBits::scroll);
+        else remove_event_flags(EventFlagBits::scroll);
+        if (needs_hover_events) add_event_flags(EventFlagBits::hover);
+        else remove_event_flags(EventFlagBits::hover);
         if (was_scrollbar_y_visible != is_scrollbar_y_visible || was_scrollbar_x_visible != is_scrollbar_x_visible)
             redraw_all_commands();
 
@@ -828,7 +837,6 @@ namespace auik::v2
                                                final_content_size.y};
         _content_clip_rect = intersect_rect(parent_clip, final_content_clip);
         update_clip_rect(_content_clip_id, _content_clip_rect);
-        detail::get_context().screen_cursor = prev_cursor;
     }
 
     void Window::translate(const amal::vec2 &delta)
@@ -905,7 +913,18 @@ namespace auik::v2
 
     void Window::on_hover(HoverState state)
     {
-        (void)state;
+        auto &ctx = detail::get_context();
+        const bool is_own_hitbox = ctx.hover_id.widget_id == id() && ctx.hover_id.tag_id == AUIK_TAG_HITBOX;
+        const bool can_resize = (window_flags & WindowFlagBits::resizable) && !(window_flags & WindowFlagBits::docked);
+        if (state != HoverState::leave && is_own_hitbox && can_resize)
+        {
+            ctx.hover_hitbox_zone = detail::get_hitbox_zone(get_rect(), ctx.io.mouse_pos);
+            detail::set_window_cursor(detail::get_cursor_for_hitbox_zone(ctx.hover_hitbox_zone), ctx.window_ctx);
+            return;
+        }
+
+        ctx.hover_hitbox_zone = detail::HitboxZoneBits::none;
+        detail::set_window_cursor(detail::CursorID::arrow, ctx.window_ctx);
     }
 
     void Window::on_click(MouseKey key, KeyPressState state, u32 click_count)

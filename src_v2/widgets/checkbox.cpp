@@ -78,14 +78,14 @@ namespace auik::v2
         ensure_checkmark_resource();
 
         const auto &style = get_theme()->get_style(_style.id);
-        const amal::vec2 cursor = detail::get_context().screen_cursor;
+        const amal::vec2 layout_origin = position();
         const amal::vec2 min_required = required_size();
 
         amal::vec2 widget_size = size();
         widget_size.x = amal::max(widget_size.x, min_required.x);
         widget_size.y = amal::max(widget_size.y, min_required.y);
 
-        const amal::vec2 pos = cursor;
+        const amal::vec2 pos = layout_origin;
         set_position(pos);
         set_size(widget_size);
         Widget::update_layout(true);
@@ -98,8 +98,6 @@ namespace auik::v2
         _box_rect.size = box_size;
 
         rebuild_checkmark_layout();
-
-        detail::get_context().screen_cursor = {cursor.x, pos.y + widget_size.y};
     }
 
     void Checkbox::translate(const amal::vec2 &delta)

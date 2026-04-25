@@ -17,8 +17,16 @@ namespace auik::v2
     struct RotatePostData
     {
         u32 id = AUIK_INVALID_POST_EFFECT_DATA_ID;
+    };
+
+    struct RotatePostRuntimeData
+    {
         amal::vec2 center{0.0f, 0.0f};
         f32 angle = 0.0f;
+        f32 animation_from = 0.0f;
+        f32 animation_to = 0.0f;
+        f64 animation_start = 0.0;
+        bool animating = false;
     };
 
     struct FadePostData
@@ -67,6 +75,12 @@ namespace auik::v2
     APPLIB_API PostEffect *get_fade_in_post_effect();
     APPLIB_API PostEffect *get_fade_out_post_effect();
     APPLIB_API PostEffect *get_rotate_post_effect();
+    APPLIB_API u32 create_rotate_post_effect_data(PostEffect *effect, Widget *owner);
+    APPLIB_API RotatePostRuntimeData *get_rotate_post_effect_data(PostEffect *effect, u32 id);
+    APPLIB_API const RotatePostRuntimeData *get_rotate_post_effect_data(const PostEffect *effect, u32 id);
+    APPLIB_API void retain_rotate_post_effect_data(PostEffect *effect, u32 id);
+    APPLIB_API void release_rotate_post_effect_data(PostEffect *effect, u32 id);
+    APPLIB_API bool is_rotate_post_effect_data_valid(PostEffect *effect, u32 id);
     APPLIB_API u32 create_fade_post_effect_data(PostEffect *effect, Widget *owner, f32 duration_sec);
     APPLIB_API void retain_fade_post_effect_data(PostEffect *effect, u32 id);
     APPLIB_API void release_fade_post_effect_data(PostEffect *effect, u32 id);

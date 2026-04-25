@@ -22,7 +22,6 @@ namespace auik::v2
         if (_resolved_text_color != style.text_color())
         {
             _resolved_text_color = style.text_color();
-            _text->set_color(_resolved_text_color);
             _text_draw_dirty = true;
         }
         return flags;
@@ -51,7 +50,7 @@ namespace auik::v2
         if (!min_size_known) update_layout_min_size();
         auto *theme = get_theme();
         const auto &style = theme->get_style(_style.id);
-        const amal::vec2 cursor = detail::get_context().screen_cursor;
+        const amal::vec2 layout_origin = position();
         const amal::vec4 margin = style.margin();
 
         const amal::vec2 min_required = required_size();
@@ -62,7 +61,7 @@ namespace auik::v2
         else button_size.x = amal::max(button_size.x, min_button.x);
         button_size.y = amal::max(button_size.y, min_button.y);
 
-        const amal::vec2 pos = {cursor.x + margin.x, cursor.y + margin.y};
+        const amal::vec2 pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
         set_position(pos);
         set_size(button_size);
         Widget::update_layout(true);
@@ -73,13 +72,9 @@ namespace auik::v2
         const amal::vec2 content_pos = {pos.x + padding.x, pos.y + padding.y};
         const amal::vec2 content_size = {amal::max(button_size.x - padding.x - padding.z, 0.0f),
                                          amal::max(button_size.y - padding.y - padding.w, 0.0f)};
+        _text->set_position(content_pos);
         _text->set_size(content_size);
-        const amal::vec2 prev_cursor = detail::get_context().screen_cursor;
-        detail::get_context().screen_cursor = content_pos;
         _text->update_layout(true);
-        detail::get_context().screen_cursor = prev_cursor;
-
-        detail::get_context().screen_cursor = {cursor.x, pos.y + button_size.y + margin.w};
     }
 
     void TextButton::translate(const amal::vec2 &delta)

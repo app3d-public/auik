@@ -171,10 +171,8 @@ namespace auik::v2
                 cursor.x = position().x + _metrics.left_inset + icon_margin.x;
 
             child->update_layout_min_size();
-            const amal::vec2 prev_cursor = detail::get_context().screen_cursor;
-            detail::get_context().screen_cursor = cursor;
+            child->set_position(cursor);
             child->update_layout(true);
-            detail::get_context().screen_cursor = prev_cursor;
 
             if (child == _icon)
             {

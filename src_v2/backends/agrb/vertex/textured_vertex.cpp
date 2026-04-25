@@ -16,6 +16,7 @@ namespace auik::v2::detail
         u32 index_offset = 0;
         u32 index_count = 0;
         TextureID texture_id = AUIK_INVALID_TEXTURE_ID;
+        u32 flags = 0u;
     };
 
     struct TexturedVertexStreamGPUData
@@ -31,6 +32,7 @@ namespace auik::v2::detail
     {
         amal::vec2 window_size;
         u32 texture_id = AUIK_INVALID_DRAW_DATA_ID;
+        u32 flags = 0u;
     };
 
     static DrawDataID push_textured_vertex_stream_batch(DrawStream *stream, const TexturedVertexStreamBatchData &batch,
@@ -47,6 +49,7 @@ namespace auik::v2::detail
         range.index_offset = static_cast<u32>(gpu_data.indices.size());
         range.index_count = batch.index_count;
         range.texture_id = batch.texture_id;
+        range.flags = batch.flags;
 
         for (u32 i = 0; i < batch.vertex_count; ++i) gpu_data.vertices.push_back(batch.vertices[i]);
         for (u32 i = 0; i < batch.index_count; ++i) gpu_data.indices.push_back(batch.indices[i] + range.vertex_offset);
@@ -87,6 +90,7 @@ namespace auik::v2::detail
         for (u32 i = 0; i < batch.index_count; ++i)
             gpu_data.indices[range.index_offset + i] = batch.indices[i] + range.vertex_offset;
         range.texture_id = batch.texture_id;
+        range.flags = batch.flags;
     }
 
     static void update_textured_vertex_stream_data(DrawStream *stream, DrawDataID draw_data_id, const void *data,
@@ -222,7 +226,7 @@ namespace auik::v2::detail
             if (batch.index_count == 0 || batch.vertex_count == 0) continue;
             if (batch.texture_id.bind_slot == AUIK_INVALID_DRAW_DATA_ID) continue;
 
-            const TexturedVertexPushData push_data{get_display_size(), batch.texture_id.bind_slot};
+            const TexturedVertexPushData push_data{get_display_size(), batch.texture_id.bind_slot, batch.flags};
             cmd.pushConstants(pipeline->layout,
                               vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, 0,
                               sizeof(TexturedVertexPushData), &push_data, loader);

@@ -4,6 +4,8 @@ struct PickerInstanceData
 {
     uint widget_id;
     uint tag_id;
+    uint element_id;
+    uint reserved;
     vec2 position;
     vec2 size;
     float depth;
@@ -16,10 +18,11 @@ layout(push_constant) uniform Push { vec2 window_size; };
 
 layout(location = 0) flat out uint out_widget_id;
 layout(location = 1) flat out uint out_tag_id;
-layout(location = 2) flat out uint out_clip_and_flags;
-layout(location = 3) out vec2 out_pixel_pos;
-layout(location = 4) out vec2 out_local_pos;
-layout(location = 5) flat out vec2 out_rect_size;
+layout(location = 2) flat out uint out_element_id;
+layout(location = 3) flat out uint out_clip_and_flags;
+layout(location = 4) out vec2 out_pixel_pos;
+layout(location = 5) out vec2 out_local_pos;
+layout(location = 6) flat out vec2 out_rect_size;
 
 #define AUIK_HITBOX_PAD 4.0
 
@@ -49,6 +52,7 @@ void main()
     gl_Position = vec4(ndc, instance.depth, 1.0);
     out_widget_id = instance.widget_id;
     out_tag_id = instance.tag_id;
+    out_element_id = instance.element_id;
     out_clip_and_flags = instance.clip_and_flags;
     out_pixel_pos = pixel_pos;
     out_local_pos = pixel_pos - (instance.position + instance.size * 0.5);

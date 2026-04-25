@@ -88,8 +88,8 @@ void main()
     float corner_radius = get_corner_radius(in_local_pos, radius, in_corner_mask);
 
     float dist_outer = sd_rounded_rect(in_local_pos, half_size, corner_radius);
-    float aa_outer = max(fwidth(dist_outer), 1e-4);
-    float fill_outer = 1.0 - smoothstep(-aa_outer, 0.0, dist_outer);
+    float aa_outer = max(0.5 * fwidth(dist_outer), 1e-4);
+    float fill_outer = 1.0 - smoothstep(-aa_outer, aa_outer, dist_outer);
 
     if (fill_outer <= 0.0) discard;
 

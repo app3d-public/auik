@@ -2,8 +2,10 @@
 #include <auik/v2/theme.hpp>
 #include <auik/v2/widgets/checkbox.hpp>
 #include <auik/v2/widgets/color_picker.hpp>
+#include <auik/v2/widgets/combobox.hpp>
 #include <auik/v2/widgets/slider.hpp>
 #include <auik/v2/widgets/text_button.hpp>
+#include <auik/v2/widgets/textbox.hpp>
 #include <auik/v2/widgets/tooltip.hpp>
 #include <auik/v2/widgets/window.hpp>
 
@@ -136,7 +138,7 @@ namespace auik::v2
         // Base palette
         constexpr auto c_surface = amal::rgba8_to_vec4(41, 41, 43, 255);
         constexpr auto c_surface_light = amal::rgba8_to_vec4(74, 74, 75, 255);
-        constexpr auto c_hover = amal::rgba8_to_vec4(97, 97, 97, 255);
+        constexpr auto c_hover = amal::rgba8_to_vec4(90, 90, 90, 255);
         constexpr auto c_active = amal::rgba8_to_vec4(31, 31, 31, 255);
         constexpr auto c_border = amal::rgba8_to_vec4(51, 51, 51, 255);
         constexpr auto c_ascent = amal::rgba8_to_vec4(72, 114, 255, 255);
@@ -147,7 +149,7 @@ namespace auik::v2
 
         // Global settings.
         theme->add_style(AUIK_TAG_GLOBAL, make_style()
-                                              .text_color({0.75f, 0.75f, 0.75f, 1.0f})
+                                              .text_color({0.9f, 0.9f, 0.9f, 1.0f})
                                               .text_size(12.5f * dpi)
                                               .font(default_font)
                                               .margin(amal::vec2{0.0f, 5.0f}));
@@ -174,30 +176,69 @@ namespace auik::v2
                          make_style().margin(amal::vec4{8.0f, 0.0f, 8.0f, 0.0f}).background_color(c_surface));
 
         theme->add_style(AUIK_TAG_TEXT_BUTTON, make_style()
-                                                   .padding(amal::vec2{10.0f, 6.0f})
+                                                   .padding(amal::vec2{10.0f, 4.0f})
                                                    .background_color(c_surface_light)
-                                                   .border_radius(6.0f)
+                                                   .border_radius(4.0f)
                                                    .border_color(c_border)
                                                    .border_thickness(1.0f));
         theme->add_style(AUIK_TAG_TEXT_BUTTON, make_style().background_color(c_hover), StyleState::hover);
         theme->add_style(AUIK_TAG_TEXT_BUTTON, make_style().background_color(c_surface_light), StyleState::active);
 
-        theme->add_style(AUIK_TAG_CHECKBOX, make_style()
-                                               .padding(amal::vec2{3.0f})
-                                               .background_color(c_surface_light)
-                                               .border_radius(3.0f));
+        theme->add_style(AUIK_TAG_TEXTBOX, make_style()
+                                               .margin(amal::vec2{0.0f, 5.0f})
+                                               .padding(amal::vec4{9.0f, 7.0f, 9.0f, 7.0f})
+                                               .background_color(amal::rgba8_to_vec4(24, 25, 28, 255))
+                                               .border_color(amal::rgba8_to_vec4(82, 84, 90, 255))
+                                               .border_thickness(1.0f)
+                                               .border_radius(5.0f)
+                                               .text_color(amal::rgba8_to_vec4(235, 235, 238, 255)));
+        theme->add_style(AUIK_TAG_TEXTBOX,
+                         make_style()
+                             .background_color(amal::rgba8_to_vec4(31, 33, 38, 255))
+                             .border_color(amal::rgba8_to_vec4(112, 116, 128, 255)),
+                         StyleState::hover);
+        theme->add_style(AUIK_TAG_TEXTBOX,
+                         make_style()
+                             .background_color(amal::rgba8_to_vec4(18, 20, 25, 255))
+                             .border_color(c_ascent)
+                             .text_color(c_white),
+                         StyleState::focus);
+        theme->add_style(AUIK_TAG_TEXTBOX,
+                         make_style()
+                             .background_color(amal::rgba8_to_vec4(18, 20, 25, 255))
+                             .border_color(c_ascent)
+                             .text_color(c_white),
+                         StyleState::active);
+
+        theme->add_style(AUIK_TAG_CHECKBOX,
+                         make_style().padding(amal::vec2{3.0f}).background_color(c_surface_light).border_radius(3.0f));
         theme->add_style(AUIK_TAG_CHECKBOX, make_style().background_color(c_hover), StyleState::hover);
-        theme->add_style(AUIK_TAG_CHECKBOX,
-                         make_style().background_color(c_surface_light).border_color(c_border), StyleState::active);
-        theme->add_style(AUIK_TAG_CHECKBOX,
-                         make_style().background_color(c_surface_light).border_color(c_border), StyleState::focus);
+        theme->add_style(AUIK_TAG_CHECKBOX, make_style().background_color(c_surface_light).border_color(c_border),
+                         StyleState::active);
+        theme->add_style(AUIK_TAG_CHECKBOX, make_style().background_color(c_surface_light).border_color(c_border),
+                         StyleState::focus);
+
+        theme->add_style(
+            AUIK_TAG_COMBO_BOX,
+            make_style().padding(amal::vec2{10.0f, 4.0f}).background_color(c_surface_light).border_radius(4.0f));
+        theme->add_style(AUIK_TAG_COMBO_BOX, make_style().background_color(c_hover), StyleState::hover);
+        theme->add_style(AUIK_TAG_COMBO_BOX, make_style().corner_mask(0x3u), StyleState::focus);
+        theme->add_style(AUIK_TAG_COMBO_BOX_POPUP, make_style()
+                                                       .margin(empty_vec2)
+                                                       .padding(amal::vec2{0.0f, 2.0f})
+                                                       .background_color(c_active)
+                                                       .border_radius(4.0f)
+                                                       .corner_mask(0xCu));
+        theme->add_style(
+            AUIK_TAG_COMBO_BOX_ITEM,
+            make_style().margin(amal::vec2{4.0f, 2.0f}).padding(amal::vec2{6.0f, 4.0f}).border_radius(3.0f));
+        theme->add_style(AUIK_TAG_COMBO_BOX_ITEM, make_style().background_color(c_hover), StyleState::hover);
+        theme->add_style(AUIK_TAG_COMBO_BOX_ITEM, make_style().background_color(c_ascent), StyleState::focus);
 
         theme->add_style(
             AUIK_TAG_SLIDER,
             make_style().background_color(c_surface_light).border_radius(2.5f).padding(amal::vec2{0.0f, 5.0f}));
-        theme->add_style(AUIK_TAG_SLIDER,
-                         make_style().background_color(c_ascent).border_radius(2.5f).padding(amal::vec2{0.0f, 5.0f}),
-                         StyleState::active);
+        theme->add_style(AUIK_TAG_SLIDER, make_style().background_color(c_ascent), StyleState::active);
         theme->add_style(AUIK_TAG_SLIDER_GRAB, make_style()
                                                    .padding(amal::vec2{8.0f})
                                                    .background_color(c_light)

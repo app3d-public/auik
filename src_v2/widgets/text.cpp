@@ -15,17 +15,33 @@ namespace auik::v2
         return out;
     }
 
-    static amal::vec4 intersect_rect(const amal::vec4 &a, const amal::vec4 &b)
+    static f32 resolve_layout_height_for_widget(const Text &widget, const detail::TextLayoutResult &layout)
     {
-        const amal::vec2 a_min = {a.x, a.y};
-        const amal::vec2 a_max = {a.x + a.z, a.y + a.w};
-        const amal::vec2 b_min = {b.x, b.y};
-        const amal::vec2 b_max = {b.x + b.z, b.y + b.w};
+        if (!widget.tight_content_height()) return layout.size.y;
 
-        const amal::vec2 out_min = {amal::max(a_min.x, b_min.x), amal::max(a_min.y, b_min.y)};
-        const amal::vec2 out_max = {amal::min(a_max.x, b_max.x), amal::min(a_max.y, b_max.y)};
-        const amal::vec2 out_size = {amal::max(out_max.x - out_min.x, 0.0f), amal::max(out_max.y - out_min.y, 0.0f)};
-        return {out_min, out_size};
+        bool has_visible_glyph = false;
+        f32 min_y = 0.0f;
+        f32 max_y = 0.0f;
+        for (const auto &glyph : layout.glyphs)
+        {
+            if (!glyph.visible()) continue;
+            const f32 glyph_min = glyph.rect.offset.y;
+            const f32 glyph_max = glyph.rect.offset.y + glyph.rect.size.y;
+            if (!has_visible_glyph)
+            {
+                min_y = glyph_min;
+                max_y = glyph_max;
+                has_visible_glyph = true;
+                continue;
+            }
+            min_y = amal::min(min_y, glyph_min);
+            max_y = amal::max(max_y, glyph_max);
+        }
+        if (has_visible_glyph) return amal::max(max_y - min_y, 0.0f);
+
+        const f32 metrics_height = amal::max(layout.ascender - layout.descender, 0.0f);
+        if (layout.lines.size() <= 1 && metrics_height > 0.0f) return metrics_height;
+        return layout.size.y;
     }
 
     StyleUpdateFlags Text::update_style()
@@ -34,7 +50,7 @@ namespace auik::v2
         const auto flags = resolve_style_selector(_style, id(), parent_id, style_state());
         const auto &style = get_theme()->get_style(_style.id);
         _layout_config.size_px = round_font_px(style.text_size());
-        if (_use_style_text_color) _render_config.tint_color = style.text_color();
+        _render_config.tint_color = style.text_color();
         return flags;
     }
 
@@ -46,12 +62,14 @@ namespace auik::v2
         _instances_gpu_dirty = true;
         const auto &style = get_theme()->get_style(_style.id);
         const amal::vec4 margin = style.margin();
+        const amal::vec4 padding = style.padding();
 
         auto *font = get_theme()->get_style(_style.id).font();
         if (!font || _text.empty() || _layout_config.size_px == 0)
         {
             const amal::vec2 content_size = is_fixed() ? size() : amal::vec2{0.0f, 0.0f};
-            set_required_size({content_size.x + margin.x + margin.z, content_size.y + margin.y + margin.w});
+            set_required_size({content_size.x + padding.x + padding.z + margin.x + margin.z,
+                               content_size.y + padding.y + padding.w + margin.y + margin.w});
             return;
         }
 
@@ -64,11 +82,13 @@ namespace auik::v2
         {
             _layout_result.clear();
             const amal::vec2 content_size = is_fixed() ? size() : amal::vec2{0.0f, 0.0f};
-            set_required_size({content_size.x + margin.x + margin.z, content_size.y + margin.y + margin.w});
+            set_required_size({content_size.x + padding.x + padding.z + margin.x + margin.z,
+                               content_size.y + padding.y + padding.w + margin.y + margin.w});
             return;
         }
 
         amal::vec2 min_size = _layout_result.size;
+        min_size.y = resolve_layout_height_for_widget(*this, _layout_result);
         if (is_fixed())
         {
             if (size().x > 0.0f) min_size.x = size().x;
@@ -76,43 +96,48 @@ namespace auik::v2
         }
         else if (size().y > 0.0f) min_size.y = amal::max(min_size.y, size().y);
 
-        set_required_size({min_size.x + margin.x + margin.z, min_size.y + margin.y + margin.w});
+        set_required_size({min_size.x + padding.x + padding.z + margin.x + margin.z,
+                           min_size.y + padding.y + padding.w + margin.y + margin.w});
     }
 
     void Text::update_layout(bool min_size_known)
     {
         if (!min_size_known) update_layout_min_size();
 
-        const amal::vec2 cursor = detail::get_context().screen_cursor;
         const auto &style = get_theme()->get_style(_style.id);
         const amal::vec4 margin = style.margin();
+        const amal::vec4 padding = style.padding();
         const amal::vec2 required_outer = required_size();
-        const amal::vec2 required_content = {amal::max(required_outer.x - margin.x - margin.z, 0.0f),
-                                             amal::max(required_outer.y - margin.y - margin.w, 0.0f)};
+        const amal::vec2 required_inner = {amal::max(required_outer.x - margin.x - margin.z, 0.0f),
+                                           amal::max(required_outer.y - margin.y - margin.w, 0.0f)};
         const bool auto_width = size().x <= 0.0f;
         const bool auto_height = size().y <= 0.0f;
-        const amal::vec2 content_pos = {cursor.x + margin.x, cursor.y + margin.y};
-        set_position(content_pos);
+        const amal::vec2 layout_origin = position();
+        const amal::vec2 outer_pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
+        set_position(outer_pos);
 
-        amal::vec2 text_size = resolve_text_size(*this, required_content);
-        set_size(text_size);
+        amal::vec2 outer_size = resolve_text_size(*this, required_inner);
+        set_size(outer_size);
         Widget::update_layout(true);
         assert(parent() && "Text must have parent");
         set_clip_id(parent()->content_clip_id());
 
-        rebuild_text_buffers(text_size);
+        const amal::vec2 inner_size = {amal::max(outer_size.x - padding.x - padding.z, 0.0f),
+                                       amal::max(outer_size.y - padding.y - padding.w, 0.0f)};
+        set_position(outer_pos + amal::vec2{padding.x, padding.y});
+        rebuild_text_buffers(inner_size);
         update_content_bounds();
+        set_position(outer_pos);
 
         if (!is_fixed())
         {
-            if (auto_width) text_size.x = _layout_result.size.x;
-            if (auto_height) text_size.y = _layout_result.size.y;
-            set_size(text_size);
-            set_required_size(
-                {_layout_result.size.x + margin.x + margin.z, _layout_result.size.y + margin.y + margin.w});
+            const f32 resolved_height = resolve_layout_height_for_widget(*this, _layout_result);
+            if (auto_width) outer_size.x = _layout_result.size.x + padding.x + padding.z;
+            if (auto_height) outer_size.y = resolved_height + padding.y + padding.w;
+            set_size(outer_size);
+            set_required_size({_layout_result.size.x + padding.x + padding.z + margin.x + margin.z,
+                               resolved_height + padding.y + padding.w + margin.y + margin.w});
         }
-
-        detail::get_context().screen_cursor = {cursor.x, content_pos.y + size().y + margin.w};
     }
 
     void Text::translate(const amal::vec2 &delta)
@@ -148,29 +173,18 @@ namespace auik::v2
 
     void Text::rebuild_clip_rects()
     {
-        const auto &content_bounds = _content_bounds;
-        if (content_bounds.size.x > 0.0f || content_bounds.size.y > 0.0f)
-        {
-            amal::vec4 clip_rect = {content_bounds.offset.x, content_bounds.offset.y, content_bounds.size.x,
-                                    content_bounds.size.y};
-            if (parent()) clip_rect = intersect_rect(clip_rect, parent()->get_content_clip_rect());
-            ensure_own_clip_rect(clip_rect);
-        }
-        else
-        {
-            assert(parent() && "Text must have parent");
-            set_clip_id(parent()->content_clip_id());
-        }
-        _draw_ids.clear();
-        _hit_id = AUIK_INVALID_DRAW_DATA_ID;
+        // Text uses parent's clip to avoid stale per-text clip rects on parent translate.
+        assert(parent() && "Text must have parent");
+        set_clip_id(parent()->content_clip_id());
     }
 
     void Text::draw(DrawCtx &ctx)
     {
-        if (is_hittable())
+        if (ctx.emit_hit_rect && is_hittable())
         {
             detail::RectData hit_rect = get_rect();
             hit_rect.bounds = _content_bounds;
+            if (ctx.is_recording()) _hit_id = AUIK_INVALID_DRAW_DATA_ID;
             const bool force_update =
                 ctx.is_recording() || (detail::get_context().dirty_flags & DirtyFlagBits::hit_rect_update);
             update_hit_rect(_hit_id, hit_rect, force_update);
@@ -257,14 +271,11 @@ namespace auik::v2
         mark_layout_dirty();
     }
 
-    void Text::set_color(const amal::vec4 &color)
+    void Text::set_tight_content_height(bool value)
     {
-        if (_render_config.tint_color == color) return;
-        _render_config.tint_color = color;
-        _use_style_text_color = false;
-        auto &ctx = detail::get_context();
-        ctx.dirty_flags |= DirtyFlagBits::redraw;
-        detail::mark_host_refresh_request();
+        if (_tight_content_height == value) return;
+        _tight_content_height = value;
+        mark_layout_dirty();
     }
 
     bool Text::rebuild_text_buffers(const amal::vec2 &bounds_size)
