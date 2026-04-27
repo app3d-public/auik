@@ -91,6 +91,8 @@ namespace auik::v2::detail
     };
 
     using PFN_set_window_cursor = void (*)(CursorID::enum_type, struct WindowContext *);
+    using PFN_get_clipboard_string = acul::string (*)(struct WindowContext *);
+    using PFN_set_clipboard_string = void (*)(struct WindowContext *, const acul::string &);
     using PFN_destroy_window_backend = void (*)(struct WindowContext *);
     using PFN_update_window_time = void (*)(struct WindowContext *);
     using PFN_window_new_frame = void (*)(struct WindowContext *);
@@ -122,6 +124,8 @@ namespace auik::v2::detail
         f64 time = 0.0;
         HostWindowState host_state = HostWindowState::normal;
         PFN_set_window_cursor set_cursor = nullptr;
+        PFN_get_clipboard_string get_clipboard_string = nullptr;
+        PFN_set_clipboard_string set_clipboard_string = nullptr;
         PFN_construct_window_backend construct_backend = nullptr;
         PFN_destroy_window_backend destroy_backend = nullptr;
         PFN_update_window_time update_time = nullptr;
@@ -145,6 +149,18 @@ namespace auik::v2::detail
     {
         assert(window_ctx && "auik window context is not initialized");
         window_ctx->set_cursor(id, window_ctx);
+    }
+
+    inline acul::string get_clipboard_string(WindowContext *window_ctx)
+    {
+        assert(window_ctx && "auik window context is not initialized");
+        return window_ctx->get_clipboard_string ? window_ctx->get_clipboard_string(window_ctx) : acul::string();
+    }
+
+    inline void set_clipboard_string(WindowContext *window_ctx, const acul::string &text)
+    {
+        assert(window_ctx && "auik window context is not initialized");
+        if (window_ctx->set_clipboard_string) window_ctx->set_clipboard_string(window_ctx, text);
     }
 
     inline void construct_window_backend(WindowContext *window_ctx) { window_ctx->construct_backend(window_ctx); }

@@ -215,8 +215,8 @@ namespace auik::v2
         QuadsInstanceData bg_data{};
         bg_data.rect = bounds();
         bg_data.z_order = (background_range.x + background_range.y) * 0.5f;
-        fill_quads_instance_by_style(theme->get_style(_style.id), clip_id(), bg_data);
-        ctx.emit(quads_stream, _bg, &bg_data, get_rect(), false);
+        const bool bg_visible = fill_quads_instance_by_style(theme->get_style(_style.id), clip_id(), bg_data);
+        if (should_emit_quads_instance(bg_visible, _bg, false)) ctx.emit(quads_stream, _bg, &bg_data, get_rect(), false);
 
         const Style &icon_style = theme->get_style(_icon_style.id);
         const amal::vec4 icon_margin = icon_style.margin();
@@ -229,8 +229,9 @@ namespace auik::v2
             const f32 x1 = _icon->position().x + _icon->size().x + icon_margin.z;
             icon_bg_data.rect = {{x0, position().y}, {amal::max(x1 - x0, 0.0f), size().y}};
             icon_bg_data.z_order = next_depth(background_range);
-            fill_quads_instance_by_style(icon_style, clip_id(), icon_bg_data);
-            ctx.emit(quads_stream, _icon_bg, &icon_bg_data, get_rect(), false);
+            const bool icon_bg_visible = fill_quads_instance_by_style(icon_style, clip_id(), icon_bg_data);
+            if (should_emit_quads_instance(icon_bg_visible, _icon_bg, false))
+                ctx.emit(quads_stream, _icon_bg, &icon_bg_data, get_rect(), false);
         }
 
         for (auto *child : _children)

@@ -239,14 +239,16 @@ namespace auik::v2::detail
         QuadsInstanceData track{};
         track.rect = bounds();
         track.z_order = get_z_order();
-        fill_quads_instance_by_style(theme->get_style(_track_style.id), clip_id(), track);
-        ctx.emit(quads_stream, _track_draw_id, &track, get_rect(), ctx.emit_hit_rect);
+        const bool track_visible = fill_quads_instance_by_style(theme->get_style(_track_style.id), clip_id(), track);
+        if (should_emit_quads_instance(track_visible, _track_draw_id, ctx.emit_hit_rect))
+            ctx.emit(quads_stream, _track_draw_id, &track, get_rect(), ctx.emit_hit_rect);
 
         QuadsInstanceData thumb{};
         thumb.rect = _thumb_rect.bounds;
         thumb.z_order = next_depth(depth_range());
         _thumb_rect.depth = thumb.z_order;
-        fill_quads_instance_by_style(theme->get_style(_thumb_style.id), clip_id(), thumb);
-        ctx.emit(quads_stream, _thumb_draw_id, &thumb, _thumb_rect, ctx.emit_hit_rect);
+        const bool thumb_visible = fill_quads_instance_by_style(theme->get_style(_thumb_style.id), clip_id(), thumb);
+        if (should_emit_quads_instance(thumb_visible, _thumb_draw_id, ctx.emit_hit_rect))
+            ctx.emit(quads_stream, _thumb_draw_id, &thumb, _thumb_rect, ctx.emit_hit_rect);
     }
 } // namespace auik::v2::detail

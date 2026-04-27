@@ -31,7 +31,8 @@ namespace auik::v2
             if (!GetIconInfo(icon, &icon_info)) return false;
 
             BITMAP color_bitmap{};
-            if (!GetObjectW(icon_info.hbmColor ? icon_info.hbmColor : icon_info.hbmMask, sizeof(color_bitmap), &color_bitmap))
+            if (!GetObjectW(icon_info.hbmColor ? icon_info.hbmColor : icon_info.hbmMask, sizeof(color_bitmap),
+                            &color_bitmap))
             {
                 if (icon_info.hbmColor) DeleteObject(icon_info.hbmColor);
                 if (icon_info.hbmMask) DeleteObject(icon_info.hbmMask);
@@ -93,7 +94,7 @@ namespace auik::v2
             if (icon_info.hbmMask) DeleteObject(icon_info.hbmMask);
             return out.pixels != nullptr;
         }
-    }
+    } // namespace
 #endif
 
     static inline HostWindowState resolve_host_window_state(const awin::Window &window)
@@ -108,6 +109,18 @@ namespace auik::v2
         auto *backend = static_cast<detail::AwinBackend *>(window_ctx);
         auto &window = backend->window;
         window.set_cursor(backend->cursors + id);
+    }
+
+    static acul::string get_clipboard_string(detail::WindowContext *window_ctx)
+    {
+        auto *backend = static_cast<detail::AwinBackend *>(window_ctx);
+        return awin::get_clipboard_string(backend->window);
+    }
+
+    static void set_clipboard_string(detail::WindowContext *window_ctx, const acul::string &text)
+    {
+        auto *backend = static_cast<detail::AwinBackend *>(window_ctx);
+        awin::set_clipboard_string(backend->window, text);
     }
 
     static void destroy_window_backend(detail::WindowContext *window_ctx)
@@ -217,6 +230,8 @@ namespace auik::v2
     {
         detail::AwinBackend *ctx = acul::alloc<detail::AwinBackend>(window);
         ctx->set_cursor = &set_window_cursor;
+        ctx->get_clipboard_string = &get_clipboard_string;
+        ctx->set_clipboard_string = &set_clipboard_string;
         ctx->update_time = &window_new_frame;
         ctx->new_frame = &window_new_frame;
         ctx->construct_backend = &construct_window_backend;

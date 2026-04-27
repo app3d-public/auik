@@ -1,8 +1,8 @@
 #pragma once
 
 #include <acul/memory/alloc.hpp>
-#include "text.hpp"
 #include "../theme.hpp"
+#include "text.hpp"
 #include "widget.hpp"
 
 #define AUIK_TAG_TEXT_BUTTON 0x6544FF93
@@ -27,7 +27,7 @@ namespace auik::v2
             : Widget(id, widget_flags, event_flags, parent, {}, AUIK_TAG_TEXT_BUTTON),
               _style({Theme::STYLE_ID_INVALID, AUIK_TAG_TEXT_BUTTON}),
               _text(acul::alloc<Text>(id ^ 0xA8115EEDu, std::move(text), amal::vec2{0.0f, 0.0f},
-                                       get_default_fixed_text_flags(), this))
+                                      get_default_fixed_text_flags(), this))
         {
             _text->set_horizontal_align(detail::TextHorizontalAlign::center);
             _text->set_vertical_align(detail::TextVerticalAlign::center);
@@ -47,7 +47,7 @@ namespace auik::v2
         DrawDataID _bg;
         StyleSelector _style;
         Text *_text = nullptr;
-        amal::vec4 _resolved_text_color{-1.0f, -1.0f, -1.0f, -1.0f};
+        u32 _resolved_text_color{0};
         bool _text_draw_dirty = true;
     };
 

@@ -26,7 +26,7 @@
 #define AUIK_TEXT_EDIT_KEY_PAGE_DOWN    0x20000F
 #define AUIK_TEXT_EDIT_KEY_SHIFT        0x400000
 
-namespace auik::detail
+namespace auik::v2::detail
 {
     using TextEditChar = int;
     using TextEditPosition = int;
@@ -96,6 +96,8 @@ namespace auik::detail
         TextEditChar (*get_char)(void *user_data, int char_idx) = nullptr;
         bool (*insert_chars)(void *user_data, int pos, const TextEditChar *text, int text_len) = nullptr;
         void (*delete_chars)(void *user_data, int pos, int count) = nullptr;
+        bool (*replace_chars)(void *user_data, int pos, int delete_count, const TextEditChar *text,
+                              int text_len) = nullptr;
         int (*key_to_text)(TextEditKey key) = nullptr;
         bool (*is_space)(TextEditChar ch) = nullptr;
         int (*next_char_index)(void *user_data, int idx) = nullptr;

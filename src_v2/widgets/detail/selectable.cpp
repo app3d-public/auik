@@ -49,8 +49,9 @@ namespace auik::v2::detail
         QuadsInstanceData bg{};
         bg.rect = bounds();
         bg.z_order = _bg_z;
-        fill_quads_instance_by_style(get_theme()->get_style(_style.id), bg_clip_id, bg);
-        ctx.emit(quads_stream, _bg, &bg, get_rect(), ctx.emit_hit_rect);
+        const bool bg_visible = fill_quads_instance_by_style(get_theme()->get_style(_style.id), bg_clip_id, bg);
+        if (should_emit_quads_instance(bg_visible, _bg, ctx.emit_hit_rect))
+            ctx.emit(quads_stream, _bg, &bg, get_rect(), ctx.emit_hit_rect);
 
         DrawCtx text_ctx = ctx;
         text_ctx.emit_hit_rect = false;

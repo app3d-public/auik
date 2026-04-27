@@ -81,6 +81,7 @@ namespace auik::v2
     {
         _open = false;
         if (_popup) _popup->hide();
+        erase_widget_from_transient_cache(this);
         if (auto *rotate_effect = get_rotate_post_effect();
             rotate_effect && _rotate_post_id != AUIK_INVALID_POST_EFFECT_DATA_ID)
             release_rotate_post_effect_data(rotate_effect, _rotate_post_id);
@@ -291,87 +292,98 @@ namespace auik::v2
 
     void ComboBox::draw(DrawCtx &ctx)
     {
+        const bool transient = ctx.reason & DrawReasonBits::transient;
+        const bool draw_transient_payload = transient || ctx.is_recording();
         auto *theme = get_theme();
         auto *quads_stream = get_primary_quads_stream();
         auto *textured_quads_stream = get_primary_textured_quads_stream();
 
-        QuadsInstanceData bg_data{};
-        bg_data.rect = bounds();
-        bg_data.z_order = next_depth(_bg_depth_range);
-        fill_quads_instance_by_style(theme->get_style(_style.id), clip_id(), bg_data);
-        ctx.emit(quads_stream, _bg_draw, &bg_data, get_rect(), ctx.emit_hit_rect);
-
-        DrawCtx label_ctx = ctx;
-        label_ctx.emit_hit_rect = false;
-        _label->draw(label_ctx);
-
-        ensure_icon_resources();
-        TextureID icon_texture = _icon_texture;
-        if (textured_quads_stream && icon_texture.handle != 0)
+        if (!transient)
         {
-            if ((detail::get_context().dirty_flags & DirtyFlagBits::textures) ||
-                icon_texture.bind_slot == AUIK_INVALID_DRAW_DATA_ID)
-                icon_texture.bind_slot = get_texture_bind_slot(icon_texture.handle);
+            QuadsInstanceData bg_data{};
+            bg_data.rect = bounds();
+            bg_data.z_order = next_depth(_bg_depth_range);
+            const bool bg_visible = fill_quads_instance_by_style(theme->get_style(_style.id), clip_id(), bg_data);
+            if (should_emit_quads_instance(bg_visible, _bg_draw, ctx.emit_hit_rect))
+                ctx.emit(quads_stream, _bg_draw, &bg_data, get_rect(), ctx.emit_hit_rect);
 
-            if (icon_texture.bind_slot != AUIK_INVALID_DRAW_DATA_ID)
-            {
-                const auto *rotate_data = get_combo_rotate_data_const(_rotate_post_id);
-                TexturesInstanceData icon_data{};
-                icon_data.rect = _icon_rect;
-                icon_data.uv_rect = _icon_uv_rect;
-                icon_data.tint_color = (rotate_data && rotate_data->animating)
-                                           ? detail::pack_rgba8(255, 255, 255, 0)
-                                           : theme->get_style(_style.id).text_color_packed();
-                icon_data.z_order = _icon_hit_rect.depth;
-                icon_data.texture_id = static_cast<u16>(icon_texture.bind_slot);
-                icon_data.clip_id = clip_id();
-                icon_data.flags = AUIK_TEXTURE_INSTANCE_TEXT_BIT;
-                ctx.emit(textured_quads_stream, _icon_draw, &icon_data, _icon_hit_rect, false);
-            }
-        }
+            DrawCtx label_ctx = ctx;
+            label_ctx.emit_hit_rect = false;
+            _label->draw(label_ctx);
 
-        auto *vertex_stream = get_primary_textured_vertex_stream();
-        auto *rotate_effect = get_rotate_post_effect();
-        if (vertex_stream && rotate_effect && _rotate_post_id != AUIK_INVALID_POST_EFFECT_DATA_ID)
-        {
-            TextureID animated_texture = _icon_texture;
-            if (animated_texture.handle != 0)
+            ensure_icon_resources();
+            TextureID icon_texture = _icon_texture;
+            if (textured_quads_stream && icon_texture.handle != 0)
             {
                 if ((detail::get_context().dirty_flags & DirtyFlagBits::textures) ||
-                    animated_texture.bind_slot == AUIK_INVALID_DRAW_DATA_ID)
-                    animated_texture.bind_slot = get_texture_bind_slot(animated_texture.handle);
+                    icon_texture.bind_slot == AUIK_INVALID_DRAW_DATA_ID)
+                    icon_texture.bind_slot = get_texture_bind_slot(icon_texture.handle);
 
-                if (animated_texture.bind_slot != AUIK_INVALID_DRAW_DATA_ID)
+                if (icon_texture.bind_slot != AUIK_INVALID_DRAW_DATA_ID)
                 {
-                    auto *rotate_data = get_rotate_post_effect_data(rotate_effect, _rotate_post_id);
-                    const bool animated_visible = rotate_data && rotate_data->animating;
-                    if (rotate_data)
-                    {
-                        rotate_data->center = _icon_rect.offset + _icon_rect.size * 0.5f;
-                        if (!rotate_data->animating) rotate_data->angle = 0.0f;
-                    }
-
-                    TexturedVertexStreamVertex vertices[4]{};
-                    const TexturedVertexStreamIndex indices[6]{0u, 1u, 2u, 0u, 2u, 3u};
-                    build_animated_icon_vertices(vertices, _icon_rect, _icon_uv_rect, _icon_hit_rect.depth,
-                                                 static_cast<u32>(clip_id()), animated_visible);
-
-                    TexturedVertexStreamBatchData animated_batch{};
-                    animated_batch.vertices = vertices;
-                    animated_batch.indices = indices;
-                    animated_batch.vertex_count = 4u;
-                    animated_batch.index_count = 6u;
-                    animated_batch.texture_id = animated_texture;
-                    animated_batch.flags = AUIK_TEXTURE_INSTANCE_TEXT_BIT;
-
-                    RotatePostData rotate_post{_rotate_post_id};
-                    DrawCtx rotated_ctx = ctx;
-                    rotated_ctx.post_effect = rotate_effect;
-                    rotated_ctx.post_data = &rotate_post;
-                    rotated_ctx.emit(vertex_stream, _animated_icon_draw, &animated_batch, _icon_hit_rect, false);
+                    const auto *rotate_data = get_combo_rotate_data_const(_rotate_post_id);
+                    TexturesInstanceData icon_data{};
+                    icon_data.rect = _icon_rect;
+                    icon_data.uv_rect = _icon_uv_rect;
+                    icon_data.tint_color = (rotate_data && rotate_data->animating)
+                                               ? detail::pack_rgba8(255, 255, 255, 0)
+                                               : theme->get_style(_style.id).text_color();
+                    icon_data.z_order = _icon_hit_rect.depth;
+                    icon_data.texture_id = static_cast<u16>(icon_texture.bind_slot);
+                    icon_data.clip_id = clip_id();
+                    icon_data.flags = AUIK_TEXTURE_INSTANCE_TEXT_BIT;
+                    ctx.emit(textured_quads_stream, _icon_draw, &icon_data, _icon_hit_rect, false);
                 }
             }
         }
+
+        if (draw_transient_payload)
+        {
+            auto *vertex_stream = get_primary_textured_vertex_stream();
+            auto *rotate_effect = get_rotate_post_effect();
+            if (vertex_stream && rotate_effect && _rotate_post_id != AUIK_INVALID_POST_EFFECT_DATA_ID)
+            {
+                TextureID animated_texture = _icon_texture;
+                if (animated_texture.handle != 0)
+                {
+                    if ((detail::get_context().dirty_flags & DirtyFlagBits::textures) ||
+                        animated_texture.bind_slot == AUIK_INVALID_DRAW_DATA_ID)
+                        animated_texture.bind_slot = get_texture_bind_slot(animated_texture.handle);
+
+                    if (animated_texture.bind_slot != AUIK_INVALID_DRAW_DATA_ID)
+                    {
+                        auto *rotate_data = get_rotate_post_effect_data(rotate_effect, _rotate_post_id);
+                        const bool animated_visible = rotate_data && rotate_data->animating;
+                        if (rotate_data)
+                        {
+                            rotate_data->center = _icon_rect.offset + _icon_rect.size * 0.5f;
+                            if (!rotate_data->animating) rotate_data->angle = 0.0f;
+                        }
+
+                        TexturedVertexStreamVertex vertices[4]{};
+                        const TexturedVertexStreamIndex indices[6]{0u, 1u, 2u, 0u, 2u, 3u};
+                        build_animated_icon_vertices(vertices, _icon_rect, _icon_uv_rect, _icon_hit_rect.depth,
+                                                     static_cast<u32>(clip_id()), animated_visible);
+
+                        TexturedVertexStreamBatchData animated_batch{};
+                        animated_batch.vertices = vertices;
+                        animated_batch.indices = indices;
+                        animated_batch.vertex_count = 4u;
+                        animated_batch.index_count = 6u;
+                        animated_batch.texture_id = animated_texture;
+                        animated_batch.flags = AUIK_TEXTURE_INSTANCE_TEXT_BIT;
+
+                        RotatePostData rotate_post{_rotate_post_id};
+                        DrawCtx rotated_ctx = ctx;
+                        rotated_ctx.post_effect = rotate_effect;
+                        rotated_ctx.post_data = &rotate_post;
+                        rotated_ctx.emit(vertex_stream, _animated_icon_draw, &animated_batch, _icon_hit_rect, false);
+                    }
+                }
+            }
+        }
+
+        if (transient) return;
 
         if (_open && _popup)
         {
@@ -583,6 +595,8 @@ namespace auik::v2
         rotate_data->animation_to = opening ? amal::pi<f32>() : 0.0f;
         rotate_data->angle = rotate_data->animation_from;
         rotate_data->animating = true;
+        push_widget_to_transient_cache(this);
+        detail::mark_host_refresh_request();
         schedule_icon_tick();
     }
 
@@ -675,13 +689,13 @@ namespace auik::v2
             {
                 rotate_data->angle = rotate_data->animation_to;
                 rotate_data->animating = false;
+                erase_widget_from_transient_cache(this);
                 rebuild_control_layout();
                 redraw_external(has_draw_record(), DrawReasonBits::external);
                 detail::mark_host_refresh_request();
                 return;
             }
 
-            redraw_external(has_draw_record(), DrawReasonBits::external);
             detail::mark_host_refresh_request();
             schedule_icon_tick();
         });

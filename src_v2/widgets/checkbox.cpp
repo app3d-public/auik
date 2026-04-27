@@ -27,12 +27,10 @@ namespace auik::v2
     amal::vec2 Checkbox::resolve_box_size(const Style &style) const
     {
         const amal::vec4 padding = style.padding();
-        const amal::vec2 base_size = _checkmark_size.x > 0.0f && _checkmark_size.y > 0.0f
-                                         ? _checkmark_size
-                                         : amal::vec2{12.0f, 12.0f};
-        const f32 side = amal::max(amal::max(base_size.x + padding.x + padding.z,
-                                             base_size.y + padding.y + padding.w),
-                                   16.0f);
+        const amal::vec2 base_size =
+            _checkmark_size.x > 0.0f && _checkmark_size.y > 0.0f ? _checkmark_size : amal::vec2{12.0f, 12.0f};
+        const f32 side =
+            amal::max(amal::max(base_size.x + padding.x + padding.z, base_size.y + padding.y + padding.w), 16.0f);
         return {side, side};
     }
 
@@ -132,8 +130,9 @@ namespace auik::v2
         QuadsInstanceData box_data{};
         box_data.rect = _box_rect;
         box_data.z_order = next_depth(_box_depth_range);
-        fill_quads_instance_by_style(get_theme()->get_style(_style.id), clip_id(), box_data);
-        ctx.emit(quads_stream, _box_bg, &box_data, get_rect(), ctx.emit_hit_rect);
+        const bool box_visible = fill_quads_instance_by_style(get_theme()->get_style(_style.id), clip_id(), box_data);
+        if (should_emit_quads_instance(box_visible, _box_bg, ctx.emit_hit_rect))
+            ctx.emit(quads_stream, _box_bg, &box_data, get_rect(), ctx.emit_hit_rect);
 
         ensure_checkmark_resource();
         auto *textured_quads_stream = get_primary_textured_quads_stream();
@@ -147,8 +146,7 @@ namespace auik::v2
             {
                 TexturesInstanceData checkmark_data{};
                 checkmark_data.rect = _checkmark_rect.bounds;
-                checkmark_data.tint_color =
-                    value() ? get_theme()->get_style(_style.id).text_color_packed() : detail::pack_rgba8(255, 255, 255, 0);
+                checkmark_data.tint_color = value() ? get_theme()->get_style(_style.id).text_color() : 0;
                 checkmark_data.uv_rect = _checkmark_uv_rect;
                 checkmark_data.z_order = _checkmark_rect.depth;
                 checkmark_data.texture_id = static_cast<u16>(_checkmark_texture.bind_slot);

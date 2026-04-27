@@ -64,6 +64,81 @@ namespace auik::v2
 
     namespace detail
     {
+        bool is_utf8_trail(unsigned char ch) { return (ch & 0xC0u) == 0x80u; }
+
+        int next_utf8_index(const acul::string &text, int idx)
+        {
+            const int len = static_cast<int>(text.size());
+            if (idx >= len) return len;
+            ++idx;
+            while (idx < len && is_utf8_trail(static_cast<unsigned char>(text[idx]))) ++idx;
+            return idx;
+        }
+
+        int prev_utf8_index(const acul::string &text, int idx)
+        {
+            if (idx <= 0) return 0;
+            --idx;
+            while (idx > 0 && is_utf8_trail(static_cast<unsigned char>(text[idx]))) --idx;
+            return idx;
+        }
+
+        acul::string encode_utf8_codepoint(u32 char_code, TextFlags flags)
+        {
+            acul::string out;
+            add_char_to_string(out, char_code, flags);
+            return out;
+        }
+
+        u32 decode_utf8_codepoint(const acul::string &text, size_t &idx)
+        {
+            const auto len = text.size();
+            const u8 lead = static_cast<u8>(text[idx++]);
+            if (lead < 0x80u) return lead;
+
+            u32 codepoint = 0;
+            u32 trail_count = 0;
+            if ((lead & 0xE0u) == 0xC0u)
+            {
+                codepoint = lead & 0x1Fu;
+                trail_count = 1;
+            }
+            else if ((lead & 0xF0u) == 0xE0u)
+            {
+                codepoint = lead & 0x0Fu;
+                trail_count = 2;
+            }
+            else if ((lead & 0xF8u) == 0xF0u)
+            {
+                codepoint = lead & 0x07u;
+                trail_count = 3;
+            }
+            else return 0xFFFDu;
+
+            for (u32 i = 0; i < trail_count; ++i)
+            {
+                if (idx >= len) return 0xFFFDu;
+                const u8 ch = static_cast<u8>(text[idx]);
+                if ((ch & 0xC0u) != 0x80u) return 0xFFFDu;
+                ++idx;
+                codepoint = (codepoint << 6u) | (ch & 0x3Fu);
+            }
+            return codepoint;
+        }
+
+        acul::string filter_text_input(const acul::string &input, TextFlags flags, bool allow_newline)
+        {
+            acul::string out;
+            for (size_t i = 0; i < input.size();)
+            {
+                const u32 codepoint = decode_utf8_codepoint(input, i);
+                if (codepoint == '\r') continue;
+                if (codepoint == '\n' && !allow_newline) continue;
+                add_char_to_string(out, codepoint, flags);
+            }
+            return out;
+        }
+
         namespace
         {
             constexpr f32 g_hb_scale = 64.0f;
@@ -284,9 +359,9 @@ namespace auik::v2
 
                 const f32 base_x = render_config.bounds.offset.x;
                 const f32 align_height = resolve_vertical_align_height(layout);
-                const f32 base_y = render_config.bounds.offset.y +
-                                   resolve_vertical_offset(render_config.vertical_align, render_config.bounds.size.y,
-                                                           align_height);
+                const f32 base_y =
+                    render_config.bounds.offset.y +
+                    resolve_vertical_offset(render_config.vertical_align, render_config.bounds.size.y, align_height);
 
                 for (const auto &line : layout.lines)
                 {
@@ -318,7 +393,7 @@ namespace auik::v2
                         instance.rect.offset = {amal::round(base_x + line_shift + glyph_offset.x),
                                                 amal::round(base_y + glyph_offset.y)};
                         instance.rect.size = {static_cast<f32>(glyph->size.x), static_cast<f32>(glyph->size.y)};
-                        instance.tint_color = detail::pack_rgba8(render_config.tint_color);
+                instance.tint_color = render_config.tint_color;
                         instance.uv_rect = glyph->uv_rect;
                         instance.z_order = render_config.z_order;
                         instance.texture_id = static_cast<u16>(glyph->texture_id.bind_slot);

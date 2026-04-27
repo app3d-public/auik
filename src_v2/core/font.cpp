@@ -158,6 +158,70 @@ namespace auik::v2
             }
         }
 
+        static bool make_six_dots_icon_image(f32 dpi, umbf::Image2D &dst)
+        {
+            constexpr f32 supersample = 3.0f;
+            const f32 s = dpi * supersample;
+            const f32 dot_radius = amal::max(1.15f * s, 1.0f);
+            const f32 fringe = amal::max(0.85f * supersample, 1.0f);
+            const u32 dot_step = amal::max(round_font_px(3.4f * s), 3u);
+            const u32 pad_x = amal::max(round_font_px(2.0f * s), 2u);
+            const u32 pad_y = amal::max(round_font_px(1.5f * s), 2u);
+            dst.width = amal::max(round_font_px(7.0f * s), 12u);
+            dst.height = pad_y * 2u + dot_step * 5u + round_font_px(dot_radius * 2.0f);
+            dst.format = {umbf::ImageFormat::Type::uint, 1};
+            dst.channels = {"r"};
+
+            auto *pixels = acul::mem_allocator<u8>::allocate(static_cast<size_t>(dst.width) * dst.height);
+            if (!pixels) return false;
+            memset(pixels, 0, static_cast<size_t>(dst.width) * dst.height);
+
+            const f32 cx = static_cast<f32>(pad_x) + dot_radius;
+            for (u32 dot = 0; dot < 6u; ++dot)
+            {
+                const f32 cy = static_cast<f32>(pad_y) + dot_radius + static_cast<f32>(dot * dot_step);
+                for (u32 y = 0; y < dst.height; ++y)
+                {
+                    for (u32 x = 0; x < dst.width; ++x)
+                    {
+                        const f32 dx = static_cast<f32>(x) + 0.5f - cx;
+                        const f32 dy = static_cast<f32>(y) + 0.5f - cy;
+                        const f32 dist = std::sqrt(dx * dx + dy * dy);
+                        const f32 coverage = amal::clamp((dot_radius + fringe - dist) / fringe, 0.0f, 1.0f);
+                        u8 &dst_pixel = pixels[static_cast<size_t>(y) * dst.width + x];
+                        dst_pixel = amal::max(dst_pixel, static_cast<u8>(coverage * 255.0f + 0.5f));
+                    }
+                }
+            }
+
+            dst.pixels = pixels;
+            return true;
+        }
+
+        static bool cache_six_dots_icon(f32 dpi)
+        {
+            if (get_cached_image(AUIK_ICON_SIX_DOTS)) return true;
+
+            umbf::Image2D image{};
+            if (!make_six_dots_icon_image(dpi, image)) return false;
+
+            detail::AtlasAllocation allocation{};
+            const bool allocated = detail::allocate_atlas_region(image, allocation) && allocation.valid();
+            if (allocated)
+            {
+                auto *icon =
+                    make_image(AUIK_ICON_SIX_DOTS, allocation.texture_id,
+                               {static_cast<f32>(image.width), static_cast<f32>(image.height)}, allocation.uv_rect);
+                if (icon)
+                {
+                    icon->set_coverage_mode(true);
+                    cache_image(AUIK_ICON_SIX_DOTS, icon);
+                }
+            }
+            acul::release(image.pixels);
+            return allocated && get_cached_image(AUIK_ICON_SIX_DOTS) != nullptr;
+        }
+
         struct PreparedGlyph
         {
             u32 size_px = 0;
@@ -624,7 +688,7 @@ namespace auik::v2
             }
         }
 
-        return true;
+        return cache_six_dots_icon(dpi);
     }
 
 #ifdef _WIN32
@@ -680,7 +744,7 @@ namespace auik::v2
                 }
             }
         }
-        return true;
+        return cache_six_dots_icon(dpi);
     }
 #endif
 } // namespace auik::v2

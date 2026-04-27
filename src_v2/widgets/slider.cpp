@@ -14,7 +14,7 @@ namespace auik::v2
         {
             data.rect = rect;
             data.background_color = pack_rgba8(0, 0, 0, 0);
-            data.border_color = style.border_color_packed();
+            data.border_color = style.border_color();
             data.border_radius = style.border_radius();
             data.border_thickness = style.has_visible_border() ? style.border_thickness() : 0.0f;
             data.z_order = z_order;
@@ -39,14 +39,14 @@ namespace auik::v2
         }
 
         static inline void fill_gradient_grab_instance(const Style &style, const amal::rect &rect, f32 z_order,
-                                                       u16 clip_id, const amal::vec4 &background_color,
-                                                       f32 border_thickness, QuadsInstanceData &data)
+                                                       u16 clip_id, u32 background_color, f32 border_thickness,
+                                                       QuadsInstanceData &data)
         {
             data.rect = rect;
             data.z_order = z_order;
             fill_quads_instance_by_style(style, clip_id, data);
-            data.background_color = pack_rgba8(background_color);
-            data.border_color = pack_rgba8(style.border_color());
+            data.background_color = background_color;
+            data.border_color = style.border_color();
             data.border_thickness = border_thickness;
             data.border_radius = amal::max(0.0f, amal::min(rect.size.x, rect.size.y) * 0.5f);
             data.mask |= (static_cast<u32>(AUIK_HAS_BORDER_BIT) << 20u);
@@ -79,10 +79,10 @@ namespace auik::v2
                                             const amal::vec2 &depth_range, u16 clip_id)
         {
             visual.clear_payload();
-            visual.set_layer(SliderTrackVisual::LayerBits::background);
             visual.background.rect = track_rect;
             visual.background.z_order = mid_depth(depth_range);
-            fill_quads_instance_by_style(style, clip_id, visual.background);
+            if (fill_quads_instance_by_style(style, clip_id, visual.background))
+                visual.set_layer(SliderTrackVisual::LayerBits::background);
         }
 
         void build_gradient_slider_track_visual(SliderTrackVisual &visual, GradientTrackVisual &gradient_visual,
@@ -267,17 +267,23 @@ namespace auik::v2
         auto *quad_stream = get_primary_quads_stream();
         bool hit_pending = ctx.emit_hit_rect;
 
-        if (_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::background))
+        if (ctx.is_recording() ||
+            should_emit_quads_instance(_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::background),
+                                       _track_visual.background_draw_id, hit_pending))
         {
             ctx.emit(quad_stream, _track_visual.background_draw_id, &_track_visual.background, get_rect(), hit_pending);
             hit_pending = false;
         }
-        if (_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::fill))
+        if (ctx.is_recording() ||
+            should_emit_quads_instance(_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::fill),
+                                       _track_visual.fill_draw_id, hit_pending))
         {
             ctx.emit(quad_stream, _track_visual.fill_draw_id, &_track_visual.fill, get_rect(), hit_pending);
             hit_pending = false;
         }
-        if (_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::border))
+        if (ctx.is_recording() ||
+            should_emit_quads_instance(_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::border),
+                                       _track_visual.border_draw_id, hit_pending))
         {
             ctx.emit(quad_stream, _track_visual.border_draw_id, &_track_visual.border, get_rect(), hit_pending);
             hit_pending = false;
@@ -288,15 +294,9 @@ namespace auik::v2
     bool Slider::has_draw_record() const
     {
         if (_grab_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
-        if (_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::background) &&
-            _track_visual.background_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID)
-            return false;
-        if (_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::fill) &&
-            _track_visual.fill_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID)
-            return false;
-        if (_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::border) &&
-            _track_visual.border_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID)
-            return false;
+        if (_track_visual.background_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
+        if (_track_visual.fill_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
+        if (_track_visual.border_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
         return true;
     }
 
@@ -388,20 +388,22 @@ namespace auik::v2
         const f32 fill_w = amal::max(right_x - left_x, 0.0f);
 
         const auto &fill_style = get_theme()->get_style(_fill_style.id);
-        _track_visual.set_layer(detail::SliderTrackVisual::LayerBits::fill);
         _track_visual.fill.rect = _track_rect;
         _track_visual.fill.rect.offset.x = left_x;
         _track_visual.fill.rect.size.x = fill_w > 0.0f ? fill_w : 1.0f;
         _track_visual.fill.z_order = detail::mid_depth(_track_depth_range);
-        fill_quads_instance_by_style(fill_style, clip_id(), _track_visual.fill);
-        if (fill_w <= 0.0f || amal::is_rect_empty(_track_rect))
+        const bool fill_visible = fill_quads_instance_by_style(fill_style, clip_id(), _track_visual.fill) &&
+                                  fill_w > 0.0f && !amal::is_rect_empty(_track_rect);
+        if (!fill_visible)
         {
-            _track_visual.fill.background_color = detail::pack_rgba8(0, 0, 0, 0);
-            _track_visual.fill.border_color = detail::pack_rgba8(0, 0, 0, 0);
+            _track_visual.clear_layer(detail::SliderTrackVisual::LayerBits::fill);
+            _track_visual.fill.background_color = 0;
+            _track_visual.fill.border_color = 0;
             _track_visual.fill.border_thickness = 0.0f;
             _track_visual.fill.mask &= ~(static_cast<u32>(AUIK_HAS_BORDER_BIT) << 20u);
             return;
         }
+        _track_visual.set_layer(detail::SliderTrackVisual::LayerBits::fill);
 
         if (!fill_style.has_visible_border())
         {
@@ -622,7 +624,9 @@ namespace auik::v2
         auto *vertex_stream = get_primary_vertex_stream();
         bool hit_pending = ctx.emit_hit_rect;
 
-        if (_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::background))
+        if (ctx.is_recording() ||
+            should_emit_quads_instance(_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::background),
+                                       _track_visual.background_draw_id, hit_pending))
         {
             ctx.emit(quad_stream, _track_visual.background_draw_id, &_track_visual.background, get_rect(), hit_pending);
             hit_pending = false;
@@ -632,12 +636,16 @@ namespace auik::v2
             ctx.emit(vertex_stream, _gradient_visual.draw_id, &_gradient_visual.data.batch, get_rect(), hit_pending);
             hit_pending = false;
         }
-        if (_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::border))
+        if (ctx.is_recording() ||
+            should_emit_quads_instance(_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::border),
+                                       _track_visual.border_draw_id, hit_pending))
         {
             ctx.emit(quad_stream, _track_visual.border_draw_id, &_track_visual.border, get_rect(), hit_pending);
             hit_pending = false;
         }
-        if (_grab_back_visual.rect.size.x > 0.0f && _grab_back_visual.rect.size.y > 0.0f)
+        const bool grab_back_visible = _grab_back_visual.rect.size.x > 0.0f && _grab_back_visual.rect.size.y > 0.0f;
+        if (ctx.is_recording() || grab_back_visible ||
+            _grab_back_draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID)
             ctx.emit(overlay_quad_stream, _grab_back_draw_id, &_grab_back_visual, _grab_hit_rect, false);
         ctx.emit(overlay_quad_stream, _grab_draw_id, &_grab_visual, _grab_hit_rect, ctx.emit_hit_rect);
     }
@@ -645,15 +653,9 @@ namespace auik::v2
     bool GradientSlider::has_draw_record() const
     {
         if (_grab_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
-        if (_grab_back_visual.rect.size.x > 0.0f && _grab_back_visual.rect.size.y > 0.0f &&
-            _grab_back_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID)
-            return false;
-        if (_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::background) &&
-            _track_visual.background_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID)
-            return false;
-        if (_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::border) &&
-            _track_visual.border_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID)
-            return false;
+        if (_grab_back_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
+        if (_track_visual.background_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
+        if (_track_visual.border_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
         if (_gradient_visual.valid && _gradient_visual.draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
         return true;
     }
@@ -770,7 +772,8 @@ namespace auik::v2
                                                 _grab_back_visual);
         }
 
-        detail::fill_gradient_grab_instance(grab_style, _grab_rect, grab_z, grab_clip_id, resolve_active_color(factor),
+        detail::fill_gradient_grab_instance(grab_style, _grab_rect, grab_z, grab_clip_id,
+                                            detail::pack_rgba8(resolve_active_color(factor)),
                                             grab_style.border_thickness(), _grab_visual);
     }
 
@@ -944,7 +947,9 @@ namespace auik::v2
         auto *vertex_stream = get_primary_vertex_stream();
         bool hit_pending = ctx.emit_hit_rect;
 
-        if (_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::background))
+        if (ctx.is_recording() ||
+            should_emit_quads_instance(_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::background),
+                                       _track_visual.background_draw_id, hit_pending))
         {
             ctx.emit(quad_stream, _track_visual.background_draw_id, &_track_visual.background, get_rect(), hit_pending);
             hit_pending = false;
@@ -954,12 +959,16 @@ namespace auik::v2
             ctx.emit(vertex_stream, _gradient_visual.draw_id, &_gradient_visual.data.batch, get_rect(), hit_pending);
             hit_pending = false;
         }
-        if (_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::border))
+        if (ctx.is_recording() ||
+            should_emit_quads_instance(_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::border),
+                                       _track_visual.border_draw_id, hit_pending))
         {
             ctx.emit(quad_stream, _track_visual.border_draw_id, &_track_visual.border, get_rect(), hit_pending);
             hit_pending = false;
         }
-        if (_grab_back_visual.rect.size.x > 0.0f && _grab_back_visual.rect.size.y > 0.0f)
+        const bool grab_back_visible = _grab_back_visual.rect.size.x > 0.0f && _grab_back_visual.rect.size.y > 0.0f;
+        if (ctx.is_recording() || grab_back_visible ||
+            _grab_back_draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID)
             ctx.emit(overlay_quad_stream, _grab_back_draw_id, &_grab_back_visual, _grab_hit_rect, false);
         ctx.emit(overlay_quad_stream, _grab_draw_id, &_grab_visual, _grab_hit_rect, ctx.emit_hit_rect);
     }
@@ -967,15 +976,9 @@ namespace auik::v2
     bool TransparencySlider::has_draw_record() const
     {
         if (_grab_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
-        if (_grab_back_visual.rect.size.x > 0.0f && _grab_back_visual.rect.size.y > 0.0f &&
-            _grab_back_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID)
-            return false;
-        if (_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::background) &&
-            _track_visual.background_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID)
-            return false;
-        if (_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::border) &&
-            _track_visual.border_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID)
-            return false;
+        if (_grab_back_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
+        if (_track_visual.background_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
+        if (_track_visual.border_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
         if (_gradient_visual.valid && _gradient_visual.draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
         return true;
     }
@@ -1052,7 +1055,7 @@ namespace auik::v2
         _track_rect = detail::resolve_slider_track_rect(bounds(), track_style);
         detail::build_quad_slider_track_visual(_track_visual, track_style, _track_rect, _track_depth_range, clip_id());
         _track_visual.background.mask |= (static_cast<u32>(AUIK_HAS_CHECKER_BIT) << 20u);
-        _track_visual.background.background_color = detail::pack_rgba8(0, 0, 0, 0);
+        _track_visual.background.background_color = 0;
 
         _gradient_visual.clear_payload();
         if (!amal::is_rect_empty(_track_rect) && _colors.size() >= 2u)
@@ -1120,7 +1123,8 @@ namespace auik::v2
                                                 _grab_back_visual);
         }
 
-        detail::fill_gradient_grab_instance(grab_style, _grab_rect, grab_z, grab_clip_id, resolve_active_color(factor),
+        detail::fill_gradient_grab_instance(grab_style, _grab_rect, grab_z, grab_clip_id,
+                                            detail::pack_rgba8(resolve_active_color(factor)),
                                             grab_style.border_thickness(), _grab_visual);
     }
 
@@ -1291,12 +1295,16 @@ namespace auik::v2
         auto *quad_stream = get_primary_quads_stream();
         bool hit_pending = ctx.emit_hit_rect;
 
-        if (_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::background))
+        if (ctx.is_recording() ||
+            should_emit_quads_instance(_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::background),
+                                       _track_visual.background_draw_id, hit_pending))
         {
             ctx.emit(quad_stream, _track_visual.background_draw_id, &_track_visual.background, get_rect(), hit_pending);
             hit_pending = false;
         }
-        if (_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::fill))
+        if (ctx.is_recording() ||
+            should_emit_quads_instance(_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::fill),
+                                       _track_visual.fill_draw_id, hit_pending))
         {
             ctx.emit(quad_stream, _track_visual.fill_draw_id, &_track_visual.fill, get_rect(), hit_pending);
             hit_pending = false;
@@ -1310,12 +1318,8 @@ namespace auik::v2
     {
         if (_from_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
         if (_to_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
-        if (_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::background) &&
-            _track_visual.background_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID)
-            return false;
-        if (_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::fill) &&
-            _track_visual.fill_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID)
-            return false;
+        if (_track_visual.background_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
+        if (_track_visual.fill_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
         return true;
     }
 
@@ -1376,10 +1380,10 @@ namespace auik::v2
         _track_rect = detail::resolve_slider_track_rect(bounds(), track_style);
 
         _track_visual.clear_payload();
-        _track_visual.set_layer(detail::SliderTrackVisual::LayerBits::background);
         _track_visual.background.rect = _track_rect;
         _track_visual.background.z_order = detail::mid_depth(_track_depth_range);
-        fill_quads_instance_by_style(track_style, clip_id(), _track_visual.background);
+        if (fill_quads_instance_by_style(track_style, clip_id(), _track_visual.background))
+            _track_visual.set_layer(detail::SliderTrackVisual::LayerBits::background);
 
         if (_from_value && _to_value)
         {
@@ -1396,12 +1400,12 @@ namespace auik::v2
             if (fill_w > 0.0f)
             {
                 const auto &fill_style = get_theme()->get_style(_fill_style.id);
-                _track_visual.set_layer(detail::SliderTrackVisual::LayerBits::fill);
                 _track_visual.fill.rect = _track_rect;
                 _track_visual.fill.rect.offset.x = left_x;
                 _track_visual.fill.rect.size.x = fill_w;
                 _track_visual.fill.z_order = detail::mid_depth(_track_depth_range);
-                fill_quads_instance_by_style(fill_style, clip_id(), _track_visual.fill);
+                if (fill_quads_instance_by_style(fill_style, clip_id(), _track_visual.fill))
+                    _track_visual.set_layer(detail::SliderTrackVisual::LayerBits::fill);
                 if (!fill_style.has_visible_border())
                 {
                     _track_visual.fill.border_thickness = 0.0f;

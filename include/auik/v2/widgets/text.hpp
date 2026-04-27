@@ -1,6 +1,5 @@
 #pragma once
 
-#include <acul/memory/alloc.hpp>
 #include <auik/v2/detail/text.hpp>
 #include <auik/v2/theme.hpp>
 #include "widget.hpp"
@@ -57,6 +56,8 @@ namespace auik::v2
 
         bool tight_content_height() const { return _tight_content_height; }
         void set_tight_content_height(bool value);
+        size_t draw_record_count() const { return _draw_ids.size(); }
+        size_t layout_instance_count() const { return _instances.size(); }
 
     protected:
         void mark_layout_dirty();

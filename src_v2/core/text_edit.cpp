@@ -1,10 +1,10 @@
 // Based on Dear ImGui's imstb_textedit.h
 // (https://github.com/ocornut/imgui/blob/master/imstb_textedit.h)
 
-#include <algorithm>
 #include <auik/v2/detail/text_edit.hpp>
+#include <amal/common.hpp>
 
-namespace auik::detail
+namespace auik::v2::detail
 {
     static int string_len(TextEditString *str)
     {
@@ -22,7 +22,7 @@ namespace auik::detail
         return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r';
     }
 
-    static int clamp_pos(TextEditString *str, int pos) { return std::clamp(pos, 0, string_len(str)); }
+    static int clamp_pos(TextEditString *str, int pos) { return amal::clamp(pos, 0, string_len(str)); }
 
     static int next_char(TextEditString *str, int idx)
     {
@@ -39,9 +39,9 @@ namespace auik::detail
         return idx - 1;
     }
 
-    static int selection_min(const TextEditCursor &cursor) { return std::min(cursor.select_start, cursor.select_end); }
+    static int selection_min(const TextEditCursor &cursor) { return amal::min(cursor.select_start, cursor.select_end); }
 
-    static int selection_max(const TextEditCursor &cursor) { return std::max(cursor.select_start, cursor.select_end); }
+    static int selection_max(const TextEditCursor &cursor) { return amal::max(cursor.select_start, cursor.select_end); }
 
     static void clear_selection(TextEditCursor &cursor)
     {
@@ -71,6 +71,14 @@ namespace auik::detail
         if (str && str->delete_chars && count > 0) str->delete_chars(str->user_data, pos, count);
     }
 
+    static bool replace_chars(TextEditString *str, int pos, int delete_count, const TextEditChar *text, int text_len)
+    {
+        if (str && str->replace_chars) return str->replace_chars(str->user_data, pos, delete_count, text, text_len);
+        if (delete_count > 0) delete_chars(str, pos, delete_count);
+        if (text_len > 0 && !insert_chars(str, pos, text, text_len)) return false;
+        return true;
+    }
+
     static void adjust_cursors_after_edit(TextEditState *state, int pos, int deleted, int inserted)
     {
         const int delta = inserted - deleted;
@@ -96,8 +104,7 @@ namespace auik::detail
         if (end < start) std::swap(start, end);
 
         const int deleted = end - start;
-        if (deleted > 0) delete_chars(str, start, deleted);
-        if (text_len > 0 && !insert_chars(str, start, text, text_len)) return false;
+        if (!replace_chars(str, start, deleted, text, text_len)) return false;
 
         adjust_cursors_after_edit(state, start, deleted, text_len);
         return true;

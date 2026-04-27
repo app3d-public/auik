@@ -260,6 +260,4 @@ namespace auik::v2
             return result;
         }
     } // namespace detail
-
-    bool add_char_to_string(acul::string &dst, u32 char_code, TextFlags flags = TextFlagBits::none);
 } // namespace auik::v2

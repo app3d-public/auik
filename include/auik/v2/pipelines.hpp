@@ -4,9 +4,9 @@
 #include "draw.hpp"
 #include "theme.hpp"
 
-#define AUIK_HAS_BORDER_BIT 0x1
-#define AUIK_HAS_RADIUS_BIT 0x2
-#define AUIK_HAS_CHECKER_BIT 0x4
+#define AUIK_HAS_BORDER_BIT            0x1
+#define AUIK_HAS_RADIUS_BIT            0x2
+#define AUIK_HAS_CHECKER_BIT           0x4
 #define AUIK_TEXTURE_INSTANCE_TEXT_BIT 0x1
 
 namespace auik::v2
@@ -14,8 +14,8 @@ namespace auik::v2
     struct QuadsInstanceData
     {
         amal::rect rect;
-        u32 background_color = detail::pack_rgba8(0, 0, 0, 0);
-        u32 border_color = detail::pack_rgba8(0, 0, 0, 0);
+        u32 background_color = 0;
+        u32 border_color = 0;
         f32 border_radius;
         f32 border_thickness;
         f32 z_order;
@@ -38,16 +38,23 @@ namespace auik::v2
         update_data_batch_in_stream(stream, draw_data_ids, data, count);
     }
 
-    inline void fill_quads_instance_by_style(const Style &style, u16 clip_id, QuadsInstanceData &data)
+    inline bool fill_quads_instance_by_style(const Style &style, u16 clip_id, QuadsInstanceData &data)
     {
-        data.background_color = style.background_color_packed();
-        data.border_color = style.border_color_packed();
+        if (!(style.mask() & detail::g_style_visible_draw_mask)) return false;
+        data.background_color = style.background_color();
+        data.border_color = style.border_color();
         data.border_radius = style.border_radius();
         data.border_thickness = style.border_thickness();
         u32 flags = 0u;
         if (data.border_thickness > 0.0f) flags |= AUIK_HAS_BORDER_BIT;
         if (data.border_radius > 0.0f) flags |= AUIK_HAS_RADIUS_BIT;
         data.mask = static_cast<u32>(clip_id) | ((style.corner_mask() & 0xFu) << 16u) | (flags << 20u);
+        return true;
+    }
+
+    inline bool should_emit_quads_instance(bool visible, const DrawDataID &draw_id, bool emit_hit_rect)
+    {
+        return visible || emit_hit_rect || draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID;
     }
 
     struct TexturesInstanceData
@@ -66,13 +73,13 @@ namespace auik::v2
     APPLIB_API void create_textured_quads_stream(DrawStream &stream);
 
     inline void push_textured_quads_batch_to_stream(DrawStream *stream, const TexturesInstanceData *data, u32 count,
-                                              DrawDataID *out_draw_ids = nullptr)
+                                                    DrawDataID *out_draw_ids = nullptr)
     {
         push_data_batch_to_stream(stream, data, count, out_draw_ids);
     }
 
     inline void update_textured_quads_batch_in_stream(DrawStream *stream, const DrawDataID *draw_data_ids,
-                                                const TexturesInstanceData *data, u32 count)
+                                                      const TexturesInstanceData *data, u32 count)
     {
         update_data_batch_in_stream(stream, draw_data_ids, data, count);
     }
@@ -115,7 +122,8 @@ namespace auik::v2
         push_data_batch_to_stream(stream, data, count, out_draw_ids);
     }
 
-    inline void update_vertex_stream_batch(DrawStream *stream, DrawDataID draw_data_id, const VertexStreamBatchData &data)
+    inline void update_vertex_stream_batch(DrawStream *stream, DrawDataID draw_data_id,
+                                           const VertexStreamBatchData &data)
     {
         update_data_in_stream(stream, draw_data_id, const_cast<VertexStreamBatchData *>(&data));
     }

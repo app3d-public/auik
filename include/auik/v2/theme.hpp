@@ -9,10 +9,14 @@
 #include <amal/color.hpp>
 #include <amal/vector.hpp>
 
-#define AUIK_TAG_GLOBAL 0x00000000u
-#define AUIK_TAG_NO_PAD 0x907B6DA8u
-#define AUIK_TAG_TITLEBAR 0xDBECC2C6u
-#define AUIK_TAG_TITLEBAR_ICON 0x5A7E4E91u
+#define AUIK_TAG_GLOBAL         0x00000000u
+#define AUIK_TAG_CARET          0x069C3BE49u
+#define AUIK_TAG_NO_PAD         0x907B6DA8u
+#define AUIK_TAG_PLACEHOLDER    0xB859984Fu
+#define AUIK_TAG_SELECTION      0xC943AC1Du
+#define AUIK_TAG_TEXT_DRAG_ICON 0x3D493314u
+#define AUIK_TAG_TITLEBAR       0xDBECC2C6u
+#define AUIK_TAG_TITLEBAR_ICON  0x5A7E4E91u
 
 namespace auik::v2
 {
@@ -58,11 +62,8 @@ namespace auik::v2
 
         using StylePropertyFlags = acul::flags<StylePropertiesBits>;
 
-        static constexpr StylePropertyFlags g_inheritable_mask =
-            StylePropertiesBits::text_color | StylePropertiesBits::text_size | StylePropertiesBits::font;
-        static constexpr StylePropertyFlags g_all_mask = acul::flag_traits<StylePropertiesBits>::all_flags;
-        static constexpr StylePropertyFlags g_non_inheritable_mask = g_all_mask & ~g_inheritable_mask;
-
+        constexpr StylePropertyFlags g_style_visible_draw_mask =
+            StylePropertiesBits::border_color | StylePropertiesBits::background_color;
     } // namespace detail
 
     enum class StyleState : u8
@@ -106,22 +107,30 @@ namespace auik::v2
             return *this;
         }
 
-        [[nodiscard]] const amal::vec4 &background_color() const { return _background_color; }
-        [[nodiscard]] u32 background_color_packed() const { return _background_color_packed; }
+        [[nodiscard]] u32 background_color() const { return _background_color; }
         Style &background_color(const amal::vec4 &value)
         {
+            _background_color = detail::pack_rgba8(value);
+            _mask |= detail::StylePropertiesBits::background_color;
+            return *this;
+        }
+        Style &background_color(u32 value)
+        {
             _background_color = value;
-            _background_color_packed = detail::pack_rgba8(value);
             _mask |= detail::StylePropertiesBits::background_color;
             return *this;
         }
 
-        [[nodiscard]] const amal::vec4 &text_color() const { return _text_color; }
-        [[nodiscard]] u32 text_color_packed() const { return _text_color_packed; }
+        [[nodiscard]] u32 text_color() const { return _text_color; }
         Style &text_color(const amal::vec4 &value)
         {
+            _text_color = detail::pack_rgba8(value);
+            _mask |= detail::StylePropertiesBits::text_color;
+            return *this;
+        }
+        Style &text_color(u32 value)
+        {
             _text_color = value;
-            _text_color_packed = detail::pack_rgba8(value);
             _mask |= detail::StylePropertiesBits::text_color;
             return *this;
         }
@@ -142,12 +151,16 @@ namespace auik::v2
             return *this;
         }
 
-        [[nodiscard]] const amal::vec4 &border_color() const { return _border_color; }
-        [[nodiscard]] u32 border_color_packed() const { return _border_color_packed; }
+        [[nodiscard]] u32 border_color() const { return _border_color; }
         Style &border_color(const amal::vec4 &value)
         {
+            _border_color = detail::pack_rgba8(value);
+            _mask |= detail::StylePropertiesBits::border_color;
+            return *this;
+        }
+        Style &border_color(u32 value)
+        {
             _border_color = value;
-            _border_color_packed = detail::pack_rgba8(value);
             _mask |= detail::StylePropertiesBits::border_color;
             return *this;
         }
@@ -180,7 +193,7 @@ namespace auik::v2
         }
         [[nodiscard]] bool has_visible_border() const
         {
-            return _border_thickness > 0.0f && _border_color.w > 0.0f;
+            return _border_thickness > 0.0f && _border_color != 0u;
         }
 
         [[nodiscard]] u32 corner_mask() const { return _corner_mask; }
@@ -196,12 +209,9 @@ namespace auik::v2
     private:
         amal::vec4 _padding{0.0f};
         amal::vec4 _margin{0.0f};
-        amal::vec4 _background_color{0.0f};
-        amal::vec4 _text_color{1.0f};
-        amal::vec4 _border_color{0.0f};
-        u32 _background_color_packed{detail::pack_rgba8(0, 0, 0, 0)};
-        u32 _text_color_packed{detail::pack_rgba8(255, 255, 255, 255)};
-        u32 _border_color_packed{detail::pack_rgba8(0, 0, 0, 0)};
+        u32 _background_color{0};
+        u32 _text_color{0};
+        u32 _border_color{0};
         f32 _border_radius{0.0f};
         f32 _border_thickness{0.0f};
         f32 _text_size{12.5f};

@@ -110,8 +110,9 @@ namespace auik::v2
         QuadsInstanceData bg_data{};
         bg_data.rect = bounds();
         bg_data.z_order = get_z_order();
-        fill_quads_instance_by_style(theme->get_style(_style.id), clip_id(), bg_data);
-        ctx.emit(quads_stream, _bg, &bg_data, get_rect(), ctx.emit_hit_rect);
+        const bool bg_visible = fill_quads_instance_by_style(theme->get_style(_style.id), clip_id(), bg_data);
+        if (should_emit_quads_instance(bg_visible, _bg, ctx.emit_hit_rect))
+            ctx.emit(quads_stream, _bg, &bg_data, get_rect(), ctx.emit_hit_rect);
 
         if (is_style_only_draw_update(ctx) && !_text_draw_dirty) return;
         _text->draw(ctx);

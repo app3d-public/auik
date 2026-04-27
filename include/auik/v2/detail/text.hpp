@@ -1,11 +1,18 @@
 #pragma once
 
-#include <auik/v2/auik.hpp>
 #include <amal/rect.hpp>
+#include <auik/v2/auik.hpp>
 #include <auik/v2/pipelines.hpp>
 
 namespace auik::v2::detail
 {
+    bool is_utf8_trail(unsigned char ch);
+    int next_utf8_index(const acul::string &text, int idx);
+    int prev_utf8_index(const acul::string &text, int idx);
+    acul::string encode_utf8_codepoint(u32 char_code, TextFlags flags);
+    u32 decode_utf8_codepoint(const acul::string &text, size_t &idx);
+    acul::string filter_text_input(const acul::string &input, TextFlags flags, bool allow_newline);
+
     enum class TextOverflowMode : u8
     {
         clip,
@@ -45,7 +52,7 @@ namespace auik::v2::detail
     struct TextRenderConfig
     {
         amal::rect bounds{};
-        amal::vec4 tint_color{1.0f, 1.0f, 1.0f, 1.0f};
+        u32 tint_color = detail::pack_rgba8(255, 255, 255, 255);
         f32 z_order = 0.0f;
         u16 clip_id = 0xFFFFu;
         TextHorizontalAlign horizontal_align = TextHorizontalAlign::left;
@@ -109,17 +116,13 @@ namespace auik::v2::detail
     };
 
     bool layout_single_line(Font &font, const acul::string &utf8_text, const TextLayoutConfig &config,
-                                       TextLayoutResult &out);
+                            TextLayoutResult &out);
     bool layout_multiline(Font &font, const acul::string &utf8_text, const TextLayoutConfig &config,
-                                     TextLayoutResult &out);
-    bool build_single_line_instances(Font &font, const acul::string &utf8_text,
-                                                const TextLayoutConfig &layout_config,
-                                                const TextRenderConfig &render_config,
-                                                acul::vector<TexturesInstanceData> &out,
-                                                TextLayoutResult *layout_result = nullptr);
-    bool build_multiline_instances(Font &font, const acul::string &utf8_text,
-                                              const TextLayoutConfig &layout_config,
-                                              const TextRenderConfig &render_config,
-                                              acul::vector<TexturesInstanceData> &out,
-                                              TextLayoutResult *layout_result = nullptr);
+                          TextLayoutResult &out);
+    bool build_single_line_instances(Font &font, const acul::string &utf8_text, const TextLayoutConfig &layout_config,
+                                     const TextRenderConfig &render_config, acul::vector<TexturesInstanceData> &out,
+                                     TextLayoutResult *layout_result = nullptr);
+    bool build_multiline_instances(Font &font, const acul::string &utf8_text, const TextLayoutConfig &layout_config,
+                                   const TextRenderConfig &render_config, acul::vector<TexturesInstanceData> &out,
+                                   TextLayoutResult *layout_result = nullptr);
 } // namespace auik::v2::detail

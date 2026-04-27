@@ -46,14 +46,13 @@ namespace auik::v2
         }
 
         static inline void fill_circle_grab_instance(const Style &style, const amal::rect &rect, f32 z_order,
-                                                     u16 clip_id, const amal::vec4 &background_color,
-                                                     QuadsInstanceData &data)
+                                                     u16 clip_id, u32 background_color, QuadsInstanceData &data)
         {
             data.rect = rect;
             data.z_order = z_order;
             fill_quads_instance_by_style(style, clip_id, data);
-            data.background_color = pack_rgba8(background_color);
-            data.border_color = pack_rgba8(style.border_color());
+            data.background_color = background_color;
+            data.border_color = style.border_color();
             data.border_thickness = style.has_visible_border() ? style.border_thickness() : 1.0f;
             data.border_radius = amal::max(0.0f, amal::min(rect.size.x, rect.size.y) * 0.5f);
             data.mask |= (static_cast<u32>(AUIK_HAS_BORDER_BIT) << 20u);
@@ -311,8 +310,6 @@ namespace auik::v2
         const f32 theme_side = detail::resolve_color_picker_size();
         const f32 side = amal::max(_preferred_side > 0.0f ? _preferred_side : theme_side, 1.0f);
         const amal::vec2 next_pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
-        const amal::vec2 prev_pos = position();
-        const amal::vec2 prev_size = size();
 
         set_position(next_pos);
         set_size({side, side});
@@ -321,8 +318,7 @@ namespace auik::v2
         assert(parent() && "CircleColorPicker must have parent");
         set_clip_id(parent()->content_clip_id());
         _grab_hit_rect.clip_id = clip_id();
-        if (!_cache_valid || prev_size.x != side || prev_size.y != side) rebuild_cached_visuals();
-        else translate_cached_visuals(next_pos - prev_pos);
+        rebuild_cached_visuals();
     }
 
     void CircleColorPicker::translate(const amal::vec2 &delta)
@@ -359,23 +355,24 @@ namespace auik::v2
         auto *overlay_stream = get_overlay_quads_stream();
         bool hit_pending = ctx.emit_hit_rect;
 
-        if (_wheel_batch.vertex_count > 0 && _wheel_batch.index_count > 0)
+        const bool wheel_visible = _wheel_batch.vertex_count > 0 && _wheel_batch.index_count > 0;
+        if (ctx.is_recording() || wheel_visible || _wheel_draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID)
         {
             ctx.emit(vertex_stream, _wheel_draw_id, &_wheel_batch, get_rect(), hit_pending);
             hit_pending = false;
         }
-        if (_grab_back_visual.rect.size.x > 0.0f && _grab_back_visual.rect.size.y > 0.0f)
+        const bool grab_back_visible = _grab_back_visual.rect.size.x > 0.0f && _grab_back_visual.rect.size.y > 0.0f;
+        if (ctx.is_recording() || grab_back_visible ||
+            _grab_back_draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID)
             ctx.emit(overlay_stream, _grab_back_draw_id, &_grab_back_visual, _grab_hit_rect, false);
         ctx.emit(overlay_stream, _grab_draw_id, &_grab_visual, _grab_hit_rect, ctx.emit_hit_rect);
     }
 
     bool CircleColorPicker::has_draw_record() const
     {
-        if (_wheel_batch.vertex_count > 0 && _wheel_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
+        if (_wheel_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
         if (_grab_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
-        if (_grab_back_visual.rect.size.x > 0.0f && _grab_back_visual.rect.size.y > 0.0f &&
-            _grab_back_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID)
-            return false;
+        if (_grab_back_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
         return true;
     }
 
@@ -517,8 +514,8 @@ namespace auik::v2
         const f32 grab_z = detail::mid_depth(_grab_depth_range);
         _grab_visual = {};
         _grab_back_visual = {};
-        detail::fill_circle_grab_instance(grab_style, _grab_hit_rect.bounds, grab_z, grab_clip, _resolved_color,
-                                          _grab_visual);
+        detail::fill_circle_grab_instance(grab_style, _grab_hit_rect.bounds, grab_z, grab_clip,
+                                          detail::pack_rgba8(_resolved_color), _grab_visual);
 
         if (const Style *border_style = get_theme()->get_desc_style(AUIK_TAG_GRADIENT_SLIDER_GRAB_BORDER))
         {
@@ -529,7 +526,7 @@ namespace auik::v2
             border_rect.size = {border_w, border_h};
             border_rect.offset = {pick_pos.x - border_w * 0.5f, pick_pos.y - border_h * 0.5f};
             detail::fill_circle_grab_instance(*border_style, border_rect, grab_z, grab_clip,
-                                              border_style->background_color(), _grab_back_visual);
+                                               border_style->background_color(), _grab_back_visual);
         }
     }
 
@@ -558,6 +555,7 @@ namespace auik::v2
         _grab_back_visual.rect.offset += delta;
         for (auto &vertex : _wheel_vertices)
             vertex.position += delta;
+        sync_batch();
     }
 
     void CircleColorPicker::update_value_from_mouse()
@@ -661,8 +659,6 @@ namespace auik::v2
         const f32 theme_side = detail::resolve_color_picker_size();
         const f32 side = amal::max(_preferred_side > 0.0f ? _preferred_side : theme_side, 1.0f);
         const amal::vec2 next_pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
-        const amal::vec2 prev_pos = position();
-        const amal::vec2 prev_size = size();
 
         set_position(next_pos);
         set_size({side, side});
@@ -672,8 +668,7 @@ namespace auik::v2
         set_clip_id(parent()->content_clip_id());
         _ring_grab_hit_rect.clip_id = clip_id();
         _sv_grab_hit_rect.clip_id = clip_id();
-        if (!_cache_valid || prev_size.x != side || prev_size.y != side) rebuild_cached_visuals();
-        else translate_cached_visuals(next_pos - prev_pos);
+        rebuild_cached_visuals();
     }
 
     void SquareColorPicker::translate(const amal::vec2 &delta)
@@ -716,20 +711,28 @@ namespace auik::v2
         auto *overlay_stream = get_overlay_quads_stream();
         bool hit_pending = ctx.emit_hit_rect;
 
-        if (_ring_batch.vertex_count > 0 && _ring_batch.index_count > 0)
+        const bool ring_visible = _ring_batch.vertex_count > 0 && _ring_batch.index_count > 0;
+        if (ctx.is_recording() || ring_visible || _ring_draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID)
         {
             ctx.emit(vertex_stream, _ring_draw_id, &_ring_batch, get_rect(), hit_pending);
             hit_pending = false;
         }
-        if (_sv_batch.vertex_count > 0 && _sv_batch.index_count > 0)
+        const bool sv_visible = _sv_batch.vertex_count > 0 && _sv_batch.index_count > 0;
+        if (ctx.is_recording() || sv_visible || _sv_draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID)
         {
             ctx.emit(vertex_stream, _sv_draw_id, &_sv_batch, get_rect(), hit_pending);
             hit_pending = false;
         }
 
-        if (_ring_grab_back_visual.rect.size.x > 0.0f && _ring_grab_back_visual.rect.size.y > 0.0f)
+        const bool ring_back_visible =
+            _ring_grab_back_visual.rect.size.x > 0.0f && _ring_grab_back_visual.rect.size.y > 0.0f;
+        if (ctx.is_recording() || ring_back_visible ||
+            _ring_grab_back_draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID)
             ctx.emit(overlay_stream, _ring_grab_back_draw_id, &_ring_grab_back_visual, _ring_grab_hit_rect, false);
-        if (_sv_grab_back_visual.rect.size.x > 0.0f && _sv_grab_back_visual.rect.size.y > 0.0f)
+        const bool sv_back_visible =
+            _sv_grab_back_visual.rect.size.x > 0.0f && _sv_grab_back_visual.rect.size.y > 0.0f;
+        if (ctx.is_recording() || sv_back_visible ||
+            _sv_grab_back_draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID)
             ctx.emit(overlay_stream, _sv_grab_back_draw_id, &_sv_grab_back_visual, _sv_grab_hit_rect, false);
 
         ctx.emit(overlay_stream, _ring_grab_draw_id, &_ring_grab_visual, _ring_grab_hit_rect, ctx.emit_hit_rect);
@@ -738,16 +741,12 @@ namespace auik::v2
 
     bool SquareColorPicker::has_draw_record() const
     {
-        if (_ring_batch.vertex_count > 0 && _ring_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
-        if (_sv_batch.vertex_count > 0 && _sv_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
+        if (_ring_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
+        if (_sv_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
         if (_ring_grab_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
         if (_sv_grab_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
-        if (_ring_grab_back_visual.rect.size.x > 0.0f && _ring_grab_back_visual.rect.size.y > 0.0f &&
-            _ring_grab_back_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID)
-            return false;
-        if (_sv_grab_back_visual.rect.size.x > 0.0f && _sv_grab_back_visual.rect.size.y > 0.0f &&
-            _sv_grab_back_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID)
-            return false;
+        if (_ring_grab_back_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
+        if (_sv_grab_back_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
         return true;
     }
 
@@ -973,9 +972,10 @@ namespace auik::v2
         _sv_grab_visual = {};
         _sv_grab_back_visual = {};
         detail::fill_circle_grab_instance(grab_style, _ring_grab_hit_rect.bounds, grab_z, grab_clip,
-                                          detail::hsv_to_rgba(_hue_deg, 1.0f, 1.0f, 1.0f), _ring_grab_visual);
-        detail::fill_circle_grab_instance(grab_style, _sv_grab_hit_rect.bounds, grab_z, grab_clip, _resolved_color,
-                                          _sv_grab_visual);
+                                          detail::pack_rgba8(detail::hsv_to_rgba(_hue_deg, 1.0f, 1.0f, 1.0f)),
+                                          _ring_grab_visual);
+        detail::fill_circle_grab_instance(grab_style, _sv_grab_hit_rect.bounds, grab_z, grab_clip,
+                                          detail::pack_rgba8(_resolved_color), _sv_grab_visual);
 
         if (const Style *border_style = get_theme()->get_desc_style(AUIK_TAG_GRADIENT_SLIDER_GRAB_BORDER))
         {
@@ -1020,6 +1020,7 @@ namespace auik::v2
             vertex.position += delta;
         for (auto &vertex : _sv_vertices)
             vertex.position += delta;
+        sync_batches();
     }
 
     SquareColorPicker::ActiveZone SquareColorPicker::pick_active_zone_from_mouse() const

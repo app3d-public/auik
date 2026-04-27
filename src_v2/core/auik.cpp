@@ -400,6 +400,15 @@ namespace auik::v2
             return leaf->focus_parent() ? leaf->focus_parent() : leaf;
         }
 
+        static inline void notify_focus_leaf(Context &ctx, Widget *leaf, Widget *entry, bool focused)
+        {
+            if (!leaf || leaf == entry) return;
+            if (leaf->has_event_handler(EventFlagBits::focus)) leaf->on_focus(focused);
+            if (!focused && ctx.active_id != leaf->id()) leaf->set_style_state(StyleState::normal);
+            else if (focused && ctx.active_id != leaf->id()) leaf->set_style_state(StyleState::focus);
+            enqueue_style_refresh<detail::FocusEventTraits>(leaf);
+        }
+
         static void set_focus_target(Context &ctx, Widget *target)
         {
             const u32 next_focus_id = target ? target->id() : 0u;
@@ -414,6 +423,8 @@ namespace auik::v2
             if (old_entry == new_entry)
             {
                 ctx.focus_id = next_focus_id;
+                notify_focus_leaf(ctx, old_leaf, old_entry, false);
+                notify_focus_leaf(ctx, new_leaf, new_entry, true);
                 return;
             }
 
@@ -434,7 +445,11 @@ namespace auik::v2
                 --j;
             }
 
+            // Switch current focus leaf id before callbacks so blur/gain handlers can query focus state directly.
+            ctx.focus_id = next_focus_id;
+
             // Blur: leaf-side to (but excluding) LCA.
+            notify_focus_leaf(ctx, old_leaf, old_entry, false);
             for (int k = 0; k <= i; ++k)
             {
                 Widget *w = path_old[k];
@@ -443,9 +458,6 @@ namespace auik::v2
                 if (ctx.active_id != w->id()) w->set_style_state(StyleState::normal);
                 enqueue_style_refresh<detail::FocusEventTraits>(w);
             }
-
-            // Switch current focus leaf id before focus-gain callbacks.
-            ctx.focus_id = next_focus_id;
 
             // Focus: from LCA child down to new leaf-side.
             for (int k = j; k >= 0; --k)
@@ -456,8 +468,7 @@ namespace auik::v2
                 if (ctx.active_id != w->id()) w->set_style_state(StyleState::focus);
                 enqueue_style_refresh<detail::FocusEventTraits>(w);
             }
-
-            detail::mark_host_refresh_request();
+            notify_focus_leaf(ctx, new_leaf, new_entry, true);
         }
 
         static void handle_left_mouse_press(Context &ctx, IO &io)

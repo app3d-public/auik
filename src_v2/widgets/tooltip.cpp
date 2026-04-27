@@ -207,8 +207,8 @@ namespace auik::v2
         QuadsInstanceData bg{};
         bg.rect = bounds();
         bg.z_order = get_z_order();
-        fill_quads_instance_by_style(theme->get_style(_style.id), clip_id(), bg);
-        ctx.emit(quads_stream, _bg, &bg, get_rect(), false);
+        const bool bg_visible = fill_quads_instance_by_style(theme->get_style(_style.id), clip_id(), bg);
+        if (should_emit_quads_instance(bg_visible, _bg, false)) ctx.emit(quads_stream, _bg, &bg, get_rect(), false);
 
         if (!textured_quads_stream || _instances.empty()) return;
 
@@ -221,7 +221,7 @@ namespace auik::v2
             {
                 instance.clip_id = current_clip;
                 instance.z_order = current_z;
-                instance.tint_color = detail::pack_rgba8(_render_config.tint_color);
+            instance.tint_color = _render_config.tint_color;
             }
         }
 

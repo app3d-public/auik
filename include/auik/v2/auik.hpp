@@ -23,6 +23,7 @@ struct FT_FaceRec_;
 #define AUIK_ICON_RESTORE       0x2F89CAF9u
 #define AUIK_ICON_CLOSE         0xBF822112u
 #define AUIK_ICON_MENU          0xDDD65C07u
+#define AUIK_ICON_SIX_DOTS      0x2CD6CBF3u
 
 namespace auik::v2
 {
@@ -186,13 +187,13 @@ namespace auik::v2
     {
         auto &ctx = detail::get_context();
         if (ctx.pending_filter && ctx.pending_filter->mask != PendingMaskBits::none) sync_pending_events();
-        if (!ctx.transient_cache.empty())
+        if (!ctx.transient_cache.empty() && !(ctx.dirty_flags & DirtyFlagBits::layout))
         {
             ctx.dirty_flags |= DirtyFlagBits::redraw;
             for (Widget *widget : ctx.transient_cache)
             {
                 if (!widget) continue;
-                widget->update_draw_commands(DrawReasonBits::external);
+                widget->update_draw_commands(DrawReasonBits::transient);
             }
         }
         if (ctx.dirty_flags & DirtyFlagBits::hit_rect_sync) auik::v2::sync_hit_rect_cache();

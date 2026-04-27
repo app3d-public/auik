@@ -12,6 +12,10 @@
 namespace auik::v2
 {
     using namespace detail;
+    constexpr StylePropertyFlags g_style_inheritable_mask =
+        StylePropertiesBits::text_color | StylePropertiesBits::text_size | StylePropertiesBits::font;
+    constexpr StylePropertyFlags g_style_all_mask = acul::flag_traits<StylePropertiesBits>::all_flags;
+    constexpr StylePropertyFlags g_style_non_inheritable_mask = g_style_all_mask & ~g_style_inheritable_mask;
     static inline void apply_desc_masked(Style &out, const Style &d, StylePropertyFlags take)
     {
         if (take & StylePropertiesBits::padding) out.padding(d.padding());
@@ -29,8 +33,8 @@ namespace auik::v2
     StyleID Theme::get_resolved_style(u32 type, u32 id, u32 parent, StyleState state)
     {
         Style out{};
-        detail::StylePropertyFlags need_inh = detail::g_inheritable_mask;
-        detail::StylePropertyFlags need_non_inh = detail::g_non_inheritable_mask;
+        detail::StylePropertyFlags need_inh = g_style_inheritable_mask;
+        detail::StylePropertyFlags need_non_inh = g_style_non_inheritable_mask;
         const bool use_normal_fallback = state != StyleState::normal;
         size_t resolve_seed = 0;
 
@@ -153,7 +157,16 @@ namespace auik::v2
                                               .text_size(12.5f * dpi)
                                               .font(default_font)
                                               .margin(amal::vec2{0.0f, 5.0f}));
+        theme->add_style(AUIK_TAG_CARET,
+                         make_style().padding(amal::vec2{2.0f, 0.0f}).background_color({0.9f, 0.9f, 0.9f, 1.0f}));
         theme->add_style(AUIK_TAG_NO_PAD, make_style().margin(empty_vec2).padding(empty_vec2));
+        theme->add_style(AUIK_TAG_PLACEHOLDER, make_style()
+                                                   .margin(empty_vec2)
+                                                   .padding(empty_vec2)
+                                                   .text_size(12.5f * dpi)
+                                                   .text_color({0.9f, 0.9f, 0.9f, 0.5f}));
+        theme->add_style(AUIK_TAG_SELECTION, make_style().background_color(amal::rgba8_to_vec4(72, 114, 255, 120)));
+        theme->add_style(AUIK_TAG_TEXT_DRAG_ICON, make_style().background_color({0.8f, 0.8f, 0.8f, 1.0f}));
         theme->set_var(AUIK_VAR_COLOR_PICKER_SIZE, 185.0f);
 
         // Window body.
@@ -186,29 +199,9 @@ namespace auik::v2
 
         theme->add_style(AUIK_TAG_TEXTBOX, make_style()
                                                .margin(amal::vec2{0.0f, 5.0f})
-                                               .padding(amal::vec4{9.0f, 7.0f, 9.0f, 7.0f})
-                                               .background_color(amal::rgba8_to_vec4(24, 25, 28, 255))
-                                               .border_color(amal::rgba8_to_vec4(82, 84, 90, 255))
-                                               .border_thickness(1.0f)
-                                               .border_radius(5.0f)
-                                               .text_color(amal::rgba8_to_vec4(235, 235, 238, 255)));
-        theme->add_style(AUIK_TAG_TEXTBOX,
-                         make_style()
-                             .background_color(amal::rgba8_to_vec4(31, 33, 38, 255))
-                             .border_color(amal::rgba8_to_vec4(112, 116, 128, 255)),
-                         StyleState::hover);
-        theme->add_style(AUIK_TAG_TEXTBOX,
-                         make_style()
-                             .background_color(amal::rgba8_to_vec4(18, 20, 25, 255))
-                             .border_color(c_ascent)
-                             .text_color(c_white),
-                         StyleState::focus);
-        theme->add_style(AUIK_TAG_TEXTBOX,
-                         make_style()
-                             .background_color(amal::rgba8_to_vec4(18, 20, 25, 255))
-                             .border_color(c_ascent)
-                             .text_color(c_white),
-                         StyleState::active);
+                                               .padding(amal::vec2{8.0f, 4.0f})
+                                               .background_color(c_surface_light)
+                                               .border_radius(4.0f));
 
         theme->add_style(AUIK_TAG_CHECKBOX,
                          make_style().padding(amal::vec2{3.0f}).background_color(c_surface_light).border_radius(3.0f));
@@ -249,11 +242,11 @@ namespace auik::v2
         theme->add_style(AUIK_TAG_SLIDER_GRAB, make_style().background_color(c_white), StyleState::active);
         theme->add_style(AUIK_TAG_SLIDER_GRAB, make_style().background_color(c_white), StyleState::focus);
         theme->add_style(AUIK_TAG_GRADIENT_SLIDER_GRAB, make_style()
-                                                            .padding(amal::vec2{7.0f})
+                                                            .padding(amal::vec2{6.0f})
                                                             .background_color(c_white)
                                                             .border_color(c_semi_transparent)
-                                                            .border_thickness(2.0f)
-                                                            .border_radius(7.0f));
+                                                            .border_thickness(1.5f)
+                                                            .border_radius(6.0f));
         theme->add_style(AUIK_TAG_GRADIENT_SLIDER_GRAB_BORDER, make_style()
                                                                    .padding(amal::vec2{9.0f})
                                                                    .background_color(c_white)

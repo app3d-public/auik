@@ -6,7 +6,6 @@
 #include <auik/v2/widgets/image.hpp>
 #include <auik/v2/widgets/slider.hpp>
 #include <auik/v2/widgets/tooltip.hpp>
-#include <cstring>
 #include <freetype/freetype.h>
 
 namespace auik::v2
@@ -309,7 +308,6 @@ namespace auik::v2
         }
 
         ctx.transient_cache.push_back(widget);
-        detail::mark_host_refresh_request();
     }
 
     APPLIB_API bool erase_widget_from_transient_cache(Widget *widget)

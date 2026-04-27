@@ -190,11 +190,25 @@ namespace auik::v2
             update_hit_rect(_hit_id, hit_rect, force_update);
         }
 
-        auto *textured_quads_stream = get_primary_textured_quads_stream();
-        if (!textured_quads_stream || _instances.empty()) return;
-
         const u16 current_clip = clip_id();
         const f32 current_z = get_z_order();
+        auto *textured_quads_stream = get_primary_textured_quads_stream();
+        if (!textured_quads_stream)
+        {
+            _draw_ids.clear();
+            _instances_gpu_dirty = true;
+            return;
+        }
+
+        if (_instances.empty())
+        {
+            assert((ctx.is_recording() || _draw_ids.empty()) && "Text instance shrink requires draw record rebuild");
+            _draw_ids.clear();
+            _applied_clip_id = current_clip;
+            _instances_gpu_dirty = false;
+            return;
+        }
+
         const bool draw_state_changed = (_applied_clip_id != current_clip);
         const bool instances_changed = _instances_gpu_dirty;
         if (draw_state_changed)
@@ -206,7 +220,7 @@ namespace auik::v2
             for (auto &instance : _instances)
             {
                 instance.z_order = current_z;
-                instance.tint_color = detail::pack_rgba8(_render_config.tint_color);
+            instance.tint_color = _render_config.tint_color;
             }
         }
 
@@ -220,10 +234,24 @@ namespace auik::v2
             return;
         }
 
-        assert(_draw_ids.size() == _instances.size() && "Text draw ids are out of sync with layout instances");
         if (!draw_state_changed && !instances_changed) return;
-        update_textured_quads_batch_in_stream(textured_quads_stream, _draw_ids.data(), _instances.data(),
-                                              static_cast<u32>(_instances.size()));
+
+        const size_t old_count = _draw_ids.size();
+        const size_t new_count = _instances.size();
+        assert(old_count <= new_count && "Text instance shrink requires draw record rebuild");
+        const size_t update_count = amal::min(old_count, new_count);
+        if (update_count > 0)
+            update_textured_quads_batch_in_stream(textured_quads_stream, _draw_ids.data(), _instances.data(),
+                                                  static_cast<u32>(update_count));
+
+        if (new_count > old_count)
+        {
+            const size_t append_count = new_count - old_count;
+            _draw_ids.resize(new_count);
+            push_textured_quads_batch_to_stream(textured_quads_stream, _instances.data() + old_count,
+                                                static_cast<u32>(append_count), _draw_ids.data() + old_count);
+        }
+
         _applied_clip_id = current_clip;
         _instances_gpu_dirty = false;
     }
@@ -301,9 +329,9 @@ namespace auik::v2
     void Text::mark_layout_dirty()
     {
         auto &ctx = detail::get_context();
+        const bool layout_pending = ctx.dirty_flags & DirtyFlagBits::layout;
         ctx.dirty_flags |= DirtyFlagBits::layout;
-        detail::mark_host_refresh_request();
-        _draw_ids.clear();
+        if (!layout_pending) detail::mark_host_refresh_request();
     }
 
     TextWithTooltip::~TextWithTooltip()
