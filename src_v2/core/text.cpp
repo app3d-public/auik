@@ -253,8 +253,7 @@ namespace auik::v2
                         ++j;
                     }
 
-                    const size_t cluster_end =
-                        (j < run.infos.size()) ? (run.text_start + run.infos[j].cluster) : run.text_end;
+                    const size_t cluster_end = (j < run.infos.size()) ? run.infos[j].cluster : run.text_end;
                     if (i == 0) first_cluster_end = cluster_end;
                     if (width <= max_width)
                     {
@@ -289,7 +288,7 @@ namespace auik::v2
                     ShapedGlyph shaped{};
                     shaped.glyph = glyph;
                     shaped.glyph_index = glyph_index;
-                    shaped.cluster = static_cast<u32>(run.text_start + run.infos[i].cluster);
+                    shaped.cluster = run.infos[i].cluster;
                     shaped.pen = {pen_x + x_offset, line_y + out.ascender - y_offset};
                     shaped.advance = {x_advance, y_advance};
                     shaped.offset = {x_offset, y_offset};
@@ -393,7 +392,7 @@ namespace auik::v2
                         instance.rect.offset = {amal::round(base_x + line_shift + glyph_offset.x),
                                                 amal::round(base_y + glyph_offset.y)};
                         instance.rect.size = {static_cast<f32>(glyph->size.x), static_cast<f32>(glyph->size.y)};
-                instance.tint_color = render_config.tint_color;
+                        instance.tint_color = render_config.tint_color;
                         instance.uv_rect = glyph->uv_rect;
                         instance.z_order = render_config.z_order;
                         instance.texture_id = static_cast<u16>(glyph->texture_id.bind_slot);
@@ -468,8 +467,11 @@ namespace auik::v2
                 size_t cursor = start;
                 while (cursor < end)
                 {
-                    cursor = skip_leading_spaces(text, cursor, end);
-                    if (cursor >= end) break;
+                    if (config.trim_trailing_spaces)
+                    {
+                        cursor = skip_leading_spaces(text, cursor, end);
+                        if (cursor >= end) break;
+                    }
 
                     if (config.max_lines != 0 && out.lines.size() + 1 >= config.max_lines)
                     {
@@ -506,8 +508,9 @@ namespace auik::v2
                         size_t line_end = last_break > cursor ? last_break : cursor;
                         if (line_end > cursor)
                         {
-                            line_end =
-                                config.trim_trailing_spaces ? trim_trailing_spaces(text, cursor, line_end) : line_end;
+                            const size_t untrimmed_end = line_end;
+                            if (config.trim_trailing_spaces) line_end = trim_trailing_spaces(text, cursor, line_end);
+                            if (line_end == cursor) line_end = untrimmed_end;
                             if (!append_shaped_line(out, font, size_px, text, cursor, line_end, line_y)) return false;
                             line_y += out.line_height;
                             cursor = skip_leading_spaces(text, last_break, end);
@@ -528,8 +531,9 @@ namespace auik::v2
 
                     if (probe > cursor)
                     {
-                        size_t line_end =
-                            config.trim_trailing_spaces ? trim_trailing_spaces(text, cursor, probe) : probe;
+                        size_t line_end = probe;
+                        if (config.trim_trailing_spaces) line_end = trim_trailing_spaces(text, cursor, probe);
+                        if (line_end == cursor) line_end = probe;
                         if (!append_shaped_line(out, font, size_px, text, cursor, line_end, line_y)) return false;
                         line_y += out.line_height;
                         cursor = probe;
@@ -540,6 +544,16 @@ namespace auik::v2
                 }
 
                 return true;
+            }
+
+            static void append_empty_line(TextLayoutResult &out, size_t cursor, f32 &line_y)
+            {
+                TextLine empty_line{};
+                empty_line.text_start = cursor;
+                empty_line.text_end = cursor;
+                empty_line.glyph_offset = static_cast<u32>(out.glyphs.size());
+                finalize_line(out, empty_line, line_y);
+                line_y += out.line_height;
             }
         } // namespace
 
@@ -583,8 +597,6 @@ namespace auik::v2
             out.descender = TextFontAccess::descender(font, config.size_px);
             out.line_height = TextFontAccess::line_height(font, config.size_px);
 
-            if (utf8_text.empty()) return true;
-
             f32 line_y = 0.0f;
             size_t cursor = 0;
             while (cursor <= utf8_text.size())
@@ -599,7 +611,8 @@ namespace auik::v2
                     break;
                 }
 
-                if (config.wrap == TextWrapMode::word)
+                if (span_end == cursor) append_empty_line(out, cursor, line_y);
+                else if (config.wrap == TextWrapMode::word)
                 {
                     bool truncated = false;
                     if (!layout_wrapped_span(out, font, utf8_text, cursor, span_end, config, line_y, truncated))
@@ -628,15 +641,6 @@ namespace auik::v2
                 }
 
                 if (!has_newline) break;
-                if (span_end == cursor)
-                {
-                    TextLine empty_line{};
-                    empty_line.text_start = cursor;
-                    empty_line.text_end = span_end;
-                    empty_line.glyph_offset = static_cast<u32>(out.glyphs.size());
-                    finalize_line(out, empty_line, line_y);
-                    line_y += out.line_height;
-                }
                 cursor = span_end + 1;
             }
 

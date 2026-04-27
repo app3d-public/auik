@@ -187,6 +187,9 @@ namespace auik::v2
     {
         auto &ctx = detail::get_context();
         if (ctx.pending_filter && ctx.pending_filter->mask != PendingMaskBits::none) sync_pending_events();
+        if (ctx.dirty_flags & DirtyFlagBits::hit_rect_sync) auik::v2::sync_hit_rect_cache();
+        detail::flush_frame_changes();
+        if (!ctx.disposal_queue.is_main_queue_empty()) ctx.disposal_queue.flush_main_queue();
         if (!ctx.transient_cache.empty() && !(ctx.dirty_flags & DirtyFlagBits::layout))
         {
             ctx.dirty_flags |= DirtyFlagBits::redraw;
@@ -196,9 +199,6 @@ namespace auik::v2
                 widget->update_draw_commands(DrawReasonBits::transient);
             }
         }
-        if (ctx.dirty_flags & DirtyFlagBits::hit_rect_sync) auik::v2::sync_hit_rect_cache();
-        detail::flush_frame_changes();
-        if (!ctx.disposal_queue.is_main_queue_empty()) ctx.disposal_queue.flush_main_queue();
     }
 
     inline void next_frame(void *sync_ctx)

@@ -8,6 +8,7 @@
 
 #define AUIK_TAG_WINDOW        0xB4382179
 #define AUIK_TAG_WINDOW_HEADER 0x663566BE
+#define AUIK_VAR_INLINE_SPACING 0x69670933u
 
 namespace auik::v2
 {

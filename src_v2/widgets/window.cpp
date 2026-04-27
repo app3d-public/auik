@@ -481,11 +481,16 @@ namespace auik::v2
     static amal::vec2 get_children_required_size(const acul::vector<Widget *> &children,
                                                  const acul::vector<WindowChildLayout> &layouts, f32 wrap_width)
     {
+        const auto resolve_inline_spacing_x = []() -> f32 {
+            const amal::vec2 inline_spacing = get_theme()->get_var<amal::vec2>(AUIK_VAR_INLINE_SPACING);
+            return amal::max(inline_spacing.x + inline_spacing.y, 0.0f);
+        };
         f32 max_width = 0.0f;
         f32 total_height = 0.0f;
         f32 row_width = 0.0f;
         f32 row_height = 0.0f;
         const bool wrap_enabled = wrap_width > 0.0f;
+        const f32 inline_spacing_x = resolve_inline_spacing_x();
         for (size_t i = 0; i < children.size(); ++i)
         {
             auto *child = children[i];
@@ -494,7 +499,8 @@ namespace auik::v2
             const amal::vec2 req = child->required_size();
             if (layout == WindowChildLayout::inline_layout)
             {
-                if (wrap_enabled && row_height > 0.0f && row_width + req.x > wrap_width)
+                const f32 gap_before = row_height > 0.0f ? inline_spacing_x : 0.0f;
+                if (wrap_enabled && row_height > 0.0f && row_width + gap_before + req.x > wrap_width)
                 {
                     max_width = amal::max(max_width, row_width);
                     total_height += row_height;
@@ -514,7 +520,7 @@ namespace auik::v2
                     total_height += req.y;
                     continue;
                 }
-                row_width += req.x;
+                row_width += gap_before + req.x;
                 row_height = amal::max(row_height, req.y);
             }
             else
@@ -567,12 +573,30 @@ namespace auik::v2
         return count;
     }
 
+    static void align_inline_row_vertical(const acul::vector<Widget *> &children, size_t row_start, size_t row_end,
+                                          f32 row_height)
+    {
+        for (size_t row_i = row_start; row_i < row_end; ++row_i)
+        {
+            auto *row_child = children[row_i];
+            if (!row_child) continue;
+            const f32 child_h = amal::max(row_child->required_size().y, 0.0f);
+            const f32 delta_y = amal::floor((row_height - child_h) * 0.5f);
+            if (delta_y <= 0.0f) continue;
+            row_child->translate({0.0f, delta_y});
+        }
+    }
+
     void Window::relayout_children(f32 available_width, const amal::vec2 &content_inset)
     {
+        const amal::vec2 inline_spacing = get_theme()->get_var<amal::vec2>(AUIK_VAR_INLINE_SPACING);
+        const f32 inline_spacing_x = amal::max(inline_spacing.x + inline_spacing.y, 0.0f);
         const amal::vec2 content_cursor = position() + content_inset - _content_offset;
         amal::vec2 cursor = content_cursor;
         f32 inline_row_height = 0.0f;
         f32 inline_row_width = 0.0f;
+        size_t inline_row_start = 0;
+        bool inline_row_active = false;
 
         for (size_t i = 0; i < children.size(); ++i)
         {
@@ -583,9 +607,11 @@ namespace auik::v2
             {
                 if (inline_row_height > 0.0f)
                 {
+                    align_inline_row_vertical(children, inline_row_start, i, inline_row_height);
                     cursor = {content_cursor.x, cursor.y + inline_row_height};
                     inline_row_height = 0.0f;
                     inline_row_width = 0.0f;
+                    inline_row_active = false;
                 }
 
                 if (!child->is_fixed()) { child->set_size({available_width, child->size().y}); }
@@ -597,21 +623,28 @@ namespace auik::v2
 
             const amal::vec2 req = child->required_size();
             const size_t inline_remaining = count_inline_run(children, _child_layouts, i);
-            const f32 remaining_row_width = amal::max(available_width - inline_row_width, 0.0f);
+            const f32 gap_before = inline_row_active ? inline_spacing_x : 0.0f;
+            const size_t remaining_gaps = inline_remaining > 0 ? inline_remaining - 1u : 0u;
+            const f32 spacing_budget = gap_before + inline_spacing_x * static_cast<f32>(remaining_gaps);
+            const f32 remaining_row_width = amal::max(available_width - inline_row_width - spacing_budget, 0.0f);
             const f32 inline_share =
                 inline_remaining > 0 ? (remaining_row_width / static_cast<f32>(inline_remaining)) : remaining_row_width;
 
             f32 inline_width = amal::max(req.x, 0.0f);
             if (!child->is_fixed()) inline_width = inline_share;
             const bool has_inline_row = inline_row_height > 0.0f;
-            const bool needs_wrap = has_inline_row && inline_row_width + inline_width > available_width;
+            const bool needs_wrap = has_inline_row && inline_row_width + gap_before + inline_width > available_width;
             if (needs_wrap)
             {
+                align_inline_row_vertical(children, inline_row_start, i, inline_row_height);
                 cursor = {content_cursor.x, cursor.y + inline_row_height};
                 inline_row_height = 0.0f;
                 inline_row_width = 0.0f;
+                inline_row_active = false;
                 const size_t wrapped_remaining = count_inline_run(children, _child_layouts, i);
-                const f32 wrapped_row_width = available_width;
+                const size_t wrapped_gaps = wrapped_remaining > 0 ? wrapped_remaining - 1u : 0u;
+                const f32 wrapped_row_width =
+                    amal::max(available_width - inline_spacing_x * static_cast<f32>(wrapped_gaps), 0.0f);
                 const f32 wrapped_share = wrapped_remaining > 0
                                               ? (wrapped_row_width / static_cast<f32>(wrapped_remaining))
                                               : wrapped_row_width;
@@ -621,6 +654,14 @@ namespace auik::v2
             // If inline item does not fit even on a fresh row, layout it as a block item.
             if (inline_width > available_width)
             {
+                if (inline_row_height > 0.0f)
+                {
+                    align_inline_row_vertical(children, inline_row_start, i, inline_row_height);
+                    cursor = {content_cursor.x, cursor.y + inline_row_height};
+                    inline_row_height = 0.0f;
+                    inline_row_width = 0.0f;
+                    inline_row_active = false;
+                }
                 if (!child->is_fixed()) { child->set_size({available_width, child->size().y}); }
                 child->set_position(cursor);
                 child->update_layout(true);
@@ -629,6 +670,16 @@ namespace auik::v2
             }
 
             if (!child->is_fixed()) child->set_size({inline_width, child->size().y});
+            if (!inline_row_active)
+            {
+                inline_row_start = i;
+                inline_row_active = true;
+            }
+            else
+            {
+                cursor.x += inline_spacing_x;
+                inline_row_width += inline_spacing_x;
+            }
             child->set_position(cursor);
             child->update_layout(true);
 
@@ -640,7 +691,11 @@ namespace auik::v2
             cursor = {content_cursor.x + inline_row_width, cursor.y};
         }
 
-        if (inline_row_height > 0.0f) cursor = {content_cursor.x, cursor.y + inline_row_height};
+        if (inline_row_height > 0.0f)
+        {
+            align_inline_row_vertical(children, inline_row_start, children.size(), inline_row_height);
+            cursor = {content_cursor.x, cursor.y + inline_row_height};
+        }
     };
 
     void Window::update_layout(bool min_size_known)

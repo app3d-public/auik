@@ -158,7 +158,7 @@ namespace auik::v2
                                               .font(default_font)
                                               .margin(amal::vec2{0.0f, 5.0f}));
         theme->add_style(AUIK_TAG_CARET,
-                         make_style().padding(amal::vec2{2.0f, 0.0f}).background_color({0.9f, 0.9f, 0.9f, 1.0f}));
+                         make_style().padding(amal::vec2{1.0f, 0.0f}).background_color({0.9f, 0.9f, 0.9f, 1.0f}));
         theme->add_style(AUIK_TAG_NO_PAD, make_style().margin(empty_vec2).padding(empty_vec2));
         theme->add_style(AUIK_TAG_PLACEHOLDER, make_style()
                                                    .margin(empty_vec2)
@@ -168,6 +168,7 @@ namespace auik::v2
         theme->add_style(AUIK_TAG_SELECTION, make_style().background_color(amal::rgba8_to_vec4(72, 114, 255, 120)));
         theme->add_style(AUIK_TAG_TEXT_DRAG_ICON, make_style().background_color({0.8f, 0.8f, 0.8f, 1.0f}));
         theme->set_var(AUIK_VAR_COLOR_PICKER_SIZE, 185.0f);
+        theme->set_var(AUIK_VAR_INLINE_SPACING, amal::vec2{4.0f, 0.0f});
 
         // Window body.
         theme->add_style(AUIK_TAG_WINDOW, make_style()

@@ -21,11 +21,17 @@ namespace auik::v2
         TextFlags text_flags = TextFlagBits::none;
 
         Text(u32 id, acul::string text, amal::vec2 size, WidgetFlags flags, Widget *parent = nullptr,
-             u32 style_tag_id = AUIK_TAG_NO_PAD)
+             u32 style_tag_id = AUIK_TAG_NO_PAD,
+             detail::TextOverflowMode overflow = detail::TextOverflowMode::ellipsis,
+             detail::TextVerticalAlign vertical_align = detail::TextVerticalAlign::top,
+             detail::TextWrapMode wrap = detail::TextWrapMode::none)
             : Widget(id, flags, EventFlagBits::none, parent, {{0.0f}, size}),
               _text(std::move(text)),
               _style({Theme::STYLE_ID_INVALID, style_tag_id})
         {
+            _layout_config.overflow = overflow;
+            _layout_config.wrap = wrap;
+            _render_config.vertical_align = vertical_align;
         }
 
         StyleUpdateFlags update_style() override;
@@ -44,6 +50,9 @@ namespace auik::v2
 
         detail::TextOverflowMode overflow_mode() const { return _layout_config.overflow; }
         void set_overflow_mode(detail::TextOverflowMode value);
+
+        bool trim_trailing_spaces() const { return _layout_config.trim_trailing_spaces; }
+        void set_trim_trailing_spaces(bool value);
 
         detail::TextHorizontalAlign horizontal_align() const { return _render_config.horizontal_align; }
         void set_horizontal_align(detail::TextHorizontalAlign value);
@@ -83,8 +92,12 @@ namespace auik::v2
     {
     public:
         TextWithTooltip(u32 id, acul::string text, acul::string tooltip_text, amal::vec2 size, WidgetFlags flags,
-                        Widget *parent = nullptr, u32 style_tag_id = AUIK_TAG_NO_PAD)
-            : Text(id, std::move(text), size, flags | WidgetFlagBits::hittable, parent, style_tag_id),
+                        Widget *parent = nullptr, u32 style_tag_id = AUIK_TAG_NO_PAD,
+                        detail::TextOverflowMode overflow = detail::TextOverflowMode::ellipsis,
+                        detail::TextVerticalAlign vertical_align = detail::TextVerticalAlign::top,
+                        detail::TextWrapMode wrap = detail::TextWrapMode::none)
+            : Text(id, std::move(text), size, flags | WidgetFlagBits::hittable, parent, style_tag_id, overflow,
+                   vertical_align, wrap),
               _tooltip_text(std::move(tooltip_text))
         {
             add_event_flags(EventFlagBits::hover);
@@ -102,20 +115,27 @@ namespace auik::v2
 
     inline Text *make_text(u32 id, const acul::string &text = "")
     {
-        return acul::alloc<Text>(id, text, amal::vec2{0.0f, 0.0f}, get_default_text_flags(), nullptr,
-                                 Theme::STYLE_ID_INVALID);
+        auto *out =
+            acul::alloc<Text>(id, text, amal::vec2{0.0f, 0.0f}, get_default_text_flags(), nullptr,
+                              Theme::STYLE_ID_INVALID, detail::TextOverflowMode::ellipsis,
+                              detail::TextVerticalAlign::center);
+        return out;
     }
 
     inline Text *make_fixed_text(u32 id, const acul::string &text = "", amal::vec2 size = {0.0f, 0.0f})
     {
-        return acul::alloc<Text>(id, text, size, get_default_fixed_text_flags(), nullptr, Theme::STYLE_ID_INVALID);
+        return acul::alloc<Text>(id, text, size, get_default_fixed_text_flags(), nullptr, Theme::STYLE_ID_INVALID,
+                                 detail::TextOverflowMode::ellipsis, detail::TextVerticalAlign::center);
     }
 
     inline TextWithTooltip *make_text_with_tooltip(u32 id, const acul::string &text = "",
                                                    const acul::string &tooltip_text = "")
     {
-        return acul::alloc<TextWithTooltip>(id, text, tooltip_text, amal::vec2{0.0f, 0.0f}, get_default_text_flags(),
-                                            nullptr, Theme::STYLE_ID_INVALID);
+        auto *out = acul::alloc<TextWithTooltip>(id, text, tooltip_text, amal::vec2{0.0f, 0.0f},
+                                                 get_default_text_flags(), nullptr, Theme::STYLE_ID_INVALID,
+                                                 detail::TextOverflowMode::ellipsis,
+                                                 detail::TextVerticalAlign::center);
+        return out;
     }
 
     inline TextWithTooltip *make_fixed_text_with_tooltip(u32 id, const acul::string &text = "",
@@ -123,6 +143,7 @@ namespace auik::v2
                                                          amal::vec2 size = {0.0f, 0.0f})
     {
         return acul::alloc<TextWithTooltip>(id, text, tooltip_text, size, get_default_fixed_text_flags(), nullptr,
-                                            Theme::STYLE_ID_INVALID);
+                                            Theme::STYLE_ID_INVALID, detail::TextOverflowMode::ellipsis,
+                                            detail::TextVerticalAlign::center);
     }
 } // namespace auik::v2

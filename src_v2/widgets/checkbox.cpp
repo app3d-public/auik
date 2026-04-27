@@ -45,6 +45,7 @@ namespace auik::v2
         ensure_checkmark_resource();
 
         const auto &style = get_theme()->get_style(_style.id);
+        const amal::vec4 margin = style.margin();
         const amal::vec2 box_size = resolve_box_size(style);
 
         amal::vec2 min_size = size();
@@ -55,7 +56,8 @@ namespace auik::v2
         if (min_size.y <= 0.0f) min_size.y = box_size.y;
         else min_size.y = amal::max(min_size.y, box_size.y);
 
-        set_required_size(min_size);
+        set_required_size(
+            {min_size.x + margin.x + margin.z, min_size.y + margin.y + margin.w});
     }
 
     void Checkbox::rebuild_checkmark_layout()
@@ -76,14 +78,16 @@ namespace auik::v2
         ensure_checkmark_resource();
 
         const auto &style = get_theme()->get_style(_style.id);
+        const amal::vec4 margin = style.margin();
         const amal::vec2 layout_origin = position();
-        const amal::vec2 min_required = required_size();
+        const amal::vec2 min_required = {amal::max(required_size().x - margin.x - margin.z, 0.0f),
+                                         amal::max(required_size().y - margin.y - margin.w, 0.0f)};
 
         amal::vec2 widget_size = size();
         widget_size.x = amal::max(widget_size.x, min_required.x);
         widget_size.y = amal::max(widget_size.y, min_required.y);
 
-        const amal::vec2 pos = layout_origin;
+        const amal::vec2 pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
         set_position(pos);
         set_size(widget_size);
         Widget::update_layout(true);
@@ -91,8 +95,9 @@ namespace auik::v2
         set_clip_id(parent()->content_clip_id());
 
         const amal::vec2 box_size = resolve_box_size(style);
+        const f32 outer_h = widget_size.y + margin.y + margin.w;
         _box_rect.offset = {pos.x + amal::max((widget_size.x - box_size.x) * 0.5f, 0.0f),
-                            pos.y + amal::max((widget_size.y - box_size.y) * 0.5f, 0.0f)};
+                            layout_origin.y + amal::max((outer_h - box_size.y) * 0.5f, 0.0f)};
         _box_rect.size = box_size;
 
         rebuild_checkmark_layout();

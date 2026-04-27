@@ -65,7 +65,8 @@ namespace auik::v2
         const amal::vec4 padding = style.padding();
 
         auto *font = get_theme()->get_style(_style.id).font();
-        if (!font || _text.empty() || _layout_config.size_px == 0)
+        const bool allow_empty_layout = multiline();
+        if (!font || (!allow_empty_layout && _text.empty()) || _layout_config.size_px == 0)
         {
             const amal::vec2 content_size = is_fixed() ? size() : amal::vec2{0.0f, 0.0f};
             set_required_size({content_size.x + padding.x + padding.z + margin.x + margin.z,
@@ -278,6 +279,13 @@ namespace auik::v2
         mark_layout_dirty();
     }
 
+    void Text::set_trim_trailing_spaces(bool value)
+    {
+        if (_layout_config.trim_trailing_spaces == value) return;
+        _layout_config.trim_trailing_spaces = value;
+        mark_layout_dirty();
+    }
+
     void Text::set_horizontal_align(detail::TextHorizontalAlign value)
     {
         if (_render_config.horizontal_align == value) return;
@@ -313,7 +321,8 @@ namespace auik::v2
         _instances_gpu_dirty = true;
 
         auto *font = get_theme()->get_style(_style.id).font();
-        if (!font || _text.empty() || _layout_config.size_px == 0) return false;
+        const bool allow_empty_layout = multiline();
+        if (!font || (!allow_empty_layout && _text.empty()) || _layout_config.size_px == 0) return false;
 
         auto render_config = _render_config;
         render_config.bounds = {position(), bounds_size};
