@@ -12,7 +12,6 @@
 #define AUIK_TAG_GRADIENT_SLIDER_GRAB        0x4B49A40Eu
 #define AUIK_TAG_GRADIENT_SLIDER_GRAB_BORDER 0xA91B53C2u
 #define AUIK_TAG_RANGE_SLIDER                0x8A233C5Fu
-#define AUIK_TAG_RANGE_SLIDER_GRAB           0x3214A7D9u
 
 namespace auik::v2
 {
@@ -143,6 +142,7 @@ namespace auik::v2
         amal::vec2 _track_depth_range{0.0f, 1.0f};
         amal::vec2 _grab_depth_range{0.0f, 1.0f};
         f32 _step = 0.0f;
+        f32 _drag_grab_offset_x = 0.0f;
 
         void rebuild_track_visuals();
         void rebuild_grab_visual();
@@ -196,6 +196,7 @@ namespace auik::v2
         amal::vec2 _track_depth_range{0.0f, 1.0f};
         amal::vec2 _grab_depth_range{0.0f, 1.0f};
         f32 _step = 0.0f;
+        f32 _drag_grab_offset_x = 0.0f;
 
         void rebuild_track_visuals();
         void rebuild_grab_visual();
@@ -249,6 +250,7 @@ namespace auik::v2
         amal::vec2 _track_depth_range{0.0f, 1.0f};
         amal::vec2 _grab_depth_range{0.0f, 1.0f};
         f32 _step = 0.0f;
+        f32 _drag_grab_offset_x = 0.0f;
 
         void rebuild_track_visuals();
         void rebuild_grab_visual();
@@ -294,7 +296,8 @@ namespace auik::v2
         f32 _step = 0.0f;
         StyleSelector _track_style{Theme::STYLE_ID_INVALID, AUIK_TAG_SLIDER};
         StyleSelector _fill_style{Theme::STYLE_ID_INVALID, AUIK_TAG_SLIDER};
-        StyleSelector _grab_style{Theme::STYLE_ID_INVALID, AUIK_TAG_RANGE_SLIDER_GRAB};
+        StyleSelector _from_grab_style{Theme::STYLE_ID_INVALID, AUIK_TAG_SLIDER_GRAB};
+        StyleSelector _to_grab_style{Theme::STYLE_ID_INVALID, AUIK_TAG_SLIDER_GRAB};
         detail::SliderTrackVisual _track_visual;
         DrawDataID _from_draw_id{};
         DrawDataID _to_draw_id{};
@@ -308,6 +311,7 @@ namespace auik::v2
         amal::vec2 _track_depth_range{0.0f, 1.0f};
         amal::vec2 _grab_depth_range{0.0f, 1.0f};
         ActiveGrab _active_grab = ActiveGrab::none;
+        f32 _drag_grab_offset_x = 0.0f;
 
         void rebuild_track_visuals();
         void rebuild_grab_visuals();
@@ -315,7 +319,7 @@ namespace auik::v2
         void update_active_grab_from_mouse();
         void update_active_value_from_mouse();
         amal::vec2 resolve_grab_size(const Style &grab_style) const;
-        f32 resolve_grab_center_x(f32 value, f32 half_grab_w) const;
+        f32 resolve_grab_center_x(f32 value, f32 outer_half_grab_w) const;
         f32 clamped_value(f32 value) const;
     };
 

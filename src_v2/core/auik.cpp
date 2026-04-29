@@ -88,6 +88,12 @@ namespace auik::v2
             detail::mark_host_refresh_request();
         }
 
+        static inline StyleState resolve_focus_visual_state(Widget *widget)
+        {
+            assert(widget && "widget cannot be null");
+            return resolve_widget_visual_state(*widget, StyleState::focus);
+        }
+
         APPLIB_API void on_hover_id_updated(const ElementID &prev_hover, const ElementID &hover)
         {
             auto &ctx = get_context();
@@ -118,6 +124,14 @@ namespace auik::v2
                 {
                     dispatch_hover(prev_widget_id, HoverState::leave);
                     dispatch_hover(widget_id, HoverState::enter);
+                    if (selector_changed)
+                    {
+                        auto prev_it = ctx.id_map.find(prev_widget_id);
+                        if (prev_it != ctx.id_map.end()) enqueue_style_refresh<detail::HoverEventTraits>(prev_it->second);
+                        auto it = ctx.id_map.find(widget_id);
+                        if (it != ctx.id_map.end() && widget_id != prev_widget_id)
+                            enqueue_style_refresh<detail::HoverEventTraits>(it->second);
+                    }
                 }
                 else if (selector_changed)
                 {
@@ -244,7 +258,7 @@ namespace auik::v2
                 auto it = ctx.id_map.find(prev_active_id);
                 if (it != ctx.id_map.end())
                 {
-                    if (it->second->id() == ctx.focus_id) it->second->set_style_state(StyleState::focus);
+                    if (it->second->id() == ctx.focus_id) it->second->set_style_state(resolve_focus_visual_state(it->second));
                     else it->second->set_style_state(StyleState::normal);
                     enqueue_style_refresh<detail::HoverEventTraits>(it->second);
                 }
@@ -367,8 +381,10 @@ namespace auik::v2
             assert(widget && "widget cannot be null");
             // Focus visuals are managed in focus transition path (on_focus callbacks).
             // Do not overwrite focused widgets during mouse release.
-            if (widget->style_state() == StyleState::focus) widget->set_style_state(StyleState::focus);
-            else if (widget->id() == hovered_id) widget->set_style_state(StyleState::hover);
+            if (detail::get_context().focus_id == widget->id() && has_widget_state_style(*widget, StyleState::focus))
+                widget->set_style_state(StyleState::focus);
+            else if (widget->id() == hovered_id && has_widget_state_style(*widget, StyleState::hover))
+                widget->set_style_state(StyleState::hover);
             else widget->set_style_state(StyleState::normal);
         }
 
@@ -405,7 +421,7 @@ namespace auik::v2
             if (!leaf || leaf == entry) return;
             if (leaf->has_event_handler(EventFlagBits::focus)) leaf->on_focus(focused);
             if (!focused && ctx.active_id != leaf->id()) leaf->set_style_state(StyleState::normal);
-            else if (focused && ctx.active_id != leaf->id()) leaf->set_style_state(StyleState::focus);
+            else if (focused && ctx.active_id != leaf->id()) leaf->set_style_state(resolve_focus_visual_state(leaf));
             enqueue_style_refresh<detail::FocusEventTraits>(leaf);
         }
 
@@ -465,7 +481,7 @@ namespace auik::v2
                 Widget *w = path_new[k];
                 assert(w && "widget cannot be null");
                 if (w->has_event_handler(EventFlagBits::focus)) w->on_focus(true);
-                if (ctx.active_id != w->id()) w->set_style_state(StyleState::focus);
+                if (ctx.active_id != w->id()) w->set_style_state(resolve_focus_visual_state(w));
                 enqueue_style_refresh<detail::FocusEventTraits>(w);
             }
             notify_focus_leaf(ctx, new_leaf, new_entry, true);
@@ -518,8 +534,9 @@ namespace auik::v2
                 const StyleState prev_style = it->second->style_state();
                 // Focus visuals are applied in focus transition path.
                 // Press should not override an already-focused widget.
-                const StyleState next_style =
-                    (prev_style == StyleState::focus) ? StyleState::focus : StyleState::active;
+                StyleState next_style = prev_style == StyleState::focus ? StyleState::focus : StyleState::active;
+                if (next_style != StyleState::focus && !has_widget_state_style(*it->second, next_style))
+                    next_style = prev_style;
                 if (prev_style != next_style) it->second->set_style_state(next_style);
                 // Pressed element (tag-based selector target) should always enter active visuals,
                 // even if owning widget keeps focus state.
@@ -667,4 +684,6 @@ namespace auik::v2
         }
 
     } // namespace detail
+
+    APPLIB_API void focus_widget(Widget *widget) { detail::set_focus_target(detail::get_context(), widget); }
 } // namespace auik::v2

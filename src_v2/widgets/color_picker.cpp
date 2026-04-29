@@ -404,7 +404,7 @@ namespace auik::v2
 
         VertexStreamVertex center_v{};
         center_v.position = center;
-        center_v.z_order = detail::mid_depth(_track_depth_range);
+        center_v.z_order = next_depth(_track_depth_range);
         center_v.color = detail::pack_rgba8(255, 255, 255, 255);
         center_v.clip_id = clip_id();
         _wheel_vertices.push_back(center_v);
@@ -423,7 +423,7 @@ namespace auik::v2
 
             VertexStreamVertex inner{};
             inner.position = {center.x + amal::cos(angle) * wheel_radius, center.y + amal::sin(angle) * wheel_radius};
-            inner.z_order = detail::mid_depth(_track_depth_range);
+            inner.z_order = next_depth(_track_depth_range);
             inner.color = detail::pack_rgba8(hue_color);
             inner.clip_id = clip_id();
             _wheel_vertices.push_back(inner);
@@ -441,7 +441,7 @@ namespace auik::v2
                 VertexStreamVertex mid{};
                 mid.position = {center.x + amal::cos(angle) * fringe_mid_radius,
                                 center.y + amal::sin(angle) * fringe_mid_radius};
-                mid.z_order = detail::mid_depth(_track_depth_range);
+                mid.z_order = next_depth(_track_depth_range);
                 mid.color = detail::pack_rgba8(amal::vec4{hue_color.x, hue_color.y, hue_color.z, 0.35f});
                 mid.clip_id = clip_id();
                 _wheel_vertices.push_back(mid);
@@ -457,7 +457,7 @@ namespace auik::v2
                 VertexStreamVertex outer{};
                 outer.position = {center.x + amal::cos(angle) * wheel_radius_outer,
                                   center.y + amal::sin(angle) * wheel_radius_outer};
-                outer.z_order = detail::mid_depth(_track_depth_range);
+                outer.z_order = next_depth(_track_depth_range);
                 outer.color = detail::pack_rgba8(amal::vec4{hue_color.x, hue_color.y, hue_color.z, 0.0f});
                 outer.clip_id = clip_id();
                 _wheel_vertices.push_back(outer);
@@ -508,10 +508,10 @@ namespace auik::v2
 
         _grab_hit_rect.bounds.offset = {pick_pos.x - grab_w * 0.5f, pick_pos.y - grab_h * 0.5f};
         _grab_hit_rect.bounds.size = {grab_w, grab_h};
-        _grab_hit_rect.depth = detail::mid_depth(_grab_depth_range);
+        _grab_hit_rect.depth = next_depth(_grab_depth_range);
 
         const u16 grab_clip = clip_id();
-        const f32 grab_z = detail::mid_depth(_grab_depth_range);
+        const f32 grab_z = next_depth(_grab_depth_range);
         _grab_visual = {};
         _grab_back_visual = {};
         detail::fill_circle_grab_instance(grab_style, _grab_hit_rect.bounds, grab_z, grab_clip,
@@ -833,7 +833,7 @@ namespace auik::v2
                                (fringe_segments + 1u));
         _ring_indices.reserve((main_segments + fringe_segments + fringe_segments) * 6u);
 
-        const f32 z = detail::mid_depth(_ring_depth_range);
+        const f32 z = next_depth(_ring_depth_range);
         const u16 cid = clip_id();
         detail::append_hue_ring_vertices(_ring_vertices, _layout.center, _layout.ring_inner_radius, fringe_segments, 0.0f,
                                          z, cid);
@@ -862,8 +862,8 @@ namespace auik::v2
         const amal::vec4 white = {1.0f};
         const amal::vec4 black_a0 = {0.0f, 0.0f, 0.0f, 0.0f};
         const amal::vec4 black_a1 = {0.0f, 0.0f, 0.0f, 1.0f};
-        const f32 z_base = detail::mid_depth(_square_depth_range);
-        const f32 z_overlay = detail::mid_depth(_square_overlay_depth_range);
+        const f32 z_base = next_depth(_square_depth_range);
+        const f32 z_overlay = next_depth(_square_overlay_depth_range);
         const u16 cid = clip_id();
         _sv_vertices.reserve(8);
         _sv_indices.reserve(12);
@@ -949,7 +949,7 @@ namespace auik::v2
         const amal::vec2 grab_size = resolve_grab_size(grab_style);
         const f32 grab_w = amal::max(amal::round(grab_size.x), 3.0f);
         const f32 grab_h = amal::max(amal::round(grab_size.y), 3.0f);
-        const f32 grab_z = detail::mid_depth(_grab_depth_range);
+        const f32 grab_z = next_depth(_grab_depth_range);
         const u16 grab_clip = clip_id();
 
         const f32 ring_mid = (_layout.ring_inner_radius + _layout.ring_outer_radius) * 0.5f;

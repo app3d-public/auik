@@ -25,6 +25,18 @@ namespace auik::v2::detail
         word
     };
 
+    enum class TextLayoutWidthMode : u8
+    {
+        // Measure the full natural text width. This is for dynamic labels that should grow their required width and let
+        // a parent container/window decide whether scrolling is needed.
+        natural,
+        // Measure the full natural text width, but treat the widget bounds as a viewport. The owner can move the text
+        // with an external x offset and clip it to the viewport; single-line TextBox uses this for horizontal caret scroll.
+        viewport,
+        // Constrain layout to max_width/widget bounds. This is for fixed text, wrapping, and ellipsis/truncation.
+        bounds
+    };
+
     enum class TextHorizontalAlign : u8
     {
         left,
@@ -46,6 +58,7 @@ namespace auik::v2::detail
         u32 max_lines = 0;
         TextOverflowMode overflow = TextOverflowMode::ellipsis;
         TextWrapMode wrap = TextWrapMode::none;
+        TextLayoutWidthMode width_mode = TextLayoutWidthMode::bounds;
         bool trim_trailing_spaces = true;
     };
 

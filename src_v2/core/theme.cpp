@@ -146,17 +146,14 @@ namespace auik::v2
         constexpr auto c_active = amal::rgba8_to_vec4(31, 31, 31, 255);
         constexpr auto c_border = amal::rgba8_to_vec4(51, 51, 51, 255);
         constexpr auto c_ascent = amal::rgba8_to_vec4(72, 114, 255, 255);
-        const amal::vec4 c_light = {0.8f, 0.8f, 0.8f, 1.0f};
-        const amal::vec4 c_white = {1.0f};
+        const amal::vec4 c_white = {0.9f, 0.9f, 0.9f, 1.0f};
         const amal::vec4 c_semi_transparent = {0.0f, 0.0f, 0.0f, 0.5f};
         const amal::vec2 empty_vec2{0.0f};
 
         // Global settings.
-        theme->add_style(AUIK_TAG_GLOBAL, make_style()
-                                              .text_color({0.9f, 0.9f, 0.9f, 1.0f})
-                                              .text_size(12.5f * dpi)
-                                              .font(default_font)
-                                              .margin(amal::vec2{0.0f, 5.0f}));
+        theme->add_style(
+            AUIK_TAG_GLOBAL,
+            make_style().text_color(c_white).text_size(12.5f * dpi).font(default_font).margin(amal::vec2{0.0f, 5.0f}));
         theme->add_style(AUIK_TAG_CARET,
                          make_style().padding(amal::vec2{1.0f, 0.0f}).background_color({0.9f, 0.9f, 0.9f, 1.0f}));
         theme->add_style(AUIK_TAG_NO_PAD, make_style().margin(empty_vec2).padding(empty_vec2));
@@ -207,10 +204,7 @@ namespace auik::v2
         theme->add_style(AUIK_TAG_CHECKBOX,
                          make_style().padding(amal::vec2{3.0f}).background_color(c_surface_light).border_radius(3.0f));
         theme->add_style(AUIK_TAG_CHECKBOX, make_style().background_color(c_hover), StyleState::hover);
-        theme->add_style(AUIK_TAG_CHECKBOX, make_style().background_color(c_surface_light).border_color(c_border),
-                         StyleState::active);
-        theme->add_style(AUIK_TAG_CHECKBOX, make_style().background_color(c_surface_light).border_color(c_border),
-                         StyleState::focus);
+        theme->add_style(AUIK_TAG_CHECKBOX, make_style().background_color(c_surface_light), StyleState::active);
 
         theme->add_style(
             AUIK_TAG_COMBO_BOX,
@@ -231,41 +225,45 @@ namespace auik::v2
 
         theme->add_style(
             AUIK_TAG_SLIDER,
-            make_style().background_color(c_surface_light).border_radius(2.5f).padding(amal::vec2{0.0f, 5.0f}));
+            make_style().background_color(c_surface_light).border_radius(2.5f).padding(amal::vec2{0.0f, 4.0f}));
         theme->add_style(AUIK_TAG_SLIDER, make_style().background_color(c_ascent), StyleState::active);
         theme->add_style(AUIK_TAG_SLIDER_GRAB, make_style()
-                                                   .padding(amal::vec2{8.0f})
-                                                   .background_color(c_light)
-                                                   .border_color(c_surface_light)
-                                                   .border_thickness(2.0f)
-                                                   .border_radius(8.0f));
-        theme->add_style(AUIK_TAG_SLIDER_GRAB, make_style().background_color(c_white), StyleState::hover);
-        theme->add_style(AUIK_TAG_SLIDER_GRAB, make_style().background_color(c_white), StyleState::active);
-        theme->add_style(AUIK_TAG_SLIDER_GRAB, make_style().background_color(c_white), StyleState::focus);
+                                                   .margin(amal::vec2{0.0f, 4.0f})
+                                                   .padding(amal::vec2{6.0f})
+                                                   .background_color(c_white)
+                                                   .border_radius(6.0f));
+        theme->add_style(AUIK_TAG_SLIDER_GRAB,
+                         make_style()
+                             .margin(amal::vec2{-4.0f, 0.0f})
+                             .padding(amal::vec2{10.0f})
+                             .border_color({1.0f, 1.0f, 1.0f, 0.25f})
+                             .border_radius(10.0f)
+                             .border_thickness(4.0f),
+                         StyleState::hover);
+        theme->add_style(AUIK_TAG_SLIDER_GRAB,
+                         make_style()
+                             .margin(amal::vec2{-4.0f, 0.0f})
+                             .padding(amal::vec2{10.0f})
+                             .border_color({1.0f, 1.0f, 1.0f, 0.35f})
+                             .border_radius(10.0f)
+                             .border_thickness(4.0f),
+                         StyleState::active);
         theme->add_style(AUIK_TAG_GRADIENT_SLIDER_GRAB, make_style()
-                                                            .padding(amal::vec2{6.0f})
+                                                            .padding(amal::vec2{5.0f})
                                                             .background_color(c_white)
                                                             .border_color(c_semi_transparent)
                                                             .border_thickness(1.5f)
-                                                            .border_radius(6.0f));
+                                                            .border_radius(5.0f));
         theme->add_style(AUIK_TAG_GRADIENT_SLIDER_GRAB_BORDER, make_style()
-                                                                   .padding(amal::vec2{9.0f})
+                                                                   .padding(amal::vec2{8.0f})
                                                                    .background_color(c_white)
                                                                    .border_thickness(1.5f)
                                                                    .border_color(c_semi_transparent)
-                                                                   .border_radius(9.0f));
+                                                                   .border_radius(8.0f));
         theme->add_style(
             AUIK_TAG_GRADIENT_SLIDER,
-            make_style().background_color(c_surface_light).border_radius(2.5f).padding(amal::vec2{0.0f, 5.0f}));
-        theme->add_style(AUIK_TAG_RANGE_SLIDER_GRAB, make_style()
-                                                         .padding(amal::vec2{8.0f})
-                                                         .background_color(c_light)
-                                                         .border_color(c_surface_light)
-                                                         .border_thickness(2.0f)
-                                                         .border_radius(8.0f));
-        theme->add_style(AUIK_TAG_RANGE_SLIDER_GRAB, make_style().background_color(c_white), StyleState::hover);
-        theme->add_style(AUIK_TAG_RANGE_SLIDER_GRAB, make_style().background_color(c_white), StyleState::active);
-        theme->add_style(AUIK_TAG_RANGE_SLIDER_GRAB, make_style().background_color(c_white), StyleState::focus);
+            make_style().background_color(c_surface_light).border_radius(2.0f).padding(amal::vec2{0.0f, 4.0f}));
+
         theme->add_style(AUIK_TAG_TOOLTIP, make_style()
                                                .margin(empty_vec2)
                                                .padding(amal::vec2{10.0f, 6.0f})

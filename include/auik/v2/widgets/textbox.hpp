@@ -96,8 +96,9 @@ namespace auik::v2
                 _text.set_position(_content_pos);
                 _text.set_size(_content_size);
                 _text.update_layout(false);
-                _text.translate({0.0f, -_content_scroll_y});
-                _text.set_clip_id(clip_id());
+                update_content_scroll_x_for_cursor();
+                _text.translate({-_content_scroll_x, -_content_scroll_y});
+                _text.set_clip_id(text_content_clip_id());
                 detail::get_context().dirty_flags &= ~DirtyFlagBits::layout;
                 rebuild_selection_rect_cache();
                 if (_text.layout_instance_count() < text_draw_count || edit_draw_slots_need_record())
@@ -109,6 +110,9 @@ namespace auik::v2
             }
             else
             {
+                const f32 old_scroll_x = _content_scroll_x;
+                if (update_content_scroll_x_for_cursor() && old_scroll_x != _content_scroll_x)
+                    _text.translate({old_scroll_x - _content_scroll_x, 0.0f});
                 rebuild_selection_rect_cache();
                 if (edit_draw_slots_need_record())
                 {
@@ -136,6 +140,9 @@ namespace auik::v2
         f32 cursor_x_on_line(u32 line_index, int cursor) const;
         f32 line_screen_y(u32 line_index) const;
         amal::rect line_selection_rect(u32 line_index, f32 x0, f32 x1) const;
+        bool update_content_scroll_x_for_cursor();
+        u16 text_content_clip_id() const { return _content_clip_id != 0xFFFFu ? _content_clip_id : clip_id(); }
+        void update_text_content_clip_rect();
         void rebuild_selection_rect_cache();
         void draw_background(DrawCtx &ctx, DrawStream *quads_stream);
         void draw_selection(DrawCtx &ctx, DrawStream *quads_stream, f32 selection_z);
@@ -151,6 +158,9 @@ namespace auik::v2
         bool selection_contains_point(const amal::vec2 &point) const;
         bool begin_selection_drag_press();
         void collapse_cursor_at_point(const amal::vec2 &point);
+        void select_text_range(int start, int end);
+        void select_word_at_point(const amal::vec2 &point);
+        void select_line_at_point(const amal::vec2 &point);
         void select_all_text();
         void copy_selection_to_clipboard();
         void cut_selection_to_clipboard();
@@ -159,6 +169,8 @@ namespace auik::v2
         bool move_selection_to_cursor(int drop_cursor, bool copy);
         void end_selection_drag(bool commit);
         bool is_read_only() const { return _read_only; }
+        bool text_changed() const { return _changed; }
+        void mark_text_unchanged() { _changed = false; }
         virtual bool accepts_newline() const { return false; }
         virtual bool should_resize_to_content() const { return false; }
         virtual bool has_internal_scrollbar() const { return false; }
@@ -175,8 +187,11 @@ namespace auik::v2
         StyleSelector _style{Theme::STYLE_ID_INVALID, AUIK_TAG_TEXTBOX};
         amal::vec2 _content_pos{0.0f, 0.0f};
         amal::vec2 _content_size{0.0f, 0.0f};
+        u16 _content_clip_id = 0xFFFFu;
         detail::Scrollbar *_scrollbar_y = nullptr;
+        f32 _content_scroll_x = 0.0f;
         f32 _content_scroll_y = 0.0f;
+        bool _changed = false;
         bool _read_only = false;
 
     private:
@@ -220,11 +235,11 @@ namespace auik::v2
                                     nullptr, AUIK_TAG_TEXTBOX, text_flags, placeholder, read_only);
     }
 
-    inline TextBox *make_fixed_textbox(u32 id, const acul::string &value, amal::vec2 size = {240.0f, 0.0f},
+    inline TextBox *make_fixed_textbox(u32 id, const acul::string &value, f32 width = 240.0f,
                                        TextFlags text_flags = TextFlagBits::none, const acul::string &placeholder = {},
                                        bool read_only = false)
     {
-        return acul::alloc<TextBox>(id, value, size,
+        return acul::alloc<TextBox>(id, value, amal::vec2{width, 0.0f},
                                     WidgetFlagBits::visible | WidgetFlagBits::attachable |
                                         WidgetFlagBits::configurable | WidgetFlagBits::fixed,
                                     nullptr, AUIK_TAG_TEXTBOX, text_flags, placeholder, read_only);

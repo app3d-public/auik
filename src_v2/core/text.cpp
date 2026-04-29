@@ -655,7 +655,8 @@ namespace auik::v2
             auto &layout = layout_result ? *layout_result : local_layout;
             auto effective_layout = layout_config;
             if (effective_layout.size_px == 0) return false;
-            if (effective_layout.max_width <= 0.0f) effective_layout.max_width = render_config.bounds.size.x;
+            if (effective_layout.width_mode == TextLayoutWidthMode::bounds && effective_layout.max_width <= 0.0f)
+                effective_layout.max_width = render_config.bounds.size.x;
             if (!layout_single_line(font, utf8_text, effective_layout, layout)) return false;
             return append_instances_from_layout(font, effective_layout.size_px, layout, render_config, out);
         }
@@ -668,7 +669,8 @@ namespace auik::v2
             auto &layout = layout_result ? *layout_result : local_layout;
             auto effective_layout = layout_config;
             if (effective_layout.size_px == 0) return false;
-            if (effective_layout.max_width <= 0.0f) effective_layout.max_width = render_config.bounds.size.x;
+            if (effective_layout.width_mode == TextLayoutWidthMode::bounds && effective_layout.max_width <= 0.0f)
+                effective_layout.max_width = render_config.bounds.size.x;
             if (!layout_multiline(font, utf8_text, effective_layout, layout)) return false;
             return append_instances_from_layout(font, effective_layout.size_px, layout, render_config, out);
         }

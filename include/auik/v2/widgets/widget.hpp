@@ -203,10 +203,24 @@ namespace auik::v2
         return (next_range.x + next_range.y) * 0.5f;
     }
 
+    inline bool has_widget_state_style(const Widget &widget, StyleState state)
+    {
+        if (state == StyleState::normal) return true;
+        auto *theme = detail::get_context().theme;
+        const u32 parent_id = widget.parent() ? widget.parent()->id() : 0u;
+        return theme && theme->has_state_style(widget.get_rect().tag_id, widget.id(), parent_id, state);
+    }
+
+    inline StyleState resolve_widget_visual_state(const Widget &widget, StyleState state)
+    {
+        return has_widget_state_style(widget, state) ? state : StyleState::normal;
+    }
+
     inline bool apply_hover_style_state(Widget &widget, HoverState state)
     {
         if (widget.style_state() == StyleState::active || widget.style_state() == StyleState::focus) return false;
         if (state == HoverState::leave) return widget.set_style_state(StyleState::normal);
+        if (!has_widget_state_style(widget, StyleState::hover)) return false;
         return widget.set_style_state(StyleState::hover);
     }
 

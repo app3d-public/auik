@@ -24,13 +24,15 @@ namespace auik::v2
              u32 style_tag_id = AUIK_TAG_NO_PAD,
              detail::TextOverflowMode overflow = detail::TextOverflowMode::ellipsis,
              detail::TextVerticalAlign vertical_align = detail::TextVerticalAlign::top,
-             detail::TextWrapMode wrap = detail::TextWrapMode::none)
+             detail::TextWrapMode wrap = detail::TextWrapMode::none,
+             detail::TextLayoutWidthMode width_mode = detail::TextLayoutWidthMode::bounds)
             : Widget(id, flags, EventFlagBits::none, parent, {{0.0f}, size}),
               _text(std::move(text)),
               _style({Theme::STYLE_ID_INVALID, style_tag_id})
         {
             _layout_config.overflow = overflow;
             _layout_config.wrap = wrap;
+            _layout_config.width_mode = width_mode;
             _render_config.vertical_align = vertical_align;
         }
 
@@ -53,6 +55,9 @@ namespace auik::v2
 
         bool trim_trailing_spaces() const { return _layout_config.trim_trailing_spaces; }
         void set_trim_trailing_spaces(bool value);
+
+        detail::TextLayoutWidthMode width_mode() const { return _layout_config.width_mode; }
+        void set_width_mode(detail::TextLayoutWidthMode value);
 
         detail::TextHorizontalAlign horizontal_align() const { return _render_config.horizontal_align; }
         void set_horizontal_align(detail::TextHorizontalAlign value);

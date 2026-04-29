@@ -2,8 +2,7 @@
 #include <auik/v2/detail/depth.hpp>
 #include <auik/v2/widgets/slider.hpp>
 
-#define AUIK_TAG_RANGE_SLIDER_GRAB_FROM 0x0A9E4D31u
-#define AUIK_TAG_RANGE_SLIDER_GRAB_TO   0x7D5C28B4u
+#define SLIDER_TRACK_HIT_PAD 4.0f
 
 namespace auik::v2
 {
@@ -63,7 +62,7 @@ namespace auik::v2
 
         static inline StyleState resolve_grab_visual_state(StyleState state)
         {
-            return (state == StyleState::active || state == StyleState::focus) ? state : StyleState::normal;
+            return state == StyleState::active ? StyleState::active : StyleState::normal;
         }
 
         static inline StyleUpdateFlags resolve_style_and_mark_redraw(StyleSelector &selector, u32 self_id,
@@ -75,12 +74,62 @@ namespace auik::v2
             return flags;
         }
 
+        static inline StyleUpdateFlags resolve_visual_style_and_mark_redraw(StyleSelector &selector, u32 self_id,
+                                                                            u32 parent_id, StyleState state,
+                                                                            bool &redraw_changed)
+        {
+            const auto flags = resolve_style_selector(selector, self_id, parent_id, state);
+            if (flags == StyleUpdateFlagBits::none) return StyleUpdateFlagBits::none;
+            redraw_changed = true;
+            return StyleUpdateFlagBits::redraw;
+        }
+
+        static inline bool is_slider_grab_hit(const ElementID &id, u32 widget_id, u32 tag_id)
+        {
+            return id.widget_id == widget_id && id.tag_id == tag_id;
+        }
+
+        static inline f32 resolve_drag_mouse_offset_x(const amal::rect &grab_rect)
+        {
+            return get_mouse_pos().x - (grab_rect.offset.x + grab_rect.size.x * 0.5f);
+        }
+
+        static inline amal::rect resolve_slider_grab_rect(const Style &style, f32 center_x, f32 center_y,
+                                                          const amal::vec2 &visual_size)
+        {
+            const amal::vec4 margin = style.margin();
+            const amal::vec2 outer_size = {visual_size.x + margin.x + margin.z, visual_size.y + margin.y + margin.w};
+            return {{center_x - outer_size.x * 0.5f + margin.x, amal::round(center_y - outer_size.y * 0.5f + margin.y)},
+                    visual_size};
+        }
+
+        static inline f32 resolve_slider_grab_outer_half_width(const Style &style, f32 visual_width)
+        {
+            const amal::vec4 margin = style.margin();
+            return (visual_width + margin.x + margin.z) * 0.5f;
+        }
+
+        static inline f32 resolve_slider_track_hit_depth(const amal::vec2 &widget_depth_range)
+        {
+            const amal::vec2 work_range = get_depth_workzone_range(widget_depth_range);
+            return depth_zone_range(work_range, DepthZone::background).x;
+        }
+
+        static inline RectData make_slider_track_hit_rect(u32 widget_id, u32 tag_id, const amal::rect &track_rect,
+                                                          u16 clip_id, f32 depth)
+        {
+            amal::rect hit_rect = track_rect;
+            hit_rect.offset.y -= SLIDER_TRACK_HIT_PAD;
+            hit_rect.size.y += SLIDER_TRACK_HIT_PAD * 2.0f;
+            return make_rect_data(widget_id, tag_id, hit_rect, clip_id, depth);
+        }
+
         void build_quad_slider_track_visual(SliderTrackVisual &visual, const Style &style, const amal::rect &track_rect,
                                             const amal::vec2 &depth_range, u16 clip_id)
         {
             visual.clear_payload();
             visual.background.rect = track_rect;
-            visual.background.z_order = mid_depth(depth_range);
+            visual.background.z_order = next_depth(depth_range);
             if (fill_quads_instance_by_style(style, clip_id, visual.background))
                 visual.set_layer(SliderTrackVisual::LayerBits::background);
         }
@@ -95,7 +144,7 @@ namespace auik::v2
             if (!colors || color_count == 0 || amal::is_rect_empty(track_rect)) return;
 
             gradient_visual.valid =
-                build_gradient_rect_vertex_data(gradient_visual.data, track_rect, mid_depth(depth_range), clip_id,
+                build_gradient_rect_vertex_data(gradient_visual.data, track_rect, next_depth(depth_range), clip_id,
                                                 colors, color_count, style.border_radius(), style.corner_mask(), 1.0f);
 
             if (style.has_visible_border())
@@ -103,7 +152,7 @@ namespace auik::v2
                 visual.set_layer(SliderTrackVisual::LayerBits::border);
                 amal::vec2 border_range{};
                 assign_next_depth(depth_range, border_range);
-                fill_border_only_instance(style, track_rect, mid_depth(border_range), clip_id, visual.border);
+                fill_border_only_instance(style, track_rect, next_depth(border_range), clip_id, visual.border);
             }
         }
     } // namespace detail
@@ -139,22 +188,25 @@ namespace auik::v2
             out |= detail::resolve_style_and_mark_redraw(_fill_style, _fill_style.tag_id, parent_id, StyleState::active,
                                                          track_or_fill_changed);
         if (_grab_style.id == Theme::STYLE_ID_INVALID)
-            out |= detail::resolve_style_and_mark_redraw(_grab_style, _grab_style.tag_id, parent_id, StyleState::normal,
-                                                         grab_changed);
+            out |= detail::resolve_visual_style_and_mark_redraw(_grab_style, _grab_style.tag_id, parent_id,
+                                                                StyleState::normal, grab_changed);
 
         const auto transition = detail::get_widget_style_selector_transition(id());
         if (transition.prev_id.tag_id == _grab_style.tag_id &&
             (transition.current_id.tag_id != _grab_style.tag_id || transition.prev_state != transition.current_state))
-            out |= detail::resolve_style_and_mark_redraw(_grab_style, _grab_style.tag_id, parent_id, StyleState::normal,
-                                                         grab_changed);
+            out |= detail::resolve_visual_style_and_mark_redraw(_grab_style, _grab_style.tag_id, parent_id,
+                                                                StyleState::normal, grab_changed);
         if (transition.current_id.tag_id == _grab_style.tag_id)
-            out |= detail::resolve_style_and_mark_redraw(_grab_style, _grab_style.tag_id, parent_id,
-                                                         transition.current_state, grab_changed);
+            out |= detail::resolve_visual_style_and_mark_redraw(_grab_style, _grab_style.tag_id, parent_id,
+                                                                transition.current_state, grab_changed);
 
         const StyleState widget_grab_state = detail::resolve_grab_visual_state(style_state());
         if (widget_grab_state == StyleState::active || widget_grab_state == StyleState::focus)
-            out |= detail::resolve_style_and_mark_redraw(_grab_style, _grab_style.tag_id, parent_id, widget_grab_state,
-                                                         grab_changed);
+            out |= detail::resolve_visual_style_and_mark_redraw(_grab_style, _grab_style.tag_id, parent_id,
+                                                                widget_grab_state, grab_changed);
+        else if (transition.current_id.tag_id != _grab_style.tag_id)
+            out |= detail::resolve_visual_style_and_mark_redraw(_grab_style, _grab_style.tag_id, parent_id,
+                                                                StyleState::normal, grab_changed);
 
         if (track_or_fill_changed) rebuild_track_visuals();
         if (grab_changed) rebuild_grab_visual();
@@ -266,26 +318,29 @@ namespace auik::v2
     {
         auto *quad_stream = get_primary_quads_stream();
         bool hit_pending = ctx.emit_hit_rect;
+        const auto track_hit_rect = detail::make_slider_track_hit_rect(
+            id(), _track_style.tag_id, _track_rect, clip_id(), detail::resolve_slider_track_hit_depth(depth_range()));
 
         if (ctx.is_recording() ||
             should_emit_quads_instance(_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::background),
                                        _track_visual.background_draw_id, hit_pending))
         {
-            ctx.emit(quad_stream, _track_visual.background_draw_id, &_track_visual.background, get_rect(), hit_pending);
+            ctx.emit(quad_stream, _track_visual.background_draw_id, &_track_visual.background, track_hit_rect,
+                     hit_pending);
             hit_pending = false;
         }
         if (ctx.is_recording() ||
             should_emit_quads_instance(_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::fill),
                                        _track_visual.fill_draw_id, hit_pending))
         {
-            ctx.emit(quad_stream, _track_visual.fill_draw_id, &_track_visual.fill, get_rect(), hit_pending);
+            ctx.emit(quad_stream, _track_visual.fill_draw_id, &_track_visual.fill, track_hit_rect, hit_pending);
             hit_pending = false;
         }
         if (ctx.is_recording() ||
             should_emit_quads_instance(_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::border),
                                        _track_visual.border_draw_id, hit_pending))
         {
-            ctx.emit(quad_stream, _track_visual.border_draw_id, &_track_visual.border, get_rect(), hit_pending);
+            ctx.emit(quad_stream, _track_visual.border_draw_id, &_track_visual.border, track_hit_rect, hit_pending);
             hit_pending = false;
         }
         ctx.emit(quad_stream, _grab_draw_id, &_grab_visual, _grab_hit_rect, ctx.emit_hit_rect);
@@ -333,7 +388,8 @@ namespace auik::v2
     {
         if (!_value) return;
         const f32 width = amal::max(_track_rect.size.x, 1e-5f);
-        const f32 t = amal::clamp((get_mouse_pos().x - _track_rect.offset.x) / width, 0.0f, 1.0f);
+        const f32 mouse_x = get_mouse_pos().x - _drag_grab_offset_x;
+        const f32 t = amal::clamp((mouse_x - _track_rect.offset.x) / width, 0.0f, 1.0f);
         set_value(_min_value + (_max_value - _min_value) * t);
     }
 
@@ -344,6 +400,11 @@ namespace auik::v2
 
         if (state == KeyPressState::press)
         {
+            if (detail::is_slider_grab_hit(detail::get_context().io.clicked_id, id(), _grab_style.tag_id))
+            {
+                add_render_command<detail::ClickEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
+                return;
+            }
             update_value_from_mouse();
             add_render_command<detail::ClickEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
             return;
@@ -356,8 +417,19 @@ namespace auik::v2
     void Slider::on_drag(const amal::vec2 &delta, KeyPressState state)
     {
         (void)delta;
-        if (state == KeyPressState::press || state == KeyPressState::repeat) update_value_from_mouse();
-        else if (state == KeyPressState::release) {}
+        if (state == KeyPressState::press)
+        {
+            const auto drag_id = detail::get_context().io.drag_id;
+            if (detail::is_slider_grab_hit(drag_id, id(), _grab_style.tag_id))
+                _drag_grab_offset_x = detail::resolve_drag_mouse_offset_x(_grab_rect);
+            else
+            {
+                _drag_grab_offset_x = 0.0f;
+                update_value_from_mouse();
+            }
+        }
+        else if (state == KeyPressState::repeat) update_value_from_mouse();
+        else if (state == KeyPressState::release) _drag_grab_offset_x = 0.0f;
         else return;
 
         add_render_command<detail::DragEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
@@ -391,7 +463,7 @@ namespace auik::v2
         _track_visual.fill.rect = _track_rect;
         _track_visual.fill.rect.offset.x = left_x;
         _track_visual.fill.rect.size.x = fill_w > 0.0f ? fill_w : 1.0f;
-        _track_visual.fill.z_order = detail::mid_depth(_track_depth_range);
+        _track_visual.fill.z_order = next_depth(_track_depth_range);
         const bool fill_visible = fill_quads_instance_by_style(fill_style, clip_id(), _track_visual.fill) &&
                                   fill_w > 0.0f && !amal::is_rect_empty(_track_rect);
         if (!fill_visible)
@@ -431,24 +503,19 @@ namespace auik::v2
         const f32 grab_h = amal::max(amal::round(grab_size.y), 3.0f);
         const f32 range = amal::max(_max_value - _min_value, 1e-5f);
         const f32 factor = amal::clamp((value() - _min_value) / range, 0.0f, 1.0f);
-        const f32 half_grab_w = grab_w * 0.5f;
-        const f32 half_grab_h = grab_h * 0.5f;
-        const f32 min_center_x = _track_rect.offset.x + half_grab_w;
-        const f32 max_center_x = _track_rect.offset.x + _track_rect.size.x - half_grab_w;
+        const f32 outer_half_w = detail::resolve_slider_grab_outer_half_width(grab_style, grab_w);
+        const f32 min_center_x = _track_rect.offset.x + outer_half_w;
+        const f32 max_center_x = _track_rect.offset.x + _track_rect.size.x - outer_half_w;
         f32 center_x = _track_rect.offset.x + _track_rect.size.x * factor;
         if (max_center_x > min_center_x) center_x = min_center_x + (max_center_x - min_center_x) * factor;
         else center_x = _track_rect.offset.x + _track_rect.size.x * 0.5f;
         const f32 center_y = _track_rect.offset.y + _track_rect.size.y * 0.5f;
-        f32 grab_x = center_x - half_grab_w;
-        _grab_rect.offset.x = grab_x;
-        _grab_rect.offset.y = amal::round(center_y - half_grab_h);
-        _grab_rect.size.x = grab_w;
-        _grab_rect.size.y = grab_h;
+        _grab_rect = detail::resolve_slider_grab_rect(grab_style, center_x, center_y, {grab_w, grab_h});
         _grab_hit_rect.bounds = _grab_rect;
-        _grab_hit_rect.depth = detail::mid_depth(_grab_depth_range);
+        _grab_hit_rect.depth = next_depth(_grab_depth_range);
 
         const u16 grab_clip_id = clip_id();
-        const f32 grab_z = detail::mid_depth(_grab_depth_range);
+        const f32 grab_z = next_depth(_grab_depth_range);
         _grab_visual.rect = _grab_rect;
         _grab_visual.z_order = grab_z;
         fill_quads_instance_by_style(grab_style, grab_clip_id, _grab_visual);
@@ -466,8 +533,7 @@ namespace auik::v2
     }
 
     GradientSlider::GradientSlider(u32 id, f32 *value, f32 min_value, f32 max_value, f32 width,
-                                   const amal::vec4 *colors, u32 color_count, WidgetFlags widget_flags,
-                                   Widget *parent)
+                                   const amal::vec4 *colors, u32 color_count, WidgetFlags widget_flags, Widget *parent)
         : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::drag, parent, {{0.0f, 0.0f}, {width, 0.0f}},
                  AUIK_TAG_GRADIENT_SLIDER),
           _value(value),
@@ -500,7 +566,8 @@ namespace auik::v2
         };
 
         auto resolve_grab_state = [&](StyleState state) -> StyleUpdateFlags {
-            const auto flags = resolve_style_selector(_grab_style, _grab_style.tag_id, parent_id, state);
+            const auto flags = detail::resolve_visual_style_and_mark_redraw(_grab_style, _grab_style.tag_id, parent_id,
+                                                                            state, grab_changed);
             if (flags & StyleUpdateFlagBits::redraw) grab_changed = true;
             return flags;
         };
@@ -517,6 +584,7 @@ namespace auik::v2
         const StyleState widget_grab_state = detail::resolve_grab_visual_state(style_state());
         if (widget_grab_state == StyleState::active || widget_grab_state == StyleState::focus)
             out |= resolve_grab_state(widget_grab_state);
+        else if (transition.current_id.tag_id != _grab_style.tag_id) out |= resolve_grab_state(StyleState::normal);
 
         if (track_changed) rebuild_track_visuals();
         if (grab_changed) rebuild_grab_visual();
@@ -623,29 +691,32 @@ namespace auik::v2
         auto *overlay_quad_stream = get_overlay_quads_stream();
         auto *vertex_stream = get_primary_vertex_stream();
         bool hit_pending = ctx.emit_hit_rect;
+        const auto track_hit_rect = detail::make_slider_track_hit_rect(
+            id(), _track_style.tag_id, _track_rect, clip_id(), detail::resolve_slider_track_hit_depth(depth_range()));
 
         if (ctx.is_recording() ||
             should_emit_quads_instance(_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::background),
                                        _track_visual.background_draw_id, hit_pending))
         {
-            ctx.emit(quad_stream, _track_visual.background_draw_id, &_track_visual.background, get_rect(), hit_pending);
+            ctx.emit(quad_stream, _track_visual.background_draw_id, &_track_visual.background, track_hit_rect,
+                     hit_pending);
             hit_pending = false;
         }
         if (_gradient_visual.valid)
         {
-            ctx.emit(vertex_stream, _gradient_visual.draw_id, &_gradient_visual.data.batch, get_rect(), hit_pending);
+            ctx.emit(vertex_stream, _gradient_visual.draw_id, &_gradient_visual.data.batch, track_hit_rect,
+                     hit_pending);
             hit_pending = false;
         }
         if (ctx.is_recording() ||
             should_emit_quads_instance(_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::border),
                                        _track_visual.border_draw_id, hit_pending))
         {
-            ctx.emit(quad_stream, _track_visual.border_draw_id, &_track_visual.border, get_rect(), hit_pending);
+            ctx.emit(quad_stream, _track_visual.border_draw_id, &_track_visual.border, track_hit_rect, hit_pending);
             hit_pending = false;
         }
         const bool grab_back_visible = _grab_back_visual.rect.size.x > 0.0f && _grab_back_visual.rect.size.y > 0.0f;
-        if (ctx.is_recording() || grab_back_visible ||
-            _grab_back_draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID)
+        if (ctx.is_recording() || grab_back_visible || _grab_back_draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID)
             ctx.emit(overlay_quad_stream, _grab_back_draw_id, &_grab_back_visual, _grab_hit_rect, false);
         ctx.emit(overlay_quad_stream, _grab_draw_id, &_grab_visual, _grab_hit_rect, ctx.emit_hit_rect);
     }
@@ -686,7 +757,8 @@ namespace auik::v2
     {
         if (!_value) return;
         const f32 width = amal::max(_track_rect.size.x, 1e-5f);
-        const f32 t = amal::clamp((get_mouse_pos().x - _track_rect.offset.x) / width, 0.0f, 1.0f);
+        const f32 mouse_x = get_mouse_pos().x - _drag_grab_offset_x;
+        const f32 t = amal::clamp((mouse_x - _track_rect.offset.x) / width, 0.0f, 1.0f);
         set_value(_min_value + (_max_value - _min_value) * t);
     }
 
@@ -697,6 +769,11 @@ namespace auik::v2
 
         if (state == KeyPressState::press)
         {
+            if (detail::is_slider_grab_hit(detail::get_context().io.clicked_id, id(), _grab_style.tag_id))
+            {
+                add_render_command<detail::ClickEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
+                return;
+            }
             update_value_from_mouse();
             add_render_command<detail::ClickEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
             return;
@@ -709,8 +786,19 @@ namespace auik::v2
     void GradientSlider::on_drag(const amal::vec2 &delta, KeyPressState state)
     {
         (void)delta;
-        if (state == KeyPressState::press || state == KeyPressState::repeat) update_value_from_mouse();
-        else if (state == KeyPressState::release) {}
+        if (state == KeyPressState::press)
+        {
+            const auto drag_id = detail::get_context().io.drag_id;
+            if (detail::is_slider_grab_hit(drag_id, id(), _grab_style.tag_id))
+                _drag_grab_offset_x = detail::resolve_drag_mouse_offset_x(_grab_rect);
+            else
+            {
+                _drag_grab_offset_x = 0.0f;
+                update_value_from_mouse();
+            }
+        }
+        else if (state == KeyPressState::repeat) update_value_from_mouse();
+        else if (state == KeyPressState::release) _drag_grab_offset_x = 0.0f;
         else return;
 
         add_render_command<detail::DragEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
@@ -736,24 +824,20 @@ namespace auik::v2
         const f32 grab_h = amal::max(amal::round(grab_size.y), 3.0f);
         const f32 range = amal::max(_max_value - _min_value, 1e-5f);
         const f32 factor = amal::clamp((value() - _min_value) / range, 0.0f, 1.0f);
-        const f32 half_grab_w = grab_w * 0.5f;
-        const f32 half_grab_h = grab_h * 0.5f;
-        const f32 min_center_x = _track_rect.offset.x + half_grab_w;
-        const f32 max_center_x = _track_rect.offset.x + _track_rect.size.x - half_grab_w;
+        const f32 outer_half_w = detail::resolve_slider_grab_outer_half_width(grab_style, grab_w);
+        const f32 min_center_x = _track_rect.offset.x + outer_half_w;
+        const f32 max_center_x = _track_rect.offset.x + _track_rect.size.x - outer_half_w;
         f32 center_x = _track_rect.offset.x + _track_rect.size.x * factor;
         if (max_center_x > min_center_x) center_x = min_center_x + (max_center_x - min_center_x) * factor;
         else center_x = _track_rect.offset.x + _track_rect.size.x * 0.5f;
         center_x = detail::apply_edge_grab_bias(center_x, factor);
         const f32 center_y = _track_rect.offset.y + _track_rect.size.y * 0.5f;
-        _grab_rect.offset.x = center_x - half_grab_w;
-        _grab_rect.offset.y = amal::round(center_y - half_grab_h);
-        _grab_rect.size.x = grab_w;
-        _grab_rect.size.y = grab_h;
+        _grab_rect = detail::resolve_slider_grab_rect(grab_style, center_x, center_y, {grab_w, grab_h});
         _grab_hit_rect.bounds = _grab_rect;
-        _grab_hit_rect.depth = detail::mid_depth(_grab_depth_range);
+        _grab_hit_rect.depth = next_depth(_grab_depth_range);
 
         const u16 grab_clip_id = clip_id();
-        const f32 grab_z = detail::mid_depth(_grab_depth_range);
+        const f32 grab_z = next_depth(_grab_depth_range);
         _grab_visual.rect = _grab_rect;
         _grab_visual.z_order = grab_z;
         _grab_back_visual = {};
@@ -763,10 +847,8 @@ namespace auik::v2
             const amal::vec2 border_size = resolve_grab_size(*border_style);
             const f32 border_w = amal::max(amal::round(border_size.x), _grab_rect.size.x);
             const f32 border_h = amal::max(amal::round(border_size.y), _grab_rect.size.y);
-            amal::rect border_rect{};
-            border_rect.size = {border_w, border_h};
-            border_rect.offset.x = center_x - border_w * 0.5f;
-            border_rect.offset.y = amal::round(center_y - border_h * 0.5f);
+            const amal::rect border_rect =
+                detail::resolve_slider_grab_rect(*border_style, center_x, center_y, {border_w, border_h});
             detail::fill_gradient_grab_instance(*border_style, border_rect, grab_z, grab_clip_id,
                                                 border_style->background_color(), border_style->border_thickness(),
                                                 _grab_back_visual);
@@ -816,7 +898,8 @@ namespace auik::v2
         };
 
         auto resolve_grab_state = [&](StyleState state) -> StyleUpdateFlags {
-            const auto flags = resolve_style_selector(_grab_style, _grab_style.tag_id, parent_id, state);
+            const auto flags = detail::resolve_visual_style_and_mark_redraw(_grab_style, _grab_style.tag_id, parent_id,
+                                                                            state, grab_changed);
             if (flags & StyleUpdateFlagBits::redraw) grab_changed = true;
             return flags;
         };
@@ -833,6 +916,7 @@ namespace auik::v2
         const StyleState widget_grab_state = detail::resolve_grab_visual_state(style_state());
         if (widget_grab_state == StyleState::active || widget_grab_state == StyleState::focus)
             out |= resolve_grab_state(widget_grab_state);
+        else if (transition.current_id.tag_id != _grab_style.tag_id) out |= resolve_grab_state(StyleState::normal);
 
         if (track_changed) rebuild_track_visuals();
         if (grab_changed) rebuild_grab_visual();
@@ -946,29 +1030,32 @@ namespace auik::v2
         auto *overlay_quad_stream = get_overlay_quads_stream();
         auto *vertex_stream = get_primary_vertex_stream();
         bool hit_pending = ctx.emit_hit_rect;
+        const auto track_hit_rect = detail::make_slider_track_hit_rect(
+            id(), _track_style.tag_id, _track_rect, clip_id(), detail::resolve_slider_track_hit_depth(depth_range()));
 
         if (ctx.is_recording() ||
             should_emit_quads_instance(_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::background),
                                        _track_visual.background_draw_id, hit_pending))
         {
-            ctx.emit(quad_stream, _track_visual.background_draw_id, &_track_visual.background, get_rect(), hit_pending);
+            ctx.emit(quad_stream, _track_visual.background_draw_id, &_track_visual.background, track_hit_rect,
+                     hit_pending);
             hit_pending = false;
         }
         if (_gradient_visual.valid)
         {
-            ctx.emit(vertex_stream, _gradient_visual.draw_id, &_gradient_visual.data.batch, get_rect(), hit_pending);
+            ctx.emit(vertex_stream, _gradient_visual.draw_id, &_gradient_visual.data.batch, track_hit_rect,
+                     hit_pending);
             hit_pending = false;
         }
         if (ctx.is_recording() ||
             should_emit_quads_instance(_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::border),
                                        _track_visual.border_draw_id, hit_pending))
         {
-            ctx.emit(quad_stream, _track_visual.border_draw_id, &_track_visual.border, get_rect(), hit_pending);
+            ctx.emit(quad_stream, _track_visual.border_draw_id, &_track_visual.border, track_hit_rect, hit_pending);
             hit_pending = false;
         }
         const bool grab_back_visible = _grab_back_visual.rect.size.x > 0.0f && _grab_back_visual.rect.size.y > 0.0f;
-        if (ctx.is_recording() || grab_back_visible ||
-            _grab_back_draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID)
+        if (ctx.is_recording() || grab_back_visible || _grab_back_draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID)
             ctx.emit(overlay_quad_stream, _grab_back_draw_id, &_grab_back_visual, _grab_hit_rect, false);
         ctx.emit(overlay_quad_stream, _grab_draw_id, &_grab_visual, _grab_hit_rect, ctx.emit_hit_rect);
     }
@@ -1018,7 +1105,8 @@ namespace auik::v2
     {
         if (!_value) return;
         const f32 width = amal::max(_track_rect.size.x, 1e-5f);
-        const f32 t = amal::clamp((get_mouse_pos().x - _track_rect.offset.x) / width, 0.0f, 1.0f);
+        const f32 mouse_x = get_mouse_pos().x - _drag_grab_offset_x;
+        const f32 t = amal::clamp((mouse_x - _track_rect.offset.x) / width, 0.0f, 1.0f);
         set_value(_min_value + (_max_value - _min_value) * t);
     }
 
@@ -1029,6 +1117,11 @@ namespace auik::v2
 
         if (state == KeyPressState::press)
         {
+            if (detail::is_slider_grab_hit(detail::get_context().io.clicked_id, id(), _grab_style.tag_id))
+            {
+                add_render_command<detail::ClickEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
+                return;
+            }
             update_value_from_mouse();
             add_render_command<detail::ClickEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
             return;
@@ -1041,8 +1134,19 @@ namespace auik::v2
     void TransparencySlider::on_drag(const amal::vec2 &delta, KeyPressState state)
     {
         (void)delta;
-        if (state == KeyPressState::press || state == KeyPressState::repeat) update_value_from_mouse();
-        else if (state == KeyPressState::release) {}
+        if (state == KeyPressState::press)
+        {
+            const auto drag_id = detail::get_context().io.drag_id;
+            if (detail::is_slider_grab_hit(drag_id, id(), _grab_style.tag_id))
+                _drag_grab_offset_x = detail::resolve_drag_mouse_offset_x(_grab_rect);
+            else
+            {
+                _drag_grab_offset_x = 0.0f;
+                update_value_from_mouse();
+            }
+        }
+        else if (state == KeyPressState::repeat) update_value_from_mouse();
+        else if (state == KeyPressState::release) _drag_grab_offset_x = 0.0f;
         else return;
 
         add_render_command<detail::DragEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
@@ -1060,10 +1164,9 @@ namespace auik::v2
         _gradient_visual.clear_payload();
         if (!amal::is_rect_empty(_track_rect) && _colors.size() >= 2u)
         {
-            _gradient_visual.valid =
-                build_gradient_rect_vertex_data(_gradient_visual.data, _track_rect, detail::mid_depth(_track_depth_range),
-                                                clip_id(), _colors.data(), static_cast<u32>(_colors.size()),
-                                                track_style.border_radius(), track_style.corner_mask(), 1.0f);
+            _gradient_visual.valid = build_gradient_rect_vertex_data(
+                _gradient_visual.data, _track_rect, next_depth(_track_depth_range), clip_id(), _colors.data(),
+                static_cast<u32>(_colors.size()), track_style.border_radius(), track_style.corner_mask(), 1.0f);
         }
 
         if (track_style.has_visible_border())
@@ -1071,7 +1174,7 @@ namespace auik::v2
             _track_visual.set_layer(detail::SliderTrackVisual::LayerBits::border);
             amal::vec2 border_range{};
             assign_next_depth(_track_depth_range, border_range);
-            detail::fill_border_only_instance(track_style, _track_rect, detail::mid_depth(border_range), clip_id(),
+            detail::fill_border_only_instance(track_style, _track_rect, next_depth(border_range), clip_id(),
                                               _track_visual.border);
         }
         else _track_visual.clear_layer(detail::SliderTrackVisual::LayerBits::border);
@@ -1087,24 +1190,20 @@ namespace auik::v2
         const f32 grab_h = amal::max(amal::round(grab_size.y), 3.0f);
         const f32 range = amal::max(_max_value - _min_value, 1e-5f);
         const f32 factor = amal::clamp((value() - _min_value) / range, 0.0f, 1.0f);
-        const f32 half_grab_w = grab_w * 0.5f;
-        const f32 half_grab_h = grab_h * 0.5f;
-        const f32 min_center_x = _track_rect.offset.x + half_grab_w;
-        const f32 max_center_x = _track_rect.offset.x + _track_rect.size.x - half_grab_w;
+        const f32 outer_half_w = detail::resolve_slider_grab_outer_half_width(grab_style, grab_w);
+        const f32 min_center_x = _track_rect.offset.x + outer_half_w;
+        const f32 max_center_x = _track_rect.offset.x + _track_rect.size.x - outer_half_w;
         f32 center_x = _track_rect.offset.x + _track_rect.size.x * factor;
         if (max_center_x > min_center_x) center_x = min_center_x + (max_center_x - min_center_x) * factor;
         else center_x = _track_rect.offset.x + _track_rect.size.x * 0.5f;
         center_x = detail::apply_edge_grab_bias(center_x, factor);
         const f32 center_y = _track_rect.offset.y + _track_rect.size.y * 0.5f;
-        _grab_rect.offset.x = center_x - half_grab_w;
-        _grab_rect.offset.y = amal::round(center_y - half_grab_h);
-        _grab_rect.size.x = grab_w;
-        _grab_rect.size.y = grab_h;
+        _grab_rect = detail::resolve_slider_grab_rect(grab_style, center_x, center_y, {grab_w, grab_h});
         _grab_hit_rect.bounds = _grab_rect;
-        _grab_hit_rect.depth = detail::mid_depth(_grab_depth_range);
+        _grab_hit_rect.depth = next_depth(_grab_depth_range);
 
         const u16 grab_clip_id = clip_id();
-        const f32 grab_z = detail::mid_depth(_grab_depth_range);
+        const f32 grab_z = next_depth(_grab_depth_range);
         _grab_visual.rect = _grab_rect;
         _grab_visual.z_order = grab_z;
         _grab_back_visual = {};
@@ -1114,10 +1213,8 @@ namespace auik::v2
             const amal::vec2 border_size = resolve_grab_size(*border_style);
             const f32 border_w = amal::max(amal::round(border_size.x), _grab_rect.size.x);
             const f32 border_h = amal::max(amal::round(border_size.y), _grab_rect.size.y);
-            amal::rect border_rect{};
-            border_rect.size = {border_w, border_h};
-            border_rect.offset.x = center_x - border_w * 0.5f;
-            border_rect.offset.y = amal::round(center_y - border_h * 0.5f);
+            const amal::rect border_rect =
+                detail::resolve_slider_grab_rect(*border_style, center_x, center_y, {border_w, border_h});
             detail::fill_gradient_grab_instance(*border_style, border_rect, grab_z, grab_clip_id,
                                                 border_style->background_color(), border_style->border_thickness(),
                                                 _grab_back_visual);
@@ -1145,9 +1242,12 @@ namespace auik::v2
     {
         _track_style.tag_id = AUIK_TAG_SLIDER;
         _fill_style.tag_id = AUIK_TAG_SLIDER;
-        _grab_style.tag_id = AUIK_TAG_RANGE_SLIDER_GRAB;
-        _from_hit_rect = detail::make_rect_data(id, AUIK_TAG_RANGE_SLIDER_GRAB_FROM);
-        _to_hit_rect = detail::make_rect_data(id, AUIK_TAG_RANGE_SLIDER_GRAB_TO);
+        _from_grab_style.tag_id = AUIK_TAG_SLIDER_GRAB;
+        _to_grab_style.tag_id = AUIK_TAG_SLIDER_GRAB;
+        _from_hit_rect = detail::make_rect_data(id, _from_grab_style.tag_id, {}, 0xFFFFu, 0.0f, 0u,
+                                                static_cast<u32>(ActiveGrab::from));
+        _to_hit_rect =
+            detail::make_rect_data(id, _to_grab_style.tag_id, {}, 0xFFFFu, 0.0f, 0u, static_cast<u32>(ActiveGrab::to));
         if (_max_value < _min_value) std::swap(_min_value, _max_value);
         set_values(from_value ? *from_value : _min_value, to_value ? *to_value : _max_value);
     }
@@ -1172,33 +1272,46 @@ namespace auik::v2
             return flags;
         };
 
-        auto resolve_grab_state = [&](u32 grab_tag, StyleState state) -> StyleUpdateFlags {
+        auto resolve_grab_state = [&](StyleSelector &selector, StyleState state) -> StyleUpdateFlags {
             const auto flags =
-                resolve_style_selector(_grab_style, grab_tag, parent_id, detail::resolve_grab_visual_state(state));
+                detail::resolve_visual_style_and_mark_redraw(selector, selector.tag_id, parent_id, state, grab_changed);
             if (flags & StyleUpdateFlagBits::redraw) grab_changed = true;
             return flags;
         };
 
         if (_track_style.id == Theme::STYLE_ID_INVALID) out |= resolve_track_state(StyleState::normal);
         if (_fill_style.id == Theme::STYLE_ID_INVALID) out |= resolve_fill_state(StyleState::active);
-        if (_grab_style.id == Theme::STYLE_ID_INVALID)
-            out |= resolve_grab_state(AUIK_TAG_RANGE_SLIDER_GRAB_FROM, StyleState::normal);
+        if (_from_grab_style.id == Theme::STYLE_ID_INVALID)
+            out |= resolve_grab_state(_from_grab_style, StyleState::normal);
+        if (_to_grab_style.id == Theme::STYLE_ID_INVALID) out |= resolve_grab_state(_to_grab_style, StyleState::normal);
 
         const auto transition = detail::get_widget_style_selector_transition(id());
-        const bool prev_is_grab = transition.prev_id.tag_id == AUIK_TAG_RANGE_SLIDER_GRAB_FROM ||
-                                  transition.prev_id.tag_id == AUIK_TAG_RANGE_SLIDER_GRAB_TO;
-        const bool curr_is_grab = transition.current_id.tag_id == AUIK_TAG_RANGE_SLIDER_GRAB_FROM ||
-                                  transition.current_id.tag_id == AUIK_TAG_RANGE_SLIDER_GRAB_TO;
-        if (prev_is_grab && (!curr_is_grab || transition.current_id.tag_id != transition.prev_id.tag_id ||
+        const bool prev_is_grab = transition.prev_id.tag_id == _from_grab_style.tag_id;
+        const bool curr_is_grab = transition.current_id.tag_id == _from_grab_style.tag_id;
+        const bool curr_from = curr_is_grab && transition.current_id.element_id == static_cast<u32>(ActiveGrab::from);
+        const bool curr_to = curr_is_grab && transition.current_id.element_id == static_cast<u32>(ActiveGrab::to);
+        if (prev_is_grab && (!curr_is_grab || transition.current_id.element_id != transition.prev_id.element_id ||
                              transition.current_state != transition.prev_state))
-            out |= resolve_grab_state(transition.prev_id.tag_id, StyleState::normal);
-        if (curr_is_grab) out |= resolve_grab_state(transition.current_id.tag_id, transition.current_state);
+        {
+            if (transition.prev_id.element_id == static_cast<u32>(ActiveGrab::from))
+                out |= resolve_grab_state(_from_grab_style, StyleState::normal);
+            else if (transition.prev_id.element_id == static_cast<u32>(ActiveGrab::to))
+                out |= resolve_grab_state(_to_grab_style, StyleState::normal);
+        }
+        if (curr_from) out |= resolve_grab_state(_from_grab_style, transition.current_state);
+        if (curr_to) out |= resolve_grab_state(_to_grab_style, transition.current_state);
 
         if (_active_grab != ActiveGrab::none)
         {
-            const u32 active_tag =
-                (_active_grab == ActiveGrab::to) ? AUIK_TAG_RANGE_SLIDER_GRAB_TO : AUIK_TAG_RANGE_SLIDER_GRAB_FROM;
-            out |= resolve_grab_state(active_tag, style_state());
+            const bool widget_active = detail::get_context().active_id == id();
+            if (_active_grab == ActiveGrab::from)
+                out |= resolve_grab_state(_from_grab_style, widget_active ? StyleState::active : StyleState::normal);
+            else out |= resolve_grab_state(_to_grab_style, widget_active ? StyleState::active : StyleState::normal);
+        }
+        else
+        {
+            if (!curr_from) out |= resolve_grab_state(_from_grab_style, StyleState::normal);
+            if (!curr_to) out |= resolve_grab_state(_to_grab_style, StyleState::normal);
         }
 
         if (track_or_fill_changed) rebuild_track_visuals();
@@ -1294,19 +1407,22 @@ namespace auik::v2
     {
         auto *quad_stream = get_primary_quads_stream();
         bool hit_pending = ctx.emit_hit_rect;
+        const auto track_hit_rect = detail::make_slider_track_hit_rect(
+            id(), _track_style.tag_id, _track_rect, clip_id(), detail::resolve_slider_track_hit_depth(depth_range()));
 
         if (ctx.is_recording() ||
             should_emit_quads_instance(_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::background),
                                        _track_visual.background_draw_id, hit_pending))
         {
-            ctx.emit(quad_stream, _track_visual.background_draw_id, &_track_visual.background, get_rect(), hit_pending);
+            ctx.emit(quad_stream, _track_visual.background_draw_id, &_track_visual.background, track_hit_rect,
+                     hit_pending);
             hit_pending = false;
         }
         if (ctx.is_recording() ||
             should_emit_quads_instance(_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::fill),
                                        _track_visual.fill_draw_id, hit_pending))
         {
-            ctx.emit(quad_stream, _track_visual.fill_draw_id, &_track_visual.fill, get_rect(), hit_pending);
+            ctx.emit(quad_stream, _track_visual.fill_draw_id, &_track_visual.fill, track_hit_rect, hit_pending);
             hit_pending = false;
         }
 
@@ -1362,12 +1478,12 @@ namespace auik::v2
         return {amal::max(grab_padding.x + grab_padding.z, 1.0f), amal::max(grab_padding.y + grab_padding.w, 1.0f)};
     }
 
-    f32 RangeSlider::resolve_grab_center_x(f32 value, f32 half_grab_w) const
+    f32 RangeSlider::resolve_grab_center_x(f32 value, f32 outer_half_grab_w) const
     {
         const f32 range = amal::max(_max_value - _min_value, 1e-5f);
         const f32 factor = amal::clamp((value - _min_value) / range, 0.0f, 1.0f);
-        const f32 min_center_x = _track_rect.offset.x + half_grab_w;
-        const f32 max_center_x = _track_rect.offset.x + _track_rect.size.x - half_grab_w;
+        const f32 min_center_x = _track_rect.offset.x + outer_half_grab_w;
+        const f32 max_center_x = _track_rect.offset.x + _track_rect.size.x - outer_half_grab_w;
         if (max_center_x > min_center_x) return min_center_x + (max_center_x - min_center_x) * factor;
         return _track_rect.offset.x + _track_rect.size.x * 0.5f;
     }
@@ -1381,7 +1497,7 @@ namespace auik::v2
 
         _track_visual.clear_payload();
         _track_visual.background.rect = _track_rect;
-        _track_visual.background.z_order = detail::mid_depth(_track_depth_range);
+        _track_visual.background.z_order = next_depth(_track_depth_range);
         if (fill_quads_instance_by_style(track_style, clip_id(), _track_visual.background))
             _track_visual.set_layer(detail::SliderTrackVisual::LayerBits::background);
 
@@ -1403,7 +1519,7 @@ namespace auik::v2
                 _track_visual.fill.rect = _track_rect;
                 _track_visual.fill.rect.offset.x = left_x;
                 _track_visual.fill.rect.size.x = fill_w;
-                _track_visual.fill.z_order = detail::mid_depth(_track_depth_range);
+                _track_visual.fill.z_order = next_depth(_track_depth_range);
                 if (fill_quads_instance_by_style(fill_style, clip_id(), _track_visual.fill))
                     _track_visual.set_layer(detail::SliderTrackVisual::LayerBits::fill);
                 if (!fill_style.has_visible_border())
@@ -1418,51 +1534,53 @@ namespace auik::v2
     void RangeSlider::rebuild_grab_visuals()
     {
         if (!_from_value || !_to_value) return;
-        if (_grab_style.id == Theme::STYLE_ID_INVALID)
+        if (_from_grab_style.id == Theme::STYLE_ID_INVALID || _to_grab_style.id == Theme::STYLE_ID_INVALID)
         {
             const u32 parent_id = parent() ? parent()->id() : 0u;
-            resolve_style_selector(_grab_style, AUIK_TAG_RANGE_SLIDER_GRAB_FROM, parent_id, StyleState::normal);
-            if (_grab_style.id == Theme::STYLE_ID_INVALID) return;
+            if (_from_grab_style.id == Theme::STYLE_ID_INVALID)
+                resolve_style_selector(_from_grab_style, _from_grab_style.tag_id, parent_id, StyleState::normal);
+            if (_to_grab_style.id == Theme::STYLE_ID_INVALID)
+                resolve_style_selector(_to_grab_style, _to_grab_style.tag_id, parent_id, StyleState::normal);
+            if (_from_grab_style.id == Theme::STYLE_ID_INVALID || _to_grab_style.id == Theme::STYLE_ID_INVALID) return;
         }
 
-        const auto &grab_style = get_theme()->get_style(_grab_style.id);
-        const amal::vec2 grab_size = resolve_grab_size(grab_style);
-        const f32 grab_w = amal::max(amal::round(grab_size.x), 3.0f);
-        const f32 grab_h = amal::max(amal::round(grab_size.y), 3.0f);
-        const f32 half_grab_w = grab_w * 0.5f;
-        const f32 half_grab_h = grab_h * 0.5f;
+        const auto &from_style = get_theme()->get_style(_from_grab_style.id);
+        const auto &to_style = get_theme()->get_style(_to_grab_style.id);
+        const amal::vec2 from_size = resolve_grab_size(from_style);
+        const amal::vec2 to_size = resolve_grab_size(to_style);
+        const f32 from_w = amal::max(amal::round(from_size.x), 3.0f);
+        const f32 from_h = amal::max(amal::round(from_size.y), 3.0f);
+        const f32 to_w = amal::max(amal::round(to_size.x), 3.0f);
+        const f32 to_h = amal::max(amal::round(to_size.y), 3.0f);
+        const f32 from_outer_half_w = detail::resolve_slider_grab_outer_half_width(from_style, from_w);
+        const f32 to_outer_half_w = detail::resolve_slider_grab_outer_half_width(to_style, to_w);
         const f32 center_y = _track_rect.offset.y + _track_rect.size.y * 0.5f;
         const u16 grab_clip_id = clip_id();
 
-        const f32 from_center_x = resolve_grab_center_x(*_from_value, half_grab_w);
-        const f32 to_center_x = resolve_grab_center_x(*_to_value, half_grab_w);
+        const f32 from_center_x = resolve_grab_center_x(*_from_value, from_outer_half_w);
+        const f32 to_center_x = resolve_grab_center_x(*_to_value, to_outer_half_w);
 
-        f32 from_x = from_center_x - half_grab_w;
-        _from_rect.offset.x = from_x;
-        _from_rect.offset.y = amal::round(center_y - half_grab_h);
-        _from_rect.size.x = grab_w;
-        _from_rect.size.y = grab_h;
+        _from_rect = detail::resolve_slider_grab_rect(from_style, from_center_x, center_y, {from_w, from_h});
         _from_hit_rect.bounds = _from_rect;
-        _from_hit_rect.depth = detail::mid_depth(_grab_depth_range);
+        _from_hit_rect.depth = next_depth(_grab_depth_range);
         _from_visual.rect = _from_rect;
-        _from_visual.z_order = detail::mid_depth(_grab_depth_range);
-        fill_quads_instance_by_style(grab_style, grab_clip_id, _from_visual);
+        _from_visual.z_order = next_depth(_grab_depth_range);
+        fill_quads_instance_by_style(from_style, grab_clip_id, _from_visual);
 
-        f32 to_x = to_center_x - half_grab_w;
-        _to_rect.offset.x = to_x;
-        _to_rect.offset.y = amal::round(center_y - half_grab_h);
-        _to_rect.size.x = grab_w;
-        _to_rect.size.y = grab_h;
+        _to_rect = detail::resolve_slider_grab_rect(to_style, to_center_x, center_y, {to_w, to_h});
         _to_hit_rect.bounds = _to_rect;
-        _to_hit_rect.depth = detail::mid_depth(_grab_depth_range);
+        _to_hit_rect.depth = next_depth(_grab_depth_range);
         _to_visual.rect = _to_rect;
-        _to_visual.z_order = detail::mid_depth(_grab_depth_range);
-        fill_quads_instance_by_style(grab_style, grab_clip_id, _to_visual);
+        _to_visual.z_order = next_depth(_grab_depth_range);
+        fill_quads_instance_by_style(to_style, grab_clip_id, _to_visual);
 
-        if (!grab_style.has_visible_border())
+        if (!from_style.has_visible_border())
         {
             _from_visual.border_thickness = 0.0f;
             _from_visual.mask &= ~(static_cast<u32>(AUIK_HAS_BORDER_BIT) << 20u);
+        }
+        if (!to_style.has_visible_border())
+        {
             _to_visual.border_thickness = 0.0f;
             _to_visual.mask &= ~(static_cast<u32>(AUIK_HAS_BORDER_BIT) << 20u);
         }
@@ -1476,13 +1594,15 @@ namespace auik::v2
 
     void RangeSlider::update_active_grab_from_mouse()
     {
-        const u32 tag = detail::get_context().hover_id.tag_id;
-        if (tag == AUIK_TAG_RANGE_SLIDER_GRAB_FROM)
+        const auto hover_id = detail::get_context().hover_id;
+        if (hover_id.widget_id == id() && hover_id.tag_id == _from_grab_style.tag_id &&
+            hover_id.element_id == static_cast<u32>(ActiveGrab::from))
         {
             _active_grab = ActiveGrab::from;
             return;
         }
-        if (tag == AUIK_TAG_RANGE_SLIDER_GRAB_TO)
+        if (hover_id.widget_id == id() && hover_id.tag_id == _to_grab_style.tag_id &&
+            hover_id.element_id == static_cast<u32>(ActiveGrab::to))
         {
             _active_grab = ActiveGrab::to;
             return;
@@ -1498,7 +1618,8 @@ namespace auik::v2
         if (!_from_value || !_to_value) return;
         if (_active_grab == ActiveGrab::none) return;
         const f32 width = amal::max(_track_rect.size.x, 1e-5f);
-        const f32 t = amal::clamp((get_mouse_pos().x - _track_rect.offset.x) / width, 0.0f, 1.0f);
+        const f32 mouse_x = get_mouse_pos().x - _drag_grab_offset_x;
+        const f32 t = amal::clamp((mouse_x - _track_rect.offset.x) / width, 0.0f, 1.0f);
         const f32 target = _min_value + (_max_value - _min_value) * t;
 
         if (_active_grab == ActiveGrab::from) set_values(amal::min(target, *_to_value), *_to_value);
@@ -1513,7 +1634,11 @@ namespace auik::v2
         if (state == KeyPressState::press)
         {
             update_active_grab_from_mouse();
-            update_active_value_from_mouse();
+            const auto clicked_id = detail::get_context().io.clicked_id;
+            const bool clicked_grab = clicked_id.widget_id == id() && clicked_id.tag_id == _from_grab_style.tag_id &&
+                                      (clicked_id.element_id == static_cast<u32>(ActiveGrab::from) ||
+                                       clicked_id.element_id == static_cast<u32>(ActiveGrab::to));
+            if (!clicked_grab) update_active_value_from_mouse();
             add_render_command<detail::ClickEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
             return;
         }
@@ -1527,17 +1652,33 @@ namespace auik::v2
 
     void RangeSlider::on_drag(const amal::vec2 &delta, KeyPressState state)
     {
+        (void)delta;
         if (state == KeyPressState::press)
         {
             update_active_grab_from_mouse();
-            update_active_value_from_mouse();
+            const auto drag_id = detail::get_context().io.drag_id;
+            const bool drag_from = drag_id.widget_id == id() && drag_id.tag_id == _from_grab_style.tag_id &&
+                                   drag_id.element_id == static_cast<u32>(ActiveGrab::from);
+            const bool drag_to = drag_id.widget_id == id() && drag_id.tag_id == _to_grab_style.tag_id &&
+                                 drag_id.element_id == static_cast<u32>(ActiveGrab::to);
+            if (drag_from) _drag_grab_offset_x = detail::resolve_drag_mouse_offset_x(_from_rect);
+            else if (drag_to) _drag_grab_offset_x = detail::resolve_drag_mouse_offset_x(_to_rect);
+            else
+            {
+                _drag_grab_offset_x = 0.0f;
+                update_active_value_from_mouse();
+            }
         }
         else if (state == KeyPressState::repeat)
         {
             if (_active_grab == ActiveGrab::none) update_active_grab_from_mouse();
             update_active_value_from_mouse();
         }
-        else if (state == KeyPressState::release) _active_grab = ActiveGrab::none;
+        else if (state == KeyPressState::release)
+        {
+            _active_grab = ActiveGrab::none;
+            _drag_grab_offset_x = 0.0f;
+        }
         else return;
 
         add_render_command<detail::DragEventTraits>(this, [this]() { redraw_external(has_draw_record()); });

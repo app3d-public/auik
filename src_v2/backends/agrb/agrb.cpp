@@ -140,7 +140,7 @@ namespace auik::v2
         {
             auto *ctx = get_agrb_context(gpu_context);
             auto &clip_rects = get_current_clip_rects(ctx);
-            if (clip_id >= clip_rects.size()) return;
+            if (clip_id >= clip_rects.size()) clip_rects.resize(static_cast<u32>(clip_id) + 1u);
             clip_rects[clip_id] = rect;
         }
 

@@ -191,10 +191,7 @@ namespace auik::v2
             _mask |= detail::StylePropertiesBits::border_thickness;
             return *this;
         }
-        [[nodiscard]] bool has_visible_border() const
-        {
-            return _border_thickness > 0.0f && _border_color != 0u;
-        }
+        [[nodiscard]] bool has_visible_border() const { return _border_thickness > 0.0f && _border_color != 0u; }
 
         [[nodiscard]] u32 corner_mask() const { return _corner_mask; }
         Style &corner_mask(u32 value)
@@ -256,6 +253,11 @@ namespace auik::v2
         }
 
         APPLIB_API StyleID get_resolved_style(u32 type, u32 id, u32 parent, StyleState state = StyleState::normal);
+        inline bool has_state_style(u32 type, u32 id, u32 parent, StyleState state) const
+        {
+            return has_style_desc(id, state) || has_style_desc(type, state) || has_style_desc(parent, state) ||
+                   has_style_desc(AUIK_TAG_GLOBAL, state);
+        }
 
         template <typename T>
         void set_var(u32 key, const T &value)
@@ -293,6 +295,12 @@ namespace auik::v2
         {
             _resolved.clear();
             _resolved_pool.clear();
+        }
+
+        inline bool has_style_desc(u32 key, StyleState state) const
+        {
+            const Style *desc = get_desc_style(key, state);
+            return desc && static_cast<u16>(desc->mask()) != 0;
         }
     };
 

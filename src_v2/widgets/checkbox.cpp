@@ -137,7 +137,11 @@ namespace auik::v2
         box_data.z_order = next_depth(_box_depth_range);
         const bool box_visible = fill_quads_instance_by_style(get_theme()->get_style(_style.id), clip_id(), box_data);
         if (should_emit_quads_instance(box_visible, _box_bg, ctx.emit_hit_rect))
-            ctx.emit(quads_stream, _box_bg, &box_data, get_rect(), ctx.emit_hit_rect);
+        {
+            auto hit_rect = get_rect();
+            hit_rect.bounds = _box_rect;
+            ctx.emit(quads_stream, _box_bg, &box_data, hit_rect, ctx.emit_hit_rect);
+        }
 
         ensure_checkmark_resource();
         auto *textured_quads_stream = get_primary_textured_quads_stream();
@@ -180,6 +184,8 @@ namespace auik::v2
     {
         (void)click_count;
         if (key != MouseKey::left || state != KeyPressState::press) return;
-        set_value(!value());
+        if (!_value) return;
+        *_value = !*_value;
+        add_render_command<detail::ClickEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
     }
 } // namespace auik::v2

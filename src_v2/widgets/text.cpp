@@ -75,7 +75,9 @@ namespace auik::v2
         }
 
         auto measure_config = _layout_config;
-        if (size().x > 0.0f && (is_fixed() || multiline())) measure_config.max_width = size().x;
+        if (_layout_config.width_mode == detail::TextLayoutWidthMode::bounds && size().x > 0.0f &&
+            (is_fixed() || multiline()))
+            measure_config.max_width = size().x;
 
         const bool is_ok = multiline() ? detail::layout_multiline(*font, _text, measure_config, _layout_result)
                                        : detail::layout_single_line(*font, _text, measure_config, _layout_result);
@@ -212,7 +214,7 @@ namespace auik::v2
 
         const bool draw_state_changed = (_applied_clip_id != current_clip);
         const bool instances_changed = _instances_gpu_dirty;
-        if (draw_state_changed)
+        if (draw_state_changed || instances_changed)
         {
             for (auto &instance : _instances) instance.clip_id = current_clip;
         }
@@ -283,6 +285,13 @@ namespace auik::v2
     {
         if (_layout_config.trim_trailing_spaces == value) return;
         _layout_config.trim_trailing_spaces = value;
+        mark_layout_dirty();
+    }
+
+    void Text::set_width_mode(detail::TextLayoutWidthMode value)
+    {
+        if (_layout_config.width_mode == value) return;
+        _layout_config.width_mode = value;
         mark_layout_dirty();
     }
 
