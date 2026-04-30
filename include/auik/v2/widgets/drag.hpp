@@ -41,6 +41,8 @@ namespace auik::v2
 
             void update_layout(bool min_size_known) override;
             void on_focus(bool focused) override;
+            void on_hover(HoverState state) override;
+            void on_click(MouseKey key, KeyPressState state, u32 click_count) override;
             void on_drag(const amal::vec2 &delta, KeyPressState state) override;
             void on_key(Key key, KeyPressState state, KeyMode mods) override;
             void on_char_input(u32 char_code, u32 count) override;
@@ -52,6 +54,7 @@ namespace auik::v2
             acul::string format_value(T value) const;
             bool parse_text_value(T &out) const;
             const char *resolve_default_unit() const;
+            bool should_draw_caret() const override;
 
             T *_value = nullptr;
             T _fallback_value{};
@@ -64,8 +67,7 @@ namespace auik::v2
             f64 _drag_delta_steps = 0.0;
             f64 _drag_value = 0.0;
             T _last_value{};
-            bool _drag_active = false;
-            bool _select_all_on_next_focus = true;
+            u8 _interaction_flags = 0u;
         };
     } // namespace detail
 

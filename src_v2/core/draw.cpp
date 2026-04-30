@@ -65,4 +65,21 @@ namespace auik::v2
         }
         return draw_id;
     }
+
+    DrawDataID emit_draw_invalidate(const DrawCtx &ctx, DrawStream *stream, DrawDataID &draw_id, const void *data,
+                                    const detail::RectData &rect, bool emit_hit_rect)
+    {
+        (void)data;
+        assert(stream);
+        if (draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID && stream->invalidate_data_in_stream)
+            stream->invalidate_data_in_stream(stream, draw_id);
+
+        if (emit_hit_rect && draw_id.hit_id != AUIK_INVALID_DRAW_DATA_ID)
+        {
+            detail::RectData hidden_rect = rect;
+            hidden_rect.bounds.size = {0.0f, 0.0f};
+            update_hit_rect(draw_id.hit_id, hidden_rect, true);
+        }
+        return draw_id;
+    }
 } // namespace auik::v2

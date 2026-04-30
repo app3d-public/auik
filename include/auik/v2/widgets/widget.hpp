@@ -84,6 +84,8 @@ namespace auik::v2
             if (visible == value) return;
             if (value) widget_flags |= WidgetFlagBits::visible;
             else widget_flags &= ~WidgetFlagBits::visible;
+            _external_draw_culled = false;
+            _external_draw_invalidated = false;
             auto &ctx = detail::get_context();
             ctx.dirty_flags |= DirtyFlagBits::redraw;
         }
@@ -131,6 +133,8 @@ namespace auik::v2
 
         void record_draw_commands(DrawReasonFlags reason = DrawReasonBits::none)
         {
+            _external_draw_culled = false;
+            _external_draw_invalidated = false;
             DrawCtx draw_ctx{};
             draw_ctx.emit_fn = &emit_draw_record;
             draw_ctx.emit_hit_rect = is_hittable();
@@ -140,6 +144,11 @@ namespace auik::v2
 
         void update_draw_commands(DrawReasonFlags reason = DrawReasonBits::none)
         {
+            if ((reason & ~DrawReasonBits::external) || !(reason & DrawReasonBits::external))
+            {
+                _external_draw_culled = false;
+                _external_draw_invalidated = false;
+            }
             DrawCtx draw_ctx{};
             draw_ctx.emit_fn = &emit_draw_update;
             draw_ctx.emit_hit_rect = is_hittable();
@@ -162,6 +171,30 @@ namespace auik::v2
         virtual bool accepts_focus_on_mouse_press(detail::ElementID) const { return true; }
         virtual u16 content_clip_id() const { return clip_id(); }
         virtual amal::vec4 get_content_clip_rect() const { return get_clip_rect(content_clip_id()); }
+        bool should_skip_external_draw_update(const amal::vec4 &clip_rect)
+        {
+            const auto &rect = bounds();
+            const f32 rect_l = rect.offset.x;
+            const f32 rect_t = rect.offset.y;
+            const f32 rect_r = rect_l + rect.size.x;
+            const f32 rect_b = rect_t + rect.size.y;
+            const f32 clip_l = clip_rect.x;
+            const f32 clip_t = clip_rect.y;
+            const f32 clip_r = clip_l + clip_rect.z;
+            const f32 clip_b = clip_t + clip_rect.w;
+            const bool culled = rect_r <= clip_l || rect_b <= clip_t || rect_l >= clip_r || rect_t >= clip_b;
+            const bool skip = _external_draw_culled && _external_draw_invalidated && culled;
+            _external_draw_culled = culled;
+            if (!culled) _external_draw_invalidated = false;
+            return skip;
+        }
+        bool is_external_draw_culled() const { return _external_draw_culled; }
+        void mark_external_draw_invalidated() { _external_draw_invalidated = true; }
+        void reset_external_draw_cull_state()
+        {
+            _external_draw_culled = false;
+            _external_draw_invalidated = false;
+        }
         virtual void on_attach()
         {
             auto &ctx = detail::get_context();
@@ -192,6 +225,8 @@ namespace auik::v2
         detail::RectData _rect{};
         amal::vec2 _required_size{0.0f, 0.0f};
         StyleState _style_state = StyleState::normal;
+        bool _external_draw_culled = false;
+        bool _external_draw_invalidated = false;
     };
 
     APPLIB_API void assign_next_depth(const amal::vec2 &parent_range, amal::vec2 &dst_range);

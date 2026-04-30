@@ -7,6 +7,16 @@
 
 namespace auik::v2::detail
 {
+    inline void invalidate_instance_payload(QuadsInstanceData &data)
+    {
+        data.rect = {{-65536.0f, -65536.0f}, {0.0f, 0.0f}};
+    }
+
+    inline void invalidate_instance_payload(TexturesInstanceData &data)
+    {
+        data.rect = {{-65536.0f, -65536.0f}, {0.0f, 0.0f}};
+    }
+
     template <typename InstanceData>
     struct InstanceStream
     {
@@ -53,6 +63,14 @@ namespace auik::v2::detail
         auto &gpu_data = static_cast<InstanceStream<InstanceData> *>(stream->stream_instances)[frame_id];
         if (draw_data_id.render_id >= gpu_data.draw_instances.size()) return;
         gpu_data.draw_instances[draw_data_id.render_id] = *static_cast<const InstanceData *>(data);
+    }
+
+    template <typename InstanceData>
+    void invalidate_instance_stream_data(DrawStream *stream, DrawDataID draw_data_id, u32 frame_id)
+    {
+        auto &gpu_data = static_cast<InstanceStream<InstanceData> *>(stream->stream_instances)[frame_id];
+        if (draw_data_id.render_id >= gpu_data.draw_instances.size()) return;
+        invalidate_instance_payload(gpu_data.draw_instances[draw_data_id.render_id]);
     }
 
     template <typename InstanceData>

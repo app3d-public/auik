@@ -396,7 +396,7 @@ namespace auik::v2
         const auto &caret_style = get_theme()->get_style(_edit->caret_style.id);
         const auto caret_padding = caret_style.padding();
         const bool has_selection = _edit_state.has_selection();
-        const bool visible = blink_on && !_edit_state.cursors.empty() && !has_selection;
+        const bool visible = blink_on && !_edit_state.cursors.empty() && !has_selection && should_draw_caret();
         QuadsInstanceData caret{};
         const f32 caret_w = amal::max(caret_padding.x, 1.0f);
         if (visible)

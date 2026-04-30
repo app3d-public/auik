@@ -32,6 +32,7 @@ namespace auik::v2::detail
         dispatch.push_data_batch_to_stream = &push_data_batch_to_instance_stream<QuadsInstanceData>;
         dispatch.update_stream_data = &update_instance_stream_data<QuadsInstanceData>;
         dispatch.update_stream_data_batch = &update_instance_stream_data_batch<QuadsInstanceData>;
+        dispatch.invalidate_stream_data = &invalidate_instance_stream_data<QuadsInstanceData>;
         dispatch.clear_stream = &clear_instance_stream<QuadsStream>;
         dispatch.copy_stream_frame_data = &copy_instance_stream_frame_data<QuadsStream>;
         dispatch.sync_stream_cache = &sync_instance_stream_cache<QuadsStream>;

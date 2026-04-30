@@ -80,6 +80,19 @@ namespace auik::v2::detail
         ctx.gpu_ctx->quads.update_stream_data(stream, draw_data_id, data, ctx.frame_id);
     }
 
+    static void invalidate_data_quads_stream(DrawStream *stream, DrawDataID draw_data_id)
+    {
+        if (draw_data_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return;
+        auto &ctx = get_context();
+        auto *state = static_cast<StreamSyncState *>(stream->runtime_data);
+        sync_frame_to_master(stream, state, ctx, ctx.frame_id);
+        mark_master_mutation(state, ctx.frame_id, ctx.frames_in_flight);
+        stream->flags |= StreamFlagBits::invalidate;
+        ctx.dirty_flags |= DirtyFlagBits::streams;
+        if (ctx.gpu_ctx->quads.invalidate_stream_data)
+            ctx.gpu_ctx->quads.invalidate_stream_data(stream, draw_data_id, ctx.frame_id);
+    }
+
     static void update_data_batch_quads_stream(DrawStream *stream, const DrawDataID *draw_data_ids, const void *data,
                                                u32 count)
     {
@@ -166,6 +179,7 @@ namespace auik::v2
         stream.push_data_batch_to_stream = &detail::push_data_batch_to_stream;
         stream.update_data_in_stream = &detail::update_data_quads_stream;
         stream.update_data_batch_in_stream = &detail::update_data_batch_quads_stream;
+        stream.invalidate_data_in_stream = &detail::invalidate_data_quads_stream;
         stream.clear = &detail::clear_quads_stream;
         stream.destroy = &detail::destroy_quads_stream;
 

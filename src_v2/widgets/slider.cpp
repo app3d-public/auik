@@ -702,7 +702,8 @@ namespace auik::v2
                      hit_pending);
             hit_pending = false;
         }
-        if (_gradient_visual.valid)
+        if (_gradient_visual.valid || (ctx.is_invalidating() &&
+                                       _gradient_visual.draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID))
         {
             ctx.emit(vertex_stream, _gradient_visual.draw_id, &_gradient_visual.data.batch, track_hit_rect,
                      hit_pending);
@@ -1041,7 +1042,8 @@ namespace auik::v2
                      hit_pending);
             hit_pending = false;
         }
-        if (_gradient_visual.valid)
+        if (_gradient_visual.valid || (ctx.is_invalidating() &&
+                                       _gradient_visual.draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID))
         {
             ctx.emit(vertex_stream, _gradient_visual.draw_id, &_gradient_visual.data.batch, track_hit_rect,
                      hit_pending);

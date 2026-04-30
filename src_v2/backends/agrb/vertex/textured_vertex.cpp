@@ -102,6 +102,17 @@ namespace auik::v2::detail
                                             *static_cast<const TexturedVertexStreamBatchData *>(data));
     }
 
+    static void invalidate_textured_vertex_stream_data(DrawStream *stream, DrawDataID draw_data_id, u32 frame_id)
+    {
+        auto &gpu_data = static_cast<TexturedVertexStreamGPUData *>(stream->stream_instances)[frame_id];
+        if (draw_data_id.render_id >= gpu_data.batches.size()) return;
+        const auto &range = gpu_data.batches[draw_data_id.render_id];
+        if (range.vertex_count == 0 || range.index_count == 0) return;
+
+        const TexturedVertexStreamIndex degenerate_index = range.vertex_offset;
+        for (u32 i = 0; i < range.index_count; ++i) gpu_data.indices[range.index_offset + i] = degenerate_index;
+    }
+
     static void update_textured_vertex_stream_data_batch(DrawStream *stream, const DrawDataID *draw_data_ids,
                                                          const void *data, u32 count, u32 frame_id)
     {
@@ -240,6 +251,7 @@ namespace auik::v2::detail
         dispatch.push_data_batch_to_stream = &push_data_batch_to_textured_vertex_stream;
         dispatch.update_stream_data = &update_textured_vertex_stream_data;
         dispatch.update_stream_data_batch = &update_textured_vertex_stream_data_batch;
+        dispatch.invalidate_stream_data = &invalidate_textured_vertex_stream_data;
         dispatch.clear_stream = &clear_textured_vertex_stream;
         dispatch.copy_stream_frame_data = &copy_textured_vertex_stream_frame_data;
         dispatch.render_stream = &render_textured_vertex_stream;

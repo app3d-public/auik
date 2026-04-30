@@ -24,8 +24,8 @@ namespace auik::v2
                                                  const acul::vector<WindowChildLayout> &layouts, f32 wrap_width = 0.0f);
     static WindowChildLayout get_effective_child_layout(const acul::vector<Widget *> &children,
                                                         const acul::vector<WindowChildLayout> &layouts, size_t index);
-    static size_t count_inline_run(const acul::vector<Widget *> &children,
-                                   const acul::vector<WindowChildLayout> &layouts, size_t start_index);
+    static bool starts_inline_run(const acul::vector<Widget *> &children,
+                                  const acul::vector<WindowChildLayout> &layouts, size_t index);
 
     static constexpr detail::StylePropertyFlags AUIK_LAYOUT_STYLE_MASK =
         detail::StylePropertiesBits::padding | detail::StylePropertiesBits::margin |
@@ -64,12 +64,34 @@ namespace auik::v2
         return static_cast<Window *>(widget);
     }
 
+    static inline bool is_widget_in_focus_chain(u32 widget_id)
+    {
+        if (widget_id == 0u) return false;
+        auto &ctx = detail::get_context();
+        auto it = ctx.id_map.find(ctx.focus_id);
+        Widget *node = it != ctx.id_map.end() ? it->second : nullptr;
+        while (node)
+        {
+            if (node->id() == widget_id) return true;
+            node = node->focus_parent();
+        }
+        return false;
+    }
+
     static inline bool is_style_only_draw_update(const DrawCtx &ctx)
     {
         if (!ctx.is_updating()) return false;
         if (!(ctx.reason & DrawReasonBits::style)) return false;
         if (ctx.reason & DrawReasonBits::layout) return false;
         if (ctx.reason & DrawReasonBits::full_redraw) return false;
+        return true;
+    }
+
+    static inline bool is_external_only_draw_update(const DrawCtx &ctx)
+    {
+        if (!ctx.is_updating()) return false;
+        if (!(ctx.reason & DrawReasonBits::external)) return false;
+        if (ctx.reason & (DrawReasonBits::style | DrawReasonBits::layout | DrawReasonBits::full_redraw)) return false;
         return true;
     }
 
@@ -152,6 +174,7 @@ namespace auik::v2
                 if (transition.current_id.tag_id == AUIK_TAG_WINDOW_HEADER) state = transition.current_state;
                 const auto ps = parent()->style_state();
                 if (ps == StyleState::active || ps == StyleState::focus) state = ps;
+                if (is_widget_in_focus_chain(parent_id)) state = StyleState::focus;
             }
             set_style_state(state);
             const auto flags = resolve_style_selector(_style, id(), parent_id, style_state());
@@ -311,12 +334,20 @@ namespace auik::v2
             if (!is_scrollbar_transition) return;
         }
 
+        const bool cull_external_children = is_external_only_draw_update(ctx);
         for (auto *child : children)
         {
             if (!child) continue;
             DrawCtx child_ctx = ctx;
+            if (cull_external_children)
+            {
+                if (child->should_skip_external_draw_update(_content_clip_rect)) continue;
+                if (child->is_external_draw_culled()) child_ctx.emit_fn = &emit_draw_invalidate;
+            }
+            else child->reset_external_draw_cull_state();
             child_ctx.emit_hit_rect = child->is_hittable();
             child->draw(child_ctx);
+            if (child_ctx.is_invalidating()) child->mark_external_draw_invalidated();
         }
 
         if (_scrollbar_y && _scrollbar_y->is_visible())
@@ -335,7 +366,7 @@ namespace auik::v2
 
     bool Window::accepts_focus_on_mouse_press(detail::ElementID hit_id) const
     {
-        if (hit_id.tag_id == AUIK_TAG_WINDOW_HEADER) return !(window_flags & WindowFlagBits::movable);
+        if (hit_id.tag_id == AUIK_TAG_WINDOW_HEADER) return true;
         if (hit_id.tag_id == AUIK_TAG_HITBOX)
             return !(window_flags & WindowFlagBits::resizable) || (window_flags & WindowFlagBits::docked);
         if (detail::is_scrollbar_tag(hit_id.tag_id)) return false;
@@ -499,6 +530,13 @@ namespace auik::v2
             const amal::vec2 req = child->required_size();
             if (layout == WindowChildLayout::inline_layout)
             {
+                if (starts_inline_run(children, layouts, i) && row_height > 0.0f)
+                {
+                    max_width = amal::max(max_width, row_width);
+                    total_height += row_height;
+                    row_width = 0.0f;
+                    row_height = 0.0f;
+                }
                 const f32 gap_before = row_height > 0.0f ? inline_spacing_x : 0.0f;
                 if (wrap_enabled && row_height > 0.0f && row_width + gap_before + req.x > wrap_width)
                 {
@@ -560,17 +598,12 @@ namespace auik::v2
         return WindowChildLayout::block;
     }
 
-    static size_t count_inline_run(const acul::vector<Widget *> &children,
-                                   const acul::vector<WindowChildLayout> &layouts, size_t start_index)
+    static bool starts_inline_run(const acul::vector<Widget *> &children,
+                                  const acul::vector<WindowChildLayout> &layouts, size_t index)
     {
-        size_t count = 0;
-        for (size_t i = start_index; i < children.size(); ++i)
-        {
-            if (!children[i]) continue;
-            if (get_effective_child_layout(children, layouts, i) != WindowChildLayout::inline_layout) break;
-            ++count;
-        }
-        return count;
+        const WindowChildLayout current = index < layouts.size() ? layouts[index] : WindowChildLayout::block;
+        return current != WindowChildLayout::inline_layout &&
+               get_effective_child_layout(children, layouts, index) == WindowChildLayout::inline_layout;
     }
 
     static void align_inline_row_vertical(const acul::vector<Widget *> &children, size_t row_start, size_t row_end,
@@ -621,17 +654,18 @@ namespace auik::v2
                 continue;
             }
 
-            const amal::vec2 req = child->required_size();
-            const size_t inline_remaining = count_inline_run(children, _child_layouts, i);
-            const f32 gap_before = inline_row_active ? inline_spacing_x : 0.0f;
-            const size_t remaining_gaps = inline_remaining > 0 ? inline_remaining - 1u : 0u;
-            const f32 spacing_budget = gap_before + inline_spacing_x * static_cast<f32>(remaining_gaps);
-            const f32 remaining_row_width = amal::max(available_width - inline_row_width - spacing_budget, 0.0f);
-            const f32 inline_share =
-                inline_remaining > 0 ? (remaining_row_width / static_cast<f32>(inline_remaining)) : remaining_row_width;
+            if (starts_inline_run(children, _child_layouts, i) && inline_row_height > 0.0f)
+            {
+                align_inline_row_vertical(children, inline_row_start, i, inline_row_height);
+                cursor = {content_cursor.x, cursor.y + inline_row_height};
+                inline_row_height = 0.0f;
+                inline_row_width = 0.0f;
+                inline_row_active = false;
+            }
 
+            const amal::vec2 req = child->required_size();
+            const f32 gap_before = inline_row_active ? inline_spacing_x : 0.0f;
             f32 inline_width = amal::max(req.x, 0.0f);
-            if (!child->is_fixed()) inline_width = inline_share;
             const bool has_inline_row = inline_row_height > 0.0f;
             const bool needs_wrap = has_inline_row && inline_row_width + gap_before + inline_width > available_width;
             if (needs_wrap)
@@ -641,14 +675,6 @@ namespace auik::v2
                 inline_row_height = 0.0f;
                 inline_row_width = 0.0f;
                 inline_row_active = false;
-                const size_t wrapped_remaining = count_inline_run(children, _child_layouts, i);
-                const size_t wrapped_gaps = wrapped_remaining > 0 ? wrapped_remaining - 1u : 0u;
-                const f32 wrapped_row_width =
-                    amal::max(available_width - inline_spacing_x * static_cast<f32>(wrapped_gaps), 0.0f);
-                const f32 wrapped_share = wrapped_remaining > 0
-                                              ? (wrapped_row_width / static_cast<f32>(wrapped_remaining))
-                                              : wrapped_row_width;
-                inline_width = !child->is_fixed() ? wrapped_share : amal::max(req.x, 0.0f);
             }
 
             // If inline item does not fit even on a fresh row, layout it as a block item.
@@ -714,6 +740,11 @@ namespace auik::v2
         const auto &padding = window_style.padding();
         _content_offset = amal::max(_content_offset, 0.0f);
 
+        for (auto *child : children)
+        {
+            if (!child) continue;
+            child->update_layout_min_size();
+        }
         const amal::vec2 children_min_size = get_children_required_size(children, _child_layouts);
         const f32 required_height = padding.y + padding.w + children_min_size.y + _header_height;
         const f32 required_width = padding.x + padding.z + children_min_size.x;
@@ -915,9 +946,15 @@ namespace auik::v2
         if (clip_id() != 0xFFFFu) update_clip_rect(clip_id(), self_clip_rect);
         if (_content_clip_id != 0xFFFFu)
         {
-            _content_clip_rect.x += applied_delta.x;
-            _content_clip_rect.y += applied_delta.y;
-            _content_clip_rect = intersect_rect(self_clip_rect, _content_clip_rect);
+            auto *theme = get_theme();
+            const auto &window_style = theme->get_style(_window_style.id);
+            const amal::vec4 padding = window_style.padding();
+            const f32 body_height = amal::max(size().y - padding.y - padding.w - _header_height, 0.0f);
+            const f32 bar_h =
+                (_scrollbar_x && _scrollbar_x->is_visible()) ? _scrollbar_x->get_min_track_thickness() : 0.0f;
+            const amal::vec4 content_clip = {position().x, position().y + padding.y + _header_height, size().x,
+                                             amal::max(body_height - bar_h, 0.0f)};
+            _content_clip_rect = intersect_rect(self_clip_rect, content_clip);
             update_clip_rect(_content_clip_id, _content_clip_rect);
         }
 
@@ -1151,7 +1188,6 @@ namespace auik::v2
         if (!_move_drag_active) return;
 
         translate(delta);
-        sync_clip_rect_cache();
         add_render_command<detail::DragEventTraits>(this, [this]() {
             update_draw_commands(DrawReasonBits::external);
             detail::get_context().dirty_flags |= DirtyFlagBits::redraw;

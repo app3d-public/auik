@@ -73,6 +73,7 @@ namespace auik::v2
         void (*push_data_batch_to_stream)(DrawStream *, const void *, u32, DrawDataID *) = nullptr;
         void (*update_data_in_stream)(DrawStream *, DrawDataID, const void *) = nullptr;
         void (*update_data_batch_in_stream)(DrawStream *, const DrawDataID *, const void *, u32) = nullptr;
+        void (*invalidate_data_in_stream)(DrawStream *, DrawDataID) = nullptr;
         void (*clear)(DrawStream *, u32) = nullptr;
         void (*render)(DrawStream *, void *, detail::GPUContext *) = nullptr;
         void (*sync_stream)(DrawStream *, u32) = nullptr;
@@ -142,6 +143,8 @@ namespace auik::v2
                                            const detail::RectData &rect, bool emit_hit_rect);
     APPLIB_API DrawDataID emit_draw_update(const DrawCtx &ctx, DrawStream *stream, DrawDataID &draw_id, const void *data,
                                            const detail::RectData &rect, bool emit_hit_rect);
+    APPLIB_API DrawDataID emit_draw_invalidate(const DrawCtx &ctx, DrawStream *stream, DrawDataID &draw_id,
+                                               const void *data, const detail::RectData &rect, bool emit_hit_rect);
 
     struct DrawCtx
     {
@@ -159,7 +162,8 @@ namespace auik::v2
         }
 
         bool is_recording() const { return emit_fn == &emit_draw_record; }
-        bool is_updating() const { return emit_fn == &emit_draw_update; }
+        bool is_updating() const { return emit_fn == &emit_draw_update || emit_fn == &emit_draw_invalidate; }
+        bool is_invalidating() const { return emit_fn == &emit_draw_invalidate; }
     };
 
     inline void update_hit_rect(u32 &hit_id, const detail::RectData &rect, bool force_update)

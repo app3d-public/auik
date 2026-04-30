@@ -174,6 +174,7 @@ namespace auik::v2
         virtual bool accepts_newline() const { return false; }
         virtual bool should_resize_to_content() const { return false; }
         virtual bool has_internal_scrollbar() const { return false; }
+        virtual bool should_draw_caret() const { return true; }
         void reset_caret_blink();
         void schedule_caret_blink();
         void tick_caret_blink();

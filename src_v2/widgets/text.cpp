@@ -203,6 +203,13 @@ namespace auik::v2
             return;
         }
 
+        if (ctx.is_invalidating())
+        {
+            for (auto &draw_id : _draw_ids) ctx.emit(textured_quads_stream, draw_id, nullptr, get_rect(), false);
+            _instances_gpu_dirty = true;
+            return;
+        }
+
         if (_instances.empty())
         {
             assert((ctx.is_recording() || _draw_ids.empty()) && "Text instance shrink requires draw record rebuild");

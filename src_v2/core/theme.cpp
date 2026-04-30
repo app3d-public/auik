@@ -3,7 +3,11 @@
 #include <auik/v2/widgets/checkbox.hpp>
 #include <auik/v2/widgets/color_picker.hpp>
 #include <auik/v2/widgets/combobox.hpp>
+#include <auik/v2/widgets/containers.hpp>
+#include <auik/v2/widgets/image_button.hpp>
+#include <auik/v2/widgets/radio_button.hpp>
 #include <auik/v2/widgets/slider.hpp>
+#include <auik/v2/widgets/switch_button.hpp>
 #include <auik/v2/widgets/text_button.hpp>
 #include <auik/v2/widgets/textbox.hpp>
 #include <auik/v2/widgets/tooltip.hpp>
@@ -195,6 +199,11 @@ namespace auik::v2
         theme->add_style(AUIK_TAG_TEXT_BUTTON, make_style().background_color(c_hover), StyleState::hover);
         theme->add_style(AUIK_TAG_TEXT_BUTTON, make_style().background_color(c_surface_light), StyleState::active);
 
+        theme->add_style(AUIK_TAG_IMAGE_BUTTON,
+                         make_style().padding(amal::vec2{6.0f}).background_color(c_surface_light).border_radius(4.0f));
+        theme->add_style(AUIK_TAG_IMAGE_BUTTON, make_style().background_color(c_hover), StyleState::hover);
+        theme->add_style(AUIK_TAG_IMAGE_BUTTON, make_style().background_color(c_surface_light), StyleState::active);
+
         theme->add_style(AUIK_TAG_TEXTBOX, make_style()
                                                .margin(amal::vec2{0.0f, 5.0f})
                                                .padding(amal::vec2{8.0f, 4.0f})
@@ -205,6 +214,24 @@ namespace auik::v2
                          make_style().padding(amal::vec2{3.0f}).background_color(c_surface_light).border_radius(3.0f));
         theme->add_style(AUIK_TAG_CHECKBOX, make_style().background_color(c_hover), StyleState::hover);
         theme->add_style(AUIK_TAG_CHECKBOX, make_style().background_color(c_surface_light), StyleState::active);
+
+        theme->add_style(
+            AUIK_TAG_RADIO_BUTTON,
+            make_style().padding(amal::vec2{10.0f}).background_color(c_surface_light).border_radius(10.0f));
+        theme->add_style(AUIK_TAG_RADIO_BUTTON, make_style().background_color(c_hover), StyleState::hover);
+        theme->add_style(AUIK_TAG_RADIO_BUTTON, make_style().background_color(c_surface_light), StyleState::active);
+        theme->add_style(
+            AUIK_TAG_RADIO_BUTTON_INDICATOR,
+            make_style().margin(empty_vec2).padding(amal::vec2{5.0f}).background_color(c_white).border_radius(5.0f));
+
+        theme->add_style(AUIK_TAG_SWITCH_BUTTON,
+                         make_style().padding(amal::vec2{2.0f}).background_color(c_surface_light).border_radius(10.0f));
+        theme->add_style(AUIK_TAG_SWITCH_BUTTON, make_style().background_color(c_hover), StyleState::hover);
+        theme->add_style(AUIK_TAG_SWITCH_BUTTON, make_style().background_color(c_surface_light), StyleState::active);
+        theme->add_style(AUIK_TAG_SWITCH_BUTTON_ON,
+                         make_style().padding(amal::vec2{2.0f}).background_color(c_ascent).border_radius(10.0f));
+        theme->add_style(AUIK_TAG_SWITCH_BUTTON_GRAB,
+                         make_style().padding(amal::vec2{8.0f}).background_color(c_white).border_radius(8.0f));
 
         theme->add_style(
             AUIK_TAG_COMBO_BOX,
