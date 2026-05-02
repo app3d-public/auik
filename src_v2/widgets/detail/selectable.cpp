@@ -9,7 +9,12 @@ namespace auik::v2::detail
         const auto flags = resolve_style_selector(_style, id(), parent_id, style_state());
         const auto &style = get_theme()->get_style(_style.id);
         _layout_config.size_px = round_font_px(style.text_size());
-        _render_config.tint_color = style.text_color();
+        const u32 text_color = style.text_color();
+        if (_render_config.tint_color != text_color)
+        {
+            _render_config.tint_color = text_color;
+            _instances_gpu_dirty = true;
+        }
         return flags;
     }
 
@@ -39,7 +44,12 @@ namespace auik::v2::detail
         assign_next_depth(this->depth_range(), bg_range);
         assign_next_depth(bg_range, text_range);
         _bg_z = next_depth(bg_range);
-        _rect.depth = next_depth(text_range);
+        const f32 text_z = next_depth(text_range);
+        if (_rect.depth != text_z)
+        {
+            _rect.depth = text_z;
+            _instances_gpu_dirty = true;
+        }
     }
 
     void Selectable::draw(DrawCtx &ctx)

@@ -5,8 +5,9 @@
 namespace auik::v2
 {
     ImageButton::ImageButton(u32 id, TextureID texture_id, amal::vec2 image_size, amal::vec2 size, amal::rect uv_rect,
-                             WidgetFlags widget_flags, Widget *parent)
-        : Widget(id, widget_flags, EventFlagBits::click, parent, {{0.0f, 0.0f}, size}, AUIK_TAG_IMAGE_BUTTON),
+                             WidgetFlags widget_flags, Widget *parent, u32 style_tag)
+        : Widget(id, widget_flags, EventFlagBits::click, parent, {{0.0f, 0.0f}, size}, style_tag),
+          _style({Theme::STYLE_ID_INVALID, style_tag}),
           _texture_id(texture_id),
           _uv_rect(uv_rect),
           _image_rect(detail::make_rect_data(AUIK_TAG_IMAGE, AUIK_TAG_IMAGE)),
@@ -16,16 +17,17 @@ namespace auik::v2
     }
 
     ImageButton::ImageButton(u32 id, Image *image, amal::vec2 image_size, amal::vec2 size, WidgetFlags widget_flags,
-                             Widget *parent)
-        : ImageButton(id, AUIK_INVALID_TEXTURE_ID, image_size, size, {{0.0f, 0.0f}, {1.0f, 1.0f}}, widget_flags, parent)
+                             Widget *parent, u32 style_tag)
+        : ImageButton(id, AUIK_INVALID_TEXTURE_ID, image_size, size, {{0.0f, 0.0f}, {1.0f, 1.0f}}, widget_flags,
+                      parent, style_tag)
     {
         _image = image;
     }
 
     amal::vec2 ImageButton::resolve_image_size() const
     {
-        return {_image_size.x > 0.0f ? _image_size.x : (_image ? _image->size().x : 0.0f),
-                _image_size.y > 0.0f ? _image_size.y : (_image ? _image->size().y : 0.0f)};
+        amal::vec2 fallback = _image ? _image->size() : amal::vec2{0.0f, 0.0f};
+        return {_image_size.x > 0.0f ? _image_size.x : fallback.x, _image_size.y > 0.0f ? _image_size.y : fallback.y};
     }
 
     TextureID ImageButton::resolve_texture_id() const { return _image ? _image->texture_id() : _texture_id; }
@@ -49,13 +51,21 @@ namespace auik::v2
         const amal::vec4 margin = style.margin();
         const amal::vec4 padding = style.padding();
         const amal::vec2 image_size = resolve_image_size();
+        const amal::vec2 content_required = {image_size.x + padding.x + padding.z, image_size.y + padding.y + padding.w};
 
         amal::vec2 min_size = _requested_size;
-        if (!is_fixed()) min_size.x = 0.0f;
-        if (min_size.x <= 0.0f) min_size.x = image_size.x + padding.x + padding.z;
-        else min_size.x = amal::max(min_size.x, image_size.x + padding.x + padding.z);
-        if (min_size.y <= 0.0f) min_size.y = image_size.y + padding.y + padding.w;
-        else min_size.y = amal::max(min_size.y, image_size.y + padding.y + padding.w);
+        if (is_fixed() && min_size.x <= 0.0f && min_size.y <= 0.0f)
+        {
+            const f32 side = amal::max(content_required.x, content_required.y);
+            min_size = {side, side};
+        }
+        else if (!is_fixed())
+            min_size.x = 0.0f;
+
+        if (min_size.x <= 0.0f) min_size.x = content_required.x;
+        else min_size.x = amal::max(min_size.x, content_required.x);
+        if (min_size.y <= 0.0f) min_size.y = content_required.y;
+        else min_size.y = amal::max(min_size.y, content_required.y);
 
         set_required_size({min_size.x + margin.x + margin.z, min_size.y + margin.y + margin.w});
     }

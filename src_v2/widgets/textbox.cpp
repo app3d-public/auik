@@ -178,7 +178,7 @@ namespace auik::v2
         f32 text_h = _text.required_size().y;
         if (_placeholder) text_h = amal::max(text_h, _placeholder->required_size().y);
 
-        amal::vec2 min_size = size();
+        amal::vec2 min_size = is_fixed() ? size() : amal::vec2{0.0f, 0.0f};
         if (min_size.x <= 0.0f) min_size.x = 160.0f;
         if (min_size.y <= 0.0f) min_size.y = amal::max(text_h, style.text_size()) + padding.y + padding.w;
         set_required_size({min_size.x + margin.x + margin.z, min_size.y + margin.y + margin.w});
@@ -273,6 +273,7 @@ namespace auik::v2
     {
         assert(parent() && "TextBox must have parent");
         set_clip_id(parent()->content_clip_id());
+        _content_clip_id = 0xFFFFu;
         update_text_content_clip_rect();
         _bg.hit_id = AUIK_INVALID_DRAW_DATA_ID;
         _text.rebuild_clip_rects();

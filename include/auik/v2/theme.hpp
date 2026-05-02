@@ -54,7 +54,8 @@ namespace auik::v2
                 border_thickness = 0x40,
                 corner_mask = 0x80,
                 text_size = 0x100,
-                font = 0x200
+                font = 0x200,
+                inline_spacing = 0x400
             };
 
             using flag_bitmask = std::true_type;
@@ -151,6 +152,14 @@ namespace auik::v2
             return *this;
         }
 
+        [[nodiscard]] f32 inline_spacing() const { return _inline_spacing; }
+        Style &inline_spacing(f32 value)
+        {
+            _inline_spacing = value;
+            _mask |= detail::StylePropertiesBits::inline_spacing;
+            return *this;
+        }
+
         [[nodiscard]] u32 border_color() const { return _border_color; }
         Style &border_color(const amal::vec4 &value)
         {
@@ -212,6 +221,7 @@ namespace auik::v2
         f32 _border_radius{0.0f};
         f32 _border_thickness{0.0f};
         f32 _text_size{12.5f};
+        f32 _inline_spacing{0.0f};
         Font *_font{nullptr};
         u32 _corner_mask{0};
         detail::StylePropertyFlags _mask{0};

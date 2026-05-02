@@ -21,7 +21,8 @@ namespace auik::v2
     }
 
     static amal::vec2 get_children_required_size(const acul::vector<Widget *> &children,
-                                                 const acul::vector<WindowChildLayout> &layouts, f32 wrap_width = 0.0f);
+                                                 const acul::vector<WindowChildLayout> &layouts,
+                                                 f32 inline_spacing_x, f32 wrap_width = 0.0f);
     static WindowChildLayout get_effective_child_layout(const acul::vector<Widget *> &children,
                                                         const acul::vector<WindowChildLayout> &layouts, size_t index);
     static bool starts_inline_run(const acul::vector<Widget *> &children,
@@ -30,7 +31,7 @@ namespace auik::v2
     static constexpr detail::StylePropertyFlags AUIK_LAYOUT_STYLE_MASK =
         detail::StylePropertiesBits::padding | detail::StylePropertiesBits::margin |
         detail::StylePropertiesBits::text_size | detail::StylePropertiesBits::border_thickness |
-        detail::StylePropertiesBits::border_radius;
+        detail::StylePropertiesBits::border_radius | detail::StylePropertiesBits::inline_spacing;
 
     static inline bool has_layout_style_delta(const Style &normal, const Style &active)
     {
@@ -338,6 +339,7 @@ namespace auik::v2
         for (auto *child : children)
         {
             if (!child) continue;
+            if (!child->is_visible()) continue;
             DrawCtx child_ctx = ctx;
             if (cull_external_children)
             {
@@ -501,31 +503,30 @@ namespace auik::v2
         for (auto *child : children)
         {
             if (!child) continue;
+            if (!child->is_visible()) continue;
             child->update_layout_min_size();
         }
-        const amal::vec2 children_min_size = get_children_required_size(children, _child_layouts);
+        const f32 inline_spacing_x = amal::max(window_style.inline_spacing(), 0.0f);
+        const amal::vec2 children_min_size = get_children_required_size(children, _child_layouts, inline_spacing_x);
 
         set_required_size({padding.x + padding.z + children_min_size.x,
                            padding.y + padding.w + children_min_size.y + _header_height});
     }
 
     static amal::vec2 get_children_required_size(const acul::vector<Widget *> &children,
-                                                 const acul::vector<WindowChildLayout> &layouts, f32 wrap_width)
+                                                 const acul::vector<WindowChildLayout> &layouts,
+                                                 f32 inline_spacing_x, f32 wrap_width)
     {
-        const auto resolve_inline_spacing_x = []() -> f32 {
-            const amal::vec2 inline_spacing = get_theme()->get_var<amal::vec2>(AUIK_VAR_INLINE_SPACING);
-            return amal::max(inline_spacing.x + inline_spacing.y, 0.0f);
-        };
         f32 max_width = 0.0f;
         f32 total_height = 0.0f;
         f32 row_width = 0.0f;
         f32 row_height = 0.0f;
         const bool wrap_enabled = wrap_width > 0.0f;
-        const f32 inline_spacing_x = resolve_inline_spacing_x();
         for (size_t i = 0; i < children.size(); ++i)
         {
             auto *child = children[i];
             if (!child) continue;
+            if (!child->is_visible()) continue;
             const WindowChildLayout layout = get_effective_child_layout(children, layouts, i);
             const amal::vec2 req = child->required_size();
             if (layout == WindowChildLayout::inline_layout)
@@ -591,6 +592,7 @@ namespace auik::v2
         for (size_t next = index + 1; next < children.size(); ++next)
         {
             if (!children[next]) continue;
+            if (!children[next]->is_visible()) continue;
             const WindowChildLayout next_layout = next < layouts.size() ? layouts[next] : WindowChildLayout::block;
             if (next_layout == WindowChildLayout::inline_layout) return WindowChildLayout::inline_layout;
             break;
@@ -613,6 +615,7 @@ namespace auik::v2
         {
             auto *row_child = children[row_i];
             if (!row_child) continue;
+            if (!row_child->is_visible()) continue;
             const f32 child_h = amal::max(row_child->required_size().y, 0.0f);
             const f32 delta_y = amal::floor((row_height - child_h) * 0.5f);
             if (delta_y <= 0.0f) continue;
@@ -622,8 +625,8 @@ namespace auik::v2
 
     void Window::relayout_children(f32 available_width, const amal::vec2 &content_inset)
     {
-        const amal::vec2 inline_spacing = get_theme()->get_var<amal::vec2>(AUIK_VAR_INLINE_SPACING);
-        const f32 inline_spacing_x = amal::max(inline_spacing.x + inline_spacing.y, 0.0f);
+        const f32 inline_spacing_x =
+            amal::max(get_theme()->get_style(_window_style.id).inline_spacing(), 0.0f);
         const amal::vec2 content_cursor = position() + content_inset - _content_offset;
         amal::vec2 cursor = content_cursor;
         f32 inline_row_height = 0.0f;
@@ -635,6 +638,7 @@ namespace auik::v2
         {
             auto *child = children[i];
             if (!child) continue;
+            if (!child->is_visible()) continue;
             const WindowChildLayout layout = get_effective_child_layout(children, _child_layouts, i);
             if (layout == WindowChildLayout::block)
             {
@@ -743,9 +747,11 @@ namespace auik::v2
         for (auto *child : children)
         {
             if (!child) continue;
+            if (!child->is_visible()) continue;
             child->update_layout_min_size();
         }
-        const amal::vec2 children_min_size = get_children_required_size(children, _child_layouts);
+        const f32 inline_spacing_x = amal::max(window_style.inline_spacing(), 0.0f);
+        const amal::vec2 children_min_size = get_children_required_size(children, _child_layouts, inline_spacing_x);
         const f32 required_height = padding.y + padding.w + children_min_size.y + _header_height;
         const f32 required_width = padding.x + padding.z + children_min_size.x;
         set_required_size({required_width, required_height});
@@ -769,7 +775,7 @@ namespace auik::v2
         {
             const f32 viewport_w = amal::max(body_width - (need_scroll_y ? bar_w : 0.0f), 0.0f);
             const f32 viewport_h = amal::max(body_height - (need_scroll_x ? bar_h : 0.0f), 0.0f);
-            children_layout_size = get_children_required_size(children, _child_layouts, viewport_w);
+            children_layout_size = get_children_required_size(children, _child_layouts, inline_spacing_x, viewport_w);
             const bool next_y = can_scroll_y && children_layout_size.y > viewport_h;
             const bool next_x = can_scroll_x && children_layout_size.x > viewport_w;
             if (next_y == need_scroll_y && next_x == need_scroll_x) break;
@@ -803,7 +809,7 @@ namespace auik::v2
         // Recompute the wrapped content size once from the actual laid out widgets so
         // scrollbars and row wrapping decisions stabilize in the same frame.
         const amal::vec2 laid_out_children_size =
-            get_children_required_size(children, _child_layouts, content_layout_width);
+            get_children_required_size(children, _child_layouts, inline_spacing_x, content_layout_width);
         if (laid_out_children_size != pre_layout_children_size)
         {
             children_layout_size = laid_out_children_size;
@@ -816,7 +822,8 @@ namespace auik::v2
                 const f32 refined_viewport_h = amal::max(body_height - (refined_need_scroll_x ? bar_h : 0.0f), 0.0f);
 
                 relayout_children(refined_viewport_w, content_inset);
-                children_layout_size = get_children_required_size(children, _child_layouts, refined_viewport_w);
+                children_layout_size =
+                    get_children_required_size(children, _child_layouts, inline_spacing_x, refined_viewport_w);
                 const bool next_refined_y = can_scroll_y && children_layout_size.y > refined_viewport_h;
                 const bool next_refined_x = can_scroll_x && children_layout_size.x > refined_viewport_w;
                 if (next_refined_y == refined_need_scroll_y && next_refined_x == refined_need_scroll_x) break;
@@ -831,7 +838,8 @@ namespace auik::v2
                 scroll_view_width = amal::max(body_width - (need_scroll_y ? bar_w : 0.0f), 0.0f);
                 scroll_view_height = amal::max(body_height - (need_scroll_x ? bar_h : 0.0f), 0.0f);
                 relayout_children(scroll_view_width, content_inset);
-                children_layout_size = get_children_required_size(children, _child_layouts, scroll_view_width);
+                children_layout_size =
+                    get_children_required_size(children, _child_layouts, inline_spacing_x, scroll_view_width);
                 const amal::vec4 refined_content_clip = {position().x, position().y + content_inset.y,
                                                          scroll_view_width, scroll_view_height};
                 _content_clip_rect = intersect_rect(parent_clip, refined_content_clip);

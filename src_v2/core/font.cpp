@@ -665,9 +665,10 @@ namespace auik::v2
 
         Font font;
         const u32 size = round_font_px(18.0f * dpi);
-        const acul::vector<u32> codepoints = {0xE5C7u, 0xE5C5u, 0xE5CAu, 0xE8B6u, 0xEF4Fu, 0xE5D2u};
-        const acul::vector<u32> ids = {AUIK_ICON_CHEVRON_RIGHT, AUIK_ICON_CHEVRON_DOWN, AUIK_ICON_CHECKMARK,
-                                       AUIK_ICON_SEARCH,        AUIK_ICON_FILTER,       AUIK_ICON_MENU};
+        const acul::vector<u32> codepoints = {0xE5CCu, 0xE5C5u, 0xE5CEu, 0xE5CAu, 0xE8B6u, 0xEF4Fu, 0xE5D2u, 0xE5CDu};
+        const acul::vector<u32> ids = {AUIK_ICON_CHEVRON_RIGHT, AUIK_ICON_CHEVRON_DOWN, AUIK_ICON_CHEVRON_UP,
+                                       AUIK_ICON_CHECKMARK,     AUIK_ICON_SEARCH,       AUIK_ICON_FILTER,
+                                       AUIK_ICON_MENU,          AUIK_ICON_CLOSE};
 
         if (!font.load(font_info->path)) return false;
         if (!font.load_glyphs(size, codepoints)) return false;
@@ -716,15 +717,16 @@ namespace auik::v2
             u32 size;
             acul::vector<u32> codepoints;
             acul::vector<u32> ids;
-        } specs[2] = {
+        } specs[3] = {
             {.size = round_font_px(11.5f * dpi), .codepoints = {0xE700u}, .ids = {AUIK_ICON_MENU}},
-            {.size = round_font_px(pt_to_px(11.0f, dpi)),
-             .codepoints = {0xE70Eu, 0xE70Du, 0xE73Eu, 0xE721u, 0xE71Cu},
-             .ids = {AUIK_ICON_CHEVRON_RIGHT, AUIK_ICON_CHEVRON_DOWN, AUIK_ICON_CHECKMARK, AUIK_ICON_SEARCH,
-                     AUIK_ICON_FILTER}},
+            {.size = round_font_px(pt_to_px(8.5f, dpi)), .codepoints = {0xE711u}, .ids = {AUIK_ICON_CLOSE}},
+            {.size = round_font_px(pt_to_px(9.5f, dpi)),
+             .codepoints = {0xE76Cu, 0xE70Du, 0xE70Eu, 0xE73Eu, 0xE721u, 0xE71Cu},
+             .ids = {AUIK_ICON_CHEVRON_RIGHT, AUIK_ICON_CHEVRON_DOWN, AUIK_ICON_CHEVRON_UP, AUIK_ICON_CHECKMARK,
+                     AUIK_ICON_SEARCH, AUIK_ICON_FILTER}},
         };
 
-        for (u32 i = 0; i < 2; ++i)
+        for (u32 i = 0; i < 3; ++i)
         {
             auto &font = specs[i].font;
             if (!font.load(font_info->path)) return false;

@@ -8,8 +8,6 @@
 
 #define AUIK_TAG_WINDOW        0xB4382179
 #define AUIK_TAG_WINDOW_HEADER 0x663566BE
-#define AUIK_VAR_INLINE_SPACING 0x69670933u
-
 namespace auik::v2
 {
     struct WindowFlagBits
@@ -70,6 +68,24 @@ namespace auik::v2
         APPLIB_API void clear_children();
         APPLIB_API void add_child(Widget *child, WindowChildLayout layout = WindowChildLayout::block);
         APPLIB_API void add_children(const acul::vector<Widget *> &new_children);
+        using value_type = Widget *;
+        using iterator = acul::vector<value_type>::iterator;
+        using const_iterator = acul::vector<value_type>::const_iterator;
+
+        iterator begin() { return children.begin(); }
+        iterator end() { return children.end(); }
+        const_iterator begin() const { return children.begin(); }
+        const_iterator end() const { return children.end(); }
+        const_iterator cbegin() const { return children.cbegin(); }
+        const_iterator cend() const { return children.cend(); }
+        bool empty() const { return children.empty(); }
+        size_t child_size() const { return children.size(); }
+        value_type front() { return children.front(); }
+        value_type back() { return children.back(); }
+        const value_type front() const { return children.front(); }
+        const value_type back() const { return children.back(); }
+        value_type *data() { return children.data(); }
+        const value_type *data() const { return children.data(); }
         void set_window_style_tag(u32 tag_id)
         {
             _window_style = {Theme::STYLE_ID_INVALID, tag_id};

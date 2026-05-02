@@ -6,8 +6,10 @@
 #include <auik/v2/widgets/containers.hpp>
 #include <auik/v2/widgets/image_button.hpp>
 #include <auik/v2/widgets/radio_button.hpp>
+#include <auik/v2/widgets/rubber_band.hpp>
 #include <auik/v2/widgets/slider.hpp>
 #include <auik/v2/widgets/switch_button.hpp>
+#include <auik/v2/widgets/tabbar.hpp>
 #include <auik/v2/widgets/text_button.hpp>
 #include <auik/v2/widgets/textbox.hpp>
 #include <auik/v2/widgets/tooltip.hpp>
@@ -16,8 +18,9 @@
 namespace auik::v2
 {
     using namespace detail;
-    constexpr StylePropertyFlags g_style_inheritable_mask =
-        StylePropertiesBits::text_color | StylePropertiesBits::text_size | StylePropertiesBits::font;
+    constexpr StylePropertyFlags g_style_inheritable_mask = StylePropertiesBits::text_color |
+                                                            StylePropertiesBits::text_size | StylePropertiesBits::font |
+                                                            StylePropertiesBits::inline_spacing;
     constexpr StylePropertyFlags g_style_all_mask = acul::flag_traits<StylePropertiesBits>::all_flags;
     constexpr StylePropertyFlags g_style_non_inheritable_mask = g_style_all_mask & ~g_style_inheritable_mask;
     static inline void apply_desc_masked(Style &out, const Style &d, StylePropertyFlags take)
@@ -32,6 +35,7 @@ namespace auik::v2
         if (take & StylePropertiesBits::corner_mask) out.corner_mask(d.corner_mask());
         if (take & StylePropertiesBits::text_size) out.text_size(d.text_size());
         if (take & StylePropertiesBits::font) out.font(d.font());
+        if (take & StylePropertiesBits::inline_spacing) out.inline_spacing(d.inline_spacing());
     }
 
     StyleID Theme::get_resolved_style(u32 type, u32 id, u32 parent, StyleState state)
@@ -155,9 +159,12 @@ namespace auik::v2
         const amal::vec2 empty_vec2{0.0f};
 
         // Global settings.
-        theme->add_style(
-            AUIK_TAG_GLOBAL,
-            make_style().text_color(c_white).text_size(12.5f * dpi).font(default_font).margin(amal::vec2{0.0f, 5.0f}));
+        theme->add_style(AUIK_TAG_GLOBAL, make_style()
+                                              .text_color(c_white)
+                                              .text_size(12.5f * dpi)
+                                              .font(default_font)
+                                              .margin(amal::vec2{0.0f, 5.0f})
+                                              .inline_spacing(4.0f));
         theme->add_style(AUIK_TAG_CARET,
                          make_style().padding(amal::vec2{1.0f, 0.0f}).background_color({0.9f, 0.9f, 0.9f, 1.0f}));
         theme->add_style(AUIK_TAG_NO_PAD, make_style().margin(empty_vec2).padding(empty_vec2));
@@ -167,9 +174,12 @@ namespace auik::v2
                                                    .text_size(12.5f * dpi)
                                                    .text_color({0.9f, 0.9f, 0.9f, 0.5f}));
         theme->add_style(AUIK_TAG_SELECTION, make_style().background_color(amal::rgba8_to_vec4(72, 114, 255, 120)));
+        theme->add_style(AUIK_TAG_RUBBER_BAND, make_style()
+                                                   .background_color(amal::rgba8_to_vec4(72, 114, 255, 45))
+                                                   .border_color(amal::rgba8_to_vec4(72, 114, 255, 210))
+                                                   .border_thickness(1.0f));
         theme->add_style(AUIK_TAG_TEXT_DRAG_ICON, make_style().background_color({0.8f, 0.8f, 0.8f, 1.0f}));
         theme->set_var(AUIK_VAR_COLOR_PICKER_SIZE, 185.0f);
-        theme->set_var(AUIK_VAR_INLINE_SPACING, amal::vec2{4.0f, 0.0f});
 
         // Window body.
         theme->add_style(AUIK_TAG_WINDOW, make_style()
@@ -249,6 +259,27 @@ namespace auik::v2
             make_style().margin(amal::vec2{4.0f, 2.0f}).padding(amal::vec2{6.0f, 4.0f}).border_radius(3.0f));
         theme->add_style(AUIK_TAG_COMBO_BOX_ITEM, make_style().background_color(c_hover), StyleState::hover);
         theme->add_style(AUIK_TAG_COMBO_BOX_ITEM, make_style().background_color(c_ascent), StyleState::focus);
+
+        theme->add_style(AUIK_TAG_TAB_BAR_ITEM, make_style()
+                                                    .margin(empty_vec2)
+                                                    .background_color(c_surface_light)
+                                                    .padding(amal::vec2{10.0f, 5.0f})
+                                                    .border_radius(4.0f));
+        theme->add_style(AUIK_TAG_TAB_BAR_ITEM, make_style().background_color(c_hover), StyleState::hover);
+        theme->add_style(AUIK_TAG_TAB_BAR_ITEM, make_style().background_color(c_ascent), StyleState::focus);
+        theme->add_style(AUIK_TAG_TABBAR_POPUP_BTN,
+                         make_style().margin(empty_vec2).padding(amal::vec2{8.0f, 5.0f}).border_radius(4.0f));
+        theme->add_style(AUIK_TAG_TABBAR_POPUP_BTN, make_style().background_color(c_hover), StyleState::hover);
+        theme->add_style(AUIK_TAG_TAB_BAR_POPUP, make_style()
+                                                     .margin(empty_vec2)
+                                                     .padding(amal::vec2{0.0f, 2.0f})
+                                                     .background_color(c_active)
+                                                     .border_radius(4.0f));
+        theme->add_style(AUIK_TAG_CLOSE_BUTTON,
+                         make_style().margin(amal::vec2{4.0f, 0.0f}).padding(amal::vec2{8.0f}).border_radius(4.0f));
+        theme->add_style(AUIK_TAG_CLOSE_BUTTON, make_style().background_color({1.0f, 1.0f, 1.0f, 0.15f}),
+                         StyleState::hover);
+        theme->add_style(AUIK_TAG_CLOSE_BUTTON, make_style().background_color(c_surface_light), StyleState::active);
 
         theme->add_style(
             AUIK_TAG_SLIDER,
