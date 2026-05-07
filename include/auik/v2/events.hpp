@@ -6,6 +6,7 @@
 #include <acul/vector.hpp>
 #include <acul/scalars.hpp>
 #include <acul/string/string.hpp>
+#include <amal/vector.hpp>
 #include <functional>
 
 #ifndef AUIK_TAG_GLOBAL
@@ -14,6 +15,15 @@
 
 namespace auik::v2
 {
+    struct EventBase
+    {
+        void prevent_default() { _prevent_default = true; }
+        bool is_prevented_default() const { return _prevent_default; }
+
+    private:
+        bool _prevent_default = false;
+    };
+
     struct KeyEnum
     {
         enum enum_type : i16
@@ -195,7 +205,8 @@ namespace auik::v2
             focus = 0x10,
             key_input = 0x20,
             char_input = 0x40,
-            shortcut = 0x80
+            shortcut = 0x80,
+            change = 0x100
         };
         using flag_bitmask = std::true_type;
     };
@@ -223,6 +234,51 @@ namespace auik::v2
         leave = 0,
         enter = 1,
         active = 2
+    };
+
+    struct HoverEvent : EventBase
+    {
+        HoverState state = HoverState::leave;
+    };
+
+    struct ClickEvent : EventBase
+    {
+        MouseKey key = MouseKey::unknown;
+        KeyPressState state = KeyPressState::release;
+        u32 click_count = 0u;
+    };
+
+    struct FocusEvent : EventBase
+    {
+        bool focused = false;
+    };
+
+    struct DragEvent : EventBase
+    {
+        amal::vec2 delta{0.0f, 0.0f};
+        KeyPressState state = KeyPressState::release;
+    };
+
+    struct ScrollEvent : EventBase
+    {
+        amal::vec2 delta{0.0f, 0.0f};
+    };
+
+    struct KeyEvent : EventBase
+    {
+        Key key = Key::unknown;
+        KeyPressState state = KeyPressState::release;
+        KeyMode mods = KeyModeBits::enum_type(0);
+    };
+
+    struct CharEvent : EventBase
+    {
+        u32 char_code = 0u;
+        u32 count = 0u;
+    };
+
+    struct ChangeEvent : EventBase
+    {
     };
 
     struct Shortcut

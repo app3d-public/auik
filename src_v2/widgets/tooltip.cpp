@@ -32,9 +32,10 @@ namespace auik::v2
     } // namespace
 
     Tooltip::Tooltip(u32 id, Widget *parent)
-        : Widget(id, get_default_widget_flags() | WidgetFlagBits::fixed | WidgetFlagBits::foreground,
-                 EventFlagBits::none, parent, {}, AUIK_TAG_TOOLTIP)
+        : Widget(id, get_default_widget_flags() | WidgetFlagBits::fixed, EventFlagBits::none, parent, {},
+                 AUIK_TAG_TOOLTIP)
     {
+        set_depth_zone(DepthZone::foreground);
         _layout_config.wrap = detail::TextWrapMode::word;
         _layout_config.overflow = detail::TextOverflowMode::clip;
         _render_config.horizontal_align = detail::TextHorizontalAlign::left;

@@ -47,12 +47,11 @@ namespace auik::v2
         enum enum_type : u16
         {
             none = 0x0,
-            style = 0x1,
-            layout = 0x2,
-            host_resize = 0x4,
-            full_redraw = 0x8,
-            external = 0x10,
-            transient = 0x20
+            layout = 0x1,
+            host_resize = 0x2,
+            full_redraw = 0x4,
+            external = 0x8,
+            transient = 0x10
         };
         using flag_bitmask = std::true_type;
     };
@@ -93,7 +92,8 @@ namespace auik::v2
         return stream->push_data_to_stream(stream, data);
     }
 
-    inline void push_data_batch_to_stream(DrawStream *stream, const void *data, u32 count, DrawDataID *out_draw_ids = nullptr)
+    inline void push_data_batch_to_stream(DrawStream *stream, const void *data, u32 count,
+                                          DrawDataID *out_draw_ids = nullptr)
     {
         if (count == 0) return;
         assert(stream && "stream is null");
@@ -139,10 +139,10 @@ namespace auik::v2
     struct DrawCtx;
     using PFN_DrawEmit = DrawDataID (*)(const DrawCtx &, DrawStream *, DrawDataID &, const void *,
                                         const detail::RectData &, bool);
-    APPLIB_API DrawDataID emit_draw_record(const DrawCtx &ctx, DrawStream *stream, DrawDataID &draw_id, const void *data,
-                                           const detail::RectData &rect, bool emit_hit_rect);
-    APPLIB_API DrawDataID emit_draw_update(const DrawCtx &ctx, DrawStream *stream, DrawDataID &draw_id, const void *data,
-                                           const detail::RectData &rect, bool emit_hit_rect);
+    APPLIB_API DrawDataID emit_draw_record(const DrawCtx &ctx, DrawStream *stream, DrawDataID &draw_id,
+                                           const void *data, const detail::RectData &rect, bool emit_hit_rect);
+    APPLIB_API DrawDataID emit_draw_update(const DrawCtx &ctx, DrawStream *stream, DrawDataID &draw_id,
+                                           const void *data, const detail::RectData &rect, bool emit_hit_rect);
     APPLIB_API DrawDataID emit_draw_invalidate(const DrawCtx &ctx, DrawStream *stream, DrawDataID &draw_id,
                                                const void *data, const detail::RectData &rect, bool emit_hit_rect);
 
@@ -171,15 +171,17 @@ namespace auik::v2
         auto &ctx = detail::get_context();
         auto *gpu = ctx.gpu_ctx;
         assert(gpu && gpu->push_hit_rect && "GPU hover rect dispatch is not initialized");
+        detail::RectData snapped_rect = rect;
+        snapped_rect.bounds = detail::snap_rect_to_pixel_grid(rect.bounds);
         const bool force_draw_recreate = ctx.dirty_flags & DirtyFlagBits::hit_rect_draw;
         if (hit_id == AUIK_INVALID_DRAW_DATA_ID || force_draw_recreate)
         {
-            hit_id = detail::push_hit_rect(gpu, rect);
+            hit_id = detail::push_hit_rect(gpu, snapped_rect);
             detail::mark_hit_rects_mutation();
         }
         else if (force_update)
         {
-            detail::update_hit_rect(gpu, hit_id, rect);
+            detail::update_hit_rect(gpu, hit_id, snapped_rect);
             detail::mark_hit_rects_mutation();
         }
     }

@@ -10,6 +10,8 @@
 #define AUIK_TAG_WINDOW_HEADER 0x663566BE
 namespace auik::v2
 {
+    class MenuBar;
+
     struct WindowFlagBits
     {
         enum enum_type
@@ -68,6 +70,9 @@ namespace auik::v2
         APPLIB_API void clear_children();
         APPLIB_API void add_child(Widget *child, WindowChildLayout layout = WindowChildLayout::block);
         APPLIB_API void add_children(const acul::vector<Widget *> &new_children);
+        APPLIB_API void set_menu_bar(MenuBar *menu_bar);
+        APPLIB_API void override_content_clip_rect(const amal::vec4 &rect);
+        MenuBar *menu_bar() const { return _menu_bar; }
         using value_type = Widget *;
         using iterator = acul::vector<value_type>::iterator;
         using const_iterator = acul::vector<value_type>::const_iterator;
@@ -108,6 +113,7 @@ namespace auik::v2
         amal::vec4 _content_clip_rect{0.0f, 0.0f, 0.0f, 0.0f};
         StyleSelector _window_style{Theme::STYLE_ID_INVALID, AUIK_TAG_WINDOW};
         class WindowHeader *_header = nullptr;
+        MenuBar *_menu_bar = nullptr;
         detail::Scrollbar *_scrollbar_x = nullptr;
         detail::Scrollbar *_scrollbar_y = nullptr;
         detail::Scrollbar *_drag_scrollbar = nullptr;
@@ -118,22 +124,9 @@ namespace auik::v2
         virtual bool accepts_focus_on_mouse_press(detail::ElementID hit_id) const override;
         virtual u16 content_clip_id() const override { return _content_clip_id; }
         virtual amal::vec4 get_content_clip_rect() const override { return _content_clip_rect; }
-        virtual void on_attach() override
-        {
-            auto &map = detail::get_context().id_map;
-            map.emplace(id(), this);
-            for (auto *child : children)
-            {
-                if (child->widget_flags & WidgetFlagBits::attachable) child->on_attach();
-            }
-        }
-
-        virtual void on_detach() override
-        {
-            auto &map = detail::get_context().id_map;
-            map.erase(id());
-            for (auto *child : children) map.erase(child->id());
-        }
+        virtual void on_attach() override;
+        virtual void on_detach() override;
+        void redraw_decorations(DrawReasonFlags reason = DrawReasonBits::none);
 
         virtual void on_scroll(const amal::vec2 &delta) override;
         virtual void on_drag(const amal::vec2 &delta, KeyPressState state) override;

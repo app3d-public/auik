@@ -74,7 +74,7 @@ namespace auik::v2
             return flags;
         }
 
-        static inline StyleUpdateFlags resolve_visual_style_and_mark_redraw(StyleSelector &selector, u32 self_id,
+        static inline StyleUpdateFlags resolve_selector_style_and_mark_redraw(StyleSelector &selector, u32 self_id,
                                                                             u32 parent_id, StyleState state,
                                                                             bool &redraw_changed)
         {
@@ -188,24 +188,24 @@ namespace auik::v2
             out |= detail::resolve_style_and_mark_redraw(_fill_style, _fill_style.tag_id, parent_id, StyleState::active,
                                                          track_or_fill_changed);
         if (_grab_style.id == Theme::STYLE_ID_INVALID)
-            out |= detail::resolve_visual_style_and_mark_redraw(_grab_style, _grab_style.tag_id, parent_id,
+            out |= detail::resolve_selector_style_and_mark_redraw(_grab_style, _grab_style.tag_id, parent_id,
                                                                 StyleState::normal, grab_changed);
 
         const auto transition = detail::get_widget_style_selector_transition(id());
         if (transition.prev_id.tag_id == _grab_style.tag_id &&
             (transition.current_id.tag_id != _grab_style.tag_id || transition.prev_state != transition.current_state))
-            out |= detail::resolve_visual_style_and_mark_redraw(_grab_style, _grab_style.tag_id, parent_id,
+            out |= detail::resolve_selector_style_and_mark_redraw(_grab_style, _grab_style.tag_id, parent_id,
                                                                 StyleState::normal, grab_changed);
         if (transition.current_id.tag_id == _grab_style.tag_id)
-            out |= detail::resolve_visual_style_and_mark_redraw(_grab_style, _grab_style.tag_id, parent_id,
+            out |= detail::resolve_selector_style_and_mark_redraw(_grab_style, _grab_style.tag_id, parent_id,
                                                                 transition.current_state, grab_changed);
 
         const StyleState widget_grab_state = detail::resolve_grab_visual_state(style_state());
         if (widget_grab_state == StyleState::active || widget_grab_state == StyleState::focus)
-            out |= detail::resolve_visual_style_and_mark_redraw(_grab_style, _grab_style.tag_id, parent_id,
+            out |= detail::resolve_selector_style_and_mark_redraw(_grab_style, _grab_style.tag_id, parent_id,
                                                                 widget_grab_state, grab_changed);
         else if (transition.current_id.tag_id != _grab_style.tag_id)
-            out |= detail::resolve_visual_style_and_mark_redraw(_grab_style, _grab_style.tag_id, parent_id,
+            out |= detail::resolve_selector_style_and_mark_redraw(_grab_style, _grab_style.tag_id, parent_id,
                                                                 StyleState::normal, grab_changed);
 
         if (track_or_fill_changed) rebuild_track_visuals();
@@ -367,6 +367,7 @@ namespace auik::v2
         }
         if (*_value == clamped) return;
         *_value = clamped;
+        dispatch_change();
         detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
         rebuild_track_fill_visual();
         rebuild_grab_visual();
@@ -566,7 +567,7 @@ namespace auik::v2
         };
 
         auto resolve_grab_state = [&](StyleState state) -> StyleUpdateFlags {
-            const auto flags = detail::resolve_visual_style_and_mark_redraw(_grab_style, _grab_style.tag_id, parent_id,
+            const auto flags = detail::resolve_selector_style_and_mark_redraw(_grab_style, _grab_style.tag_id, parent_id,
                                                                             state, grab_changed);
             if (flags & StyleUpdateFlagBits::redraw) grab_changed = true;
             return flags;
@@ -744,6 +745,7 @@ namespace auik::v2
         }
         if (*_value == clamped) return;
         *_value = clamped;
+        dispatch_change();
         detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
         rebuild_grab_visual();
     }
@@ -899,7 +901,7 @@ namespace auik::v2
         };
 
         auto resolve_grab_state = [&](StyleState state) -> StyleUpdateFlags {
-            const auto flags = detail::resolve_visual_style_and_mark_redraw(_grab_style, _grab_style.tag_id, parent_id,
+            const auto flags = detail::resolve_selector_style_and_mark_redraw(_grab_style, _grab_style.tag_id, parent_id,
                                                                             state, grab_changed);
             if (flags & StyleUpdateFlagBits::redraw) grab_changed = true;
             return flags;
@@ -1084,6 +1086,7 @@ namespace auik::v2
         }
         if (*_value == clamped) return;
         *_value = clamped;
+        dispatch_change();
         detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
         rebuild_grab_visual();
     }
@@ -1276,7 +1279,7 @@ namespace auik::v2
 
         auto resolve_grab_state = [&](StyleSelector &selector, StyleState state) -> StyleUpdateFlags {
             const auto flags =
-                detail::resolve_visual_style_and_mark_redraw(selector, selector.tag_id, parent_id, state, grab_changed);
+                detail::resolve_selector_style_and_mark_redraw(selector, selector.tag_id, parent_id, state, grab_changed);
             if (flags & StyleUpdateFlagBits::redraw) grab_changed = true;
             return flags;
         };
@@ -1463,6 +1466,7 @@ namespace auik::v2
         *_from_value = from_clamped;
         *_to_value = to_clamped;
         if (!changed) return;
+        dispatch_change();
         detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
         rebuild_track_visuals();
         rebuild_grab_visuals();

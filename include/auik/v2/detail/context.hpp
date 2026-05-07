@@ -14,17 +14,17 @@
 #include "events.hpp"
 #include "fwd.hpp"
 #include "gpu_context.hpp"
-
+#include "pixel_snap.hpp"
 
 struct FT_LibraryRec_;
 
-#define AUIK_SYNC_CLIP_RECT       0
-#define AUIK_SYNC_HIT_RECT        1
-#define AUIK_PRIMARY_QUAD_STREAM  0
-#define AUIK_PRIMARY_TEXTURED_QUADS_STREAM 1
-#define AUIK_PRIMARY_VERTEX_STREAM 2
+#define AUIK_SYNC_CLIP_RECT                 0
+#define AUIK_SYNC_HIT_RECT                  1
+#define AUIK_PRIMARY_QUAD_STREAM            0
+#define AUIK_PRIMARY_TEXTURED_QUADS_STREAM  1
+#define AUIK_PRIMARY_VERTEX_STREAM          2
 #define AUIK_PRIMARY_TEXTURED_VERTEX_STREAM 3
-#define AUIK_PRIMARY_OVERLAY_QUADS_STREAM 4
+#define AUIK_PRIMARY_OVERLAY_QUADS_STREAM   4
 
 namespace auik::v2
 {
@@ -250,10 +250,7 @@ namespace auik::v2
 
         inline IO &get_io() { return get_context().io; }
 
-        inline const StyleSelectorTransition &get_style_selector_transition()
-        {
-            return get_context().style_selector;
-        }
+        inline const StyleSelectorTransition &get_style_selector_transition() { return get_context().style_selector; }
 
         inline ElementID get_prev_style_selector_id() { return get_style_selector_transition().prev_id; }
 
@@ -404,7 +401,7 @@ namespace auik::v2
     {
         auto *gpu = detail::get_context().gpu_ctx;
         assert(gpu && gpu->push_clip_rect && "GPU clip rect dispatch is not initialized");
-        const u16 id = gpu->push_clip_rect(gpu, rect);
+        const u16 id = gpu->push_clip_rect(gpu, detail::snap_rect_to_pixel_grid(rect));
         detail::mark_clip_rects_mutation();
         return id;
     }
@@ -413,7 +410,7 @@ namespace auik::v2
     {
         auto *gpu = detail::get_context().gpu_ctx;
         assert(gpu && gpu->update_clip_rect && "GPU clip rect dispatch is not initialized");
-        gpu->update_clip_rect(gpu, clip_id, rect);
+        gpu->update_clip_rect(gpu, clip_id, detail::snap_rect_to_pixel_grid(rect));
         detail::mark_clip_rects_mutation();
     }
 

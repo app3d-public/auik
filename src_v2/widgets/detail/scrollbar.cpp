@@ -142,6 +142,7 @@ namespace auik::v2::detail
     {
         _content_size = content_size;
         _view_size = view_size;
+        _behavior.set_metrics(content_size, view_size);
         set_position(track_pos);
         set_size(track_size);
 
@@ -250,5 +251,12 @@ namespace auik::v2::detail
         const bool thumb_visible = fill_quads_instance_by_style(theme->get_style(_thumb_style.id), clip_id(), thumb);
         if (should_emit_quads_instance(thumb_visible, _thumb_draw_id, ctx.emit_hit_rect))
             ctx.emit(quads_stream, _thumb_draw_id, &thumb, _thumb_rect, ctx.emit_hit_rect);
+    }
+
+    bool Scrollbar::has_draw_record() const
+    {
+        if (!is_visible()) return true;
+        return _track_draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID &&
+               _thumb_draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID;
     }
 } // namespace auik::v2::detail

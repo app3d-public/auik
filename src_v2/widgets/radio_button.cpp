@@ -157,6 +157,7 @@ namespace auik::v2
     {
         if (!_value || *_value == new_value) return;
         *_value = new_value;
+        dispatch_change();
         redraw_external(has_draw_record());
     }
 
@@ -165,6 +166,7 @@ namespace auik::v2
         (void)click_count;
         if (key != MouseKey::left || state != KeyPressState::press || !_value) return;
         *_value = !*_value;
+        dispatch_change();
         add_render_command<detail::ClickEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
     }
 } // namespace auik::v2

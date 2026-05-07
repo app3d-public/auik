@@ -1,6 +1,7 @@
 #pragma once
 
 #include <acul/enum.hpp>
+#include <acul/functional/unique_function.hpp>
 #include <acul/string/string.hpp>
 #include <acul/vector.hpp>
 #include <amal/vector.hpp>
@@ -18,8 +19,6 @@ namespace auik::v2
             visible = 0x1,
             configurable = 0x2,
             attachable = 0x4,
-            foreground = 0x8,
-            background = 0x10,
             fixed = 0x20,
             hittable = 0x40,
             viewport_reserved = 0x80
@@ -28,6 +27,16 @@ namespace auik::v2
     };
 
     using WidgetFlags = acul::flags<WidgetFlagBits>;
+    struct DepthZone
+    {
+        enum enum_type
+        {
+            foreground,
+            work,
+            background
+        };
+    };
+
     struct StyleUpdateFlagBits
     {
         enum enum_type
@@ -40,6 +49,14 @@ namespace auik::v2
         using flag_bitmask = std::true_type;
     };
     using StyleUpdateFlags = acul::flags<StyleUpdateFlagBits>;
+    constexpr inline DrawReasonFlags get_draw_reason_from_style_update(StyleUpdateFlags flags)
+    {
+        DrawReasonFlags reason = DrawReasonBits::none;
+        if ((flags & StyleUpdateFlagBits::layout) || (flags & StyleUpdateFlagBits::parent_layout))
+            reason |= DrawReasonBits::layout;
+        return reason;
+    }
+
     constexpr inline detail::StylePropertyFlags g_style_layout_mask =
         detail::StylePropertiesBits::padding | detail::StylePropertiesBits::text_size |
         detail::StylePropertiesBits::border_thickness | detail::StylePropertiesBits::border_radius |
@@ -54,6 +71,79 @@ namespace auik::v2
     class APPLIB_API Widget
     {
     public:
+        struct UserBind
+        {
+            explicit UserBind(Widget *owner) : _owner(owner) {}
+
+            UserBind &on_hover(acul::unique_function<void(HoverEvent &)> fn)
+            {
+                on_hover_fn = std::move(fn);
+                if (_owner && on_hover_fn) _owner->add_event_flags(EventFlagBits::hover);
+                return *this;
+            }
+
+            UserBind &on_click(acul::unique_function<void(ClickEvent &)> fn)
+            {
+                on_click_fn = std::move(fn);
+                if (_owner && on_click_fn) _owner->add_event_flags(EventFlagBits::click);
+                return *this;
+            }
+
+            UserBind &on_drag(acul::unique_function<void(DragEvent &)> fn)
+            {
+                on_drag_fn = std::move(fn);
+                if (_owner && on_drag_fn) _owner->add_event_flags(EventFlagBits::drag);
+                return *this;
+            }
+
+            UserBind &on_scroll(acul::unique_function<void(ScrollEvent &)> fn)
+            {
+                on_scroll_fn = std::move(fn);
+                if (_owner && on_scroll_fn) _owner->add_event_flags(EventFlagBits::scroll);
+                return *this;
+            }
+
+            UserBind &on_focus(acul::unique_function<void(FocusEvent &)> fn)
+            {
+                on_focus_fn = std::move(fn);
+                if (_owner && on_focus_fn) _owner->add_event_flags(EventFlagBits::focus);
+                return *this;
+            }
+
+            UserBind &on_key(acul::unique_function<void(KeyEvent &)> fn)
+            {
+                on_key_fn = std::move(fn);
+                if (_owner && on_key_fn) _owner->add_event_flags(EventFlagBits::key_input);
+                return *this;
+            }
+
+            UserBind &on_char(acul::unique_function<void(CharEvent &)> fn)
+            {
+                on_char_fn = std::move(fn);
+                if (_owner && on_char_fn) _owner->add_event_flags(EventFlagBits::char_input);
+                return *this;
+            }
+
+            UserBind &on_change(acul::unique_function<void(ChangeEvent &)> fn)
+            {
+                on_change_fn = std::move(fn);
+                if (_owner && on_change_fn) _owner->add_event_flags(EventFlagBits::change);
+                return *this;
+            }
+
+            acul::unique_function<void(HoverEvent &)> on_hover_fn = nullptr;
+            acul::unique_function<void(ClickEvent &)> on_click_fn = nullptr;
+            acul::unique_function<void(DragEvent &)> on_drag_fn = nullptr;
+            acul::unique_function<void(ScrollEvent &)> on_scroll_fn = nullptr;
+            acul::unique_function<void(FocusEvent &)> on_focus_fn = nullptr;
+            acul::unique_function<void(KeyEvent &)> on_key_fn = nullptr;
+            acul::unique_function<void(CharEvent &)> on_char_fn = nullptr;
+            acul::unique_function<void(ChangeEvent &)> on_change_fn = nullptr;
+
+        private:
+            Widget *_owner = nullptr;
+        };
+
         WidgetFlags widget_flags;
         EventFlags event_flags = EventFlagBits::none;
 
@@ -68,12 +158,19 @@ namespace auik::v2
         }
 
         virtual ~Widget();
+        UserBind &bind()
+        {
+            if (!_user_bind) _user_bind = acul::alloc<UserBind>(this);
+            return *_user_bind;
+        }
 
         inline u32 id() const { return _id; }
         inline Widget *parent() const { return _parent; }
         inline void set_parent(Widget *parent) { _parent = parent; }
         inline Widget *focus_parent() const { return _focus_parent; }
         inline void set_focus_parent(Widget *parent) { _focus_parent = parent; }
+        inline DepthZone::enum_type depth_zone() const { return _depth_zone; }
+        inline void set_depth_zone(DepthZone::enum_type zone) { _depth_zone = zone; }
         inline detail::RectData &get_rect() { return _rect; }
         inline const detail::RectData &get_rect() const { return _rect; }
         inline void set_rect_tag_id(u32 tag_id) { _rect.tag_id = tag_id; }
@@ -156,6 +253,15 @@ namespace auik::v2
             draw(draw_ctx);
         }
 
+        void invalidate_draw_commands(DrawReasonFlags reason = DrawReasonBits::none)
+        {
+            DrawCtx draw_ctx{};
+            draw_ctx.emit_fn = &emit_draw_invalidate;
+            draw_ctx.emit_hit_rect = is_hittable();
+            draw_ctx.reason = reason;
+            draw(draw_ctx);
+        }
+
         virtual void update_layout_min_size() { set_required_size(size()); }
         virtual void update_layout(bool min_size_known = true)
         {
@@ -209,7 +315,105 @@ namespace auik::v2
         virtual void on_key(Key key, KeyPressState state, KeyMode mods) {}
         virtual void on_char_input(u32 char_code, u32 count) {}
 
+        inline void dispatch_hover(HoverState state)
+        {
+            HoverEvent e{};
+            e.state = state;
+            if (_user_bind && _user_bind->on_hover_fn)
+            {
+                _user_bind->on_hover_fn(e);
+                if (e.is_prevented_default()) return;
+            }
+            on_hover(state);
+        }
+
+        inline void dispatch_click(MouseKey key, KeyPressState state, u32 click_count)
+        {
+            ClickEvent e{};
+            e.key = key;
+            e.state = state;
+            e.click_count = click_count;
+            if (_user_bind && _user_bind->on_click_fn)
+            {
+                _user_bind->on_click_fn(e);
+                if (e.is_prevented_default()) return;
+            }
+            on_click(key, state, click_count);
+        }
+
+        inline void dispatch_drag(const amal::vec2 &delta, KeyPressState state)
+        {
+            DragEvent e{};
+            e.delta = delta;
+            e.state = state;
+            if (_user_bind && _user_bind->on_drag_fn)
+            {
+                _user_bind->on_drag_fn(e);
+                if (e.is_prevented_default()) return;
+            }
+            on_drag(delta, state);
+        }
+
+        inline void dispatch_scroll(const amal::vec2 &delta)
+        {
+            ScrollEvent e{};
+            e.delta = delta;
+            if (_user_bind && _user_bind->on_scroll_fn)
+            {
+                _user_bind->on_scroll_fn(e);
+                if (e.is_prevented_default()) return;
+            }
+            on_scroll(delta);
+        }
+
+        inline void dispatch_focus(bool focused)
+        {
+            FocusEvent e{};
+            e.focused = focused;
+            if (_user_bind && _user_bind->on_focus_fn)
+            {
+                _user_bind->on_focus_fn(e);
+                if (e.is_prevented_default()) return;
+            }
+            on_focus(focused);
+        }
+
+        inline void dispatch_key(Key key, KeyPressState state, KeyMode mods)
+        {
+            KeyEvent e{};
+            e.key = key;
+            e.state = state;
+            e.mods = mods;
+            if (_user_bind && _user_bind->on_key_fn)
+            {
+                _user_bind->on_key_fn(e);
+                if (e.is_prevented_default()) return;
+            }
+            on_key(key, state, mods);
+        }
+
+        inline void dispatch_char(u32 char_code, u32 count)
+        {
+            CharEvent e{};
+            e.char_code = char_code;
+            e.count = count;
+            if (_user_bind && _user_bind->on_char_fn)
+            {
+                _user_bind->on_char_fn(e);
+                if (e.is_prevented_default()) return;
+            }
+            on_char_input(char_code, count);
+        }
+
     protected:
+        inline bool dispatch_change()
+        {
+            if (!_user_bind || !_user_bind->on_change_fn) return false;
+            ChangeEvent e{};
+            _user_bind->on_change_fn(e);
+            return e.is_prevented_default();
+        }
+
         inline void redraw_external(bool has_record, DrawReasonFlags update_reason = DrawReasonBits::external)
         {
             if (has_record) update_draw_commands(update_reason);
@@ -220,6 +424,7 @@ namespace auik::v2
         u32 _id;
         Widget *_parent = nullptr;
         Widget *_focus_parent = nullptr;
+        DepthZone::enum_type _depth_zone = DepthZone::work;
         amal::vec2 _depth_range{0.0f, 1.0f};
         amal::vec2 _root_viewport_origin{0.0f, 0.0f};
         detail::RectData _rect{};
@@ -227,6 +432,7 @@ namespace auik::v2
         StyleState _style_state = StyleState::normal;
         bool _external_draw_culled = false;
         bool _external_draw_invalidated = false;
+        UserBind *_user_bind = nullptr;
     };
 
     APPLIB_API void assign_next_depth(const amal::vec2 &parent_range, amal::vec2 &dst_range);

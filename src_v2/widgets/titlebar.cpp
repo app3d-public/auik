@@ -31,7 +31,7 @@ namespace auik::v2
 
         static void update_titlebar_child_depths(const amal::vec2 &parent_depth_range, const acul::vector<Widget *> &children)
         {
-            const amal::vec2 background_range = detail::depth_zone_range(parent_depth_range, detail::DepthZone::background);
+            const amal::vec2 background_range = detail::depth_zone_range(parent_depth_range, DepthZone::background);
             amal::vec2 child_range{};
             assign_next_depth(background_range, child_range);
             for (auto *child : children)
@@ -210,7 +210,7 @@ namespace auik::v2
     {
         auto *theme = get_theme();
         auto *quads_stream = get_primary_quads_stream();
-        const amal::vec2 background_range = detail::depth_zone_range(depth_range(), detail::DepthZone::background);
+        const amal::vec2 background_range = detail::depth_zone_range(depth_range(), DepthZone::background);
 
         QuadsInstanceData bg_data{};
         bg_data.rect = bounds();

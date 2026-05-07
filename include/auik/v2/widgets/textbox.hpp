@@ -80,7 +80,10 @@ namespace auik::v2
                 if (has_internal_scrollbar())
                 {
                     const size_t text_draw_count = _text.draw_record_count();
-                    update_layout(false);
+                    const f32 old_scroll_y = _content_scroll_y;
+                    update_layout_from_current_bounds(false);
+                    if (update_content_scroll_y_for_cursor() && old_scroll_y != _content_scroll_y)
+                        update_layout_from_current_bounds(true);
                     rebuild_selection_rect_cache();
                     if (_text.layout_instance_count() < text_draw_count || edit_draw_slots_need_record())
                     {
@@ -95,10 +98,13 @@ namespace auik::v2
                 const size_t text_draw_count = _text.draw_record_count();
                 _text.set_position(_content_pos);
                 _text.set_size(_content_size);
+                _text.set_clip_id(text_content_clip_id());
                 _text.update_layout(false);
                 update_content_scroll_x_for_cursor();
+                update_content_scroll_y_for_cursor();
                 _text.translate({-_content_scroll_x, -_content_scroll_y});
                 _text.set_clip_id(text_content_clip_id());
+                refresh_placeholder_layout();
                 detail::get_context().dirty_flags &= ~DirtyFlagBits::layout;
                 rebuild_selection_rect_cache();
                 if (_text.layout_instance_count() < text_draw_count || edit_draw_slots_need_record())
@@ -111,8 +117,11 @@ namespace auik::v2
             else
             {
                 const f32 old_scroll_x = _content_scroll_x;
+                const f32 old_scroll_y = _content_scroll_y;
                 if (update_content_scroll_x_for_cursor() && old_scroll_x != _content_scroll_x)
                     _text.translate({old_scroll_x - _content_scroll_x, 0.0f});
+                if (update_content_scroll_y_for_cursor() && old_scroll_y != _content_scroll_y)
+                    update_layout_from_current_bounds(true);
                 rebuild_selection_rect_cache();
                 if (edit_draw_slots_need_record())
                 {
@@ -141,6 +150,7 @@ namespace auik::v2
         f32 line_screen_y(u32 line_index) const;
         amal::rect line_selection_rect(u32 line_index, f32 x0, f32 x1) const;
         bool update_content_scroll_x_for_cursor();
+        bool update_content_scroll_y_for_cursor();
         u16 text_content_clip_id() const { return _content_clip_id != 0xFFFFu ? _content_clip_id : clip_id(); }
         void update_text_content_clip_rect();
         void rebuild_selection_rect_cache();
@@ -151,7 +161,9 @@ namespace auik::v2
         void draw_caret(DrawCtx &ctx);
         void draw_selection_drag_icon(DrawCtx &ctx, f32 selection_z);
         u32 line_index_from_cursor(int cursor) const;
+        u32 line_index_from_cursor(int cursor, bool cursor_at_end_of_line) const;
         void refresh_text_layout_for_editing();
+        void refresh_placeholder_layout();
         u32 required_selection_draw_slots() const;
         bool edit_draw_slots_need_record() const;
         void move_cursor_vertical(int dir, bool select);
@@ -179,6 +191,7 @@ namespace auik::v2
         void schedule_caret_blink();
         void tick_caret_blink();
         void update_transient_draw_commands();
+        void update_layout_from_current_bounds(bool min_size_known);
 
         Text _text;
         Text *_placeholder = nullptr;
@@ -190,6 +203,7 @@ namespace auik::v2
         amal::vec2 _content_size{0.0f, 0.0f};
         u16 _content_clip_id = 0xFFFFu;
         detail::Scrollbar *_scrollbar_y = nullptr;
+        detail::Scrollbar *_drag_scrollbar = nullptr;
         f32 _content_scroll_x = 0.0f;
         f32 _content_scroll_y = 0.0f;
         bool _changed = false;
@@ -222,7 +236,7 @@ namespace auik::v2
     protected:
         bool accepts_newline() const override { return true; }
         bool should_resize_to_content() const override { return _can_expand_to_content; }
-        bool has_internal_scrollbar() const override { return true; }
+        bool has_internal_scrollbar() const override { return !_can_expand_to_content; }
 
     private:
         bool _can_expand_to_content = false;

@@ -3,19 +3,19 @@
 #include <acul/string/string.hpp>
 #include <acul/vector.hpp>
 #include "../theme.hpp"
+#include "combobox.hpp"
 #include "detail/popup_trigger.hpp"
 #include "detail/selectable.hpp"
 #include "image_button.hpp"
 #include "widget.hpp"
 
-#define AUIK_TAG_TAB_BAR            0xECA5E393u
-#define AUIK_TAG_TAB_BAR_ITEM       0x6F421EACu
-#define AUIK_TAG_TABBAR_POPUP_BTN   0x9041AD68u
-#define AUIK_TAG_TAB_BAR_OVERFLOW   AUIK_TAG_TABBAR_POPUP_BTN
-#define AUIK_TAG_TAB_BAR_POPUP      0x2E443728u
-#define AUIK_TAG_TAB_BAR_POPUP_ITEM 0x292CF651u
-#define AUIK_TAG_TAB_BAR_TAB_WIDTH  0xC72A3851u
-#define AUIK_TAG_CLOSE_BUTTON       0x5B258693u
+#define AUIK_TAG_TAB_BAR           0xECA5E393u
+#define AUIK_TAG_TAB_BAR_ITEM      0x6F421EACu
+#define AUIK_TAG_TABBAR_POPUP_BTN  0x9041AD68u
+#define AUIK_TAG_TAB_BAR_OVERFLOW  AUIK_TAG_TABBAR_POPUP_BTN
+#define AUIK_TAG_TAB_BAR_POPUP     0x2E443728u
+#define AUIK_TAG_TAB_BAR_TAB_WIDTH 0xC72A3851u
+#define AUIK_TAG_CLOSE_BUTTON      0x5B258693u
 
 namespace auik::v2
 {
@@ -47,13 +47,13 @@ namespace auik::v2
         return get_default_tab_bar_flags() | WidgetFlagBits::fixed;
     }
 
-    class APPLIB_API TabBar final : public Widget
+    class APPLIB_API TabBar : public Widget
     {
     public:
         TabBar(u32 id, acul::vector<acul::string> items = {}, TabBarFlags tab_flags = TabBarFlagBits::none,
-               amal::vec2 size = {0.0f, 0.0f},
-               WidgetFlags widget_flags = get_default_tab_bar_flags(), Widget *parent = nullptr,
-               u32 style_tag = AUIK_TAG_TAB_BAR, f32 tab_width = 0.0f, u32 tab_width_key = 0u);
+               amal::vec2 size = {0.0f, 0.0f}, WidgetFlags widget_flags = get_default_tab_bar_flags(),
+               Widget *parent = nullptr, f32 tab_width = 0.0f, u32 tab_width_key = 0u,
+               u32 item_style_tag = AUIK_TAG_TAB_BAR_ITEM, u32 popup_item_style_tag = AUIK_TAG_COMBO_BOX_ITEM);
         ~TabBar() override;
 
         StyleUpdateFlags update_style() override;
@@ -76,6 +76,7 @@ namespace auik::v2
 
         const acul::vector<u32> &element_ids() const { return _element_ids; }
         void set_items(acul::vector<acul::string> items);
+        void set_style_tag(u32 tag_id);
 
         iterator begin() { return _tabs.begin(); }
         iterator end() { return _tabs.end(); }
@@ -111,7 +112,8 @@ namespace auik::v2
         void set_tab_width(f32 value);
         void set_tab_width_key(u32 key);
 
-    private:
+    protected:
+        bool draw_transition_targets(DrawCtx &ctx);
         void rebuild_items();
         void sync_selection_to_widgets();
         void update_popup_layout();
@@ -130,6 +132,9 @@ namespace auik::v2
         void update_drag_realtime_order(f32 delta_x);
         void swap_drag_with_neighbor(u32 drag_index, u32 neighbor_index);
         void update_drag_depth();
+        StyleUpdateFlags update_tab_item_style(u32 index, const detail::WidgetStyleSelectorTransition &transition);
+        StyleUpdateFlags update_close_button_style(u32 index, const detail::WidgetStyleSelectorTransition &transition);
+        StyleUpdateFlags update_popup_item_style(u32 index, const detail::WidgetStyleSelectorTransition &transition);
         void update_layout_from_current_bounds(bool min_size_known);
         f32 resolve_tab_width() const;
         amal::vec2 resolve_tab_required_size(u32 index);
@@ -159,6 +164,8 @@ namespace auik::v2
         f32 _tab_width = 0.0f;
         f32 _resolved_tab_width = 0.0f;
         u32 _tab_width_key = 0u;
+        u32 _item_style_tag = AUIK_TAG_TAB_BAR_ITEM;
+        u32 _popup_item_style_tag = AUIK_TAG_COMBO_BOX_ITEM;
         u16 _full_clip_id = 0xFFFFu;
         u16 _content_clip_id = 0xFFFFu;
         StyleSelector _style{Theme::STYLE_ID_INVALID, AUIK_TAG_TAB_BAR};
@@ -168,15 +175,15 @@ namespace auik::v2
                                 TabBarFlags tab_flags = TabBarFlagBits::none, f32 tab_width = 0.0f,
                                 u32 tab_width_key = 0u)
     {
-        return acul::alloc<TabBar>(id, std::move(items), tab_flags, amal::vec2{0.0f, 0.0f},
-                                   get_default_tab_bar_flags(), nullptr, AUIK_TAG_TAB_BAR, tab_width, tab_width_key);
+        return acul::alloc<TabBar>(id, std::move(items), tab_flags, amal::vec2{0.0f, 0.0f}, get_default_tab_bar_flags(),
+                                   nullptr, tab_width, tab_width_key);
     }
 
     inline TabBar *make_fixed_tab_bar(u32 id, acul::vector<acul::string> items = {}, amal::vec2 size = {0.0f, 0.0f},
                                       TabBarFlags tab_flags = TabBarFlagBits::none, f32 tab_width = 0.0f,
                                       u32 tab_width_key = 0u)
     {
-        return acul::alloc<TabBar>(id, std::move(items), tab_flags, size, get_default_fixed_tab_bar_flags(),
-                                   nullptr, AUIK_TAG_TAB_BAR, tab_width, tab_width_key);
+        return acul::alloc<TabBar>(id, std::move(items), tab_flags, size, get_default_fixed_tab_bar_flags(), nullptr,
+                                   tab_width, tab_width_key);
     }
 } // namespace auik::v2

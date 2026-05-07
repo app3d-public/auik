@@ -4,15 +4,6 @@
 
 namespace auik::v2
 {
-    static inline bool is_style_only_draw_update(const DrawCtx &ctx)
-    {
-        if (!ctx.is_updating()) return false;
-        if (!(ctx.reason & DrawReasonBits::style)) return false;
-        if (ctx.reason & DrawReasonBits::layout) return false;
-        if (ctx.reason & DrawReasonBits::full_redraw) return false;
-        return true;
-    }
-
     StyleUpdateFlags TextButton::update_style()
     {
         const u32 parent_id = parent() ? parent()->id() : 0u;
@@ -114,7 +105,6 @@ namespace auik::v2
         if (should_emit_quads_instance(bg_visible, _bg, ctx.emit_hit_rect))
             ctx.emit(quads_stream, _bg, &bg_data, get_rect(), ctx.emit_hit_rect);
 
-        if (is_style_only_draw_update(ctx) && !_text_draw_dirty) return;
         _text->draw(ctx);
         _text_draw_dirty = false;
     }

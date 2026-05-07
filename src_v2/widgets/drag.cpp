@@ -143,9 +143,12 @@ namespace auik::v2
         void Draggable<T>::set_value(T value)
         {
             value = clamp_value(value, _min_value, _max_value);
+            const T prev_value = this->value();
+            if (prev_value == value) return;
             if (_value) *_value = value;
             else _fallback_value = value;
             _last_value = value;
+            dispatch_change();
             sync_text_from_value();
         }
 

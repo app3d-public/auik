@@ -4,15 +4,17 @@
 #include "../../theme.hpp"
 #include "../widget.hpp"
 
-#define AUIK_TAG_SCROLLBAR_TRACK   0x5E57D9C1
-#define AUIK_TAG_SCROLLBAR_THUMB   0x0DA3B8EE
-#define AUIK_ID_SCROLLBAR_X        0x2F8B5D23u
-#define AUIK_ID_SCROLLBAR_Y        0x2F8B5D24u
-#define AUIK_TAG_SCROLLBAR_TRACK_X 0x05548502u
-#define AUIK_TAG_SCROLLBAR_THUMB_X 0x7EA30FD2u
-#define AUIK_TAG_SCROLLBAR_TRACK_Y 0x2D8A351Cu
-#define AUIK_TAG_SCROLLBAR_THUMB_Y 0x06058F64u
-#define AUIK_SCROLL_STEP           24
+#define AUIK_TAG_SCROLLBAR_TRACK          0x5E57D9C1
+#define AUIK_TAG_SCROLLBAR_THUMB          0x0DA3B8EE
+#define AUIK_ID_SCROLLBAR_X               0x2F8B5D23u
+#define AUIK_ID_SCROLLBAR_Y               0x2F8B5D24u
+#define AUIK_TAG_SCROLLBAR_TRACK_X        0x05548502u
+#define AUIK_TAG_SCROLLBAR_THUMB_X        0x7EA30FD2u
+#define AUIK_TAG_SCROLLBAR_TRACK_Y        0x2D8A351Cu
+#define AUIK_TAG_SCROLLBAR_THUMB_Y        0x06058F64u
+#define AUIK_TAG_SCROLLBAR_TRACK_INTERNAL 0xFF44005Bu
+#define AUIK_TAG_SCROLLBAR_THUMB_INTERNAL 0x1791BD20u
+#define AUIK_SCROLL_STEP                  24
 
 namespace auik::v2::detail
 {
@@ -36,15 +38,17 @@ namespace auik::v2::detail
     class APPLIB_API Scrollbar : public Widget
     {
     public:
-        Scrollbar(u32 id, u32 track_tag_id, u32 thumb_tag_id, Widget *parent = nullptr, amal::axis axis = amal::axis::y)
-            : Widget(id, WidgetFlagBits::visible | WidgetFlagBits::foreground | WidgetFlagBits::hittable,
-                     EventFlagBits::none, parent, {}, track_tag_id),
-              _track_style({Theme::STYLE_ID_INVALID, AUIK_TAG_SCROLLBAR_TRACK}),
-              _thumb_style({Theme::STYLE_ID_INVALID, AUIK_TAG_SCROLLBAR_THUMB}),
+        Scrollbar(u32 id, u32 track_tag_id, u32 thumb_tag_id, Widget *parent = nullptr, amal::axis axis = amal::axis::y,
+                  u32 track_style_tag = AUIK_TAG_SCROLLBAR_TRACK, u32 thumb_style_tag = AUIK_TAG_SCROLLBAR_THUMB)
+            : Widget(id, WidgetFlagBits::visible | WidgetFlagBits::hittable, EventFlagBits::none, parent, {},
+                     track_tag_id),
+              _track_style({Theme::STYLE_ID_INVALID, track_style_tag}),
+              _thumb_style({Theme::STYLE_ID_INVALID, thumb_style_tag}),
               _thumb_rect(detail::make_rect_data(0, thumb_tag_id)),
               _behavior(axis)
         {
             assert(parent);
+            set_depth_zone(DepthZone::foreground);
             u32 owner_id = parent->id();
             _rect.widget_id = owner_id;
             _thumb_rect.widget_id = owner_id;
@@ -74,6 +78,7 @@ namespace auik::v2::detail
         void rebuild_clip_rects() override;
 
         void draw(DrawCtx &ctx) override;
+        bool has_draw_record() const;
 
     private:
         DrawDataID _track_draw_id;
@@ -113,6 +118,13 @@ namespace auik::v2::detail
                                       parent, amal::axis::y);
     }
 
+    inline Scrollbar *make_internal_y_scrollbar(Widget *parent)
+    {
+        return acul::alloc<Scrollbar>(AUIK_ID_SCROLLBAR_Y, AUIK_TAG_SCROLLBAR_TRACK_Y, AUIK_TAG_SCROLLBAR_THUMB_Y,
+                                      parent, amal::axis::y, AUIK_TAG_SCROLLBAR_TRACK_INTERNAL,
+                                      AUIK_TAG_SCROLLBAR_THUMB_INTERNAL);
+    }
+
     inline void ensure_x_scrollbar(Scrollbar *&scrollbar, Widget *parent)
     {
         if (scrollbar) return;
@@ -123,5 +135,11 @@ namespace auik::v2::detail
     {
         if (scrollbar) return;
         scrollbar = make_y_scrollbar(parent);
+    }
+
+    inline void ensure_internal_y_scrollbar(Scrollbar *&scrollbar, Widget *parent)
+    {
+        if (scrollbar) return;
+        scrollbar = make_internal_y_scrollbar(parent);
     }
 } // namespace auik::v2::detail

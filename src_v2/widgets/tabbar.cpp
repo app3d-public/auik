@@ -1,5 +1,6 @@
 #include <auik/v2/auik.hpp>
 #include <auik/v2/detail/depth.hpp>
+#include <auik/v2/detail/rect.hpp>
 #include <auik/v2/widgets/combobox.hpp>
 #include <auik/v2/widgets/detail/selectable.hpp>
 #include <auik/v2/widgets/tabbar.hpp>
@@ -12,21 +13,12 @@ namespace auik::v2
 {
     static inline amal::vec2 get_tab_popup_depth_range()
     {
-        return detail::get_root_depth_range(detail::DepthZone::foreground, 31);
+        return detail::get_root_depth_range(DepthZone::foreground, 31);
     }
 
     static inline f32 dominant_scroll_axis(const amal::vec2 &delta)
     {
         return amal::abs(delta.x) > amal::abs(delta.y) ? delta.x : delta.y;
-    }
-
-    static inline amal::vec4 intersect_rects(const amal::vec4 &a, const amal::vec4 &b)
-    {
-        const f32 left = amal::max(a.x, b.x);
-        const f32 top = amal::max(a.y, b.y);
-        const f32 right = amal::min(a.x + a.z, b.x + b.z);
-        const f32 bottom = amal::min(a.y + a.w, b.y + b.w);
-        return {left, top, amal::max(right - left, 0.0f), amal::max(bottom - top, 0.0f)};
     }
 
     static inline TabBarFlags normalize_tab_bar_flags(TabBarFlags flags)
@@ -46,12 +38,15 @@ namespace auik::v2
     }
 
     TabBar::TabBar(u32 id, acul::vector<acul::string> items, TabBarFlags tab_flags, amal::vec2 size,
-                   WidgetFlags widget_flags, Widget *parent, u32 style_tag, f32 tab_width, u32 tab_width_key)
-        : Widget(id, widget_flags, make_tab_bar_event_flags(tab_flags), parent, {{0.0f, 0.0f}, size}, style_tag),
+                   WidgetFlags widget_flags, Widget *parent, f32 tab_width, u32 tab_width_key, u32 item_style_tag,
+                   u32 popup_item_style_tag)
+        : Widget(id, widget_flags, make_tab_bar_event_flags(tab_flags), parent, {{0.0f, 0.0f}, size}, AUIK_TAG_TAB_BAR),
           _tab_flags(normalize_tab_bar_flags(tab_flags)),
           _tab_width(tab_width),
           _tab_width_key(tab_width_key)
     {
+        _item_style_tag = item_style_tag;
+        _popup_item_style_tag = popup_item_style_tag;
         if (popup())
         {
             _overflow_button = acul::alloc<detail::PopupTrigger>(AUIK_TAG_TABBAR_POPUP_BTN, AUIK_TAG_TABBAR_POPUP_BTN,
@@ -90,11 +85,10 @@ namespace auik::v2
         if (_popup) _popup->clear_children();
         while (_close_buttons.size() < _tabs.size())
         {
-            auto *button = acul::alloc<ImageButton>(AUIK_TAG_CLOSE_BUTTON, get_cached_image(AUIK_ICON_CLOSE),
-                                                    amal::vec2{0.0f, 0.0f}, amal::vec2{0.0f, 0.0f},
-                                                    WidgetFlagBits::visible | WidgetFlagBits::hittable |
-                                                        WidgetFlagBits::fixed,
-                                                    this, AUIK_TAG_CLOSE_BUTTON);
+            auto *button = acul::alloc<ImageButton>(
+                AUIK_TAG_CLOSE_BUTTON, get_cached_image(AUIK_ICON_CLOSE), amal::vec2{0.0f, 0.0f},
+                amal::vec2{0.0f, 0.0f}, WidgetFlagBits::visible | WidgetFlagBits::hittable | WidgetFlagBits::fixed,
+                this, AUIK_TAG_CLOSE_BUTTON);
             button->get_rect().widget_id = id();
             button->set_focus_parent(this);
             button->update_style();
@@ -116,10 +110,9 @@ namespace auik::v2
 
             if (_popup)
             {
-                auto *popup_item = acul::alloc<detail::Selectable>(AUIK_TAG_COMBO_BOX_ITEM, AUIK_TAG_COMBO_BOX_ITEM,
-                                                                   element_id, tab->text(), amal::vec2{0.0f, 0.0f},
-                                                                   _popup, AUIK_TAG_COMBO_BOX_ITEM,
-                                                                   WidgetFlagBits::visible | WidgetFlagBits::hittable);
+                auto *popup_item = acul::alloc<detail::Selectable>(
+                    _popup_item_style_tag, _popup_item_style_tag, element_id, tab->text(), amal::vec2{0.0f, 0.0f},
+                    _popup, _popup_item_style_tag, WidgetFlagBits::visible | WidgetFlagBits::hittable);
                 popup_item->get_rect().widget_id = id();
                 popup_item->set_focus_parent(_popup);
                 _popup->add_child(popup_item, WindowChildLayout::block);
@@ -140,15 +133,17 @@ namespace auik::v2
 
     void TabBar::sync_selection_to_widgets()
     {
-        const auto apply = [&](Widget *widget, u32 index) {
+        const auto apply = [&](detail::Selectable *widget, u32 index) {
             if (!widget) return;
             const bool selected = index < _element_ids.size() && is_selected(_element_ids[index]);
-            widget->set_style_state(selected ? StyleState::focus : StyleState::normal);
+            widget->set_style_state(StyleState::normal);
+            widget->set_selected(selected);
             widget->update_style();
         };
         for (u32 i = 0; i < _tabs.size(); ++i) apply(_tabs[i], i);
         if (_popup)
-            for (u32 i = 0; i < _popup->children.size(); ++i) apply(_popup->children[i], i);
+            for (u32 i = 0; i < _popup->children.size(); ++i)
+                apply(static_cast<detail::Selectable *>(_popup->children[i]), i);
     }
 
     void TabBar::set_items(acul::vector<acul::string> items)
@@ -168,9 +163,9 @@ namespace auik::v2
         {
             const u32 element_id = _next_element_id++;
             _element_ids.push_back(element_id);
-            auto *tab = acul::alloc<detail::Selectable>(AUIK_TAG_TAB_BAR_ITEM, AUIK_TAG_TAB_BAR_ITEM, element_id,
-                                                        items[i], amal::vec2{0.0f, 0.0f}, this, AUIK_TAG_TAB_BAR_ITEM,
-                                                        WidgetFlagBits::visible | WidgetFlagBits::hittable);
+            auto *tab = acul::alloc<detail::Selectable>(
+                _item_style_tag, _item_style_tag, element_id, items[i], amal::vec2{0.0f, 0.0f}, this, _item_style_tag,
+                WidgetFlagBits::visible | WidgetFlagBits::hittable, _item_style_tag, StyleState::focus);
             tab->get_rect().widget_id = id();
             tab->set_focus_parent(this);
             tab->update_style();
@@ -178,6 +173,14 @@ namespace auik::v2
         }
         rebuild_items();
         sync_selection_to_widgets();
+    }
+
+    void TabBar::set_style_tag(u32 tag_id)
+    {
+        if (_style.tag_id == tag_id) return;
+        _style = {Theme::STYLE_ID_INVALID, tag_id};
+        set_rect_tag_id(tag_id);
+        detail::get_context().dirty_flags |= DirtyFlagBits::layout;
     }
 
     u32 TabBar::selected_id() const { return _selected_element_ids.empty() ? 0u : _selected_element_ids[0]; }
@@ -236,11 +239,69 @@ namespace auik::v2
         detail::mark_host_refresh_request();
     }
 
+    StyleUpdateFlags TabBar::update_tab_item_style(u32 index,
+                                                   const detail::WidgetStyleSelectorTransition &transition)
+    {
+        if (index >= _tabs.size()) return StyleUpdateFlagBits::none;
+        auto *tab = _tabs[index];
+        if (!tab) return StyleUpdateFlagBits::none;
+        const bool selected = index < _element_ids.size() && is_selected(_element_ids[index]);
+        StyleState state = StyleState::normal;
+        if (transition.current_id.tag_id == _item_style_tag && index < _element_ids.size() &&
+            transition.current_id.element_id == _element_ids[index])
+            state = transition.current_state;
+        tab->set_style_state(state);
+        tab->set_selected(selected);
+        return tab->update_style();
+    }
+
+    StyleUpdateFlags TabBar::update_close_button_style(u32 index,
+                                                       const detail::WidgetStyleSelectorTransition &transition)
+    {
+        if (index >= _close_buttons.size() || !_close_buttons[index]) return StyleUpdateFlagBits::none;
+        StyleState close_state = StyleState::normal;
+        if (transition.current_id.tag_id == AUIK_TAG_CLOSE_BUTTON && index < _element_ids.size() &&
+            transition.current_id.element_id == _element_ids[index])
+            close_state = transition.current_state;
+        _close_buttons[index]->set_style_state(close_state);
+        return _close_buttons[index]->update_style();
+    }
+
+    StyleUpdateFlags TabBar::update_popup_item_style(u32 index,
+                                                     const detail::WidgetStyleSelectorTransition &transition)
+    {
+        if (!_popup || index >= _popup->children.size()) return StyleUpdateFlagBits::none;
+        auto *child = static_cast<detail::Selectable *>(_popup->children[index]);
+        if (!child) return StyleUpdateFlagBits::none;
+        const bool selected = index < _element_ids.size() && is_selected(_element_ids[index]);
+        StyleState state = StyleState::normal;
+        if (transition.current_id.tag_id == _popup_item_style_tag && index < _element_ids.size() &&
+            transition.current_id.element_id == _element_ids[index])
+            state = transition.current_state;
+        child->set_style_state(state);
+        child->set_selected(selected);
+        return child->update_style();
+    }
+
     StyleUpdateFlags TabBar::update_style()
     {
         const u32 parent_id = parent() ? parent()->id() : 0u;
         StyleUpdateFlags out = resolve_style_selector(_style, id(), parent_id, style_state());
         const auto transition = detail::get_widget_style_selector_transition(id());
+        const bool transition_targets_self =
+            transition.current_id.widget_id == id() || transition.prev_id.widget_id == id();
+        const bool transition_targets_item =
+            transition.current_id.tag_id == _item_style_tag || transition.prev_id.tag_id == _item_style_tag;
+        const bool transition_targets_close =
+            transition.current_id.tag_id == AUIK_TAG_CLOSE_BUTTON || transition.prev_id.tag_id == AUIK_TAG_CLOSE_BUTTON;
+        const bool transition_targets_popup_item =
+            transition.current_id.tag_id == _popup_item_style_tag || transition.prev_id.tag_id == _popup_item_style_tag;
+        const bool transition_targets_overflow = transition.current_id.tag_id == AUIK_TAG_TABBAR_POPUP_BTN ||
+                                                 transition.prev_id.tag_id == AUIK_TAG_TABBAR_POPUP_BTN;
+        const bool local_hover_transition =
+            transition_targets_self && (transition_targets_item || transition_targets_close ||
+                                        transition_targets_popup_item || transition_targets_overflow);
+
         if (_overflow_button)
         {
             StyleState overflow_state = _open ? StyleState::active : StyleState::normal;
@@ -248,41 +309,44 @@ namespace auik::v2
             _overflow_button->set_style_state(overflow_state);
             out |= _overflow_button->update_style(AUIK_TAG_TABBAR_POPUP_BTN, id(), overflow_state);
         }
-        for (u32 i = 0; i < _tabs.size(); ++i)
+
+        if (local_hover_transition)
         {
-            auto *tab = _tabs[i];
-            StyleState state =
-                i < _element_ids.size() && is_selected(_element_ids[i]) ? StyleState::focus : StyleState::normal;
-            if (transition.current_id.tag_id == AUIK_TAG_TAB_BAR_ITEM && i < _element_ids.size() &&
-                transition.current_id.element_id == _element_ids[i])
-                state = transition.current_state;
-            tab->set_style_state(state);
-            out |= tab->update_style();
-            if (i < _close_buttons.size() && _close_buttons[i])
+            const u32 prev_index = find_index_by_element_id(transition.prev_id.element_id);
+            const u32 current_index = find_index_by_element_id(transition.current_id.element_id);
+            if (transition_targets_item)
             {
-                StyleState close_state = StyleState::normal;
-                if (transition.current_id.tag_id == AUIK_TAG_CLOSE_BUTTON && i < _element_ids.size() &&
-                    transition.current_id.element_id == _element_ids[i])
-                    close_state = transition.current_state;
-                _close_buttons[i]->set_style_state(close_state);
-                out |= _close_buttons[i]->update_style();
+                out |= update_tab_item_style(prev_index, transition);
+                if (current_index != prev_index) out |= update_tab_item_style(current_index, transition);
+            }
+            if (transition_targets_close)
+            {
+                out |= update_close_button_style(prev_index, transition);
+                if (current_index != prev_index) out |= update_close_button_style(current_index, transition);
+            }
+        }
+        else
+        {
+            for (u32 i = 0; i < _tabs.size(); ++i)
+            {
+                out |= update_tab_item_style(i, transition);
+                out |= update_close_button_style(i, transition);
             }
         }
 
         if (_popup)
         {
             out |= _popup->update_style();
-            for (u32 i = 0; i < _popup->children.size(); ++i)
+            if (local_hover_transition && transition_targets_popup_item)
             {
-                auto *child = _popup->children[i];
-                if (!child) continue;
-                StyleState state =
-                    i < _element_ids.size() && is_selected(_element_ids[i]) ? StyleState::focus : StyleState::normal;
-                if (transition.current_id.tag_id == AUIK_TAG_COMBO_BOX_ITEM && i < _element_ids.size() &&
-                    transition.current_id.element_id == _element_ids[i])
-                    state = transition.current_state;
-                child->set_style_state(state);
-                out |= child->update_style();
+                const u32 prev_index = find_index_by_element_id(transition.prev_id.element_id);
+                const u32 current_index = find_index_by_element_id(transition.current_id.element_id);
+                out |= update_popup_item_style(prev_index, transition);
+                if (current_index != prev_index) out |= update_popup_item_style(current_index, transition);
+            }
+            else
+            {
+                for (u32 i = 0; i < _popup->children.size(); ++i) out |= update_popup_item_style(i, transition);
             }
         }
         const f32 next_tab_width = resolve_tab_width();
@@ -404,9 +468,10 @@ namespace auik::v2
 
         const amal::vec4 parent_clip =
             parent() ? parent()->get_content_clip_rect() : amal::vec4{position().x, position().y, size().x, size().y};
-        const amal::vec4 full_clip = intersect_rects(parent_clip, {position().x, position().y, size().x, size().y});
+        const amal::vec4 full_clip =
+            detail::intersect_rects(parent_clip, {position().x, position().y, size().x, size().y});
         const f32 tabs_clip_right = position().x + size().x - padding.z - popup_reserved;
-        const amal::vec4 tabs_clip = intersect_rects(
+        const amal::vec4 tabs_clip = detail::intersect_rects(
             parent_clip, {position().x, position().y, amal::max(tabs_clip_right - position().x, 0.0f), size().y});
         if (_full_clip_id == 0xFFFFu) _full_clip_id = push_clip_rect(full_clip);
         else update_clip_rect(_full_clip_id, full_clip);
@@ -508,9 +573,10 @@ namespace auik::v2
             const f32 popup_reserved = popup() ? overflow_size.x : 0.0f;
             const amal::vec4 parent_clip = parent() ? parent()->get_content_clip_rect()
                                                     : amal::vec4{position().x, position().y, size().x, size().y};
-            const amal::vec4 full_clip = intersect_rects(parent_clip, {position().x, position().y, size().x, size().y});
+            const amal::vec4 full_clip =
+                detail::intersect_rects(parent_clip, {position().x, position().y, size().x, size().y});
             const f32 tabs_clip_right = position().x + size().x - padding.z - popup_reserved;
-            const amal::vec4 tabs_clip = intersect_rects(
+            const amal::vec4 tabs_clip = detail::intersect_rects(
                 parent_clip, {position().x, position().y, amal::max(tabs_clip_right - position().x, 0.0f), size().y});
             if (_full_clip_id != 0xFFFFu) update_clip_rect(_full_clip_id, full_clip);
             if (_content_clip_id != 0xFFFFu) update_clip_rect(_content_clip_id, tabs_clip);
@@ -519,15 +585,18 @@ namespace auik::v2
 
     void TabBar::rebuild_clip_rects()
     {
+        _full_clip_id = 0xFFFFu;
+        _content_clip_id = 0xFFFFu;
         const auto &style = get_theme()->get_style(_style.id);
         const amal::vec4 padding = style.padding();
         const amal::vec2 overflow_size = popup() ? measure_overflow_size() : amal::vec2{0.0f, 0.0f};
         const f32 popup_reserved = popup() ? overflow_size.x : 0.0f;
         const amal::vec4 parent_clip =
             parent() ? parent()->get_content_clip_rect() : amal::vec4{position().x, position().y, size().x, size().y};
-        const amal::vec4 full_clip = intersect_rects(parent_clip, {position().x, position().y, size().x, size().y});
+        const amal::vec4 full_clip =
+            detail::intersect_rects(parent_clip, {position().x, position().y, size().x, size().y});
         const f32 tabs_clip_right = position().x + size().x - padding.z - popup_reserved;
-        const amal::vec4 tabs_clip = intersect_rects(
+        const amal::vec4 tabs_clip = detail::intersect_rects(
             parent_clip, {position().x, position().y, amal::max(tabs_clip_right - position().x, 0.0f), size().y});
         if (_full_clip_id == 0xFFFFu) _full_clip_id = push_clip_rect(full_clip);
         else update_clip_rect(_full_clip_id, full_clip);
@@ -572,9 +641,61 @@ namespace auik::v2
         if (_drag_element_id != 0u) update_drag_depth();
     }
 
+    bool TabBar::draw_transition_targets(DrawCtx &ctx)
+    {
+        const auto transition = detail::get_widget_style_selector_transition(id());
+        bool emitted = false;
+        auto draw_target = [&](const detail::ElementID &element_id) {
+            if (!element_id || element_id.widget_id != id()) return;
+            if (element_id.tag_id == _item_style_tag)
+            {
+                const u32 index = find_index_by_element_id(element_id.element_id);
+                if (index >= _tabs.size() || !_tabs[index] || !_tabs[index]->is_visible()) return;
+                DrawCtx tab_ctx = ctx;
+                tab_ctx.emit_hit_rect = _tabs[index]->is_hittable();
+                _tabs[index]->draw(tab_ctx);
+                emitted = true;
+                return;
+            }
+            if (element_id.tag_id == AUIK_TAG_CLOSE_BUTTON)
+            {
+                const u32 index = find_index_by_element_id(element_id.element_id);
+                if (index >= _close_buttons.size() || !_close_buttons[index] || !_close_buttons[index]->is_visible())
+                    return;
+                DrawCtx close_ctx = ctx;
+                close_ctx.emit_hit_rect = _close_buttons[index]->is_hittable();
+                _close_buttons[index]->draw(close_ctx);
+                emitted = true;
+                return;
+            }
+            if (element_id.tag_id == AUIK_TAG_TABBAR_POPUP_BTN && _overflow_button && _overflow_start < _tabs.size())
+            {
+                ensure_overflow_icon_resources();
+                _overflow_button->draw(ctx, ctx.emit_hit_rect);
+                emitted = true;
+                return;
+            }
+            if (element_id.tag_id == _popup_item_style_tag && _popup)
+            {
+                const u32 index = find_index_by_element_id(element_id.element_id);
+                if (index >= _popup->children.size()) return;
+                auto *child = _popup->children[index];
+                if (!child || !child->is_visible()) return;
+                DrawCtx popup_ctx = ctx;
+                popup_ctx.emit_hit_rect = child->is_hittable();
+                child->draw(popup_ctx);
+                emitted = true;
+            }
+        };
+        draw_target(transition.prev_id);
+        draw_target(transition.current_id);
+        return emitted;
+    }
+
     void TabBar::draw(DrawCtx &ctx)
     {
         if (!(widget_flags & WidgetFlagBits::visible)) return;
+        if (ctx.is_updating() && ctx.reason == DrawReasonBits::none && draw_transition_targets(ctx)) return;
         for (u32 i = 0; i < _tabs.size(); ++i)
         {
             auto *tab = _tabs[i];
@@ -603,13 +724,6 @@ namespace auik::v2
         {
             DrawCtx popup_ctx = ctx;
             popup_ctx.emit_hit_rect = _popup->is_hittable();
-            if (popup_ctx.reason & DrawReasonBits::style)
-            {
-                const auto transition = detail::get_widget_style_selector_transition(id());
-                const bool popup_item_transition = transition.current_id.tag_id == AUIK_TAG_COMBO_BOX_ITEM ||
-                                                   transition.prev_id.tag_id == AUIK_TAG_COMBO_BOX_ITEM;
-                if (popup_item_transition) popup_ctx.reason &= ~DrawReasonBits::style;
-            }
             _popup->draw(popup_ctx);
         }
     }
@@ -632,7 +746,7 @@ namespace auik::v2
         if (changed)
         {
             update_style();
-            update_draw_commands(DrawReasonBits::style);
+            update_draw_commands();
             detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
         }
     }
@@ -895,7 +1009,7 @@ namespace auik::v2
                                                       : detail::get_depth_workzone_range(depth_range());
         amal::vec2 child_top_range{};
         assign_next_depth(parent_work_range, child_top_range);
-        const amal::vec2 tab_range = detail::depth_zone_range(child_top_range, detail::DepthZone::foreground);
+        const amal::vec2 tab_range = detail::depth_zone_range(child_top_range, DepthZone::foreground);
         if (_tabs[drag_index]) _tabs[drag_index]->update_depth(tab_range);
         if (drag_index < _close_buttons.size() && _close_buttons[drag_index])
         {
@@ -930,7 +1044,7 @@ namespace auik::v2
             detail::mark_host_refresh_request();
             return;
         }
-        if (hover_id.tag_id == AUIK_TAG_TAB_BAR_ITEM)
+        if (hover_id.tag_id == _item_style_tag)
         {
             add_render_command<detail::ClickEventTraits>(this, [this, element_id = hover_id.element_id]() {
                 if (_drag_moved) return;
@@ -941,7 +1055,7 @@ namespace auik::v2
             detail::mark_host_refresh_request();
             return;
         }
-        if (hover_id.tag_id == AUIK_TAG_COMBO_BOX_ITEM)
+        if (hover_id.tag_id == _popup_item_style_tag)
         {
             add_render_command<detail::ClickEventTraits>(this, [this, element_id = hover_id.element_id]() {
                 handle_item_click(element_id);
@@ -972,7 +1086,7 @@ namespace auik::v2
         const auto &ctx = detail::get_context();
         if (state == KeyPressState::press)
         {
-            if (ctx.hover_id.widget_id == id() && ctx.hover_id.tag_id == AUIK_TAG_TAB_BAR_ITEM)
+            if (ctx.hover_id.widget_id == id() && ctx.hover_id.tag_id == _item_style_tag)
                 begin_drag(ctx.hover_id.element_id);
             return;
         }

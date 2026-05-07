@@ -35,13 +35,6 @@ namespace auik::v2::detail
         return {z_min, z_max};
     }
 
-    DepthZone::enum_type get_depth_zone_by_flags(WidgetFlags flags)
-    {
-        if (flags & WidgetFlagBits::foreground) return DepthZone::foreground;
-        if (flags & WidgetFlagBits::background) return DepthZone::background;
-        return DepthZone::work;
-    }
-
     amal::vec2 get_root_depth_range(DepthZone::enum_type zone, int lane_index)
     {
         constexpr amal::vec2 global = {0.0f, 1.0f};
@@ -62,12 +55,7 @@ namespace auik::v2
     void Widget::update_depth(const amal::vec2 &depth_range)
     {
         _depth_range = detail::normalize_depth_range(depth_range);
-        amal::vec2 active_range = _depth_range;
-        if (widget_flags & WidgetFlagBits::foreground)
-            active_range = detail::depth_zone_range(_depth_range, detail::DepthZone::foreground);
-        else if (widget_flags & WidgetFlagBits::background)
-            active_range = detail::depth_zone_range(_depth_range, detail::DepthZone::background);
-        else active_range = detail::depth_zone_range(_depth_range, detail::DepthZone::work);
+        const amal::vec2 active_range = detail::depth_zone_range(_depth_range, _depth_zone);
         _depth_range = detail::normalize_depth_range(active_range);
         _rect.depth = (_depth_range.x + _depth_range.y) * 0.5f;
     }

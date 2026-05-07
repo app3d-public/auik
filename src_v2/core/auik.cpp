@@ -10,6 +10,11 @@ namespace auik::v2
 {
     Widget::~Widget()
     {
+        if (_user_bind)
+        {
+            acul::release(_user_bind);
+            _user_bind = nullptr;
+        }
         if (detail::g_context)
         {
             cancel_delayed_tasks(id());
@@ -57,14 +62,6 @@ namespace auik::v2
             return CursorID::arrow;
         }
 
-        static inline DrawReasonFlags resolve_draw_reason_from_style(StyleUpdateFlags style_flags)
-        {
-            DrawReasonFlags out = DrawReasonBits::style;
-            if ((style_flags & StyleUpdateFlagBits::layout) || (style_flags & StyleUpdateFlagBits::parent_layout))
-                out |= DrawReasonBits::layout;
-            return out;
-        }
-
         template <class Traits>
         static void enqueue_style_refresh(Widget *widget)
         {
@@ -72,6 +69,7 @@ namespace auik::v2
             add_render_command<Traits>(widget, [widget]() {
                 auto &ctx = detail::get_context();
                 const auto style_flags = widget->update_style();
+                if (style_flags == StyleUpdateFlagBits::none) return;
                 if (style_flags & StyleUpdateFlagBits::parent_layout)
                 {
                     if (auto *parent = widget->parent()) parent->update_layout(false);
@@ -81,7 +79,7 @@ namespace auik::v2
                 else if (style_flags & StyleUpdateFlagBits::layout) widget->update_layout(false);
                 if (style_flags & StyleUpdateFlagBits::redraw)
                 {
-                    widget->update_draw_commands(resolve_draw_reason_from_style(style_flags));
+                    widget->update_draw_commands(get_draw_reason_from_style_update(style_flags));
                     ctx.dirty_flags |= DirtyFlagBits::redraw;
                 }
             });
@@ -110,12 +108,8 @@ namespace auik::v2
                 if (it == ctx.id_map.end()) return;
                 Widget *widget = it->second;
                 assert(widget && "widget is null");
-                if (widget->has_event_handler(EventFlagBits::hover)) widget->on_hover(state);
-                if (apply_hover_style_state(*widget, state))
-                {
-                    enqueue_style_refresh<detail::HoverEventTraits>(widget);
-                    mark_host_refresh_request();
-                }
+                if (widget->has_event_handler(EventFlagBits::hover)) widget->dispatch_hover(state);
+                if (apply_hover_style_state(*widget, state)) enqueue_style_refresh<detail::HoverEventTraits>(widget);
             };
 
             if (!is_dragging)
@@ -235,7 +229,7 @@ namespace auik::v2
             {
                 auto it = ctx.id_map.find(prev_drag.widget_id);
                 if (it != ctx.id_map.end() && it->second->has_event_handler(EventFlagBits::drag))
-                    it->second->on_drag({0.0f, 0.0f}, KeyPressState::release);
+                    it->second->dispatch_drag({0.0f, 0.0f}, KeyPressState::release);
             }
 
             io.mouse_down = false;
@@ -258,7 +252,8 @@ namespace auik::v2
                 auto it = ctx.id_map.find(prev_active_id);
                 if (it != ctx.id_map.end())
                 {
-                    if (it->second->id() == ctx.focus_id) it->second->set_style_state(resolve_focus_visual_state(it->second));
+                    if (it->second->id() == ctx.focus_id)
+                        it->second->set_style_state(resolve_focus_visual_state(it->second));
                     else it->second->set_style_state(StyleState::normal);
                     enqueue_style_refresh<detail::HoverEventTraits>(it->second);
                 }
@@ -270,9 +265,11 @@ namespace auik::v2
                 {
                     Widget *widget = it->second;
                     assert(widget && "widget is null");
-                    if (widget->has_event_handler(EventFlagBits::hover)) widget->on_hover(HoverState::leave);
+                    if (widget->has_event_handler(EventFlagBits::hover)) widget->dispatch_hover(HoverState::leave);
                     if (apply_hover_style_state(*widget, HoverState::leave))
+                    {
                         enqueue_style_refresh<detail::HoverEventTraits>(widget);
+                    }
                 }
             }
             ctx.hover_hitbox_zone = HitboxZoneBits::none;
@@ -324,7 +321,7 @@ namespace auik::v2
             }
 
             Widget *target = resolve_focus_event_target(ctx, EventFlagBits::key_input);
-            if (target) target->on_key(key, state, mods);
+            if (target) target->dispatch_key(key, state, mods);
         }
 
         APPLIB_API void on_char_event(u32 char_code)
@@ -342,7 +339,7 @@ namespace auik::v2
                 if (frame_cache.char_repeat_count > 0)
                 {
                     Widget *target = resolve_focus_event_target(ctx, EventFlagBits::char_input);
-                    if (target) target->on_char_input(frame_cache.char_code, frame_cache.char_repeat_count);
+                    if (target) target->dispatch_char(frame_cache.char_code, frame_cache.char_repeat_count);
                 }
                 frame_cache.char_code = char_code;
                 frame_cache.char_repeat_count = 1;
@@ -419,7 +416,7 @@ namespace auik::v2
         static inline void notify_focus_leaf(Context &ctx, Widget *leaf, Widget *entry, bool focused)
         {
             if (!leaf || leaf == entry) return;
-            if (leaf->has_event_handler(EventFlagBits::focus)) leaf->on_focus(focused);
+            if (leaf->has_event_handler(EventFlagBits::focus)) leaf->dispatch_focus(focused);
             if (!focused && ctx.active_id != leaf->id()) leaf->set_style_state(StyleState::normal);
             else if (focused && ctx.active_id != leaf->id()) leaf->set_style_state(resolve_focus_visual_state(leaf));
             enqueue_style_refresh<detail::FocusEventTraits>(leaf);
@@ -470,7 +467,7 @@ namespace auik::v2
             {
                 Widget *w = path_old[k];
                 assert(w && "widget cannot be null");
-                if (w->has_event_handler(EventFlagBits::focus)) w->on_focus(false);
+                if (w->has_event_handler(EventFlagBits::focus)) w->dispatch_focus(false);
                 if (ctx.active_id != w->id()) w->set_style_state(StyleState::normal);
                 enqueue_style_refresh<detail::FocusEventTraits>(w);
             }
@@ -480,7 +477,7 @@ namespace auik::v2
             {
                 Widget *w = path_new[k];
                 assert(w && "widget cannot be null");
-                if (w->has_event_handler(EventFlagBits::focus)) w->on_focus(true);
+                if (w->has_event_handler(EventFlagBits::focus)) w->dispatch_focus(true);
                 if (ctx.active_id != w->id()) w->set_style_state(resolve_focus_visual_state(w));
                 enqueue_style_refresh<detail::FocusEventTraits>(w);
             }
@@ -512,7 +509,7 @@ namespace auik::v2
             {
                 auto drag_it = ctx.id_map.find(io.drag_id.widget_id);
                 if (drag_it != ctx.id_map.end() && drag_it->second->has_event_handler(EventFlagBits::drag))
-                    drag_it->second->on_drag({0.0f, 0.0f}, KeyPressState::press);
+                    drag_it->second->dispatch_drag({0.0f, 0.0f}, KeyPressState::press);
             }
 
             auto it = ctx.id_map.find(ctx.hover_id.widget_id);
@@ -521,7 +518,7 @@ namespace auik::v2
                 if (it->second->accepts_focus_on_mouse_press(ctx.hover_id)) set_focus_target(ctx, it->second);
                 // Press transfers visual state from hover -> active immediately.
                 // Hover re-enter is restored later by hover update/release path.
-                if (it->second->has_event_handler(EventFlagBits::hover)) it->second->on_hover(HoverState::leave);
+                if (it->second->has_event_handler(EventFlagBits::hover)) it->second->dispatch_hover(HoverState::leave);
                 const u32 prev_active_id = ctx.active_id;
                 const u32 next_active_id = it->second->id();
                 const StyleState prev_style_state = it->second->style_state();
@@ -544,13 +541,10 @@ namespace auik::v2
                 const bool active_changed = prev_active_id != ctx.active_id;
                 const bool style_changed = it->second->style_state() != prev_style_state;
                 if (active_changed || style_changed)
-                {
                     for_each_active_chain(ctx, ctx.active_id,
                                           [&](Widget *w) { enqueue_style_refresh<detail::ClickEventTraits>(w); });
-                    detail::mark_host_refresh_request();
-                }
                 if (it->second->has_event_handler(EventFlagBits::click))
-                    it->second->on_click(MouseKey::left, KeyPressState::press, io.click_count);
+                    it->second->dispatch_click(MouseKey::left, KeyPressState::press, io.click_count);
             }
             else set_focus_target(ctx, nullptr);
         }
@@ -563,7 +557,7 @@ namespace auik::v2
             const u32 clicked_widget_id = clicked_id.widget_id;
             auto it = ctx.id_map.find(io.clicked_id.widget_id);
             if (it != ctx.id_map.end() && it->second->has_event_handler(EventFlagBits::click))
-                it->second->on_click(MouseKey::left, KeyPressState::release, io.click_count);
+                it->second->dispatch_click(MouseKey::left, KeyPressState::release, io.click_count);
 
             // Interrupted drag: clear pending frame payload.
             frame_cache.drag_widget_id = 0;
@@ -572,7 +566,7 @@ namespace auik::v2
 
             it = ctx.id_map.find(io.drag_id.widget_id);
             if (it != ctx.id_map.end() && it->second->has_event_handler(EventFlagBits::drag))
-                it->second->on_drag({0.0f, 0.0f}, KeyPressState::release);
+                it->second->dispatch_drag({0.0f, 0.0f}, KeyPressState::release);
 
             if (ctx.active_id != 0)
             {
@@ -597,12 +591,11 @@ namespace auik::v2
                     if (hover_id == clicked_id)
                     {
                         if (clicked_it->second->has_event_handler(EventFlagBits::hover))
-                            clicked_it->second->on_hover(HoverState::enter);
+                            clicked_it->second->dispatch_hover(HoverState::enter);
                     }
                     else if (style_changed)
                     {
                         enqueue_style_refresh<detail::HoverEventTraits>(clicked_it->second);
-                        detail::mark_host_refresh_request();
                     }
                 }
             }
@@ -627,7 +620,7 @@ namespace auik::v2
                 const u32 target_id = ctx.hover_id.widget_id;
                 auto it = ctx.id_map.find(target_id);
                 if (it != ctx.id_map.end() && it->second->has_event_handler(EventFlagBits::click))
-                    it->second->on_click(key, state, 1);
+                    it->second->dispatch_click(key, state, 1);
                 return;
             }
 
@@ -658,14 +651,14 @@ namespace auik::v2
                 {
                     auto it = ctx.id_map.find(drag_widget_id);
                     if (it != ctx.id_map.end() && it->second->has_event_handler(EventFlagBits::drag))
-                        it->second->on_drag(drag_delta, KeyPressState::repeat);
+                        it->second->dispatch_drag(drag_delta, KeyPressState::repeat);
                 }
             }
 
             if (changes & FrameChangesBits::scroll_delta)
             {
                 Widget *target = resolve_scroll_target(ctx);
-                if (target) target->on_scroll(frame_cache.scroll_delta);
+                if (target) target->dispatch_scroll(frame_cache.scroll_delta);
                 frame_cache.scroll_delta = {0.0f, 0.0f};
             }
 
@@ -674,7 +667,7 @@ namespace auik::v2
                 if (frame_cache.char_repeat_count > 0)
                 {
                     Widget *target = resolve_focus_event_target(ctx, EventFlagBits::char_input);
-                    if (target) target->on_char_input(frame_cache.char_code, frame_cache.char_repeat_count);
+                    if (target) target->dispatch_char(frame_cache.char_code, frame_cache.char_repeat_count);
                 }
                 frame_cache.char_code = 0;
                 frame_cache.char_repeat_count = 0;

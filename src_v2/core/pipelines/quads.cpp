@@ -1,5 +1,6 @@
 #include <auik/v2/detail/context.hpp>
 #include <auik/v2/detail/gpu_context.hpp>
+#include <auik/v2/detail/pixel_snap.hpp>
 #include <auik/v2/pipelines.hpp>
 #include <auik/v2/widgets/widget.hpp>
 #include "stream_data.hpp"
@@ -49,7 +50,9 @@ namespace auik::v2::detail
         mark_master_mutation(state, frame_id, ctx.frames_in_flight);
         stream->flags |= StreamFlagBits::invalidate;
         ctx.dirty_flags |= DirtyFlagBits::streams;
-        return gpu_ctx->quads.push_data_to_stream(stream, data, frame_id);
+        auto copy = *static_cast<const QuadsInstanceData *>(data);
+        copy.rect = snap_rect_to_pixel_grid(copy.rect);
+        return gpu_ctx->quads.push_data_to_stream(stream, &copy, frame_id);
     }
 
     static void push_data_batch_to_stream(DrawStream *stream, const void *data, u32 count, DrawDataID *out_ids)
@@ -65,7 +68,15 @@ namespace auik::v2::detail
         stream->flags |= StreamFlagBits::invalidate;
         ctx.dirty_flags |= DirtyFlagBits::streams;
         assert(gpu_ctx->quads.push_data_batch_to_stream && "GPU quads batch push dispatch is not initialized");
-        gpu_ctx->quads.push_data_batch_to_stream(stream, data, count, out_ids, frame_id);
+        acul::vector<QuadsInstanceData> copies;
+        copies.resize(count);
+        const auto *src = static_cast<const QuadsInstanceData *>(data);
+        for (u32 i = 0; i < count; ++i)
+        {
+            copies[i] = src[i];
+            copies[i].rect = snap_rect_to_pixel_grid(copies[i].rect);
+        }
+        gpu_ctx->quads.push_data_batch_to_stream(stream, copies.data(), count, out_ids, frame_id);
     }
 
     static void update_data_quads_stream(DrawStream *stream, DrawDataID draw_data_id, const void *data)
@@ -77,7 +88,9 @@ namespace auik::v2::detail
         mark_master_mutation(state, ctx.frame_id, ctx.frames_in_flight);
         stream->flags |= StreamFlagBits::invalidate;
         ctx.dirty_flags |= DirtyFlagBits::streams;
-        ctx.gpu_ctx->quads.update_stream_data(stream, draw_data_id, data, ctx.frame_id);
+        auto copy = *static_cast<const QuadsInstanceData *>(data);
+        copy.rect = snap_rect_to_pixel_grid(copy.rect);
+        ctx.gpu_ctx->quads.update_stream_data(stream, draw_data_id, &copy, ctx.frame_id);
     }
 
     static void invalidate_data_quads_stream(DrawStream *stream, DrawDataID draw_data_id)
@@ -105,7 +118,15 @@ namespace auik::v2::detail
         stream->flags |= StreamFlagBits::invalidate;
         ctx.dirty_flags |= DirtyFlagBits::streams;
         assert(ctx.gpu_ctx->quads.update_stream_data_batch && "GPU quads batch update dispatch is not initialized");
-        ctx.gpu_ctx->quads.update_stream_data_batch(stream, draw_data_ids, data, count, ctx.frame_id);
+        acul::vector<QuadsInstanceData> copies;
+        copies.resize(count);
+        const auto *src = static_cast<const QuadsInstanceData *>(data);
+        for (u32 i = 0; i < count; ++i)
+        {
+            copies[i] = src[i];
+            copies[i].rect = snap_rect_to_pixel_grid(copies[i].rect);
+        }
+        ctx.gpu_ctx->quads.update_stream_data_batch(stream, draw_data_ids, copies.data(), count, ctx.frame_id);
     }
 
     static void render_quads_stream(DrawStream *stream, void *render_ctx, GPUContext *gpu_context)

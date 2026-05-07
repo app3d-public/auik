@@ -15,7 +15,13 @@ namespace auik::v2
     {
         static inline amal::vec2 get_combo_popup_depth_range()
         {
-            return detail::get_root_depth_range(detail::DepthZone::foreground, 31);
+            return detail::get_root_depth_range(DepthZone::foreground, 31);
+        }
+
+        static inline StyleState get_combo_control_style_state(bool open, StyleState state)
+        {
+            if (open) return StyleState::focus;
+            return state == StyleState::focus ? StyleState::normal : state;
         }
 
     } // namespace
@@ -38,7 +44,8 @@ namespace auik::v2
 
         _popup = acul::alloc<Window>(
             AUIK_TAG_COMBO_BOX_POPUP, "", amal::rect{{0.0f, 0.0f}, {0.0f, 0.0f}}, WindowFlagBits::scrollable,
-            WidgetFlagBits::visible | WidgetFlagBits::hittable | WidgetFlagBits::foreground | WidgetFlagBits::fixed);
+            WidgetFlagBits::visible | WidgetFlagBits::hittable | WidgetFlagBits::fixed);
+        _popup->set_depth_zone(DepthZone::foreground);
         _popup->get_rect().widget_id = this->id();
         _popup->set_window_style_tag(AUIK_TAG_COMBO_BOX_POPUP);
         _popup->set_focus_parent(this);
@@ -103,9 +110,10 @@ namespace auik::v2
 
         for (u32 i = 0; i < _popup->children.size(); ++i)
         {
-            auto *item = _popup->children[i];
+            auto *item = static_cast<detail::Selectable *>(_popup->children[i]);
             if (!item) continue;
-            item->set_style_state(i == _selected_index ? StyleState::focus : StyleState::normal);
+            item->set_style_state(StyleState::normal);
+            item->set_selected(i == _selected_index);
             item->update_style();
         }
 
@@ -134,16 +142,23 @@ namespace auik::v2
 
         if (_selected_index < count)
         {
-            auto *prev = _popup->children[_selected_index];
+            auto *prev = static_cast<detail::Selectable *>(_popup->children[_selected_index]);
             if (prev)
             {
                 prev->set_style_state(StyleState::normal);
+                prev->set_selected(false);
                 prev->update_style();
             }
         }
-        auto *next = _popup->children[index];
-        if (next) next->set_style_state(StyleState::focus);
+        auto *next = static_cast<detail::Selectable *>(_popup->children[index]);
+        if (next)
+        {
+            next->set_style_state(StyleState::normal);
+            next->set_selected(true);
+            next->update_style();
+        }
         _selected_index = index;
+        dispatch_change();
         sync_label_text();
         auto &ctx = detail::get_context();
         ctx.dirty_flags |= DirtyFlagBits::redraw;
@@ -153,12 +168,12 @@ namespace auik::v2
     StyleUpdateFlags ComboBox::update_style()
     {
         const u32 parent_id = parent() ? parent()->id() : 0u;
-        StyleUpdateFlags flags = resolve_style_selector(_style, id(), parent_id, style_state());
+        const StyleState control_state = get_combo_control_style_state(_open, style_state());
+        StyleUpdateFlags flags = resolve_style_selector(_style, id(), parent_id, control_state);
         if (_trigger)
         {
-            StyleState trigger_state = _open ? StyleState::focus : style_state();
             _trigger->set_open(_open);
-            flags |= _trigger->update_style(id(), parent_id, trigger_state);
+            flags |= _trigger->update_style(id(), parent_id, control_state);
         }
         flags |= _label->update_style();
         if (_popup)
@@ -168,16 +183,14 @@ namespace auik::v2
             if (transition.prev_id.tag_id == AUIK_TAG_COMBO_BOX_ITEM &&
                 transition.prev_id.element_id < _popup->children.size())
             {
-                auto &item = _popup->children[transition.prev_id.element_id];
-                auto next_style_state =
-                    item->get_rect().element_id == _selected_index ? StyleState::focus : StyleState::normal;
-                item->set_style_state(next_style_state);
+                auto *item = static_cast<detail::Selectable *>(_popup->children[transition.prev_id.element_id]);
+                item->set_style_state(StyleState::normal);
                 flags |= item->update_style();
             }
             if (transition.current_id.tag_id == AUIK_TAG_COMBO_BOX_ITEM &&
                 transition.current_id.element_id < _popup->children.size())
             {
-                auto &item = _popup->children[transition.current_id.element_id];
+                auto *item = static_cast<detail::Selectable *>(_popup->children[transition.current_id.element_id]);
                 item->set_style_state(transition.current_state);
                 flags |= item->update_style();
             }
@@ -198,10 +211,12 @@ namespace auik::v2
 
         const f32 icon_height =
             _trigger && _trigger->icon_size().y > 0.0f ? _trigger->icon_size().y : style.text_size();
+        const f32 compact_width =
+            _trigger ? _trigger->required_size().x : (style.text_size() + style.padding().x + style.padding().z);
         const amal::vec4 margin = style.margin();
         const amal::vec4 padding = style.padding();
         amal::vec2 min_size = is_fixed() ? size() : amal::vec2{0.0f, 0.0f};
-        if (min_size.x <= 0.0f) min_size.x = 140.0f;
+        if (min_size.x <= 0.0f) min_size.x = is_fixed() ? 140.0f : compact_width;
         if (min_size.y <= 0.0f) min_size.y = amal::max(label_required.y, icon_height) + padding.y + padding.w;
         set_required_size({min_size.x + margin.x + margin.z, min_size.y + margin.y + margin.w});
     }
@@ -217,7 +232,8 @@ namespace auik::v2
         const amal::vec2 min_combo = {amal::max(min_required.x - margin.x - margin.z, 0.0f),
                                       amal::max(min_required.y - margin.y - margin.w, 0.0f)};
         amal::vec2 widget_size = size();
-        if (!is_fixed()) widget_size.x = amal::max(widget_size.x - margin.x - margin.z, min_combo.x);
+        if (!is_fixed())
+            widget_size.x = widget_size.x > 0.0f ? amal::max(widget_size.x - margin.x - margin.z, 1.0f) : min_combo.x;
         else widget_size.x = amal::max(widget_size.x, min_combo.x);
         widget_size.y = amal::max(widget_size.y, min_combo.y);
 
@@ -285,13 +301,6 @@ namespace auik::v2
         {
             DrawCtx popup_ctx = ctx;
             popup_ctx.emit_hit_rect = _popup->is_hittable();
-            if (popup_ctx.reason & DrawReasonBits::style)
-            {
-                const auto transition = detail::get_widget_style_selector_transition(id());
-                const bool popup_item_transition = transition.current_id.tag_id == AUIK_TAG_COMBO_BOX_ITEM ||
-                                                   transition.prev_id.tag_id == AUIK_TAG_COMBO_BOX_ITEM;
-                if (popup_item_transition) popup_ctx.reason &= ~DrawReasonBits::style;
-            }
             _popup->draw(popup_ctx);
         }
     }
@@ -381,10 +390,7 @@ namespace auik::v2
         _label->set_clip_id(clip_id());
     }
 
-    void ComboBox::sync_label_text()
-    {
-        _label->set_text(selected_text());
-    }
+    void ComboBox::sync_label_text() { _label->set_text(selected_text()); }
 
     void ComboBox::update_popup_layout()
     {
@@ -464,7 +470,7 @@ namespace auik::v2
             {
                 set_style_state(StyleState::focus);
                 update_style();
-                redraw_external(has_draw_record(), DrawReasonBits::style);
+                redraw_external(has_draw_record());
             }
             const bool mouse_down = ctx.io.mouse_down;
             if (!mouse_down)
@@ -494,10 +500,7 @@ namespace auik::v2
         detail::mark_host_refresh_request();
     }
 
-    bool ComboBox::has_draw_record() const
-    {
-        return _trigger && _trigger->has_draw_record();
-    }
+    bool ComboBox::has_draw_record() const { return _trigger && _trigger->has_draw_record(); }
 
     MultipleComboBox::MultipleComboBox(u32 id, acul::vector<acul::string> items, acul::string placeholder,
                                        amal::vec2 size, WidgetFlags widget_flags, Widget *parent)
@@ -517,7 +520,8 @@ namespace auik::v2
 
         _popup = acul::alloc<Window>(
             AUIK_TAG_COMBO_BOX_POPUP, "", amal::rect{{0.0f, 0.0f}, {0.0f, 0.0f}}, WindowFlagBits::scrollable,
-            WidgetFlagBits::visible | WidgetFlagBits::hittable | WidgetFlagBits::foreground | WidgetFlagBits::fixed);
+            WidgetFlagBits::visible | WidgetFlagBits::hittable | WidgetFlagBits::fixed);
+        _popup->set_depth_zone(DepthZone::foreground);
         _popup->get_rect().widget_id = this->id();
         _popup->set_window_style_tag(AUIK_TAG_COMBO_BOX_POPUP);
         _popup->set_focus_parent(this);
@@ -584,6 +588,7 @@ namespace auik::v2
 
     void MultipleComboBox::set_selected_indices(const acul::vector<u32> &indices)
     {
+        const auto prev_selected = _selected_indices;
         _selected_indices.clear();
         const u32 count = _popup ? static_cast<u32>(_popup->children.size()) : 0u;
         for (u32 index : indices)
@@ -593,11 +598,13 @@ namespace auik::v2
         }
         for (u32 i = 0; i < count; ++i)
         {
-            auto *item = _popup->children[i];
+            auto *item = static_cast<detail::Selectable *>(_popup->children[i]);
             if (!item) continue;
-            item->set_style_state(is_selected(i) ? StyleState::focus : StyleState::normal);
+            item->set_style_state(StyleState::normal);
+            item->set_selected(is_selected(i));
             item->update_style();
         }
+        if (_selected_indices != prev_selected) dispatch_change();
         sync_label_text();
         detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
         detail::mark_host_refresh_request();
@@ -606,12 +613,12 @@ namespace auik::v2
     StyleUpdateFlags MultipleComboBox::update_style()
     {
         const u32 parent_id = parent() ? parent()->id() : 0u;
-        StyleUpdateFlags flags = resolve_style_selector(_style, id(), parent_id, style_state());
+        const StyleState control_state = get_combo_control_style_state(_open, style_state());
+        StyleUpdateFlags flags = resolve_style_selector(_style, id(), parent_id, control_state);
         if (_trigger)
         {
-            StyleState trigger_state = _open ? StyleState::focus : style_state();
             _trigger->set_open(_open);
-            flags |= _trigger->update_style(id(), parent_id, trigger_state);
+            flags |= _trigger->update_style(id(), parent_id, control_state);
         }
         flags |= _label->update_style();
         if (_popup)
@@ -621,15 +628,17 @@ namespace auik::v2
             if (transition.prev_id.tag_id == AUIK_TAG_COMBO_BOX_ITEM &&
                 transition.prev_id.element_id < _popup->children.size())
             {
-                auto &item = _popup->children[transition.prev_id.element_id];
-                item->set_style_state(is_selected(item->get_rect().element_id) ? StyleState::focus : StyleState::normal);
+                auto *item = static_cast<detail::Selectable *>(_popup->children[transition.prev_id.element_id]);
+                item->set_style_state(StyleState::normal);
+                item->set_selected(is_selected(item->get_rect().element_id));
                 flags |= item->update_style();
             }
             if (transition.current_id.tag_id == AUIK_TAG_COMBO_BOX_ITEM &&
                 transition.current_id.element_id < _popup->children.size())
             {
-                auto &item = _popup->children[transition.current_id.element_id];
+                auto *item = static_cast<detail::Selectable *>(_popup->children[transition.current_id.element_id]);
                 item->set_style_state(transition.current_state);
+                item->set_selected(is_selected(item->get_rect().element_id));
                 flags |= item->update_style();
             }
         }
@@ -647,10 +656,12 @@ namespace auik::v2
         if (_trigger) _trigger->update_layout_min_size({0.0f, 0.0f}, true);
         const f32 icon_height =
             _trigger && _trigger->icon_size().y > 0.0f ? _trigger->icon_size().y : style.text_size();
+        const f32 compact_width =
+            _trigger ? _trigger->required_size().x : (style.text_size() + style.padding().x + style.padding().z);
         const amal::vec4 margin = style.margin();
         const amal::vec4 padding = style.padding();
         amal::vec2 min_size = is_fixed() ? size() : amal::vec2{0.0f, 0.0f};
-        if (min_size.x <= 0.0f) min_size.x = 140.0f;
+        if (min_size.x <= 0.0f) min_size.x = is_fixed() ? 140.0f : compact_width;
         if (min_size.y <= 0.0f) min_size.y = amal::max(label_required.y, icon_height) + padding.y + padding.w;
         set_required_size({min_size.x + margin.x + margin.z, min_size.y + margin.y + margin.w});
     }
@@ -665,7 +676,8 @@ namespace auik::v2
         const amal::vec2 min_combo = {amal::max(min_required.x - margin.x - margin.z, 0.0f),
                                       amal::max(min_required.y - margin.y - margin.w, 0.0f)};
         amal::vec2 widget_size = size();
-        if (!is_fixed()) widget_size.x = amal::max(widget_size.x - margin.x - margin.z, min_combo.x);
+        if (!is_fixed())
+            widget_size.x = widget_size.x > 0.0f ? amal::max(widget_size.x - margin.x - margin.z, 1.0f) : min_combo.x;
         else widget_size.x = amal::max(widget_size.x, min_combo.x);
         widget_size.y = amal::max(widget_size.y, min_combo.y);
         set_position({layout_origin.x + margin.x, layout_origin.y + margin.y});
@@ -712,6 +724,7 @@ namespace auik::v2
     {
         const bool transient = ctx.reason & DrawReasonBits::transient;
         const bool draw_transient_payload = transient || ctx.is_recording();
+
         if (!transient)
         {
             if (_trigger) _trigger->draw(ctx, ctx.emit_hit_rect);
@@ -725,13 +738,6 @@ namespace auik::v2
         {
             DrawCtx popup_ctx = ctx;
             popup_ctx.emit_hit_rect = _popup->is_hittable();
-            if (popup_ctx.reason & DrawReasonBits::style)
-            {
-                const auto transition = detail::get_widget_style_selector_transition(id());
-                const bool popup_item_transition = transition.current_id.tag_id == AUIK_TAG_COMBO_BOX_ITEM ||
-                                                   transition.prev_id.tag_id == AUIK_TAG_COMBO_BOX_ITEM;
-                if (popup_item_transition) popup_ctx.reason &= ~DrawReasonBits::style;
-            }
             _popup->draw(popup_ctx);
         }
     }
@@ -772,11 +778,13 @@ namespace auik::v2
                         }
                     }
                     else _selected_indices.push_back(index);
+                    dispatch_change();
                     for (u32 i = 0; i < _popup->children.size(); ++i)
                     {
-                        auto *item = _popup->children[i];
+                        auto *item = static_cast<detail::Selectable *>(_popup->children[i]);
                         if (!item) continue;
-                        item->set_style_state(is_selected(i) ? StyleState::focus : StyleState::normal);
+                        item->set_style_state(StyleState::normal);
+                        item->set_selected(is_selected(i));
                         item->update_style();
                     }
                     sync_label_text();
@@ -914,7 +922,7 @@ namespace auik::v2
             {
                 set_style_state(StyleState::focus);
                 update_style();
-                redraw_external(has_draw_record(), DrawReasonBits::style);
+                redraw_external(has_draw_record());
             }
             if (!ctx.io.mouse_down)
             {

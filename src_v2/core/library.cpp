@@ -15,7 +15,7 @@ namespace auik::v2
         static inline amal::vec2 get_root_overlay_depth_range()
         {
             // Reserve the very top foreground root lane for transient overlays such as tooltips.
-            return detail::get_root_depth_range(detail::DepthZone::foreground, 31);
+            return detail::get_root_depth_range(DepthZone::foreground, 31);
         }
 
         static void compact_delayed_tasks(detail::Context &ctx)
@@ -286,7 +286,7 @@ namespace auik::v2
         auto &ctx = detail::get_context();
         ctx.widget_tree.push_back(widget);
         if (widget->widget_flags & WidgetFlagBits::attachable) widget->on_attach();
-        const auto zone = detail::get_depth_zone_by_flags(widget->widget_flags);
+        const auto zone = widget->depth_zone();
         const int lane_index = ctx.root_depth_counts[zone];
         assert(lane_index < 32 && "Max depth zone exceeded");
         widget->update_depth(detail::get_root_depth_range(zone, lane_index));
