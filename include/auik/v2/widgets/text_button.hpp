@@ -26,8 +26,8 @@ namespace auik::v2
                    Widget *parent)
             : Widget(id, widget_flags, event_flags, parent, {}, AUIK_TAG_TEXT_BUTTON),
               _style({Theme::STYLE_ID_INVALID, AUIK_TAG_TEXT_BUTTON}),
-              _text(acul::alloc<Text>(id ^ 0xA8115EEDu, std::move(text), amal::vec2{0.0f, 0.0f},
-                                      get_default_fixed_text_flags(), this))
+              _text(acul::alloc<Text>(AUIK_TAG_TEXT, std::move(text), amal::vec2{0.0f, 0.0f},
+                                      WidgetFlagBits::visible | WidgetFlagBits::fixed, this))
         {
             _text->set_horizontal_align(detail::TextHorizontalAlign::center);
             _text->set_vertical_align(detail::TextVerticalAlign::center);

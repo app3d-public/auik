@@ -19,9 +19,6 @@ struct FT_FaceRec_;
 #define AUIK_ICON_CHECKMARK     0x0E3F8C25u
 #define AUIK_ICON_SEARCH        0x57EA33E1u
 #define AUIK_ICON_FILTER        0x3D57E8D8u
-#define AUIK_ICON_MINIMIZE      0x7CB8CE8Du
-#define AUIK_ICON_MAXIMIZE      0x28392EA5u
-#define AUIK_ICON_RESTORE       0x2F89CAF9u
 #define AUIK_ICON_CLOSE         0xBF822112u
 #define AUIK_ICON_MENU          0xDDD65C07u
 #define AUIK_ICON_SIX_DOTS      0x2CD6CBF3u
@@ -107,18 +104,6 @@ namespace auik::v2
         CreateInfo &set_sync_options(const SyncOptions &value)
         {
             sync_options = value;
-            return *this;
-        }
-
-        CreateInfo &set_host_refresh_request(bool *host_refresh_request)
-        {
-            sync_options.host_refresh_request = host_refresh_request;
-            return *this;
-        }
-
-        CreateInfo &set_pending_filter(PendingFilter *pending_filter)
-        {
-            sync_options.pending_filter = pending_filter;
             return *this;
         }
     };
@@ -209,8 +194,7 @@ namespace auik::v2
         detail::update_hover_id(ctx.gpu_ctx, sync_ctx);
         detail::new_window_frame(ctx.window_ctx);
         ctx.frame_id = (ctx.frame_id + 1) % ctx.frames_in_flight;
-        if (!(ctx.dirty_flags & DirtyFlagBits::hover_update)) ctx.dirty_flags &= ~DirtyFlagBits::redraw;
-        ctx.dirty_flags &= ~(DirtyFlagBits::hover_update | DirtyFlagBits::host_update | DirtyFlagBits::hit_rect_update |
+        ctx.dirty_flags &= ~(DirtyFlagBits::redraw | DirtyFlagBits::host_update | DirtyFlagBits::hit_rect_update |
                              DirtyFlagBits::textures);
     }
 
@@ -518,6 +502,31 @@ namespace auik::v2
     APPLIB_API bool load_material_icons(const FontRegistry &fonts, f32 dpi = 1.0f);
 
 #ifdef _WIN32
+    inline bool is_win_11_or_greater()
+    {
+        OSVERSIONINFOEX osvi{};
+        osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEX);
+        GetVersionEx((OSVERSIONINFO *)&osvi);
+        return osvi.dwBuildNumber >= 22000;
+    }
+
     APPLIB_API bool load_win32_icons(const FontRegistry &fonts, f32 dpi = 1.0f);
 #endif
+    inline bool is_window_size_modified()
+    {
+        auto *window_ctx = detail::get_context().window_ctx;
+        return window_ctx && window_ctx->is_size_modified;
+    }
+
+    inline acul::point2D<i32> get_window_modified_size()
+    {
+        auto *window_ctx = detail::get_window_context();
+        return detail::get_window_modified_size(window_ctx);
+    }
+
+    inline acul::point2D<i32> get_window_modified_pos()
+    {
+        auto *window_ctx = detail::get_window_context();
+        return detail::get_window_modified_pos(window_ctx);
+    }
 } // namespace auik::v2

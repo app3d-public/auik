@@ -1,5 +1,7 @@
 #pragma once
 
+#include <acul/scalars.hpp>
+#include <amal/common.hpp>
 #include <amal/vector.hpp>
 
 namespace auik::v2::detail

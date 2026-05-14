@@ -8,6 +8,8 @@
 #define AUIK_TAG_MENU_BAR_ITEM   0x62F8CAAAu
 #define AUIK_TAG_MENU_POPUP      0x0EF2EE30u
 #define AUIK_TAG_MENU_SHORTCUT   0x94020AC8u
+#define AUIK_TAG_MAIN_MENU_BAR   0x5F42BA15u
+#define AUIK_TAG_MAIN_MENU_ITEM  0xDD0667CDu
 
 namespace auik::v2
 {
@@ -19,6 +21,13 @@ namespace auik::v2
     class APPLIB_API MenuBar final : public TabBar
     {
     public:
+        enum class PopupDepthMode : u8
+        {
+            workzone_overlay,
+            root_overlay,
+            root_overlay_next
+        };
+
         class GroupRef;
         class ItemRef
         {
@@ -87,6 +96,9 @@ namespace auik::v2
         void set_item_selected(u32 element_id, bool selected = true);
         void set_selected_items(const acul::vector<u32> &element_ids);
         bool is_item_selected(u32 element_id) const;
+        void set_menu_style_tag(u32 tag_id);
+        void set_menu_item_style_tag(u32 tag_id);
+        void set_popup_depth_mode(PopupDepthMode mode);
         const acul::vector<u32> &selected_item_ids() const { return _selected_item_ids; }
         ItemRef item(u32 element_id) { return ItemRef{this, element_id}; }
         ItemRef operator[](size_t index)
@@ -142,6 +154,8 @@ namespace auik::v2
         void refresh_popup_clip_rect(Window *popup);
         void request_redraw();
         bool draw_popup_child(const detail::ElementID &element_id, DrawCtx &ctx, bool prefer_cursor_hit);
+        u16 get_layout_parent_clip_id() const override;
+        amal::vec4 get_layout_parent_clip_rect() const override;
 
         DrawDataID _bg{};
         acul::vector<ItemData> _items;
@@ -149,6 +163,7 @@ namespace auik::v2
         acul::vector<u32> _open_path;
         acul::vector<u32> _selected_item_ids;
         StyleSelector _menu_style{Theme::STYLE_ID_INVALID, AUIK_TAG_WINDOW_MENU_BAR};
+        PopupDepthMode _popup_depth_mode = PopupDepthMode::workzone_overlay;
     };
 
     inline MenuBar::GroupRef MenuBar::ItemRef::add_group(acul::vector<acul::string> items) const
@@ -160,5 +175,14 @@ namespace auik::v2
     inline MenuBar *make_menu_bar(u32 id, acul::vector<acul::string> items = {})
     {
         return acul::alloc<MenuBar>(id, std::move(items));
+    }
+
+    inline MenuBar *make_main_menu_bar(u32 id, acul::vector<acul::string> items = {})
+    {
+        auto *menu_bar = acul::alloc<MenuBar>(id, std::move(items));
+        menu_bar->set_menu_style_tag(AUIK_TAG_MAIN_MENU_BAR);
+        menu_bar->set_menu_item_style_tag(AUIK_TAG_MAIN_MENU_ITEM);
+        menu_bar->set_popup_depth_mode(MenuBar::PopupDepthMode::root_overlay);
+        return menu_bar;
     }
 } // namespace auik::v2

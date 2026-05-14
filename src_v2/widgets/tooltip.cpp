@@ -209,7 +209,7 @@ namespace auik::v2
         bg.rect = bounds();
         bg.z_order = get_z_order();
         const bool bg_visible = fill_quads_instance_by_style(theme->get_style(_style.id), clip_id(), bg);
-        if (should_emit_quads_instance(bg_visible, _bg, false)) ctx.emit(quads_stream, _bg, &bg, get_rect(), false);
+        emit_quads_instance(ctx, quads_stream, _bg, bg, get_rect(), bg_visible, false);
 
         if (!textured_quads_stream || _instances.empty()) return;
 

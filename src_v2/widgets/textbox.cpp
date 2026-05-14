@@ -347,8 +347,7 @@ namespace auik::v2
         bg.rect = bounds();
         bg.z_order = get_z_order();
         const bool bg_visible = fill_quads_instance_by_style(get_theme()->get_style(_style.id), clip_id(), bg);
-        if (should_emit_quads_instance(bg_visible, _bg, ctx.emit_hit_rect))
-            ctx.emit(quads_stream, _bg, &bg, get_rect(), ctx.emit_hit_rect);
+        emit_quads_instance(ctx, quads_stream, _bg, bg, get_rect(), bg_visible, ctx.emit_hit_rect);
     }
 
     void TextBox::draw_selection(DrawCtx &ctx, DrawStream *quads_stream, f32 selection_z)
@@ -414,21 +413,21 @@ namespace auik::v2
         const bool has_selection = _edit_state.has_selection();
         const bool visible = blink_on && !_edit_state.cursors.empty() && !has_selection && should_draw_caret();
         QuadsInstanceData caret{};
-        const f32 caret_w = amal::max(caret_padding.x, 1.0f);
+        const f32 caret_w = amal::max(amal::round(caret_padding.x), 1.0f);
         if (visible)
         {
             const auto &edit_cursor = _edit_state.primary_cursor();
             const int cursor = edit_cursor.cursor;
             const u32 line_index = line_index_from_cursor(cursor, edit_cursor.cursor_at_end_of_line);
             const f32 x = cursor_x_on_line(line_index, cursor);
-            const amal::rect line_rect = line_selection_rect(line_index, x, x);
-            caret.rect = {{line_rect.offset.x, line_rect.offset.y}, {caret_w, line_rect.size.y}};
+            caret.rect = caret_rect(line_index, x, caret_w);
         }
         else caret.rect = {_content_pos, {caret_w, 0.0f}};
         caret.z_order = next_depth(depth_range());
         caret.background_color = visible ? caret_style.background_color() : 0;
         caret.mask = text_content_clip_id();
-        ctx.emit(overlay_stream, _edit->caret, &caret, detail::make_rect_data(id(), AUIK_TAG_CARET, caret.rect), false);
+        ctx.emit(overlay_stream, _edit->caret, &caret, detail::make_rect_data(id(), _edit->caret_style.tag_id, caret.rect),
+                 false);
     }
 
     void TextBox::draw_selection_drag_icon(DrawCtx &ctx, f32 selection_z)
@@ -1119,13 +1118,55 @@ namespace auik::v2
 
     f32 TextBox::line_screen_y(u32 line_index) const { return line_selection_rect(line_index, 0.0f, 0.0f).offset.y; }
 
+    amal::rect TextBox::caret_rect(u32 line_index, f32 x, f32 width) const
+    {
+        const auto &layout = _text.layout_result();
+        const auto &style = get_theme()->get_style(_style.id);
+        f32 line_h = layout.line_height;
+        if (line_h <= 0.0f)
+        {
+            if (auto *font = style.font())
+                line_h = detail::TextFontAccess::line_height(*font, round_font_px(style.text_size()));
+            if (line_h <= 0.0f) line_h = style.text_size();
+        }
+        const f32 caret_h = amal::min(style.text_size(), _content_size.y);
+        line_h = amal::max(line_h, caret_h);
+        const f32 layout_h = accepts_newline() ? amal::max(layout.size.y, line_h) : _content_size.y;
+        f32 align_y = 0.0f;
+        switch (_text.vertical_align())
+        {
+            case detail::TextVerticalAlign::center:
+                align_y = amal::max((_content_size.y - layout_h) * 0.5f, 0.0f);
+                break;
+            case detail::TextVerticalAlign::bottom:
+                align_y = amal::max(_content_size.y - layout_h, 0.0f);
+                break;
+            case detail::TextVerticalAlign::top:
+            default:
+                break;
+        }
+
+        f32 line_y = amal::max((layout_h - caret_h) * 0.5f, 0.0f);
+        if (accepts_newline())
+        {
+            if (!layout.lines.empty() && line_index >= layout.lines.size())
+                line_index = static_cast<u32>(layout.lines.size() - 1);
+            line_y = static_cast<f32>(line_index) * line_h + amal::max((line_h - caret_h) * 0.5f, 0.0f);
+        }
+
+        return {{amal::round(_content_pos.x + x - _content_scroll_x),
+                 amal::round(_content_pos.y + align_y + line_y - _content_scroll_y)},
+                {width, caret_h}};
+    }
+
     amal::rect TextBox::line_selection_rect(u32 line_index, f32 x0, f32 x1) const
     {
         const auto &layout = _text.layout_result();
         const auto &style = get_theme()->get_style(_style.id);
         const f32 metrics_h = amal::max(layout.ascender - layout.descender, style.text_size());
         const f32 line_h = amal::max(layout.line_height, style.text_size());
-        const f32 layout_h = layout.lines.size() <= 1 ? metrics_h : layout.size.y;
+        const f32 selection_h = accepts_newline() ? amal::min(style.text_size(), line_h) : line_h;
+        const f32 layout_h = layout.lines.size() <= 1 ? (accepts_newline() ? line_h : metrics_h) : layout.size.y;
         f32 align_y = 0.0f;
         switch (_text.vertical_align())
         {
@@ -1140,15 +1181,17 @@ namespace auik::v2
                 break;
         }
         if (layout.lines.empty())
-            return {{_content_pos.x + x0 - _content_scroll_x, _content_pos.y + align_y - _content_scroll_y},
-                    {amal::max(x1 - x0, 0.0f), line_h}};
+            return {{_content_pos.x + x0 - _content_scroll_x,
+                     _content_pos.y + align_y + amal::max((line_h - selection_h) * 0.5f, 0.0f) - _content_scroll_y},
+                    {amal::max(x1 - x0, 0.0f), selection_h}};
         if (line_index >= layout.lines.size()) line_index = static_cast<u32>(layout.lines.size() - 1);
 
         const auto &line = layout.lines[line_index];
-        const f32 line_y = line.glyph_count > 0 ? layout.glyphs[line.glyph_offset].pen.y - layout.ascender
-                                                : static_cast<f32>(line_index) * layout.line_height;
+        f32 line_y = line.glyph_count > 0 ? layout.glyphs[line.glyph_offset].pen.y - layout.ascender
+                                          : static_cast<f32>(line_index) * layout.line_height;
+        if (accepts_newline()) line_y += amal::max((line_h - selection_h) * 0.5f, 0.0f);
         return {{_content_pos.x + x0 - _content_scroll_x, _content_pos.y + align_y + line_y - _content_scroll_y},
-                {amal::max(x1 - x0, 0.0f), line_h}};
+                {amal::max(x1 - x0, 0.0f), selection_h}};
     }
 
     bool TextBox::update_content_scroll_x_for_cursor()
@@ -1483,6 +1526,7 @@ namespace auik::v2
     {
         _text.set_trim_trailing_spaces(false);
         if (_placeholder) _placeholder->set_trim_trailing_spaces(false);
+        if (_edit) _edit->caret_style.tag_id = AUIK_TAG_MULTILINE_CARET;
         detail::text_edit_initialize_state(&_edit_state, false);
     }
 

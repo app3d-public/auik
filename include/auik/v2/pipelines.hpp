@@ -40,6 +40,7 @@ namespace auik::v2
 
     inline bool fill_quads_instance_by_style(const Style &style, u16 clip_id, QuadsInstanceData &data)
     {
+        data.mask = static_cast<u32>(clip_id);
         if (!(style.mask() & detail::g_style_visible_draw_mask)) return false;
         data.background_color = style.background_color();
         data.border_color = style.border_color();
@@ -52,9 +53,41 @@ namespace auik::v2
         return true;
     }
 
-    inline bool should_emit_quads_instance(bool visible, const DrawDataID &draw_id, bool emit_hit_rect)
+    inline void emit_quads_hit_rect_only(const DrawCtx &ctx, DrawDataID &draw_id, const detail::RectData &rect,
+                                         bool emit_hit_rect)
     {
-        return visible || emit_hit_rect || draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID;
+        if (!emit_hit_rect) return;
+        if (ctx.is_invalidating())
+        {
+            if (draw_id.hit_id != AUIK_INVALID_DRAW_DATA_ID)
+            {
+                detail::RectData hidden_rect = rect;
+                hidden_rect.bounds.size = {0.0f, 0.0f};
+                update_hit_rect(draw_id.hit_id, hidden_rect, true);
+            }
+            return;
+        }
+        const bool force_update =
+            ctx.is_recording() || (detail::get_context().dirty_flags & DirtyFlagBits::hit_rect_update);
+        update_hit_rect(draw_id.hit_id, rect, force_update);
+    }
+
+    inline void emit_quads_instance(const DrawCtx &ctx, DrawStream *stream, DrawDataID &draw_id,
+                                    const QuadsInstanceData &data, const detail::RectData &rect, bool visible,
+                                    bool emit_hit_rect)
+    {
+        if (visible)
+        {
+            ctx.emit(stream, draw_id, &data, rect, emit_hit_rect);
+            return;
+        }
+
+        if (draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID)
+        {
+            if (ctx.is_recording()) draw_id.render_id = AUIK_INVALID_DRAW_DATA_ID;
+            else emit_draw_invalidate(ctx, stream, draw_id, nullptr, rect, false);
+        }
+        emit_quads_hit_rect_only(ctx, draw_id, rect, emit_hit_rect);
     }
 
     struct TexturesInstanceData

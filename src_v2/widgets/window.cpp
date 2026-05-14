@@ -22,8 +22,8 @@ namespace auik::v2
     }
 
     static amal::vec2 get_children_required_size(const acul::vector<Widget *> &children,
-                                                 const acul::vector<WindowChildLayout> &layouts,
-                                                 f32 inline_spacing_x, f32 wrap_width = 0.0f);
+                                                 const acul::vector<WindowChildLayout> &layouts, f32 inline_spacing_x,
+                                                 f32 wrap_width = 0.0f);
     static WindowChildLayout get_effective_child_layout(const acul::vector<Widget *> &children,
                                                         const acul::vector<WindowChildLayout> &layouts, size_t index);
     static bool starts_inline_run(const acul::vector<Widget *> &children,
@@ -88,15 +88,9 @@ namespace auik::v2
         return true;
     }
 
-    static inline f32 snap_layout_start(f32 value)
-    {
-        return amal::ceil(value);
-    }
+    static inline f32 snap_layout_start(f32 value) { return amal::ceil(value); }
 
-    static inline f32 snap_layout_end(f32 value)
-    {
-        return amal::floor(value);
-    }
+    static inline f32 snap_layout_end(f32 value) { return amal::floor(value); }
 
     static inline amal::vec4 get_root_viewport_clip_rect(Widget *widget)
     {
@@ -148,8 +142,8 @@ namespace auik::v2
                      WidgetFlagBits::visible | (hittable ? WidgetFlagBits::hittable : WidgetFlagBits::none),
                      EventFlagBits::none, parent, {}, AUIK_TAG_WINDOW_HEADER),
               _style({Theme::STYLE_ID_INVALID, AUIK_TAG_WINDOW_HEADER}),
-              _title(acul::alloc<Text>(AUIK_TAG_WINDOW_HEADER ^ parent->id(), std::move(text), amal::vec2{0.0f, 0.0f},
-                                       get_default_fixed_text_flags(), this))
+              _title(acul::alloc<Text>(AUIK_TAG_WINDOW_HEADER, std::move(text), amal::vec2{0.0f, 0.0f},
+                                       WidgetFlagBits::visible | WidgetFlagBits::fixed, this))
         {
             assert(parent);
             set_depth_zone(DepthZone::foreground);
@@ -239,8 +233,7 @@ namespace auik::v2
             data.rect = bounds();
             data.z_order = get_z_order();
             const bool bg_visible = fill_quads_instance_by_style(theme->get_style(_style.id), clip_id(), data);
-            if (should_emit_quads_instance(bg_visible, _bg, ctx.emit_hit_rect))
-                ctx.emit(quads_stream, _bg, &data, get_rect(), ctx.emit_hit_rect);
+            emit_quads_instance(ctx, quads_stream, _bg, data, get_rect(), bg_visible, ctx.emit_hit_rect);
 
             DrawCtx title_ctx = ctx;
             title_ctx.emit_hit_rect = _title->is_hittable();
@@ -346,8 +339,9 @@ namespace auik::v2
     {
         auto &map = detail::get_context().id_map;
         map.erase(id());
-        if (_menu_bar) map.erase(_menu_bar->id());
-        for (auto *child : children) map.erase(child->id());
+        if (_menu_bar && (_menu_bar->widget_flags & WidgetFlagBits::attachable)) _menu_bar->on_detach();
+        for (auto *child : children)
+            if (child && (child->widget_flags & WidgetFlagBits::attachable)) child->on_detach();
     }
 
     void Window::draw(DrawCtx &ctx)
@@ -360,8 +354,7 @@ namespace auik::v2
         bg_data.rect = bounds();
         bg_data.z_order = get_z_order();
         const bool bg_visible = fill_quads_instance_by_style(window_style, clip_id(), bg_data);
-        if (should_emit_quads_instance(bg_visible, _bg, ctx.emit_hit_rect))
-            ctx.emit(quads_stream, _bg, &bg_data, get_rect(), ctx.emit_hit_rect);
+        emit_quads_instance(ctx, quads_stream, _bg, bg_data, get_rect(), bg_visible, ctx.emit_hit_rect);
 
         if (_header)
         {
@@ -425,8 +418,7 @@ namespace auik::v2
         bg_data.rect = bounds();
         bg_data.z_order = get_z_order();
         const bool bg_visible = fill_quads_instance_by_style(window_style, clip_id(), bg_data);
-        if (should_emit_quads_instance(bg_visible, _bg, ctx.emit_hit_rect))
-            ctx.emit(quads_stream, _bg, &bg_data, get_rect(), ctx.emit_hit_rect);
+        emit_quads_instance(ctx, quads_stream, _bg, bg_data, get_rect(), bg_visible, ctx.emit_hit_rect);
 
         if (_header)
         {
@@ -543,8 +535,6 @@ namespace auik::v2
 
     void Window::rebuild_clip_rects()
     {
-        _rect.clip_id = 0xFFFFu;
-        _content_clip_id = 0xFFFFu;
         amal::vec4 self_clip = {position().x, position().y, size().x, size().y};
         if (parent()) self_clip = intersect_rect(self_clip, parent()->get_content_clip_rect());
         ensure_own_clip_rect(self_clip);
@@ -610,8 +600,8 @@ namespace auik::v2
     }
 
     static amal::vec2 get_children_required_size(const acul::vector<Widget *> &children,
-                                                 const acul::vector<WindowChildLayout> &layouts,
-                                                 f32 inline_spacing_x, f32 wrap_width)
+                                                 const acul::vector<WindowChildLayout> &layouts, f32 inline_spacing_x,
+                                                 f32 wrap_width)
     {
         f32 max_width = 0.0f;
         f32 total_height = 0.0f;
@@ -721,8 +711,7 @@ namespace auik::v2
 
     void Window::relayout_children(f32 available_width, const amal::vec2 &content_inset)
     {
-        const f32 inline_spacing_x =
-            amal::max(get_theme()->get_style(_window_style.id).inline_spacing(), 0.0f);
+        const f32 inline_spacing_x = amal::max(get_theme()->get_style(_window_style.id).inline_spacing(), 0.0f);
         const amal::vec2 content_cursor = position() + content_inset - _content_offset;
         amal::vec2 cursor = content_cursor;
         f32 inline_row_height = 0.0f;
@@ -871,8 +860,8 @@ namespace auik::v2
         const f32 header_top_y = position().y;
         const f32 header_bottom_y = _header ? snap_layout_start(header_top_y + _header_height) : header_top_y;
         const f32 menu_top_y = header_bottom_y;
-        const f32 menu_bottom_y = (_menu_bar && _menu_bar->is_visible()) ? snap_layout_start(menu_top_y + menu_height)
-                                                                         : menu_top_y;
+        const f32 menu_bottom_y =
+            (_menu_bar && _menu_bar->is_visible()) ? snap_layout_start(menu_top_y + menu_height) : menu_top_y;
         const f32 body_top_y = snap_layout_start(menu_bottom_y + padding.y);
         const f32 body_bottom_y = snap_layout_end(position().y + size().y - padding.w);
         const f32 scrollbar_top_y = menu_bottom_y;
@@ -1090,8 +1079,8 @@ namespace auik::v2
             const f32 header_top_y = position().y;
             const f32 header_bottom_y = _header ? snap_layout_start(header_top_y + _header_height) : header_top_y;
             const f32 menu_top_y = header_bottom_y;
-            const f32 menu_bottom_y = (_menu_bar && _menu_bar->is_visible()) ? snap_layout_start(menu_top_y + menu_height)
-                                                                             : menu_top_y;
+            const f32 menu_bottom_y =
+                (_menu_bar && _menu_bar->is_visible()) ? snap_layout_start(menu_top_y + menu_height) : menu_top_y;
             const f32 body_top_y = snap_layout_start(menu_bottom_y + padding.y);
             const f32 body_bottom_y = snap_layout_end(position().y + size().y - padding.w);
             const f32 body_height = amal::max(body_bottom_y - body_top_y, 0.0f);
@@ -1138,6 +1127,7 @@ namespace auik::v2
         }
         if (_content_offset != old_offset)
         {
+            sync_clip_rect_cache();
             add_render_command<detail::ScrollEventTraits>(this, [this]() {
                 update_layout(true);
                 update_draw_commands(DrawReasonBits::layout);

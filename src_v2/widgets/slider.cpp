@@ -321,28 +321,19 @@ namespace auik::v2
         const auto track_hit_rect = detail::make_slider_track_hit_rect(
             id(), _track_style.tag_id, _track_rect, clip_id(), detail::resolve_slider_track_hit_depth(depth_range()));
 
-        if (ctx.is_recording() ||
-            should_emit_quads_instance(_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::background),
-                                       _track_visual.background_draw_id, hit_pending))
-        {
-            ctx.emit(quad_stream, _track_visual.background_draw_id, &_track_visual.background, track_hit_rect,
-                     hit_pending);
-            hit_pending = false;
-        }
-        if (ctx.is_recording() ||
-            should_emit_quads_instance(_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::fill),
-                                       _track_visual.fill_draw_id, hit_pending))
-        {
-            ctx.emit(quad_stream, _track_visual.fill_draw_id, &_track_visual.fill, track_hit_rect, hit_pending);
-            hit_pending = false;
-        }
-        if (ctx.is_recording() ||
-            should_emit_quads_instance(_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::border),
-                                       _track_visual.border_draw_id, hit_pending))
-        {
-            ctx.emit(quad_stream, _track_visual.border_draw_id, &_track_visual.border, track_hit_rect, hit_pending);
-            hit_pending = false;
-        }
+        bool layer_hit = hit_pending;
+        emit_quads_instance(ctx, quad_stream, _track_visual.background_draw_id, _track_visual.background,
+                            track_hit_rect, _track_visual.has_layer(detail::SliderTrackVisual::LayerBits::background),
+                            layer_hit);
+        if (layer_hit) hit_pending = false;
+        layer_hit = hit_pending;
+        emit_quads_instance(ctx, quad_stream, _track_visual.fill_draw_id, _track_visual.fill, track_hit_rect,
+                            _track_visual.has_layer(detail::SliderTrackVisual::LayerBits::fill), layer_hit);
+        if (layer_hit) hit_pending = false;
+        layer_hit = hit_pending;
+        emit_quads_instance(ctx, quad_stream, _track_visual.border_draw_id, _track_visual.border, track_hit_rect,
+                            _track_visual.has_layer(detail::SliderTrackVisual::LayerBits::border), layer_hit);
+        if (layer_hit) hit_pending = false;
         ctx.emit(quad_stream, _grab_draw_id, &_grab_visual, _grab_hit_rect, ctx.emit_hit_rect);
     }
 
@@ -695,14 +686,11 @@ namespace auik::v2
         const auto track_hit_rect = detail::make_slider_track_hit_rect(
             id(), _track_style.tag_id, _track_rect, clip_id(), detail::resolve_slider_track_hit_depth(depth_range()));
 
-        if (ctx.is_recording() ||
-            should_emit_quads_instance(_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::background),
-                                       _track_visual.background_draw_id, hit_pending))
-        {
-            ctx.emit(quad_stream, _track_visual.background_draw_id, &_track_visual.background, track_hit_rect,
-                     hit_pending);
-            hit_pending = false;
-        }
+        bool layer_hit = hit_pending;
+        emit_quads_instance(ctx, quad_stream, _track_visual.background_draw_id, _track_visual.background,
+                            track_hit_rect, _track_visual.has_layer(detail::SliderTrackVisual::LayerBits::background),
+                            layer_hit);
+        if (layer_hit) hit_pending = false;
         if (_gradient_visual.valid || (ctx.is_invalidating() &&
                                        _gradient_visual.draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID))
         {
@@ -710,16 +698,13 @@ namespace auik::v2
                      hit_pending);
             hit_pending = false;
         }
-        if (ctx.is_recording() ||
-            should_emit_quads_instance(_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::border),
-                                       _track_visual.border_draw_id, hit_pending))
-        {
-            ctx.emit(quad_stream, _track_visual.border_draw_id, &_track_visual.border, track_hit_rect, hit_pending);
-            hit_pending = false;
-        }
+        layer_hit = hit_pending;
+        emit_quads_instance(ctx, quad_stream, _track_visual.border_draw_id, _track_visual.border, track_hit_rect,
+                            _track_visual.has_layer(detail::SliderTrackVisual::LayerBits::border), layer_hit);
+        if (layer_hit) hit_pending = false;
         const bool grab_back_visible = _grab_back_visual.rect.size.x > 0.0f && _grab_back_visual.rect.size.y > 0.0f;
-        if (ctx.is_recording() || grab_back_visible || _grab_back_draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID)
-            ctx.emit(overlay_quad_stream, _grab_back_draw_id, &_grab_back_visual, _grab_hit_rect, false);
+        emit_quads_instance(ctx, overlay_quad_stream, _grab_back_draw_id, _grab_back_visual, _grab_hit_rect,
+                            grab_back_visible, false);
         ctx.emit(overlay_quad_stream, _grab_draw_id, &_grab_visual, _grab_hit_rect, ctx.emit_hit_rect);
     }
 
@@ -1036,14 +1021,11 @@ namespace auik::v2
         const auto track_hit_rect = detail::make_slider_track_hit_rect(
             id(), _track_style.tag_id, _track_rect, clip_id(), detail::resolve_slider_track_hit_depth(depth_range()));
 
-        if (ctx.is_recording() ||
-            should_emit_quads_instance(_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::background),
-                                       _track_visual.background_draw_id, hit_pending))
-        {
-            ctx.emit(quad_stream, _track_visual.background_draw_id, &_track_visual.background, track_hit_rect,
-                     hit_pending);
-            hit_pending = false;
-        }
+        bool layer_hit = hit_pending;
+        emit_quads_instance(ctx, quad_stream, _track_visual.background_draw_id, _track_visual.background,
+                            track_hit_rect, _track_visual.has_layer(detail::SliderTrackVisual::LayerBits::background),
+                            layer_hit);
+        if (layer_hit) hit_pending = false;
         if (_gradient_visual.valid || (ctx.is_invalidating() &&
                                        _gradient_visual.draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID))
         {
@@ -1051,16 +1033,13 @@ namespace auik::v2
                      hit_pending);
             hit_pending = false;
         }
-        if (ctx.is_recording() ||
-            should_emit_quads_instance(_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::border),
-                                       _track_visual.border_draw_id, hit_pending))
-        {
-            ctx.emit(quad_stream, _track_visual.border_draw_id, &_track_visual.border, track_hit_rect, hit_pending);
-            hit_pending = false;
-        }
+        layer_hit = hit_pending;
+        emit_quads_instance(ctx, quad_stream, _track_visual.border_draw_id, _track_visual.border, track_hit_rect,
+                            _track_visual.has_layer(detail::SliderTrackVisual::LayerBits::border), layer_hit);
+        if (layer_hit) hit_pending = false;
         const bool grab_back_visible = _grab_back_visual.rect.size.x > 0.0f && _grab_back_visual.rect.size.y > 0.0f;
-        if (ctx.is_recording() || grab_back_visible || _grab_back_draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID)
-            ctx.emit(overlay_quad_stream, _grab_back_draw_id, &_grab_back_visual, _grab_hit_rect, false);
+        emit_quads_instance(ctx, overlay_quad_stream, _grab_back_draw_id, _grab_back_visual, _grab_hit_rect,
+                            grab_back_visible, false);
         ctx.emit(overlay_quad_stream, _grab_draw_id, &_grab_visual, _grab_hit_rect, ctx.emit_hit_rect);
     }
 
@@ -1415,21 +1394,15 @@ namespace auik::v2
         const auto track_hit_rect = detail::make_slider_track_hit_rect(
             id(), _track_style.tag_id, _track_rect, clip_id(), detail::resolve_slider_track_hit_depth(depth_range()));
 
-        if (ctx.is_recording() ||
-            should_emit_quads_instance(_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::background),
-                                       _track_visual.background_draw_id, hit_pending))
-        {
-            ctx.emit(quad_stream, _track_visual.background_draw_id, &_track_visual.background, track_hit_rect,
-                     hit_pending);
-            hit_pending = false;
-        }
-        if (ctx.is_recording() ||
-            should_emit_quads_instance(_track_visual.has_layer(detail::SliderTrackVisual::LayerBits::fill),
-                                       _track_visual.fill_draw_id, hit_pending))
-        {
-            ctx.emit(quad_stream, _track_visual.fill_draw_id, &_track_visual.fill, track_hit_rect, hit_pending);
-            hit_pending = false;
-        }
+        bool layer_hit = hit_pending;
+        emit_quads_instance(ctx, quad_stream, _track_visual.background_draw_id, _track_visual.background,
+                            track_hit_rect, _track_visual.has_layer(detail::SliderTrackVisual::LayerBits::background),
+                            layer_hit);
+        if (layer_hit) hit_pending = false;
+        layer_hit = hit_pending;
+        emit_quads_instance(ctx, quad_stream, _track_visual.fill_draw_id, _track_visual.fill, track_hit_rect,
+                            _track_visual.has_layer(detail::SliderTrackVisual::LayerBits::fill), layer_hit);
+        if (layer_hit) hit_pending = false;
 
         ctx.emit(quad_stream, _from_draw_id, &_from_visual, _from_hit_rect, ctx.emit_hit_rect);
         ctx.emit(quad_stream, _to_draw_id, &_to_visual, _to_hit_rect, ctx.emit_hit_rect);

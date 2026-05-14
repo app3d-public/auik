@@ -19,4 +19,10 @@ namespace auik::v2
     } // namespace detail
 
     APPLIB_API detail::WindowContext *create_awin_backend(awin::Window &window);
+    inline void adjust_window_hints_by_titlebar_settings(awin::WindowFlags &flags)
+    {
+        flags |= awin::WindowFlagBits::extended_nc_area;
+        flags &= ~awin::WindowFlagBits::decorated;
+    }
+
 } // namespace auik::v2

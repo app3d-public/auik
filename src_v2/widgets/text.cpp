@@ -183,6 +183,13 @@ namespace auik::v2
 
     void Text::draw(DrawCtx &ctx)
     {
+        const u16 current_clip = clip_id();
+        if (current_clip == 0xFFFFu)
+        {
+            assert(_instances.empty() && "Text draw requires a valid clip rect");
+            if (!_instances.empty()) return;
+        }
+
         if (ctx.emit_hit_rect && is_hittable())
         {
             detail::RectData hit_rect = get_rect();
@@ -193,7 +200,6 @@ namespace auik::v2
             update_hit_rect(_hit_id, hit_rect, force_update);
         }
 
-        const u16 current_clip = clip_id();
         const f32 current_z = get_z_order();
         auto *textured_quads_stream = get_primary_textured_quads_stream();
         if (!textured_quads_stream)

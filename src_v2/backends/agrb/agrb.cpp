@@ -167,7 +167,11 @@ namespace auik::v2
             auto &dst = ctx->clip_rects[dst_frame_id];
             auto &src = ctx->clip_rects[src_frame_id];
             const u32 src_size = static_cast<u32>(src.size());
-            if (src_size == 0) return;
+            if (src_size == 0)
+            {
+                dst.clear();
+                return;
+            }
             dst.resize(src_size);
             memcpy(dst.data().mapped, src.data().mapped, src_size * sizeof(amal::vec4));
         }

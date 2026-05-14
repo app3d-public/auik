@@ -97,7 +97,7 @@ namespace auik::v2
         {
             auto *item = acul::alloc<detail::Selectable>(AUIK_TAG_COMBO_BOX_ITEM, AUIK_TAG_COMBO_BOX_ITEM, i, items[i],
                                                          amal::vec2{0.0f, 0.0f}, _popup, AUIK_TAG_COMBO_BOX_ITEM,
-                                                         WidgetFlagBits::visible | WidgetFlagBits::hittable);
+                                                         detail::get_selectable_item_flags());
             item->get_rect().widget_id = id();
             item->set_focus_parent(_popup);
             _popup->add_child(item, WindowChildLayout::block);
@@ -563,7 +563,7 @@ namespace auik::v2
         {
             auto *item = acul::alloc<detail::Selectable>(AUIK_TAG_COMBO_BOX_ITEM, AUIK_TAG_COMBO_BOX_ITEM, i, items[i],
                                                          amal::vec2{0.0f, 0.0f}, _popup, AUIK_TAG_COMBO_BOX_ITEM,
-                                                         WidgetFlagBits::visible | WidgetFlagBits::hittable);
+                                                         detail::get_selectable_item_flags());
             item->get_rect().widget_id = id();
             item->set_focus_parent(_popup);
             _popup->add_child(item, WindowChildLayout::block);

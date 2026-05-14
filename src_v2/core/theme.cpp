@@ -7,7 +7,7 @@
 #include <auik/v2/widgets/image_button.hpp>
 #include <auik/v2/widgets/menubar.hpp>
 #include <auik/v2/widgets/radio_button.hpp>
-#include <auik/v2/widgets/rubber_band.hpp>
+#include <auik/v2/widgets/titlebar.hpp>
 #include <auik/v2/widgets/separator.hpp>
 #include <auik/v2/widgets/slider.hpp>
 #include <auik/v2/widgets/switch_button.hpp>
@@ -170,14 +170,16 @@ namespace auik::v2
                                               .inline_spacing(4.0f));
         theme->add_style(AUIK_TAG_CARET,
                          make_style().padding(amal::vec2{1.0f, 0.0f}).background_color({0.9f, 0.9f, 0.9f, 1.0f}));
+        theme->add_style(AUIK_TAG_MULTILINE_CARET,
+                         make_style().padding(amal::vec2{1.0f, 0.0f}).background_color({0.9f, 0.9f, 0.9f, 1.0f}));
         theme->add_style(AUIK_TAG_NO_PAD, make_style().margin(empty_vec2).padding(empty_vec2));
         theme->add_style(AUIK_TAG_PLACEHOLDER,
                          make_style().margin(empty_vec2).padding(empty_vec2).text_color({0.9f, 0.9f, 0.9f, 0.5f}));
         theme->add_style(AUIK_TAG_SELECTION, make_style().background_color(amal::rgba8_to_vec4(72, 114, 255, 120)));
-        theme->add_style(AUIK_TAG_RUBBER_BAND, make_style()
-                                                   .background_color(amal::rgba8_to_vec4(72, 114, 255, 45))
-                                                   .border_color(amal::rgba8_to_vec4(72, 114, 255, 210))
-                                                   .border_thickness(1.0f));
+        // theme->add_style(AUIK_TAG_RUBBER_BAND, make_style()
+        //                                            .background_color(amal::rgba8_to_vec4(72, 114, 255, 45))
+        //                                            .border_color(amal::rgba8_to_vec4(72, 114, 255, 210))
+        //                                            .border_thickness(1.0f));
         theme->add_style(AUIK_TAG_TEXT_DRAG_ICON, make_style().background_color({0.8f, 0.8f, 0.8f, 1.0f}));
         theme->set_var(AUIK_VAR_COLOR_PICKER_SIZE, 185.0f);
 
@@ -197,8 +199,9 @@ namespace auik::v2
         theme->add_style(AUIK_TAG_WINDOW_HEADER, make_style().background_color(c_surface_light), StyleState::focus);
 
         theme->add_style(AUIK_TAG_TITLEBAR, make_style().background_color(c_active));
-        theme->add_style(AUIK_TAG_TITLEBAR_ICON,
-                         make_style().margin(amal::vec4{8.0f, 0.0f, 8.0f, 0.0f}).background_color(c_surface));
+        theme->add_style(AUIK_TAG_TITLEBAR_LEADING_REGION,
+                         make_style().margin(empty_vec2).background_color(c_surface_light));
+        theme->add_style(AUIK_TAG_TITLEBAR_ICON, make_style().margin(amal::vec4{8.0f, 0.0f, 8.0f, 0.0f}));
 
         theme->add_style(AUIK_TAG_TEXT_BUTTON, make_style()
                                                    .padding(amal::vec2{10.0f, 2.0f})
@@ -281,13 +284,45 @@ namespace auik::v2
         theme->add_style(AUIK_TAG_CLOSE_BUTTON, make_style().background_color({1.0f, 1.0f, 1.0f, 0.15f}),
                          StyleState::hover);
         theme->add_style(AUIK_TAG_CLOSE_BUTTON, make_style().background_color(c_surface_light), StyleState::active);
-        theme->add_style(AUIK_TAG_WINDOW_MENU_BAR, make_style().margin(empty_vec2).background_color({0.0f, 0.0f, 0.0f, 0.15f}));
+        theme->add_style(AUIK_TAG_WINDOW_CAPTION_BUTTON, make_style().margin(empty_vec2));
+        theme->add_style(AUIK_TAG_WINDOW_CAPTION_BUTTON,
+                         make_style().background_color(amal::vec4{1.0f, 1.0f, 1.0f, 0.15f}), StyleState::hover);
+        theme->add_style(AUIK_TAG_WINDOW_CAPTION_BUTTON, make_style().background_color(c_surface_light),
+                         StyleState::active);
+        theme->add_style(AUIK_TAG_WINDOW_CAPTION_CLOSE_BUTTON, make_style()
+                                                                   .margin(empty_vec2)
+                                                                   .padding(amal::vec2{8.0f})
+                                                                   .background_color(amal::vec4{0.0f, 0.0f, 0.0f, 0.0f})
+                                                                   .border_radius(0.0f));
+        theme->add_style(AUIK_TAG_WINDOW_CAPTION_CLOSE_BUTTON,
+                         make_style().background_color(amal::vec4{0.756862f, 0.164705f, 0.109803f, 1.0f}),
+                         StyleState::hover);
+        theme->add_style(AUIK_TAG_WINDOW_CAPTION_CLOSE_BUTTON,
+                         make_style().background_color(amal::vec4{0.756862f, 0.164705f, 0.109803f, 1.0f}),
+                         StyleState::active);
+        theme->add_style(AUIK_TAG_WINDOW_MENU_BAR,
+                         make_style().margin(empty_vec2).background_color({0.0f, 0.0f, 0.0f, 0.15f}));
+        theme->add_style(AUIK_TAG_MAIN_MENU_BAR, make_style().margin(empty_vec2).background_color(c_active));
+        theme->add_style(AUIK_TAG_TITLEBAR_MENU_BAR, make_style().margin(amal::vec2{8.0f, 0.0f}));
         theme->add_style(
             AUIK_TAG_MENU_BAR_ITEM,
             make_style().margin(amal::vec2{2.0f, 2.0f}).padding(amal::vec2{8.0f, 2.0f}).border_radius(3.0f));
         theme->add_style(AUIK_TAG_MENU_BAR_ITEM, make_style().background_color(c_hover), StyleState::hover);
         theme->add_style(AUIK_TAG_MENU_BAR_ITEM, make_style().background_color(c_surface_light), StyleState::active);
         theme->add_style(AUIK_TAG_MENU_BAR_ITEM, make_style().background_color(c_hover), StyleState::focus);
+        theme->add_style(
+            AUIK_TAG_MAIN_MENU_ITEM,
+            make_style().margin(amal::vec2{2.0f, 2.0f}).padding(amal::vec2{8.0f, 2.0f}).border_radius(3.0f));
+        theme->add_style(AUIK_TAG_MAIN_MENU_ITEM, make_style().background_color(c_hover), StyleState::hover);
+        theme->add_style(AUIK_TAG_MAIN_MENU_ITEM, make_style().background_color(c_surface_light), StyleState::active);
+        theme->add_style(AUIK_TAG_MAIN_MENU_ITEM, make_style().background_color(c_hover), StyleState::focus);
+        theme->add_style(
+            AUIK_TAG_TITLEBAR_MENU_ITEM,
+            make_style().margin(amal::vec2{2.0f, 2.0f}).padding(amal::vec2{8.0f, 4.0f}).border_radius(3.0f));
+        theme->add_style(AUIK_TAG_TITLEBAR_MENU_ITEM, make_style().background_color({1.0f, 1.0f, 1.0f, 0.1f}), StyleState::hover);
+        theme->add_style(AUIK_TAG_TITLEBAR_MENU_ITEM, make_style().background_color(c_surface_light),
+                         StyleState::active);
+        theme->add_style(AUIK_TAG_TITLEBAR_MENU_ITEM, make_style().background_color({1.0f, 1.0f, 1.0f, 0.08f}), StyleState::focus);
         theme->add_style(
             AUIK_TAG_MENU_SHORTCUT,
             make_style().margin(amal::vec4{50.0f, 0.0f, 0.0f, 0.0f}).text_color({0.72f, 0.72f, 0.72f, 1.0f}));

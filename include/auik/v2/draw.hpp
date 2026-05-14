@@ -51,7 +51,8 @@ namespace auik::v2
             host_resize = 0x2,
             full_redraw = 0x4,
             external = 0x8,
-            transient = 0x10
+            transient = 0x10,
+            record = 0x20
         };
         using flag_bitmask = std::true_type;
     };
@@ -158,11 +159,14 @@ namespace auik::v2
                         bool emit_hit_rect_value) const
         {
             assert(emit_fn && "DrawCtx emitter is not configured");
-            return emit_fn(*this, stream, draw_id, data, rect, emit_hit_rect_value);
+            if (is_invalidating()) return emit_draw_invalidate(*this, stream, draw_id, data, rect, emit_hit_rect_value);
+            if (is_recording() || draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID)
+                return emit_draw_record(*this, stream, draw_id, data, rect, emit_hit_rect_value);
+            return emit_draw_update(*this, stream, draw_id, data, rect, emit_hit_rect_value);
         }
 
-        bool is_recording() const { return emit_fn == &emit_draw_record; }
-        bool is_updating() const { return emit_fn == &emit_draw_update || emit_fn == &emit_draw_invalidate; }
+        bool is_recording() const { return emit_fn == &emit_draw_record || (reason & DrawReasonBits::record); }
+        bool is_updating() const { return emit_fn == &emit_draw_update && !is_recording(); }
         bool is_invalidating() const { return emit_fn == &emit_draw_invalidate; }
     };
 

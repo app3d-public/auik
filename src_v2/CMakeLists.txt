@@ -34,10 +34,12 @@ pkg_check_modules(HARFBUZZ REQUIRED harfbuzz)
 target_link_libraries(${PROJECT_NAME} PRIVATE
     ${FREETYPE2_LIBRARIES}
     ${FONTCONFIG_LIBRARIES}
-    ${HARFBUZZ_LIBRARIES}    
+    ${HARFBUZZ_LIBRARIES}
 )
 
 if(WIN32)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE -DWIN32_LEAN_AND_MEAN -DNOMINMAX -DWINVER=0x0A00)
+
     # Manifest
     gen_manifest_lib(lib${PROJECT_NAME} ${PROJECT_VERSION})
 

@@ -90,6 +90,7 @@ namespace auik::v2::detail
         };
     };
 
+    using PFN_get_window_handle = void *(*)(struct WindowContext *);
     using PFN_set_window_cursor = void (*)(CursorID::enum_type, struct WindowContext *);
     using PFN_get_clipboard_string = acul::string (*)(struct WindowContext *);
     using PFN_set_clipboard_string = void (*)(struct WindowContext *, const acul::string &);
@@ -98,6 +99,8 @@ namespace auik::v2::detail
     using PFN_window_new_frame = void (*)(struct WindowContext *);
     using PFN_construct_window_backend = void (*)(struct WindowContext *);
     using PFN_get_window_icon_image = bool (*)(struct WindowContext *, umbf::Image2D &);
+    using PFN_get_window_modified_size = acul::point2D<i32> (*)(struct WindowContext *);
+    using PFN_get_window_modified_pos = acul::point2D<i32> (*)(struct WindowContext *);
 
     struct ElementID
     {
@@ -123,6 +126,8 @@ namespace auik::v2::detail
     {
         f64 time = 0.0;
         HostWindowState host_state = HostWindowState::normal;
+        bool is_size_modified = false;
+        PFN_get_window_handle get_window_handle = nullptr;
         PFN_set_window_cursor set_cursor = nullptr;
         PFN_get_clipboard_string get_clipboard_string = nullptr;
         PFN_set_clipboard_string set_clipboard_string = nullptr;
@@ -131,6 +136,8 @@ namespace auik::v2::detail
         PFN_update_window_time update_time = nullptr;
         PFN_window_new_frame new_frame = nullptr;
         PFN_get_window_icon_image get_window_icon_image = nullptr;
+        PFN_get_window_modified_size get_window_modified_size = nullptr;
+        PFN_get_window_modified_pos get_window_modified_pos = nullptr;
     };
 
     APPLIB_API void on_mouse_move(const amal::vec2 &delta);
@@ -144,6 +151,12 @@ namespace auik::v2::detail
     APPLIB_API void on_hover_id_updated(const ElementID &prev_hover_id, const ElementID &hover_id);
     HitboxZone get_hitbox_zone(const RectData &rect, const amal::vec2 &mouse_pos);
     CursorID::enum_type get_cursor_for_hitbox_zone(HitboxZone zone);
+
+    inline void *get_window_handle(WindowContext *window_ctx)
+    {
+        assert(window_ctx && "auik window context is not initialized");
+        return window_ctx->get_window_handle(window_ctx);
+    }
 
     inline void set_window_cursor(CursorID::enum_type id, WindowContext *window_ctx)
     {
@@ -184,6 +197,20 @@ namespace auik::v2::detail
         assert(window_ctx && "auik window context is not initialized");
         if (!window_ctx->get_window_icon_image) return false;
         return window_ctx->get_window_icon_image(window_ctx, image);
+    }
+
+    inline acul::point2D<i32> get_window_modified_size(WindowContext *window_ctx)
+    {
+        assert(window_ctx && "auik window context is not initialized");
+        return window_ctx->get_window_modified_size ? window_ctx->get_window_modified_size(window_ctx)
+                                                    : acul::point2D<i32>{0, 0};
+    }
+
+    inline acul::point2D<i32> get_window_modified_pos(WindowContext *window_ctx)
+    {
+        assert(window_ctx && "auik window context is not initialized");
+        return window_ctx->get_window_modified_pos ? window_ctx->get_window_modified_pos(window_ctx)
+                                                   : acul::point2D<i32>{0, 0};
     }
 
     struct RectData

@@ -693,17 +693,6 @@ namespace auik::v2
     }
 
 #ifdef _WIN32
-    namespace
-    {
-        static bool is_win_11_or_greater()
-        {
-            OSVERSIONINFOEX osvi{};
-            osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEX);
-            GetVersionEx((OSVERSIONINFO *)&osvi);
-            return osvi.dwBuildNumber >= 22000;
-        }
-    } // namespace
-
     bool load_win32_icons(const FontRegistry &fonts, f32 dpi)
     {
         FontInfo *font_info = nullptr;
@@ -730,6 +719,8 @@ namespace auik::v2
         {
             auto &font = specs[i].font;
             if (!font.load(font_info->path)) return false;
+            font.set_load_flags(FontLoadFlagBits::target_light | FontLoadFlagBits::no_bitmap);
+            font.set_render_mode(FontRenderMode::light);
             if (!font.load_glyphs(specs[i].size, specs[i].codepoints)) return false;
             for (u32 code = 0; code < specs[i].codepoints.size(); ++code)
             {

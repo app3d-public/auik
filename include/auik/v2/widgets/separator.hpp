@@ -18,6 +18,7 @@ namespace auik::v2
         StyleUpdateFlags update_style() override;
         void update_layout_min_size() override;
         void update_layout(bool min_size_known) override;
+        void translate(const amal::vec2 &delta) override;
         void rebuild_clip_rects() override;
         void update_depth(const amal::vec2 &depth_range) override;
         void draw(DrawCtx &ctx) override;

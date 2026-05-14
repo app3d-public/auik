@@ -129,6 +129,8 @@ namespace auik::v2
         void end_drag();
         u32 find_drop_index_by_x(f32 x) const;
         u32 find_drop_index_by_dragged_center() const;
+        virtual u16 get_layout_parent_clip_id() const;
+        virtual amal::vec4 get_layout_parent_clip_rect() const;
         void update_drag_realtime_order(f32 delta_x);
         void swap_drag_with_neighbor(u32 drag_index, u32 neighbor_index);
         void update_drag_depth();

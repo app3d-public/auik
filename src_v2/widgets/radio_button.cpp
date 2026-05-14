@@ -130,20 +130,17 @@ namespace auik::v2
         background.z_order = next_depth(_background_depth_range);
         const bool background_visible =
             fill_quads_instance_by_style(theme->get_style(_background_style.id), clip_id(), background);
-        if (should_emit_quads_instance(background_visible, _background_draw, ctx.emit_hit_rect))
-        {
-            auto hit_rect = get_rect();
-            hit_rect.bounds = _background_rect;
-            ctx.emit(quads_stream, _background_draw, &background, hit_rect, ctx.emit_hit_rect);
-        }
+        auto hit_rect = get_rect();
+        hit_rect.bounds = _background_rect;
+        emit_quads_instance(ctx, quads_stream, _background_draw, background, hit_rect, background_visible,
+                            ctx.emit_hit_rect);
 
         QuadsInstanceData indicator{};
         indicator.rect = _indicator_rect.bounds;
         indicator.z_order = _indicator_rect.depth;
         const bool indicator_visible =
             value() && fill_quads_instance_by_style(theme->get_style(_indicator_style.id), clip_id(), indicator);
-        if (should_emit_quads_instance(indicator_visible, _indicator_draw, false))
-            ctx.emit(quads_stream, _indicator_draw, &indicator, _indicator_rect, false);
+        emit_quads_instance(ctx, quads_stream, _indicator_draw, indicator, _indicator_rect, indicator_visible, false);
     }
 
     bool RadioButton::has_draw_record() const

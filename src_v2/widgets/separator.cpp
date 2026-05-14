@@ -27,18 +27,6 @@ namespace auik::v2
         return {{origin.x + r.offset.x, origin.y + r.offset.y}, r.size};
     }
 
-    static inline void snap_separator_cross_axis(amal::rect &rect, amal::axis axis)
-    {
-        if (axis == amal::axis::y)
-        {
-            rect.offset.x = amal::round(rect.offset.x);
-            rect.size.x = rect.size.x > 0.0f ? amal::max(amal::round(rect.size.x), 1.0f) : 0.0f;
-            return;
-        }
-        rect.offset.y = amal::round(rect.offset.y);
-        rect.size.y = rect.size.y > 0.0f ? amal::max(amal::round(rect.size.y), 1.0f) : 0.0f;
-    }
-
     Separator::Separator(amal::axis axis, WidgetFlags widget_flags, Widget *parent, u32 style_tag)
         : Widget(AUIK_TAG_SEPARATOR, widget_flags, EventFlagBits::none, parent, {}, style_tag),
           _axis(axis),
@@ -70,26 +58,34 @@ namespace auik::v2
         const amal::vec2 layout_origin = position();
         const amal::vec2 oriented_size = orient_size(size(), _axis);
         const amal::vec2 oriented_required = orient_size(required_size(), _axis);
-        const amal::vec2 min_inner = {amal::max(oriented_required.x - margin.x - margin.z, 0.0f),
-                                      amal::max(oriented_required.y - margin.y - margin.w, 0.0f)};
-        const amal::vec2 inner_size = {amal::max(oriented_size.x - margin.x - margin.z, min_inner.x), min_inner.y};
-        const amal::vec2 oriented_pos = {margin.x, margin.y};
-        set_position(layout_origin + unorient_size(oriented_pos, _axis));
+        const amal::vec2 cell_size = {amal::max(oriented_size.x, oriented_required.x),
+                                      oriented_size.y > 0.0f ? amal::max(oriented_size.y, oriented_required.y)
+                                                             : oriented_required.y};
+        const amal::vec2 inner_size = {amal::max(cell_size.x - margin.x - margin.z, 0.0f),
+                                       amal::max(cell_size.y - margin.y - margin.w, 0.0f)};
+        set_position(layout_origin + unorient_size({margin.x, margin.y}, _axis));
         set_size(unorient_size(inner_size, _axis));
         Widget::update_layout(true);
         set_clip_id(parent() ? parent()->content_clip_id() : clip_id());
 
+        const f32 cross_thickness = amal::max(inner_size.y, padding.y + padding.w);
         const amal::vec2 line_pos = {padding.x, 0.0f};
         const amal::vec2 line_size = {amal::max(inner_size.x - padding.x - padding.z, 0.0f),
-                                      amal::max(inner_size.y, 0.0f)};
+                                      amal::min(cross_thickness, amal::max(inner_size.y, 0.0f))};
         _line_rect = unorient_rect(position(), {line_pos, line_size}, _axis);
-        snap_separator_cross_axis(_line_rect, _axis);
     }
 
     void Separator::rebuild_clip_rects()
     {
         set_clip_id(parent() ? parent()->content_clip_id() : clip_id());
         _line.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+    }
+
+    void Separator::translate(const amal::vec2 &delta)
+    {
+        if (delta.x == 0.0f && delta.y == 0.0f) return;
+        Widget::translate(delta);
+        _line_rect.offset += delta;
     }
 
     void Separator::update_depth(const amal::vec2 &depth_range) { Widget::update_depth(depth_range); }
@@ -101,7 +97,6 @@ namespace auik::v2
         line.rect = _line_rect;
         line.z_order = get_z_order();
         const bool visible = fill_quads_instance_by_style(get_theme()->get_style(_style.id), clip_id(), line);
-        if (should_emit_quads_instance(visible, _line, ctx.emit_hit_rect))
-            ctx.emit(quads_stream, _line, &line, get_rect(), false);
+        emit_quads_instance(ctx, quads_stream, _line, line, get_rect(), visible, false);
     }
 } // namespace auik::v2

@@ -152,19 +152,15 @@ namespace auik::v2
         track.rect = _track_rect;
         track.z_order = next_depth(_track_depth_range);
         const bool track_visible = fill_quads_instance_by_style(track_style, clip_id(), track);
-        if (should_emit_quads_instance(track_visible, _track_draw, ctx.emit_hit_rect))
-        {
-            auto hit_rect = get_rect();
-            hit_rect.bounds = _track_rect;
-            ctx.emit(quads_stream, _track_draw, &track, hit_rect, ctx.emit_hit_rect);
-        }
+        auto hit_rect = get_rect();
+        hit_rect.bounds = _track_rect;
+        emit_quads_instance(ctx, quads_stream, _track_draw, track, hit_rect, track_visible, ctx.emit_hit_rect);
 
         QuadsInstanceData grab{};
         grab.rect = _grab_rect.bounds;
         grab.z_order = _grab_rect.depth;
         const bool grab_visible = fill_quads_instance_by_style(grab_style, clip_id(), grab);
-        if (should_emit_quads_instance(grab_visible, _grab_draw, false))
-            ctx.emit(quads_stream, _grab_draw, &grab, _grab_rect, false);
+        emit_quads_instance(ctx, quads_stream, _grab_draw, grab, _grab_rect, grab_visible, false);
     }
 
     bool SwitchButton::has_draw_record() const

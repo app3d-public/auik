@@ -228,26 +228,16 @@ namespace auik::v2
 
         virtual void rebuild_clip_rects() {}
 
-        void record_draw_commands(DrawReasonFlags reason = DrawReasonBits::none)
-        {
-            _external_draw_culled = false;
-            _external_draw_invalidated = false;
-            DrawCtx draw_ctx{};
-            draw_ctx.emit_fn = &emit_draw_record;
-            draw_ctx.emit_hit_rect = is_hittable();
-            draw_ctx.reason = reason;
-            draw(draw_ctx);
-        }
-
         void update_draw_commands(DrawReasonFlags reason = DrawReasonBits::none)
         {
-            if ((reason & ~DrawReasonBits::external) || !(reason & DrawReasonBits::external))
+            const bool external_only = (reason & DrawReasonBits::external) && !(reason & ~DrawReasonBits::external);
+            if (!external_only)
             {
                 _external_draw_culled = false;
                 _external_draw_invalidated = false;
             }
             DrawCtx draw_ctx{};
-            draw_ctx.emit_fn = &emit_draw_update;
+            draw_ctx.emit_fn = (reason & DrawReasonBits::record) ? &emit_draw_record : &emit_draw_update;
             draw_ctx.emit_hit_rect = is_hittable();
             draw_ctx.reason = reason;
             draw(draw_ctx);
@@ -417,7 +407,7 @@ namespace auik::v2
         inline void redraw_external(bool has_record, DrawReasonFlags update_reason = DrawReasonBits::external)
         {
             if (has_record) update_draw_commands(update_reason);
-            else record_draw_commands(DrawReasonBits::external);
+            else update_draw_commands(DrawReasonBits::external | DrawReasonBits::record);
             detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
         }
 

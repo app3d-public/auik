@@ -102,8 +102,7 @@ namespace auik::v2
         bg_data.rect = bounds();
         bg_data.z_order = get_z_order();
         const bool bg_visible = fill_quads_instance_by_style(theme->get_style(_style.id), clip_id(), bg_data);
-        if (should_emit_quads_instance(bg_visible, _bg, ctx.emit_hit_rect))
-            ctx.emit(quads_stream, _bg, &bg_data, get_rect(), ctx.emit_hit_rect);
+        emit_quads_instance(ctx, quads_stream, _bg, bg_data, get_rect(), bg_visible, ctx.emit_hit_rect);
 
         _text->draw(ctx);
         _text_draw_dirty = false;

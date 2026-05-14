@@ -6,102 +6,114 @@
 namespace auik::v2
 {
 #ifdef _WIN32
-    namespace
+    static HICON resolve_window_icon(HWND hwnd)
     {
-        static HICON resolve_window_icon(HWND hwnd)
+        HICON icon = reinterpret_cast<HICON>(SendMessageW(hwnd, WM_GETICON, ICON_SMALL2, 0));
+        if (!icon) icon = reinterpret_cast<HICON>(SendMessageW(hwnd, WM_GETICON, ICON_SMALL, 0));
+        if (!icon) icon = reinterpret_cast<HICON>(SendMessageW(hwnd, WM_GETICON, ICON_BIG, 0));
+        if (!icon) icon = reinterpret_cast<HICON>(GetClassLongPtrW(hwnd, GCLP_HICONSM));
+        if (!icon) icon = reinterpret_cast<HICON>(GetClassLongPtrW(hwnd, GCLP_HICON));
+        return icon;
+    }
+
+    static bool get_window_icon_image(detail::WindowContext *window_ctx, umbf::Image2D &out)
+    {
+        auto *backend = static_cast<detail::AwinBackend *>(window_ctx);
+        const HWND hwnd = awin::native_access::get_hwnd(backend->window);
+        if (!hwnd) return false;
+
+        const HICON icon = resolve_window_icon(hwnd);
+        if (!icon) return false;
+
+        ICONINFO icon_info{};
+        if (!GetIconInfo(icon, &icon_info)) return false;
+
+        BITMAP color_bitmap{};
+        if (!GetObjectW(icon_info.hbmColor ? icon_info.hbmColor : icon_info.hbmMask, sizeof(color_bitmap),
+                        &color_bitmap))
         {
-            HICON icon = reinterpret_cast<HICON>(SendMessageW(hwnd, WM_GETICON, ICON_SMALL2, 0));
-            if (!icon) icon = reinterpret_cast<HICON>(SendMessageW(hwnd, WM_GETICON, ICON_SMALL, 0));
-            if (!icon) icon = reinterpret_cast<HICON>(SendMessageW(hwnd, WM_GETICON, ICON_BIG, 0));
-            if (!icon) icon = reinterpret_cast<HICON>(GetClassLongPtrW(hwnd, GCLP_HICONSM));
-            if (!icon) icon = reinterpret_cast<HICON>(GetClassLongPtrW(hwnd, GCLP_HICON));
-            return icon;
+            if (icon_info.hbmColor) DeleteObject(icon_info.hbmColor);
+            if (icon_info.hbmMask) DeleteObject(icon_info.hbmMask);
+            return false;
         }
 
-        static bool get_window_icon_image(detail::WindowContext *window_ctx, umbf::Image2D &out)
+        const i32 width = color_bitmap.bmWidth;
+        const i32 height = icon_info.hbmColor ? color_bitmap.bmHeight : color_bitmap.bmHeight / 2;
+        if (width <= 0 || height <= 0)
         {
-            auto *backend = static_cast<detail::AwinBackend *>(window_ctx);
-            const HWND hwnd = awin::native_access::get_hwnd(backend->window);
-            if (!hwnd) return false;
+            if (icon_info.hbmColor) DeleteObject(icon_info.hbmColor);
+            if (icon_info.hbmMask) DeleteObject(icon_info.hbmMask);
+            return false;
+        }
 
-            const HICON icon = resolve_window_icon(hwnd);
-            if (!icon) return false;
+        BITMAPINFO bmi{};
+        bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+        bmi.bmiHeader.biWidth = width;
+        bmi.bmiHeader.biHeight = -height;
+        bmi.bmiHeader.biPlanes = 1;
+        bmi.bmiHeader.biBitCount = 32;
+        bmi.bmiHeader.biCompression = BI_RGB;
 
-            ICONINFO icon_info{};
-            if (!GetIconInfo(icon, &icon_info)) return false;
-
-            BITMAP color_bitmap{};
-            if (!GetObjectW(icon_info.hbmColor ? icon_info.hbmColor : icon_info.hbmMask, sizeof(color_bitmap),
-                            &color_bitmap))
-            {
-                if (icon_info.hbmColor) DeleteObject(icon_info.hbmColor);
-                if (icon_info.hbmMask) DeleteObject(icon_info.hbmMask);
-                return false;
-            }
-
-            const i32 width = color_bitmap.bmWidth;
-            const i32 height = icon_info.hbmColor ? color_bitmap.bmHeight : color_bitmap.bmHeight / 2;
-            if (width <= 0 || height <= 0)
-            {
-                if (icon_info.hbmColor) DeleteObject(icon_info.hbmColor);
-                if (icon_info.hbmMask) DeleteObject(icon_info.hbmMask);
-                return false;
-            }
-
-            BITMAPINFO bmi{};
-            bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-            bmi.bmiHeader.biWidth = width;
-            bmi.bmiHeader.biHeight = -height;
-            bmi.bmiHeader.biPlanes = 1;
-            bmi.bmiHeader.biBitCount = 32;
-            bmi.bmiHeader.biCompression = BI_RGB;
-
-            const size_t pixel_count = static_cast<size_t>(width) * static_cast<size_t>(height);
-            auto *bgra_pixels = acul::alloc_n<u32>(pixel_count);
-            HDC dc = GetDC(nullptr);
-            const int copied = GetDIBits(dc, icon_info.hbmColor ? icon_info.hbmColor : icon_info.hbmMask, 0,
-                                         static_cast<UINT>(height), bgra_pixels, &bmi, DIB_RGB_COLORS);
-            ReleaseDC(nullptr, dc);
-            if (copied == 0)
-            {
-                acul::release(bgra_pixels);
-                if (icon_info.hbmColor) DeleteObject(icon_info.hbmColor);
-                if (icon_info.hbmMask) DeleteObject(icon_info.hbmMask);
-                return false;
-            }
-
-            out.width = static_cast<u32>(width);
-            out.height = static_cast<u32>(height);
-            out.format = {umbf::ImageFormat::Type::uint, 1};
-            out.channels = {"r", "g", "b", "a"};
-            out.pixels = acul::alloc_n<std::byte>(pixel_count * 4u);
-            auto *dst = static_cast<u8 *>(out.pixels);
-            for (size_t i = 0; i < pixel_count; ++i)
-            {
-                const u32 pixel = bgra_pixels[i];
-                const u8 b = static_cast<u8>(pixel & 0xFFu);
-                const u8 g = static_cast<u8>((pixel >> 8) & 0xFFu);
-                const u8 r = static_cast<u8>((pixel >> 16) & 0xFFu);
-                const u8 a = static_cast<u8>((pixel >> 24) & 0xFFu);
-                dst[i * 4u + 0u] = r;
-                dst[i * 4u + 1u] = g;
-                dst[i * 4u + 2u] = b;
-                dst[i * 4u + 3u] = a;
-            }
-
+        const size_t pixel_count = static_cast<size_t>(width) * static_cast<size_t>(height);
+        auto *bgra_pixels = acul::alloc_n<u32>(pixel_count);
+        HDC dc = GetDC(nullptr);
+        const int copied = GetDIBits(dc, icon_info.hbmColor ? icon_info.hbmColor : icon_info.hbmMask, 0,
+                                     static_cast<UINT>(height), bgra_pixels, &bmi, DIB_RGB_COLORS);
+        ReleaseDC(nullptr, dc);
+        if (copied == 0)
+        {
             acul::release(bgra_pixels);
             if (icon_info.hbmColor) DeleteObject(icon_info.hbmColor);
             if (icon_info.hbmMask) DeleteObject(icon_info.hbmMask);
-            return out.pixels != nullptr;
+            return false;
         }
-    } // namespace
+
+        out.width = static_cast<u32>(width);
+        out.height = static_cast<u32>(height);
+        out.format = {umbf::ImageFormat::Type::uint, 1};
+        out.channels = {"r", "g", "b", "a"};
+        out.pixels = acul::alloc_n<std::byte>(pixel_count * 4u);
+        auto *dst = static_cast<u8 *>(out.pixels);
+        for (size_t i = 0; i < pixel_count; ++i)
+        {
+            const u32 pixel = bgra_pixels[i];
+            const u8 b = static_cast<u8>(pixel & 0xFFu);
+            const u8 g = static_cast<u8>((pixel >> 8) & 0xFFu);
+            const u8 r = static_cast<u8>((pixel >> 16) & 0xFFu);
+            const u8 a = static_cast<u8>((pixel >> 24) & 0xFFu);
+            dst[i * 4u + 0u] = r;
+            dst[i * 4u + 1u] = g;
+            dst[i * 4u + 2u] = b;
+            dst[i * 4u + 3u] = a;
+        }
+
+        acul::release(bgra_pixels);
+        if (icon_info.hbmColor) DeleteObject(icon_info.hbmColor);
+        if (icon_info.hbmMask) DeleteObject(icon_info.hbmMask);
+        return out.pixels != nullptr;
+    }
 #endif
 
     static inline HostWindowState resolve_host_window_state(const awin::Window &window)
     {
+        if (window.fullscreen()) return HostWindowState::fullscreen;
         if (window.minimized()) return HostWindowState::minimized;
         if (window.maximized()) return HostWindowState::maximized;
         return HostWindowState::normal;
+    }
+
+    static void *get_window_handle(detail::WindowContext *window_ctx)
+    {
+        auto *backend = static_cast<detail::AwinBackend *>(window_ctx);
+#ifdef _WIN32
+        return awin::native_access::get_hwnd(backend->window);
+#else
+        int backend = native_access::get_backend_type();
+        if (backend == AWIN_BACKEND_X11) return awin::native_access::get_x11_window_handle(backend->window);
+        else if (backend == AWIN_BACKEND_WAYLAND)
+            return awin::native_access::get_wayland_window_handle(backend->window);
+        else return nullptr;
+#endif
     }
 
     static void set_window_cursor(detail::CursorID::enum_type id, detail::WindowContext *window_ctx)
@@ -136,19 +148,24 @@ namespace auik::v2
 
     static void bind_window_events(awin::Window &window, acul::events::dispatcher &ed, void *backend)
     {
-        ed.bind_event(backend, awin::event_id::resize, [&window](const awin::PosEvent &event) {
-            if (event.window != &window) return;
-            auto &ctx = detail::get_context();
-            ctx.io.display_size = {event.position.x, event.position.y};
-            auto *pf = ctx.pending_filter;
-            if (pf && !pf->allow()) pf->set(PendingMaskBits::resize);
-            else ctx.dirty_flags |= DirtyFlagBits::layout;
-        });
+        ed.bind_event(
+            backend, awin::event_id::resize,
+            [&window](const awin::PosEvent &event) {
+                if (event.window != &window) return;
+                auto &ctx = detail::get_context();
+                const HostWindowState next_state = resolve_host_window_state(window);
+                if (ctx.window_ctx->host_state != next_state) ctx.window_ctx->host_state = next_state;
+                if (event.position.x <= 0 || event.position.y <= 0) return;
+                ctx.io.display_size = {event.position.x, event.position.y};
+                auto *pf = ctx.pending_filter;
+                if (pf && !pf->allow()) pf->set(PendingMaskBits::resize);
+                else ctx.dirty_flags |= DirtyFlagBits::layout;
+            },
+            4);
         ed.bind_event(backend, awin::event_id::mouse_move, [&window](const awin::PosEvent &event) {
             if (event.window != &window) return;
             auto &ctx = detail::get_context();
             ctx.io.mouse_pos = {event.position.x, event.position.y};
-            ctx.dirty_flags |= DirtyFlagBits::hover_update;
             if (ctx.raw_mouse_mode) return;
             auto *pending_filter = ctx.pending_filter;
             if (pending_filter && !pending_filter->allow()) pending_filter->set(PendingMaskBits::mouse_move);
@@ -229,6 +246,7 @@ namespace auik::v2
     APPLIB_API detail::WindowContext *create_awin_backend(awin::Window &window)
     {
         detail::AwinBackend *ctx = acul::alloc<detail::AwinBackend>(window);
+        ctx->get_window_handle = &get_window_handle;
         ctx->set_cursor = &set_window_cursor;
         ctx->get_clipboard_string = &get_clipboard_string;
         ctx->set_clipboard_string = &set_clipboard_string;

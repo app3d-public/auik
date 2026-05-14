@@ -136,12 +136,9 @@ namespace auik::v2
         box_data.rect = _box_rect;
         box_data.z_order = next_depth(_box_depth_range);
         const bool box_visible = fill_quads_instance_by_style(get_theme()->get_style(_style.id), clip_id(), box_data);
-        if (should_emit_quads_instance(box_visible, _box_bg, ctx.emit_hit_rect))
-        {
-            auto hit_rect = get_rect();
-            hit_rect.bounds = _box_rect;
-            ctx.emit(quads_stream, _box_bg, &box_data, hit_rect, ctx.emit_hit_rect);
-        }
+        auto hit_rect = get_rect();
+        hit_rect.bounds = _box_rect;
+        emit_quads_instance(ctx, quads_stream, _box_bg, box_data, hit_rect, box_visible, ctx.emit_hit_rect);
 
         ensure_checkmark_resource();
         auto *textured_quads_stream = get_primary_textured_quads_stream();

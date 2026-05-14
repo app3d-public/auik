@@ -41,11 +41,10 @@ namespace auik::v2
             hit_rect_sync = 0x8,
             clip_rect = 0x10,
             host_update = 0x20,
-            hover_update = 0x40,
-            hit_rect_draw = 0x80,
-            hit_rect_update = 0x100,
-            textures = 0x200,
-            delayed_tasks = 0x400
+            hit_rect_draw = 0x40,
+            hit_rect_update = 0x80,
+            textures = 0x100,
+            delayed_tasks = 0x200
         };
         using flag_bitmask = std::true_type;
     };
@@ -184,6 +183,24 @@ namespace auik::v2
             return get_context().shared_sync_state[AUIK_SYNC_HIT_RECT];
         }
 
+        inline void sync_current_clip_rect_frame()
+        {
+            auto &ctx = get_context();
+            auto &state = get_clip_rects_sync_state();
+            const u32 frame_id = ctx.frame_id;
+            assert(state.buffer_versions);
+            if (state.buffer_versions[frame_id] == state.master_version)
+            {
+                if (state.invalidation_count == 0) ctx.dirty_flags &= ~DirtyFlagBits::clip_rect;
+                return;
+            }
+            copy_clip_rects_frame(ctx.gpu_ctx, frame_id, state.master_id);
+            state.buffer_versions[frame_id] = state.master_version;
+            if (state.invalidation_count > 0) --state.invalidation_count;
+            if (state.invalidation_count == 0) state.stage_version = state.master_version;
+            if (state.invalidation_count == 0) ctx.dirty_flags &= ~DirtyFlagBits::clip_rect;
+        }
+
         inline void mark_shared_buffer_mutation(SharedBufferSyncState &state, u32 frame_id, u32 frames_in_flight)
         {
             const bool already_mutating_same_frame = (state.master_id == frame_id) &&
@@ -315,6 +332,7 @@ namespace auik::v2
         }
 
         inline void clear_widget_pending_bits() {}
+
     } // namespace detail
 
     inline Theme *get_theme() { return detail::get_context().theme; }
@@ -401,6 +419,7 @@ namespace auik::v2
     {
         auto *gpu = detail::get_context().gpu_ctx;
         assert(gpu && gpu->push_clip_rect && "GPU clip rect dispatch is not initialized");
+        detail::sync_current_clip_rect_frame();
         const u16 id = gpu->push_clip_rect(gpu, detail::snap_rect_to_pixel_grid(rect));
         detail::mark_clip_rects_mutation();
         return id;
@@ -410,6 +429,7 @@ namespace auik::v2
     {
         auto *gpu = detail::get_context().gpu_ctx;
         assert(gpu && gpu->update_clip_rect && "GPU clip rect dispatch is not initialized");
+        detail::sync_current_clip_rect_frame();
         gpu->update_clip_rect(gpu, clip_id, detail::snap_rect_to_pixel_grid(rect));
         detail::mark_clip_rects_mutation();
     }
@@ -434,6 +454,7 @@ namespace auik::v2
     {
         auto *gpu = detail::get_context().gpu_ctx;
         assert(gpu && gpu->get_clip_rect && "GPU clip rect dispatch is not initialized");
+        detail::sync_current_clip_rect_frame();
         auto *rect = gpu->get_clip_rect(gpu, clip_id);
         assert(rect && "Invalid clip rect id");
         return *rect;

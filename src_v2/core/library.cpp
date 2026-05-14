@@ -7,6 +7,7 @@
 #include <auik/v2/widgets/slider.hpp>
 #include <auik/v2/widgets/tooltip.hpp>
 #include <freetype/freetype.h>
+#include "pipelines/stream_data.hpp"
 
 namespace auik::v2
 {
@@ -34,7 +35,11 @@ namespace auik::v2
             for (u32 stream_id = 0; stream_id < ctx.streams.stream_count; ++stream_id)
             {
                 auto &stream = ctx.streams.attached_streams[stream_id];
-                if (stream.draw_sizes[ctx.frame_id] <= 0) continue;
+                if (stream.draw_sizes[ctx.frame_id] <= 0)
+                {
+                    detail::mark_stream_frame_synced(&stream, ctx.frame_id);
+                    continue;
+                }
                 clear_draw_stream(&stream, ctx.frame_id);
             }
         }
@@ -154,7 +159,7 @@ namespace auik::v2
         ctx.window_ctx = create_info.window_ctx;
         detail::construct_window_backend(ctx.window_ctx);
         reset_main_viewport();
-        ctx.dirty_flags = DirtyFlagBits::redraw | DirtyFlagBits::layout;
+        ctx.dirty_flags = DirtyFlagBits::redraw;
         detail::construct_shared_buffer_sync_state(ctx.shared_sync_state[AUIK_SYNC_CLIP_RECT], ctx.frames_in_flight);
         detail::construct_shared_buffer_sync_state(ctx.shared_sync_state[AUIK_SYNC_HIT_RECT], ctx.frames_in_flight);
         if (detail::create_gpu_resources(ctx.gpu_ctx)) return true;
@@ -203,7 +208,7 @@ namespace auik::v2
         for (Widget *widget : ctx.widget_tree)
         {
             widget->update_layout(false);
-            widget->record_draw_commands(DrawReasonBits::layout);
+            widget->update_draw_commands(DrawReasonBits::layout | DrawReasonBits::record);
         }
         ctx.dirty_flags &= ~DirtyFlagBits::layout;
         if (need_hit_rect_draw)
@@ -223,7 +228,8 @@ namespace auik::v2
                "redraw_all_commands() started with stale current-frame hit rect cache");
         clear_hit_rects();
         clear_all_streams(ctx);
-        for (Widget *widget : ctx.widget_tree) widget->record_draw_commands(DrawReasonBits::full_redraw);
+        for (Widget *widget : ctx.widget_tree)
+            widget->update_draw_commands(DrawReasonBits::full_redraw | DrawReasonBits::record);
         ctx.dirty_flags &= ~DirtyFlagBits::hit_rect_draw;
         ctx.dirty_flags |= DirtyFlagBits::hit_rect_sync;
     }
@@ -293,7 +299,16 @@ namespace auik::v2
         ++ctx.root_depth_counts[zone];
         widget->update_style();
         widget->update_layout(false);
-        widget->record_draw_commands(DrawReasonBits::full_redraw);
+        if (widget->is_viewport_reserved() && widget->is_visible())
+        {
+            reset_main_viewport();
+            for (Widget *root_widget : ctx.widget_tree)
+                root_widget->update_layout(false);
+            for (Widget *root_widget : ctx.widget_tree)
+                root_widget->update_draw_commands(root_widget == widget ? DrawReasonBits::full_redraw | DrawReasonBits::record
+                                                                        : DrawReasonBits::layout);
+        }
+        else widget->update_draw_commands(DrawReasonBits::full_redraw | DrawReasonBits::record);
         ctx.dirty_flags |= DirtyFlagBits::redraw;
     }
 

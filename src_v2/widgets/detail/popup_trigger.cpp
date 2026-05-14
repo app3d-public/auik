@@ -182,8 +182,7 @@ namespace auik::v2::detail
             bg_data.rect = _bounds;
             bg_data.z_order = next_depth(_bg_depth_range);
             const bool bg_visible = fill_quads_instance_by_style(theme->get_style(_style.id), _hit_rect.clip_id, bg_data);
-            if (should_emit_quads_instance(bg_visible, _bg_draw, emit_hit_rect))
-                ctx.emit(quads_stream, _bg_draw, &bg_data, _hit_rect, emit_hit_rect);
+            emit_quads_instance(ctx, quads_stream, _bg_draw, bg_data, _hit_rect, bg_visible, emit_hit_rect);
 
             ensure_icon_resources();
             auto *textured_quads_stream = get_primary_textured_quads_stream();

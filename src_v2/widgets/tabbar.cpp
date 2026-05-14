@@ -16,6 +16,13 @@ namespace auik::v2
         return detail::get_root_depth_range(DepthZone::foreground, 31);
     }
 
+    static inline bool should_own_full_clip_rect(const TabBar &tabbar) { return tabbar.is_fixed() || !tabbar.parent(); }
+
+    static inline bool should_own_content_clip_rect(const TabBar &tabbar)
+    {
+        return tabbar.scroll() || tabbar.is_fixed() || !tabbar.parent();
+    }
+
     static inline f32 dominant_scroll_axis(const amal::vec2 &delta)
     {
         return amal::abs(delta.x) > amal::abs(delta.y) ? delta.x : delta.y;
@@ -112,7 +119,7 @@ namespace auik::v2
             {
                 auto *popup_item = acul::alloc<detail::Selectable>(
                     _popup_item_style_tag, _popup_item_style_tag, element_id, tab->text(), amal::vec2{0.0f, 0.0f},
-                    _popup, _popup_item_style_tag, WidgetFlagBits::visible | WidgetFlagBits::hittable);
+                    _popup, _popup_item_style_tag, detail::get_selectable_item_flags());
                 popup_item->get_rect().widget_id = id();
                 popup_item->set_focus_parent(_popup);
                 _popup->add_child(popup_item, WindowChildLayout::block);
@@ -165,7 +172,7 @@ namespace auik::v2
             _element_ids.push_back(element_id);
             auto *tab = acul::alloc<detail::Selectable>(
                 _item_style_tag, _item_style_tag, element_id, items[i], amal::vec2{0.0f, 0.0f}, this, _item_style_tag,
-                WidgetFlagBits::visible | WidgetFlagBits::hittable, _item_style_tag, StyleState::focus);
+                detail::get_selectable_item_flags(), _item_style_tag, StyleState::focus);
             tab->get_rect().widget_id = id();
             tab->set_focus_parent(this);
             tab->update_style();
@@ -227,20 +234,15 @@ namespace auik::v2
     {
         if (_tab_width == value) return;
         _tab_width = value;
-        detail::get_context().dirty_flags |= DirtyFlagBits::layout | DirtyFlagBits::redraw;
-        detail::mark_host_refresh_request();
     }
 
     void TabBar::set_tab_width_key(u32 key)
     {
         if (_tab_width_key == key) return;
         _tab_width_key = key;
-        detail::get_context().dirty_flags |= DirtyFlagBits::layout | DirtyFlagBits::redraw;
-        detail::mark_host_refresh_request();
     }
 
-    StyleUpdateFlags TabBar::update_tab_item_style(u32 index,
-                                                   const detail::WidgetStyleSelectorTransition &transition)
+    StyleUpdateFlags TabBar::update_tab_item_style(u32 index, const detail::WidgetStyleSelectorTransition &transition)
     {
         if (index >= _tabs.size()) return StyleUpdateFlagBits::none;
         auto *tab = _tabs[index];
@@ -267,8 +269,7 @@ namespace auik::v2
         return _close_buttons[index]->update_style();
     }
 
-    StyleUpdateFlags TabBar::update_popup_item_style(u32 index,
-                                                     const detail::WidgetStyleSelectorTransition &transition)
+    StyleUpdateFlags TabBar::update_popup_item_style(u32 index, const detail::WidgetStyleSelectorTransition &transition)
     {
         if (!_popup || index >= _popup->children.size()) return StyleUpdateFlagBits::none;
         auto *child = static_cast<detail::Selectable *>(_popup->children[index]);
@@ -466,19 +467,30 @@ namespace auik::v2
         const amal::vec2 overflow_size = popup() ? measure_overflow_size() : amal::vec2{0.0f, 0.0f};
         const f32 popup_reserved = popup() ? overflow_size.x : 0.0f;
 
-        const amal::vec4 parent_clip =
-            parent() ? parent()->get_content_clip_rect() : amal::vec4{position().x, position().y, size().x, size().y};
+        const bool own_full_clip = should_own_full_clip_rect(*this);
+        const amal::vec4 parent_clip = get_layout_parent_clip_rect();
         const amal::vec4 full_clip =
             detail::intersect_rects(parent_clip, {position().x, position().y, size().x, size().y});
         const f32 tabs_clip_right = position().x + size().x - padding.z - popup_reserved;
         const amal::vec4 tabs_clip = detail::intersect_rects(
             parent_clip, {position().x, position().y, amal::max(tabs_clip_right - position().x, 0.0f), size().y});
-        if (_full_clip_id == 0xFFFFu) _full_clip_id = push_clip_rect(full_clip);
-        else update_clip_rect(_full_clip_id, full_clip);
-        if (_content_clip_id == 0xFFFFu) _content_clip_id = push_clip_rect(tabs_clip);
-        else update_clip_rect(_content_clip_id, tabs_clip);
-        set_clip_id(_full_clip_id);
-
+        if (own_full_clip)
+        {
+            if (_full_clip_id == 0xFFFFu) _full_clip_id = push_clip_rect(full_clip);
+            else update_clip_rect(_full_clip_id, full_clip);
+            set_clip_id(_full_clip_id);
+        }
+        else
+        {
+            _full_clip_id = 0xFFFFu;
+            set_clip_id(get_layout_parent_clip_id());
+        }
+        if (should_own_content_clip_rect(*this))
+        {
+            if (_content_clip_id == 0xFFFFu) _content_clip_id = push_clip_rect(tabs_clip);
+            else update_clip_rect(_content_clip_id, tabs_clip);
+        }
+        else _content_clip_id = 0xFFFFu;
         f32 cursor_x = content_x - (scroll() ? _scroll_offset : 0.0f);
         f32 total_w = 0.0f;
         _visible_count = 0u;
@@ -559,50 +571,61 @@ namespace auik::v2
     {
         if (delta.x == 0.0f && delta.y == 0.0f) return;
         Widget::translate(delta);
-        for (auto *tab : _tabs)
-            if (tab) tab->translate(delta);
-        for (auto *button : _close_buttons)
-            if (button) button->translate(delta);
-        if (_overflow_button) _overflow_button->translate(delta);
-        if (_open && _popup) static_cast<Widget *>(_popup)->translate(delta);
         if (_full_clip_id != 0xFFFFu || _content_clip_id != 0xFFFFu)
         {
             const auto &style = get_theme()->get_style(_style.id);
             const amal::vec4 padding = style.padding();
             const amal::vec2 overflow_size = popup() ? measure_overflow_size() : amal::vec2{0.0f, 0.0f};
             const f32 popup_reserved = popup() ? overflow_size.x : 0.0f;
-            const amal::vec4 parent_clip = parent() ? parent()->get_content_clip_rect()
-                                                    : amal::vec4{position().x, position().y, size().x, size().y};
+            const amal::vec4 parent_clip = get_layout_parent_clip_rect();
             const amal::vec4 full_clip =
                 detail::intersect_rects(parent_clip, {position().x, position().y, size().x, size().y});
             const f32 tabs_clip_right = position().x + size().x - padding.z - popup_reserved;
             const amal::vec4 tabs_clip = detail::intersect_rects(
                 parent_clip, {position().x, position().y, amal::max(tabs_clip_right - position().x, 0.0f), size().y});
             if (_full_clip_id != 0xFFFFu) update_clip_rect(_full_clip_id, full_clip);
+            else set_clip_id(get_layout_parent_clip_id());
             if (_content_clip_id != 0xFFFFu) update_clip_rect(_content_clip_id, tabs_clip);
         }
+        else set_clip_id(get_layout_parent_clip_id());
+        for (auto *tab : _tabs)
+            if (tab) tab->translate(delta);
+        for (auto *button : _close_buttons)
+            if (button) button->translate(delta);
+        if (_overflow_button) _overflow_button->translate(delta);
+        if (_open && _popup) static_cast<Widget *>(_popup)->translate(delta);
     }
 
     void TabBar::rebuild_clip_rects()
     {
-        _full_clip_id = 0xFFFFu;
-        _content_clip_id = 0xFFFFu;
         const auto &style = get_theme()->get_style(_style.id);
         const amal::vec4 padding = style.padding();
         const amal::vec2 overflow_size = popup() ? measure_overflow_size() : amal::vec2{0.0f, 0.0f};
         const f32 popup_reserved = popup() ? overflow_size.x : 0.0f;
-        const amal::vec4 parent_clip =
-            parent() ? parent()->get_content_clip_rect() : amal::vec4{position().x, position().y, size().x, size().y};
+        const bool own_full_clip = should_own_full_clip_rect(*this);
+        const amal::vec4 parent_clip = get_layout_parent_clip_rect();
         const amal::vec4 full_clip =
             detail::intersect_rects(parent_clip, {position().x, position().y, size().x, size().y});
         const f32 tabs_clip_right = position().x + size().x - padding.z - popup_reserved;
         const amal::vec4 tabs_clip = detail::intersect_rects(
             parent_clip, {position().x, position().y, amal::max(tabs_clip_right - position().x, 0.0f), size().y});
-        if (_full_clip_id == 0xFFFFu) _full_clip_id = push_clip_rect(full_clip);
-        else update_clip_rect(_full_clip_id, full_clip);
-        if (_content_clip_id == 0xFFFFu) _content_clip_id = push_clip_rect(tabs_clip);
-        else update_clip_rect(_content_clip_id, tabs_clip);
-        set_clip_id(_full_clip_id);
+        if (own_full_clip)
+        {
+            if (_full_clip_id == 0xFFFFu) _full_clip_id = push_clip_rect(full_clip);
+            else update_clip_rect(_full_clip_id, full_clip);
+            set_clip_id(_full_clip_id);
+        }
+        else
+        {
+            _full_clip_id = 0xFFFFu;
+            set_clip_id(get_layout_parent_clip_id());
+        }
+        if (should_own_content_clip_rect(*this))
+        {
+            if (_content_clip_id == 0xFFFFu) _content_clip_id = push_clip_rect(tabs_clip);
+            else update_clip_rect(_content_clip_id, tabs_clip);
+        }
+        else _content_clip_id = 0xFFFFu;
         for (auto *tab : _tabs)
             if (tab) tab->rebuild_clip_rects();
         for (auto *button : _close_buttons)
@@ -637,8 +660,16 @@ namespace auik::v2
             assign_next_depth(next_range, child_range);
             _overflow_button->update_depth(child_range);
         }
-        if (_popup) static_cast<Widget *>(_popup)->update_depth(get_tab_popup_depth_range());
+        if (_popup) _popup->update_depth(get_tab_popup_depth_range());
         if (_drag_element_id != 0u) update_drag_depth();
+    }
+
+    u16 TabBar::get_layout_parent_clip_id() const { return parent() ? parent()->content_clip_id() : clip_id(); }
+
+    amal::vec4 TabBar::get_layout_parent_clip_rect() const
+    {
+        return parent() ? parent()->get_content_clip_rect()
+                        : amal::vec4{position().x, position().y, size().x, size().y};
     }
 
     bool TabBar::draw_transition_targets(DrawCtx &ctx)
@@ -696,29 +727,49 @@ namespace auik::v2
     {
         if (!(widget_flags & WidgetFlagBits::visible)) return;
         if (ctx.is_updating() && ctx.reason == DrawReasonBits::none && draw_transition_targets(ctx)) return;
+
+        const auto invalidate_hidden_widget = [&](Widget *widget) {
+            if (!widget || ctx.is_recording()) return;
+            DrawCtx invalidate_ctx = ctx;
+            invalidate_ctx.emit_fn = &emit_draw_invalidate;
+            invalidate_ctx.emit_hit_rect = false;
+            widget->draw(invalidate_ctx);
+        };
+
         for (u32 i = 0; i < _tabs.size(); ++i)
         {
             auto *tab = _tabs[i];
-            if (!tab || !tab->is_visible()) continue;
+            if (!tab) continue;
+            auto *close_button = i < _close_buttons.size() ? _close_buttons[i] : nullptr;
+            if (!tab->is_visible())
+            {
+                invalidate_hidden_widget(tab);
+                invalidate_hidden_widget(close_button);
+                continue;
+            }
             DrawCtx tab_ctx = ctx;
             tab_ctx.emit_hit_rect = tab->is_hittable();
             tab->draw(tab_ctx);
-            if (i < _close_buttons.size())
+            if (close_button && close_button->is_visible())
             {
-                auto *close_button = _close_buttons[i];
-                if (close_button && close_button->is_visible())
-                {
-                    DrawCtx close_ctx = ctx;
-                    close_ctx.emit_hit_rect = close_button->is_hittable();
-                    close_button->draw(close_ctx);
-                }
+                DrawCtx close_ctx = ctx;
+                close_ctx.emit_hit_rect = close_button->is_hittable();
+                close_button->draw(close_ctx);
             }
+            else invalidate_hidden_widget(close_button);
         }
         if (_overflow_button && _overflow_start < _tabs.size())
         {
             ensure_overflow_icon_resources();
             DrawCtx overflow_ctx = ctx;
             _overflow_button->draw(overflow_ctx, ctx.emit_hit_rect);
+        }
+        else if (_overflow_button && !ctx.is_recording())
+        {
+            DrawCtx invalidate_ctx = ctx;
+            invalidate_ctx.emit_fn = &emit_draw_invalidate;
+            invalidate_ctx.emit_hit_rect = false;
+            _overflow_button->draw(invalidate_ctx, false);
         }
         if (_open && _popup)
         {
@@ -1191,8 +1242,8 @@ namespace auik::v2
         else _popup->window_flags = (get_popup_window_flags() | WindowFlagBits::docked) & ~WindowFlagBits::scrollable;
         _popup->set_position({position().x + size().x - popup_w, position().y + size().y - 1.0f});
         _popup->set_size({popup_w, popup_h});
-        static_cast<Widget *>(_popup)->update_depth(get_tab_popup_depth_range());
-        static_cast<Widget *>(_popup)->update_layout(false);
+        _popup->update_depth(get_tab_popup_depth_range());
+        _popup->update_layout(false);
 
         content_width = amal::max(popup_w - popup_padding.x - popup_padding.z, 0.0f);
         amal::vec2 cursor = _popup->position() + amal::vec2{popup_padding.x, popup_padding.y};

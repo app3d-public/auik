@@ -5,6 +5,7 @@
 #include "text.hpp"
 
 #define AUIK_TAG_TEXTBOX 0x37C7A6D1u
+#define AUIK_TAG_MULTILINE_CARET 0x7D6F3E2Au
 
 namespace auik::v2
 {
@@ -148,6 +149,7 @@ namespace auik::v2
         int cursor_from_line_x(u32 line_index, f32 x) const;
         f32 cursor_x_on_line(u32 line_index, int cursor) const;
         f32 line_screen_y(u32 line_index) const;
+        amal::rect caret_rect(u32 line_index, f32 x, f32 width) const;
         amal::rect line_selection_rect(u32 line_index, f32 x0, f32 x1) const;
         bool update_content_scroll_x_for_cursor();
         bool update_content_scroll_y_for_cursor();

@@ -18,8 +18,8 @@ namespace auik::v2
 
     ImageButton::ImageButton(u32 id, Image *image, amal::vec2 image_size, amal::vec2 size, WidgetFlags widget_flags,
                              Widget *parent, u32 style_tag)
-        : ImageButton(id, AUIK_INVALID_TEXTURE_ID, image_size, size, {{0.0f, 0.0f}, {1.0f, 1.0f}}, widget_flags,
-                      parent, style_tag)
+        : ImageButton(id, AUIK_INVALID_TEXTURE_ID, image_size, size, {{0.0f, 0.0f}, {1.0f, 1.0f}}, widget_flags, parent,
+                      style_tag)
     {
         _image = image;
     }
@@ -51,7 +51,8 @@ namespace auik::v2
         const amal::vec4 margin = style.margin();
         const amal::vec4 padding = style.padding();
         const amal::vec2 image_size = resolve_image_size();
-        const amal::vec2 content_required = {image_size.x + padding.x + padding.z, image_size.y + padding.y + padding.w};
+        const amal::vec2 content_required = {image_size.x + padding.x + padding.z,
+                                             image_size.y + padding.y + padding.w};
 
         amal::vec2 min_size = _requested_size;
         if (is_fixed() && min_size.x <= 0.0f && min_size.y <= 0.0f)
@@ -59,8 +60,7 @@ namespace auik::v2
             const f32 side = amal::max(content_required.x, content_required.y);
             min_size = {side, side};
         }
-        else if (!is_fixed())
-            min_size.x = 0.0f;
+        else if (!is_fixed()) min_size.x = 0.0f;
 
         if (min_size.x <= 0.0f) min_size.x = content_required.x;
         else min_size.x = amal::max(min_size.x, content_required.x);
@@ -135,9 +135,9 @@ namespace auik::v2
         QuadsInstanceData bg_data{};
         bg_data.rect = bounds();
         bg_data.z_order = get_z_order();
-        const bool bg_visible = fill_quads_instance_by_style(theme->get_style(_style.id), clip_id(), bg_data);
-        if (should_emit_quads_instance(bg_visible, _bg, ctx.emit_hit_rect))
-            ctx.emit(quads_stream, _bg, &bg_data, get_rect(), ctx.emit_hit_rect);
+        const auto &style = theme->get_style(_style.id);
+        const bool bg_visible = fill_quads_instance_by_style(style, clip_id(), bg_data);
+        emit_quads_instance(ctx, quads_stream, _bg, bg_data, get_rect(), bg_visible, ctx.emit_hit_rect);
 
         auto *textured_quads_stream = get_primary_textured_quads_stream();
         TextureID texture_id = resolve_texture_id();
@@ -151,7 +151,7 @@ namespace auik::v2
 
         TexturesInstanceData image_data{};
         image_data.rect = _image_rect.bounds;
-        image_data.tint_color = theme->get_style(_style.id).text_color();
+        image_data.tint_color = style.text_color();
         image_data.uv_rect = resolve_uv_rect();
         image_data.z_order = _image_rect.depth;
         image_data.texture_id = static_cast<u16>(texture_id.bind_slot);

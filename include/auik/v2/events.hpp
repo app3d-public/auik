@@ -3,11 +3,12 @@
 #include <acul/api.hpp>
 #include <acul/enum.hpp>
 #include <acul/hash/hashmap.hpp>
-#include <acul/vector.hpp>
 #include <acul/scalars.hpp>
 #include <acul/string/string.hpp>
+#include <acul/vector.hpp>
 #include <amal/vector.hpp>
 #include <functional>
+
 
 #ifndef AUIK_TAG_GLOBAL
     #define AUIK_TAG_GLOBAL 0x00000000u
@@ -167,7 +168,8 @@ namespace auik::v2
     {
         normal = 0,
         minimized = 1,
-        maximized = 2
+        maximized = 2,
+        fullscreen = 3
     };
 
     enum class KeyPressState : i8

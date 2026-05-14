@@ -21,8 +21,7 @@ namespace auik::v2::detail
 
     void Selectable::rebuild_clip_rects()
     {
-        set_clip_id(parent() ? parent()->content_clip_id() : clip_id());
-        Text::rebuild_clip_rects();
+        update_content_clip_rect();
         _bg.hit_id = AUIK_INVALID_DRAW_DATA_ID;
         _selected_bg.hit_id = AUIK_INVALID_DRAW_DATA_ID;
     }
@@ -36,6 +35,13 @@ namespace auik::v2::detail
             set_size({amal::max(size().x - margin.x - margin.z, 0.0f), size().y});
         }
         Text::update_layout(min_size_known);
+        update_content_clip_rect();
+    }
+
+    void Selectable::translate(const amal::vec2 &delta)
+    {
+        Text::translate(delta);
+        update_content_clip_rect();
     }
 
     void Selectable::update_depth(const amal::vec2 &depth_range)
@@ -60,15 +66,35 @@ namespace auik::v2::detail
     void Selectable::draw(DrawCtx &ctx)
     {
         auto *quads_stream = get_primary_quads_stream();
-        const u16 bg_clip_id = parent() ? parent()->content_clip_id() : clip_id();
+        if (ctx.is_invalidating())
+        {
+            ctx.emit(quads_stream, _selected_bg, nullptr, get_rect(), false);
+            ctx.emit(quads_stream, _bg, nullptr, get_rect(), false);
+            DrawCtx text_ctx = ctx;
+            text_ctx.emit_hit_rect = false;
+            Text::draw(text_ctx);
+            return;
+        }
+
+        const u16 bg_clip_id = clip_id();
+        if (bg_clip_id == 0xFFFFu)
+        {
+            if (!ctx.is_recording())
+            {
+                DrawCtx invalidate_ctx = ctx;
+                invalidate_ctx.emit_fn = &emit_draw_invalidate;
+                invalidate_ctx.emit_hit_rect = false;
+                draw(invalidate_ctx);
+            }
+            return;
+        }
         QuadsInstanceData selected_bg{};
         selected_bg.rect = bounds();
         selected_bg.z_order = _selected_bg_z;
         const bool selected_visible =
-            _selected &&
+            _selected && style_state() == StyleState::normal &&
             fill_quads_instance_by_style(get_theme()->get_style(_selected_style.id), bg_clip_id, selected_bg);
-        if (selected_visible || ctx.is_recording() || _selected_bg.render_id != AUIK_INVALID_DRAW_DATA_ID)
-            ctx.emit(quads_stream, _selected_bg, &selected_bg, get_rect(), false);
+        emit_quads_instance(ctx, quads_stream, _selected_bg, selected_bg, get_rect(), selected_visible, false);
 
         QuadsInstanceData bg{};
         bg.rect = bounds();
@@ -76,12 +102,18 @@ namespace auik::v2::detail
         const bool draw_state_bg = !_selected || style_state() != StyleState::normal;
         const bool bg_visible =
             draw_state_bg && fill_quads_instance_by_style(get_theme()->get_style(_style.id), bg_clip_id, bg);
-        if (should_emit_quads_instance(bg_visible, _bg, ctx.emit_hit_rect))
-            ctx.emit(quads_stream, _bg, &bg, get_rect(), ctx.emit_hit_rect);
+        emit_quads_instance(ctx, quads_stream, _bg, bg, get_rect(), bg_visible, ctx.emit_hit_rect);
 
         DrawCtx text_ctx = ctx;
         text_ctx.emit_hit_rect = false;
         set_clip_id(bg_clip_id);
         Text::draw(text_ctx);
+    }
+
+    void Selectable::update_content_clip_rect()
+    {
+        const u16 next_clip_id = parent() ? parent()->content_clip_id() : clip_id();
+        if (next_clip_id == 0xFFFFu) return;
+        set_clip_id(next_clip_id);
     }
 } // namespace auik::v2::detail

@@ -18,6 +18,15 @@ namespace auik::v2
         return popup_range;
     }
 
+    static inline amal::vec2 get_root_menu_popup_depth_range(MenuBar::PopupDepthMode mode)
+    {
+        amal::vec2 overlay_range = detail::get_root_depth_range(DepthZone::foreground, 31);
+        if (mode != MenuBar::PopupDepthMode::root_overlay_next) return overlay_range;
+        amal::vec2 next_range{};
+        assign_next_depth(overlay_range, next_range);
+        return next_range;
+    }
+
     class MenuBar::PopupItem final : public Widget
     {
     public:
@@ -174,12 +183,11 @@ namespace auik::v2
                 QuadsInstanceData selected_bg = bg;
                 const bool selected_visible =
                     fill_quads_instance_by_style(get_theme()->get_style(_selected_style.id), clip_id(), selected_bg);
-                if (should_emit_quads_instance(selected_visible, _selected_bg, ctx.emit_hit_rect))
-                    ctx.emit(quads_stream, _selected_bg, &selected_bg, get_rect(), ctx.emit_hit_rect);
+                emit_quads_instance(ctx, quads_stream, _selected_bg, selected_bg, get_rect(), selected_visible,
+                                    ctx.emit_hit_rect);
             }
             const bool visible = fill_quads_instance_by_style(get_theme()->get_style(_style.id), clip_id(), bg);
-            if (should_emit_quads_instance(visible, _bg, ctx.emit_hit_rect))
-                ctx.emit(quads_stream, _bg, &bg, get_rect(), ctx.emit_hit_rect);
+            emit_quads_instance(ctx, quads_stream, _bg, bg, get_rect(), visible, ctx.emit_hit_rect);
             _label->draw(ctx);
             if (!_shortcut->text().empty()) _shortcut->draw(ctx);
             draw_next_icon(ctx);
@@ -268,6 +276,39 @@ namespace auik::v2
         _open_path.clear();
         for (auto *popup : _popups) acul::release(popup);
         _popups.clear();
+    }
+
+    void MenuBar::set_menu_style_tag(u32 tag_id)
+    {
+        if (_menu_style.tag_id == tag_id) return;
+        TabBar::set_style_tag(tag_id);
+        _menu_style = {Theme::STYLE_ID_INVALID, tag_id};
+        detail::get_context().dirty_flags |= DirtyFlagBits::layout | DirtyFlagBits::redraw;
+        detail::mark_host_refresh_request();
+    }
+
+    void MenuBar::set_menu_item_style_tag(u32 tag_id)
+    {
+        if (_item_style_tag == tag_id) return;
+        _item_style_tag = tag_id;
+        for (auto *tab : _tabs)
+        {
+            if (!tab) continue;
+            tab->set_style_tag(tag_id);
+            tab->set_selected_style_tag(tag_id);
+            tab->update_style();
+        }
+        detail::get_context().dirty_flags |= DirtyFlagBits::layout | DirtyFlagBits::redraw;
+        detail::mark_host_refresh_request();
+    }
+
+    void MenuBar::set_popup_depth_mode(PopupDepthMode mode)
+    {
+        if (_popup_depth_mode == mode) return;
+        _popup_depth_mode = mode;
+        update_depth(depth_range());
+        detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
+        detail::mark_host_refresh_request();
     }
 
     MenuBar::ItemData *MenuBar::find_item(u32 element_id)
@@ -528,13 +569,23 @@ namespace auik::v2
 
     void MenuBar::refresh_menu_clip_rects()
     {
-        const amal::vec4 parent_clip =
-            parent() ? get_clip_rect(parent()->clip_id()) : amal::vec4{position().x, position().y, size().x, size().y};
+        const amal::vec4 parent_clip = get_layout_parent_clip_rect();
         const amal::vec4 own_clip =
             detail::intersect_rects(parent_clip, {position().x, position().y, size().x, size().y});
         if (_full_clip_id != 0xFFFFu) update_clip_rect(_full_clip_id, own_clip);
         if (_content_clip_id != 0xFFFFu) update_clip_rect(_content_clip_id, own_clip);
-        if (_full_clip_id != 0xFFFFu) set_clip_id(_full_clip_id);
+        set_clip_id(_full_clip_id != 0xFFFFu ? _full_clip_id : get_layout_parent_clip_id());
+    }
+
+    u16 MenuBar::get_layout_parent_clip_id() const
+    {
+        return parent() ? parent()->clip_id() : clip_id();
+    }
+
+    amal::vec4 MenuBar::get_layout_parent_clip_rect() const
+    {
+        return parent() ? get_clip_rect(parent()->clip_id())
+                        : amal::vec4{position().x, position().y, size().x, size().y};
     }
 
     amal::vec4 MenuBar::get_popup_clip_rect(Window *popup) const
@@ -555,6 +606,18 @@ namespace auik::v2
 
     void MenuBar::update_layout(bool min_size_known)
     {
+        if (is_viewport_reserved() && !parent() && is_visible())
+        {
+            if (!min_size_known) update_layout_min_size();
+            const amal::vec4 viewport = get_main_viewport();
+            const f32 reserved_height = required_size().y;
+            set_position({viewport.x, viewport.y});
+            set_size({viewport.z, reserved_height});
+            TabBar::update_layout(true);
+            refresh_menu_clip_rects();
+            reserve_main_viewport_top(reserved_height);
+            return;
+        }
         TabBar::update_layout(min_size_known);
         refresh_menu_clip_rects();
     }
@@ -562,10 +625,13 @@ namespace auik::v2
     void MenuBar::update_depth(const amal::vec2 &depth_range)
     {
         TabBar::update_depth(depth_range);
-        const amal::vec2 parent_range = parent() ? parent()->depth_range() : this->depth_range();
+        const amal::vec2 popup_range =
+            _popup_depth_mode == PopupDepthMode::workzone_overlay
+                ? get_menu_popup_depth_range(parent() ? parent()->depth_range() : this->depth_range())
+                : get_root_menu_popup_depth_range(_popup_depth_mode);
         for (u32 i = 0; i < _popups.size(); ++i)
         {
-            if (_popups[i]) static_cast<Widget *>(_popups[i])->update_depth(get_menu_popup_depth_range(parent_range));
+            if (_popups[i]) static_cast<Widget *>(_popups[i])->update_depth(popup_range);
         }
     }
 
@@ -627,7 +693,11 @@ namespace auik::v2
         if (!target) return false;
         DrawCtx child_ctx = ctx;
         const bool has_record = static_cast<PopupItem *>(target)->has_draw_record();
-        child_ctx.emit_fn = has_record ? &emit_draw_update : &emit_draw_record;
+        if (!has_record)
+        {
+            child_ctx.emit_fn = &emit_draw_record;
+            child_ctx.reason |= DrawReasonBits::record;
+        }
         child_ctx.emit_hit_rect = target->is_hittable();
         target->draw(child_ctx);
         return true;
@@ -649,8 +719,7 @@ namespace auik::v2
         bg.rect = bounds();
         bg.z_order = get_z_order();
         const bool visible = fill_quads_instance_by_style(get_theme()->get_style(_menu_style.id), clip_id(), bg);
-        if (should_emit_quads_instance(visible, _bg, ctx.emit_hit_rect))
-            ctx.emit(quads_stream, _bg, &bg, get_rect(), ctx.emit_hit_rect);
+        emit_quads_instance(ctx, quads_stream, _bg, bg, get_rect(), visible, ctx.emit_hit_rect);
         TabBar::draw(ctx);
         if (parent() && parent()->get_rect().tag_id == AUIK_TAG_WINDOW)
         {
@@ -742,9 +811,12 @@ namespace auik::v2
         popup->update_style();
         popup->set_position(pos);
         popup->set_size({popup_w, popup_h});
-        const amal::vec2 parent_range = parent() ? parent()->depth_range() : this->depth_range();
-        static_cast<Widget *>(popup)->update_depth(get_menu_popup_depth_range(parent_range));
-        static_cast<Widget *>(popup)->update_layout(false);
+        const amal::vec2 popup_range =
+            _popup_depth_mode == PopupDepthMode::workzone_overlay
+                ? get_menu_popup_depth_range(parent() ? parent()->depth_range() : this->depth_range())
+                : get_root_menu_popup_depth_range(_popup_depth_mode);
+        popup->update_depth(popup_range);
+        popup->update_layout(false);
         refresh_popup_clip_rect(popup);
         f32 cursor_y = popup->position().y + padding.y;
         for (auto *child : popup->children)
@@ -755,7 +827,7 @@ namespace auik::v2
             child->update_layout(false);
             cursor_y += child->required_size().y;
         }
-        static_cast<Widget *>(popup)->record_draw_commands();
+        static_cast<Widget *>(popup)->update_draw_commands(DrawReasonBits::record);
     }
 
     void MenuBar::open_root(u32 element_id)
@@ -820,14 +892,16 @@ namespace auik::v2
 
     void MenuBar::close_from_depth(u32 depth)
     {
+        bool closed_any = false;
         for (u32 i = depth; i < _popups.size(); ++i)
         {
             if (!_popups[i]) continue;
-            if (_popups[i]->is_visible()) static_cast<Widget *>(_popups[i])->invalidate_draw_commands();
+            if (_popups[i]->is_visible()) closed_any = true;
             _popups[i]->hide();
         }
         if (_open_path.size() > depth) _open_path.erase(_open_path.begin() + depth, _open_path.end());
         sync_popup_item_states();
+        if (closed_any) redraw_all_commands();
         request_redraw();
     }
 
