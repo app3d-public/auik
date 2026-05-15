@@ -71,6 +71,60 @@ namespace auik::v2::detail
                mouse_pos.y < (r.offset.y + r.size.y);
     }
 
+    void Scrollbar::begin_thumb_drag(const amal::vec2 &mouse_pos)
+    {
+        _thumb_drag_grab_offset =
+            (_behavior.axis == amal::axis::y) ? mouse_pos.y - _thumb_rect.bounds.offset.y
+                                              : mouse_pos.x - _thumb_rect.bounds.offset.x;
+    }
+
+    bool Scrollbar::scroll_thumb_to_mouse_pos(const amal::vec2 &mouse_pos)
+    {
+        const f32 max_scroll_px = _behavior.max_scroll();
+        if (max_scroll_px <= 0.0f) return false;
+
+        auto *theme = get_theme();
+        const auto &track_style = theme->get_style(_track_style.id);
+        const auto &thumb_style = theme->get_style(_thumb_style.id);
+        const amal::vec4 track_padding = axis_reverse_offsets(track_style.padding(), _behavior.axis);
+        const amal::vec4 thumb_margin = axis_reverse_offsets(thumb_style.margin(), _behavior.axis);
+        const amal::vec4 thumb_padding = axis_reverse_offsets(thumb_style.padding(), _behavior.axis);
+
+        const f32 safe_content = amal::max(_content_size, 1.0f);
+        const f32 safe_view = amal::max(_view_size, 0.0f);
+        const f32 ratio = amal::clamp(safe_view / safe_content, 0.0f, 1.0f);
+        const f32 old_offset = _behavior.scroll_offset();
+
+        if (_behavior.axis == amal::axis::y)
+        {
+            const f32 lane_y = position().y + track_padding.y + thumb_margin.y;
+            const f32 lane_h =
+                amal::max(size().y - track_padding.y - track_padding.w - thumb_margin.y - thumb_margin.w, 0.0f);
+            const f32 min_thumb_h = 18.0f;
+            const f32 base_thumb_h = amal::max(lane_h * ratio, amal::min(min_thumb_h, lane_h));
+            const f32 thumb_range = amal::max(lane_h - base_thumb_h, 0.0f);
+            if (thumb_range <= 0.0f) return false;
+
+            const f32 thumb_y = mouse_pos.y - _thumb_drag_grab_offset;
+            const f32 normalized = (thumb_y - lane_y - thumb_padding.y) / thumb_range;
+            _behavior.set_scroll_normalized(normalized);
+            return _behavior.scroll_offset() != old_offset;
+        }
+
+        const f32 lane_x = position().x + track_padding.x + thumb_margin.x;
+        const f32 lane_w =
+            amal::max(size().x - track_padding.x - track_padding.z - thumb_margin.x - thumb_margin.z, 0.0f);
+        const f32 min_thumb_w = 18.0f;
+        const f32 base_thumb_w = amal::max(lane_w * ratio, amal::min(min_thumb_w, lane_w));
+        const f32 thumb_range = amal::max(lane_w - base_thumb_w, 0.0f);
+        if (thumb_range <= 0.0f) return false;
+
+        const f32 thumb_x = mouse_pos.x - _thumb_drag_grab_offset;
+        const f32 normalized = (thumb_x - lane_x - thumb_padding.x) / thumb_range;
+        _behavior.set_scroll_normalized(normalized);
+        return _behavior.scroll_offset() != old_offset;
+    }
+
     bool Scrollbar::scroll_thumb_by_drag_delta(const amal::vec2 &delta)
     {
         const f32 max_scroll_px = _behavior.max_scroll();
@@ -179,6 +233,7 @@ namespace auik::v2::detail
 
             _thumb_rect.bounds = {lane_pos.x + thumb_offset_x,
                                   lane_pos.y + thumb_range * scroll_norm + thumb_offset_top, thumb_w, thumb_h};
+            _thumb_rect.clip_id = clip_id();
             return;
         }
 
@@ -187,6 +242,7 @@ namespace auik::v2::detail
         const amal::vec2 lane_size = {
             amal::max(track_size.x - track_padding.x - track_padding.z - thumb_margin.x - thumb_margin.z, 0.0f),
             amal::max(track_size.y - track_padding.y - track_padding.w - thumb_margin.y - thumb_margin.w, 0.0f)};
+        _thumb_rect.clip_id = clip_id();
 
         const f32 min_thumb_w = 18.0f;
         const f32 base_thumb_w = amal::max(lane_size.x * ratio, amal::min(min_thumb_w, lane_size.x));
@@ -247,6 +303,7 @@ namespace auik::v2::detail
         thumb.rect = _thumb_rect.bounds;
         thumb.z_order = next_depth(depth_range());
         _thumb_rect.depth = thumb.z_order;
+        _thumb_rect.clip_id = clip_id();
         const bool thumb_visible = fill_quads_instance_by_style(theme->get_style(_thumb_style.id), clip_id(), thumb);
         emit_quads_instance(ctx, quads_stream, _thumb_draw_id, thumb, _thumb_rect, thumb_visible, ctx.emit_hit_rect);
     }

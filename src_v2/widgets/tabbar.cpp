@@ -729,7 +729,12 @@ namespace auik::v2
         if (ctx.is_updating() && ctx.reason == DrawReasonBits::none && draw_transition_targets(ctx)) return;
 
         const auto invalidate_hidden_widget = [&](Widget *widget) {
-            if (!widget || ctx.is_recording()) return;
+            if (!widget) return;
+            if (ctx.is_recording())
+            {
+                widget->reset_draw_records();
+                return;
+            }
             DrawCtx invalidate_ctx = ctx;
             invalidate_ctx.emit_fn = &emit_draw_invalidate;
             invalidate_ctx.emit_hit_rect = false;
@@ -771,6 +776,7 @@ namespace auik::v2
             invalidate_ctx.emit_hit_rect = false;
             _overflow_button->draw(invalidate_ctx, false);
         }
+        else if (_overflow_button && ctx.is_recording()) _overflow_button->reset_draw_records();
         if (_open && _popup)
         {
             DrawCtx popup_ctx = ctx;

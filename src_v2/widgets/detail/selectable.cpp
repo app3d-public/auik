@@ -44,6 +44,13 @@ namespace auik::v2::detail
         update_content_clip_rect();
     }
 
+    void Selectable::reset_draw_records()
+    {
+        Text::reset_draw_records();
+        _bg = {};
+        _selected_bg = {};
+    }
+
     void Selectable::update_depth(const amal::vec2 &depth_range)
     {
         Widget::update_depth(depth_range);

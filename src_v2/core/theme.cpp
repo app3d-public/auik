@@ -8,6 +8,7 @@
 #include <auik/v2/widgets/menubar.hpp>
 #include <auik/v2/widgets/radio_button.hpp>
 #include <auik/v2/widgets/titlebar.hpp>
+#include <auik/v2/widgets/rubber_band.hpp>
 #include <auik/v2/widgets/separator.hpp>
 #include <auik/v2/widgets/slider.hpp>
 #include <auik/v2/widgets/switch_button.hpp>
@@ -176,10 +177,10 @@ namespace auik::v2
         theme->add_style(AUIK_TAG_PLACEHOLDER,
                          make_style().margin(empty_vec2).padding(empty_vec2).text_color({0.9f, 0.9f, 0.9f, 0.5f}));
         theme->add_style(AUIK_TAG_SELECTION, make_style().background_color(amal::rgba8_to_vec4(72, 114, 255, 120)));
-        // theme->add_style(AUIK_TAG_RUBBER_BAND, make_style()
-        //                                            .background_color(amal::rgba8_to_vec4(72, 114, 255, 45))
-        //                                            .border_color(amal::rgba8_to_vec4(72, 114, 255, 210))
-        //                                            .border_thickness(1.0f));
+        theme->add_style(AUIK_TAG_RUBBER_BAND, make_style()
+                                                   .background_color(amal::rgba8_to_vec4(72, 114, 255, 80))
+                                                   .border_color(amal::rgba8_to_vec4(72, 114, 255, 210))
+                                                   .border_thickness(1.0f));
         theme->add_style(AUIK_TAG_TEXT_DRAG_ICON, make_style().background_color({0.8f, 0.8f, 0.8f, 1.0f}));
         theme->set_var(AUIK_VAR_COLOR_PICKER_SIZE, 185.0f);
 

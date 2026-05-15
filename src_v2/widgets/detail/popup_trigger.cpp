@@ -154,6 +154,13 @@ namespace auik::v2::detail
         _hit_rect.clip_id = clip_id;
     }
 
+    void PopupTrigger::reset_draw_records()
+    {
+        _bg_draw = {};
+        _icon_draw = {};
+        _animated_icon_draw = {};
+    }
+
     void PopupTrigger::update_depth(const amal::vec2 &depth_range)
     {
         assign_next_depth(depth_range, _bg_depth_range);

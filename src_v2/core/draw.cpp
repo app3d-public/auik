@@ -3,15 +3,12 @@
 
 namespace auik::v2
 {
-    namespace
+    static PostEffectNode *get_effect_handler(const DrawCtx &ctx, const DrawStream *stream)
     {
-        static PostEffectNode *get_effect_handler(const DrawCtx &ctx, const DrawStream *stream)
-        {
-            if (!ctx.post_effect || !stream) return nullptr;
-            if (stream->post_slot_id == 0xFFFFu || stream->post_slot_id >= ctx.post_effect->slot_count) return nullptr;
-            return ctx.post_effect->slots[stream->post_slot_id];
-        }
-    } // namespace
+        if (!ctx.post_effect || !stream) return nullptr;
+        if (stream->post_slot_id == 0xFFFFu || stream->post_slot_id >= ctx.post_effect->slot_count) return nullptr;
+        return ctx.post_effect->slots[stream->post_slot_id];
+    }
 
     bool is_post_effect_supported(const DrawStream *stream, const PostEffect *effect)
     {
@@ -40,8 +37,9 @@ namespace auik::v2
     {
         assert(stream);
         const auto *handler = get_effect_handler(ctx, stream);
-        const DrawDataID stream_id = (handler && handler->record) ? handler->record(handler->data, stream, data, ctx.post_data)
-                                                                  : stream->push_data_to_stream(stream, data);
+        const DrawDataID stream_id = (handler && handler->record)
+                                         ? handler->record(handler->data, stream, data, ctx.post_data)
+                                         : stream->push_data_to_stream(stream, data);
         draw_id.render_id = stream_id.render_id;
         draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
         if (emit_hit_rect) update_hit_rect(draw_id.hit_id, rect, true);
@@ -55,8 +53,7 @@ namespace auik::v2
         assert(draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID && "Update called before record");
         if (const auto *handler = get_effect_handler(ctx, stream); handler && handler->update)
             handler->update(handler->data, stream, draw_id, data, ctx.post_data);
-        else
-            stream->update_data_in_stream(stream, draw_id, data);
+        else stream->update_data_in_stream(stream, draw_id, data);
 
         if (emit_hit_rect)
         {
@@ -73,6 +70,7 @@ namespace auik::v2
         assert(stream);
         if (draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID && stream->invalidate_data_in_stream)
             stream->invalidate_data_in_stream(stream, draw_id);
+        draw_id.render_id = AUIK_INVALID_DRAW_DATA_ID;
 
         if (emit_hit_rect && draw_id.hit_id != AUIK_INVALID_DRAW_DATA_ID)
         {

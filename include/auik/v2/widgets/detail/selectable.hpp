@@ -30,6 +30,7 @@ namespace auik::v2::detail
         void rebuild_clip_rects() override;
         void update_layout(bool min_size_known) override;
         void translate(const amal::vec2 &delta) override;
+        void reset_draw_records() override;
         void update_depth(const amal::vec2 &depth_range) override;
         void draw(DrawCtx &ctx) override;
         bool selected() const { return _selected; }

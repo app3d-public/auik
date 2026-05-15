@@ -1,26 +1,15 @@
 #include <acul/memory/alloc.hpp>
 #include <auik/v2/auik.hpp>
 #include <auik/v2/detail/depth.hpp>
+#include <auik/v2/detail/rect.hpp>
 #include <auik/v2/pipelines.hpp>
 #include <auik/v2/widgets/menubar.hpp>
+#include <auik/v2/widgets/rubber_band.hpp>
 #include <auik/v2/widgets/text.hpp>
 #include <auik/v2/widgets/window.hpp>
 
 namespace auik::v2
 {
-    static inline amal::vec4 intersect_rect(const amal::vec4 &a, const amal::vec4 &b)
-    {
-        const amal::vec2 a_min = {a.x, a.y};
-        const amal::vec2 a_max = {a.x + a.z, a.y + a.w};
-        const amal::vec2 b_min = {b.x, b.y};
-        const amal::vec2 b_max = {b.x + b.z, b.y + b.w};
-
-        const amal::vec2 out_min = {amal::max(a_min.x, b_min.x), amal::max(a_min.y, b_min.y)};
-        const amal::vec2 out_max = {amal::min(a_max.x, b_max.x), amal::min(a_max.y, b_max.y)};
-        const amal::vec2 out_size = {amal::max(out_max.x - out_min.x, 0.0f), amal::max(out_max.y - out_min.y, 0.0f)};
-        return {out_min, out_size};
-    }
-
     static amal::vec2 get_children_required_size(const acul::vector<Widget *> &children,
                                                  const acul::vector<WindowChildLayout> &layouts, f32 inline_spacing_x,
                                                  f32 wrap_width = 0.0f);
@@ -28,6 +17,36 @@ namespace auik::v2
                                                         const acul::vector<WindowChildLayout> &layouts, size_t index);
     static bool starts_inline_run(const acul::vector<Widget *> &children,
                                   const acul::vector<WindowChildLayout> &layouts, size_t index);
+
+    static bool is_window_scrollbar_x_drag(detail::ElementID drag_id, u32 window_id)
+    {
+        return drag_id.widget_id == window_id &&
+               (drag_id.tag_id == AUIK_TAG_SCROLLBAR_TRACK_X || drag_id.tag_id == AUIK_TAG_SCROLLBAR_THUMB_X);
+    }
+
+    static bool is_window_scrollbar_y_drag(detail::ElementID drag_id, u32 window_id)
+    {
+        return drag_id.widget_id == window_id &&
+               (drag_id.tag_id == AUIK_TAG_SCROLLBAR_TRACK_Y || drag_id.tag_id == AUIK_TAG_SCROLLBAR_THUMB_Y);
+    }
+
+    static bool is_scrollbar_thumb_drag(detail::ElementID drag_id)
+    {
+        return drag_id.tag_id == AUIK_TAG_SCROLLBAR_THUMB_X || drag_id.tag_id == AUIK_TAG_SCROLLBAR_THUMB_Y;
+    }
+
+    static void activate_scrollbar_thumb_style(Window *window, u32 thumb_tag_id)
+    {
+        if (!window) return;
+        const auto thumb_id = detail::make_element_id(window->id(), thumb_tag_id);
+        if (!detail::set_style_selector(thumb_id, StyleState::active)) return;
+        const auto style_flags = window->update_style();
+        if (style_flags & StyleUpdateFlagBits::redraw)
+            window->update_draw_commands(get_draw_reason_from_style_update(style_flags));
+        detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
+    }
+
+    static u32 make_window_rubber_band_id(u32 window_id) { return window_id ^ AUIK_TAG_RUBBER_BAND; }
 
     static constexpr detail::StylePropertyFlags AUIK_LAYOUT_STYLE_MASK =
         detail::StylePropertiesBits::padding | detail::StylePropertiesBits::margin |
@@ -259,6 +278,8 @@ namespace auik::v2
         if (window_flags & WindowFlagBits::resizable) _rect.flags |= detail::RectBits::hitbox;
         if (window_flags & WindowFlagBits::decorated)
             _header = acul::alloc<WindowHeader>(this, std::move(title), window_flags & WindowFlagBits::movable);
+        if (window_flags & WindowFlagBits::rubber_band)
+            _rubber_band = acul::alloc<RubberBand>(make_window_rubber_band_id(id), WidgetFlagBits::none, this);
     }
 
     Window::~Window()
@@ -266,6 +287,7 @@ namespace auik::v2
         clear_children();
 
         if (_menu_bar) acul::release(_menu_bar);
+        if (_rubber_band) acul::release(_rubber_band);
         if (_header) acul::release(_header);
         if (_scrollbar_x) acul::release(_scrollbar_x);
         if (_scrollbar_y) acul::release(_scrollbar_y);
@@ -324,6 +346,15 @@ namespace auik::v2
         _content_clip_rect = rect;
         if (_content_clip_id == 0xFFFFu) _content_clip_id = push_clip_rect(_content_clip_rect);
         else update_clip_rect(_content_clip_id, _content_clip_rect);
+        sync_rubber_band();
+    }
+
+    void Window::sync_rubber_band()
+    {
+        if (!_rubber_band) return;
+        _rubber_band->set_parent(this);
+        _rubber_band->set_focus_parent(this);
+        _rubber_band->update_layout(true);
     }
 
     void Window::on_attach()
@@ -331,6 +362,7 @@ namespace auik::v2
         auto &map = detail::get_context().id_map;
         map.emplace(id(), this);
         if (_menu_bar && (_menu_bar->widget_flags & WidgetFlagBits::attachable)) _menu_bar->on_attach();
+        if (_rubber_band && (_rubber_band->widget_flags & WidgetFlagBits::attachable)) _rubber_band->on_attach();
         for (auto *child : children)
             if (child->widget_flags & WidgetFlagBits::attachable) child->on_attach();
     }
@@ -383,6 +415,13 @@ namespace auik::v2
             child_ctx.emit_hit_rect = child->is_hittable();
             child->draw(child_ctx);
             if (child_ctx.is_invalidating()) child->mark_external_draw_invalidated();
+        }
+
+        if (_rubber_band && _rubber_band->is_visible())
+        {
+            DrawCtx rubber_band_ctx = ctx;
+            rubber_band_ctx.emit_hit_rect = false;
+            _rubber_band->draw(rubber_band_ctx);
         }
 
         if (_scrollbar_y && _scrollbar_y->is_visible())
@@ -484,6 +523,11 @@ namespace auik::v2
         // overlap with content depth and reduce z-fighting with other overlay items.
         amal::vec2 overlay_range{};
         assign_next_depth(this->depth_range(), overlay_range);
+        if (_rubber_band)
+        {
+            _rubber_band->update_depth(overlay_range);
+            if (_scrollbar_y || _scrollbar_x) assign_next_depth(overlay_range, overlay_range);
+        }
         if (_scrollbar_y && _scrollbar_x)
         {
             _scrollbar_y->update_depth(overlay_range);
@@ -527,16 +571,16 @@ namespace auik::v2
             (window_flags & WindowFlagBits::scrollable) && !(window_flags & WindowFlagBits::no_scrollbar_x);
         if (can_scroll_y) ensure_y_scrollbar(_scrollbar_y, this);
         if (can_scroll_x) ensure_x_scrollbar(_scrollbar_x, this);
-
         if (_scrollbar_y) out |= _scrollbar_y->update_style();
         if (_scrollbar_x) out |= _scrollbar_x->update_style();
+        if (_rubber_band) out |= _rubber_band->update_style();
         return out;
     }
 
     void Window::rebuild_clip_rects()
     {
         amal::vec4 self_clip = {position().x, position().y, size().x, size().y};
-        if (parent()) self_clip = intersect_rect(self_clip, parent()->get_content_clip_rect());
+        if (parent()) self_clip = detail::intersect_rects(self_clip, parent()->get_content_clip_rect());
         ensure_own_clip_rect(self_clip);
         if (_content_clip_id == 0xFFFFu) _content_clip_id = push_clip_rect(_content_clip_rect);
         else update_clip_rect(_content_clip_id, _content_clip_rect);
@@ -559,6 +603,8 @@ namespace auik::v2
             if (!child) continue;
             child->rebuild_clip_rects();
         }
+
+        if (_rubber_band) _rubber_band->rebuild_clip_rects();
 
         if (_scrollbar_y)
         {
@@ -613,6 +659,7 @@ namespace auik::v2
             auto *child = children[i];
             if (!child) continue;
             if (!child->is_visible()) continue;
+            if (child->depth_zone() != DepthZone::work) continue;
             const WindowChildLayout layout = get_effective_child_layout(children, layouts, i);
             const amal::vec2 req = child->required_size();
             if (layout == WindowChildLayout::inline_layout)
@@ -669,6 +716,13 @@ namespace auik::v2
         return amal::vec2{max_width, total_height};
     };
 
+    static f32 resolve_content_layout_width(f32 viewport_width, const amal::vec2 &children_layout_size,
+                                            bool need_scroll_x)
+    {
+        if (!need_scroll_x) return viewport_width;
+        return amal::max(viewport_width, children_layout_size.x);
+    }
+
     static WindowChildLayout get_effective_child_layout(const acul::vector<Widget *> &children,
                                                         const acul::vector<WindowChildLayout> &layouts, size_t index)
     {
@@ -724,6 +778,13 @@ namespace auik::v2
             auto *child = children[i];
             if (!child) continue;
             if (!child->is_visible()) continue;
+            if (child->depth_zone() != DepthZone::work)
+            {
+                child->set_position(content_cursor);
+                child->set_size({available_width, child->size().y});
+                child->update_layout(true);
+                continue;
+            }
             const WindowChildLayout layout = get_effective_child_layout(children, _child_layouts, i);
             if (layout == WindowChildLayout::block)
             {
@@ -821,7 +882,7 @@ namespace auik::v2
         Widget::update_layout(true);
         const amal::vec4 parent_bounds = get_root_viewport_clip_rect(this);
         const amal::vec4 self_clip_rect =
-            intersect_rect({position().x, position().y, size().x, size().y}, parent_bounds);
+            detail::intersect_rects({position().x, position().y, size().x, size().y}, parent_bounds);
         ensure_own_clip_rect(self_clip_rect);
 
         auto *theme = get_theme();
@@ -893,12 +954,13 @@ namespace auik::v2
         // Policy: allow horizontal overlay across the whole window width,
         // while keeping strict vertical clipping for scrolling.
         const f32 clip_viewport_width = size().x;
-        const f32 content_layout_width = scroll_view_width;
+        f32 clip_viewport_height = scroll_view_height;
+        f32 content_layout_width = resolve_content_layout_width(scroll_view_width, children_layout_size, need_scroll_x);
         const amal::vec2 content_inset = {padding.x, body_top_y - position().y};
-        amal::vec2 content_size = {clip_viewport_width, scroll_view_height};
+        amal::vec2 content_size = {clip_viewport_width, clip_viewport_height};
         const amal::vec4 content_clip = {position().x, body_top_y, content_size.x, content_size.y};
         const amal::vec4 parent_clip = get_clip_rect(clip_id());
-        _content_clip_rect = intersect_rect(parent_clip, content_clip);
+        _content_clip_rect = detail::intersect_rects(parent_clip, content_clip);
         if (_content_clip_id == 0xFFFFu) _content_clip_id = push_clip_rect(_content_clip_rect);
         else update_clip_rect(_content_clip_id, _content_clip_rect);
         if (_scrollbar_x) _scrollbar_x->set_metrics(children_layout_size.x, scroll_view_width);
@@ -924,10 +986,12 @@ namespace auik::v2
             {
                 const f32 refined_viewport_w = amal::max(body_width - (refined_need_scroll_y ? bar_w : 0.0f), 0.0f);
                 const f32 refined_viewport_h = amal::max(body_height - (refined_need_scroll_x ? bar_h : 0.0f), 0.0f);
+                const f32 refined_layout_w =
+                    resolve_content_layout_width(refined_viewport_w, children_layout_size, refined_need_scroll_x);
 
-                relayout_children(refined_viewport_w, content_inset);
+                relayout_children(refined_layout_w, content_inset);
                 children_layout_size =
-                    get_children_required_size(children, _child_layouts, inline_spacing_x, refined_viewport_w);
+                    get_children_required_size(children, _child_layouts, inline_spacing_x, refined_layout_w);
                 const bool next_refined_y = can_scroll_y && children_layout_size.y > refined_viewport_h;
                 const bool next_refined_x = can_scroll_x && children_layout_size.x > refined_viewport_w;
                 if (next_refined_y == refined_need_scroll_y && next_refined_x == refined_need_scroll_x) break;
@@ -941,19 +1005,24 @@ namespace auik::v2
                 need_scroll_x = refined_need_scroll_x;
                 scroll_view_width = amal::max(body_width - (need_scroll_y ? bar_w : 0.0f), 0.0f);
                 scroll_view_height = amal::max(body_height - (need_scroll_x ? bar_h : 0.0f), 0.0f);
-                content_size = {clip_viewport_width, scroll_view_height};
+                clip_viewport_height = scroll_view_height;
+                content_size = {clip_viewport_width, clip_viewport_height};
                 const amal::vec4 refined_content_clip = {position().x, body_top_y, content_size.x, content_size.y};
-                _content_clip_rect = intersect_rect(parent_clip, refined_content_clip);
+                _content_clip_rect = detail::intersect_rects(parent_clip, refined_content_clip);
                 update_clip_rect(_content_clip_id, _content_clip_rect);
-                relayout_children(scroll_view_width, content_inset);
+                content_layout_width =
+                    resolve_content_layout_width(scroll_view_width, children_layout_size, need_scroll_x);
+                relayout_children(content_layout_width, content_inset);
                 children_layout_size =
-                    get_children_required_size(children, _child_layouts, inline_spacing_x, scroll_view_width);
+                    get_children_required_size(children, _child_layouts, inline_spacing_x, content_layout_width);
                 if (_scrollbar_x) _scrollbar_x->set_metrics(children_layout_size.x, scroll_view_width);
                 if (_scrollbar_y) _scrollbar_y->set_metrics(children_layout_size.y, scroll_view_height);
                 const amal::vec2 refined_max_scroll = {_scrollbar_x ? _scrollbar_x->max_scroll() : 0.0f,
                                                        _scrollbar_y ? _scrollbar_y->max_scroll() : 0.0f};
                 _content_offset = amal::clamp(_content_offset, amal::vec2{0.0f}, refined_max_scroll);
-                relayout_children(scroll_view_width, content_inset);
+                content_layout_width =
+                    resolve_content_layout_width(scroll_view_width, children_layout_size, need_scroll_x);
+                relayout_children(content_layout_width, content_inset);
             }
             else relayout_children(content_layout_width, content_inset);
         }
@@ -991,10 +1060,10 @@ namespace auik::v2
                                           track_area_pos.y};
             const amal::vec2 track_size = {track_w, track_area_size.y};
             _scrollbar_y->set_visible(true);
+            _scrollbar_y->set_clip_id(clip_id());
             _scrollbar_y->set_scroll_offset(_content_offset.y);
             _scrollbar_y->configure(track_pos, track_size, children_layout_size.y, scroll_view_height);
             _content_offset.y = _scrollbar_y->scroll_offset();
-            _scrollbar_y->set_clip_id(clip_id());
         }
         else if (_scrollbar_y) _scrollbar_y->set_visible(false);
 
@@ -1013,10 +1082,10 @@ namespace auik::v2
                                           track_area_pos.y + amal::max(track_area_size.y - track_h, 0.0f)};
             const amal::vec2 track_size = {track_area_size.x, track_h};
             _scrollbar_x->set_visible(true);
+            _scrollbar_x->set_clip_id(clip_id());
             _scrollbar_x->set_scroll_offset(_content_offset.x);
             _scrollbar_x->configure(track_pos, track_size, children_layout_size.x, scroll_view_width);
             _content_offset.x = _scrollbar_x->scroll_offset();
-            _scrollbar_x->set_clip_id(clip_id());
         }
         else if (_scrollbar_x) _scrollbar_x->set_visible(false);
 
@@ -1035,7 +1104,7 @@ namespace auik::v2
         // Child content must be clipped to viewport area otherwise children can render under the header while
         // scrolling.
         const amal::vec4 final_content_clip = {position().x, body_top_y, content_size.x, content_size.y};
-        const amal::vec4 next_content_clip_rect = intersect_rect(parent_clip, final_content_clip);
+        const amal::vec4 next_content_clip_rect = detail::intersect_rects(parent_clip, final_content_clip);
         if (next_content_clip_rect != _content_clip_rect)
         {
             _content_clip_rect = next_content_clip_rect;
@@ -1047,6 +1116,7 @@ namespace auik::v2
             _content_clip_rect = next_content_clip_rect;
             update_clip_rect(_content_clip_id, _content_clip_rect);
         }
+        sync_rubber_band();
     }
 
     void Window::translate(const amal::vec2 &delta)
@@ -1068,31 +1138,31 @@ namespace auik::v2
 
         const amal::vec4 parent_bounds = get_root_viewport_clip_rect(this);
         const amal::vec4 self_clip_rect =
-            intersect_rect({position().x, position().y, size().x, size().y}, parent_bounds);
+            detail::intersect_rects({position().x, position().y, size().x, size().y}, parent_bounds);
         if (clip_id() != 0xFFFFu) update_clip_rect(clip_id(), self_clip_rect);
         if (_content_clip_id != 0xFFFFu)
         {
             auto *theme = get_theme();
-            const auto &window_style = theme->get_style(_window_style.id);
-            const amal::vec4 padding = window_style.padding();
+            const auto &padding = theme->get_style(_window_style.id).padding();
             const f32 menu_height = (_menu_bar && _menu_bar->is_visible()) ? _menu_bar->required_size().y : 0.0f;
             const f32 header_top_y = position().y;
             const f32 header_bottom_y = _header ? snap_layout_start(header_top_y + _header_height) : header_top_y;
             const f32 menu_top_y = header_bottom_y;
             const f32 menu_bottom_y =
                 (_menu_bar && _menu_bar->is_visible()) ? snap_layout_start(menu_top_y + menu_height) : menu_top_y;
-            const f32 body_top_y = snap_layout_start(menu_bottom_y + padding.y);
-            const f32 body_bottom_y = snap_layout_end(position().y + size().y - padding.w);
-            const f32 body_height = amal::max(body_bottom_y - body_top_y, 0.0f);
             const f32 bar_h =
                 (_scrollbar_x && _scrollbar_x->is_visible()) ? _scrollbar_x->get_min_track_thickness() : 0.0f;
-            const amal::vec4 content_clip = {position().x, body_top_y, size().x, amal::max(body_height - bar_h, 0.0f)};
-            _content_clip_rect = intersect_rect(self_clip_rect, content_clip);
+            const f32 body_top_y = snap_layout_start(menu_bottom_y + padding.y);
+            const f32 body_bottom_y = snap_layout_end(position().y + size().y - padding.w);
+            const f32 clip_height = amal::max(body_bottom_y - body_top_y - bar_h, 0.0f);
+            const amal::vec4 content_clip = {position().x, body_top_y, size().x, clip_height};
+            _content_clip_rect = detail::intersect_rects(self_clip_rect, content_clip);
             update_clip_rect(_content_clip_id, _content_clip_rect);
         }
 
         if (_header) _header->translate(applied_delta);
         if (_menu_bar) _menu_bar->translate(applied_delta);
+        if (_rubber_band) _rubber_band->translate(applied_delta);
         for (auto *child : children)
         {
             if (!child) continue;
@@ -1175,79 +1245,107 @@ namespace auik::v2
             }
         }
 
-        if (!_scrollbar_x && !_scrollbar_y) return;
-        if (!detail::is_scrollbar_tag(ctx.hover_id.tag_id)) return;
-
-        bool is_offset_changed = false;
-        _drag_scrollbar = nullptr;
-
-        if (_scrollbar_y && _scrollbar_y->is_visible() &&
-            (ctx.hover_id.tag_id == AUIK_TAG_SCROLLBAR_TRACK_Y || ctx.hover_id.tag_id == AUIK_TAG_SCROLLBAR_THUMB_Y))
+        if ((_scrollbar_x || _scrollbar_y) && detail::is_scrollbar_tag(ctx.hover_id.tag_id))
         {
-            _move_drag_active = false;
-            _scrollbar_y->set_scroll_offset(_content_offset.y);
-            if (ctx.hover_id.tag_id == AUIK_TAG_SCROLLBAR_THUMB_Y) _drag_scrollbar = _scrollbar_y;
-            else
+            bool is_offset_changed = false;
+
+            if (_scrollbar_y && _scrollbar_y->is_visible() &&
+                (ctx.hover_id.tag_id == AUIK_TAG_SCROLLBAR_TRACK_Y ||
+                 ctx.hover_id.tag_id == AUIK_TAG_SCROLLBAR_THUMB_Y))
             {
-                is_offset_changed = _scrollbar_y->scroll_to_track_click(ctx.io.mouse_pos) || is_offset_changed;
-                _drag_scrollbar = _scrollbar_y;
+                _move_drag_active = false;
+                _scrollbar_y->set_scroll_offset(_content_offset.y);
+                if (ctx.hover_id.tag_id == AUIK_TAG_SCROLLBAR_THUMB_Y) _scrollbar_y->begin_thumb_drag(ctx.io.mouse_pos);
+                else
+                {
+                    is_offset_changed = _scrollbar_y->scroll_to_track_click(ctx.io.mouse_pos) || is_offset_changed;
+                    activate_scrollbar_thumb_style(this, AUIK_TAG_SCROLLBAR_THUMB_Y);
+                }
+                _content_offset.y = _scrollbar_y->scroll_offset();
             }
-            _content_offset.y = _scrollbar_y->scroll_offset();
-        }
 
-        if (_scrollbar_x && _scrollbar_x->is_visible() &&
-            (ctx.hover_id.tag_id == AUIK_TAG_SCROLLBAR_TRACK_X || ctx.hover_id.tag_id == AUIK_TAG_SCROLLBAR_THUMB_X))
-        {
-            _move_drag_active = false;
-            _scrollbar_x->set_scroll_offset(_content_offset.x);
-            if (ctx.hover_id.tag_id == AUIK_TAG_SCROLLBAR_THUMB_X) _drag_scrollbar = _scrollbar_x;
-            else
+            if (_scrollbar_x && _scrollbar_x->is_visible() &&
+                (ctx.hover_id.tag_id == AUIK_TAG_SCROLLBAR_TRACK_X ||
+                 ctx.hover_id.tag_id == AUIK_TAG_SCROLLBAR_THUMB_X))
             {
-                is_offset_changed = _scrollbar_x->scroll_to_track_click(ctx.io.mouse_pos) || is_offset_changed;
-                _drag_scrollbar = _scrollbar_x;
+                _move_drag_active = false;
+                _scrollbar_x->set_scroll_offset(_content_offset.x);
+                if (ctx.hover_id.tag_id == AUIK_TAG_SCROLLBAR_THUMB_X) _scrollbar_x->begin_thumb_drag(ctx.io.mouse_pos);
+                else
+                {
+                    is_offset_changed = _scrollbar_x->scroll_to_track_click(ctx.io.mouse_pos) || is_offset_changed;
+                    activate_scrollbar_thumb_style(this, AUIK_TAG_SCROLLBAR_THUMB_X);
+                }
+                _content_offset.x = _scrollbar_x->scroll_offset();
             }
-            _content_offset.x = _scrollbar_x->scroll_offset();
-        }
 
-        if (is_offset_changed)
-        {
-            sync_clip_rect_cache();
-            add_render_command<detail::ClickEventTraits>(this, [this]() {
-                update_layout(true);
-                update_draw_commands(DrawReasonBits::layout);
-                detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
-            });
+            if (is_offset_changed)
+            {
+                sync_clip_rect_cache();
+                add_render_command<detail::ClickEventTraits>(this, [this]() {
+                    update_layout(true);
+                    update_draw_commands(DrawReasonBits::layout);
+                    detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
+                });
+                return;
+            }
             return;
         }
+
+        if (!_rubber_band) return;
+        if (_move_drag_active || _resize_zone != detail::HitboxZoneBits::none) return;
+        if (ctx.hover_id.widget_id != id() || ctx.hover_id.tag_id != AUIK_TAG_WINDOW) return;
+        ctx.io.drag_id = detail::make_element_id(id(), AUIK_TAG_RUBBER_BAND);
+        _rubber_band->dispatch_drag({0.0f, 0.0f}, KeyPressState::press);
     }
 
     void Window::on_drag(const amal::vec2 &delta, KeyPressState state)
     {
+        auto &ctx = detail::get_context();
+        const auto drag_id = ctx.io.drag_id;
+        if (drag_id.widget_id == id() && drag_id.tag_id == AUIK_TAG_RUBBER_BAND)
+        {
+            if (_rubber_band) _rubber_band->dispatch_drag(delta, state);
+            return;
+        }
+
         if (state == KeyPressState::release)
         {
-            auto &ctx = detail::get_context();
             _move_drag_active = false;
             if (ctx.hover_id.tag_id == AUIK_TAG_HITBOX)
                 detail::set_window_cursor(detail::get_cursor_for_hitbox_zone(ctx.hover_hitbox_zone), ctx.window_ctx);
             else detail::set_window_cursor(detail::CursorID::arrow, ctx.window_ctx);
-            _drag_scrollbar = nullptr;
             _resize_zone = detail::HitboxZoneBits::none;
             return;
         }
 
-        if (_drag_scrollbar)
+        const bool drag_scrollbar_y =
+            _scrollbar_y && _scrollbar_y->is_visible() && is_window_scrollbar_y_drag(drag_id, id());
+        const bool drag_scrollbar_x =
+            _scrollbar_x && _scrollbar_x->is_visible() && is_window_scrollbar_x_drag(drag_id, id());
+        if (drag_scrollbar_y || drag_scrollbar_x)
         {
+            const bool thumb_drag = is_scrollbar_thumb_drag(drag_id);
+            if (state == KeyPressState::press)
+            {
+                if (thumb_drag && drag_scrollbar_y) _scrollbar_y->begin_thumb_drag(ctx.io.mouse_pos);
+                if (thumb_drag && drag_scrollbar_x) _scrollbar_x->begin_thumb_drag(ctx.io.mouse_pos);
+                return;
+            }
+
             bool is_offset_changed = false;
-            if (_drag_scrollbar == _scrollbar_y)
+            if (drag_scrollbar_y)
             {
                 _scrollbar_y->set_scroll_offset(_content_offset.y);
-                is_offset_changed = _scrollbar_y->scroll_thumb_by_drag_delta(delta);
+                is_offset_changed = thumb_drag ? _scrollbar_y->scroll_thumb_to_mouse_pos(ctx.io.mouse_pos)
+                                               : _scrollbar_y->scroll_thumb_by_drag_delta(delta);
                 _content_offset.y = _scrollbar_y->scroll_offset();
             }
-            else if (_drag_scrollbar == _scrollbar_x)
+            if (drag_scrollbar_x)
             {
                 _scrollbar_x->set_scroll_offset(_content_offset.x);
-                is_offset_changed = _scrollbar_x->scroll_thumb_by_drag_delta(delta);
+                is_offset_changed = thumb_drag ? _scrollbar_x->scroll_thumb_to_mouse_pos(ctx.io.mouse_pos)
+                                               : _scrollbar_x->scroll_thumb_by_drag_delta(delta);
                 _content_offset.x = _scrollbar_x->scroll_offset();
             }
 
@@ -1266,7 +1364,6 @@ namespace auik::v2
 
         if (_resize_zone != detail::HitboxZoneBits::none)
         {
-            auto &ctx = detail::get_context();
             detail::set_window_cursor(detail::get_cursor_for_hitbox_zone(_resize_zone), ctx.window_ctx);
             if (!(window_flags & WindowFlagBits::resizable)) return;
             if (window_flags & WindowFlagBits::docked) return;
@@ -1295,16 +1392,17 @@ namespace auik::v2
             }
             else if (hit_bottom) new_size.y += delta.y;
 
-            const amal::vec2 min_size = {32.0f, 32.0f};
-            if (new_size.x < min_size.x)
+            const f32 min_width = _min_size.x > 0.0f ? _min_size.x : 0.0f;
+            const f32 min_height = _min_size.y > 0.0f ? _min_size.y : 0.0f;
+            if (new_size.x < min_width)
             {
-                if (hit_left) new_pos.x -= (min_size.x - new_size.x);
-                new_size.x = min_size.x;
+                if (hit_left) new_pos.x -= (min_width - new_size.x);
+                new_size.x = min_width;
             }
-            if (new_size.y < min_size.y)
+            if (new_size.y < min_height)
             {
-                if (hit_top) new_pos.y -= (min_size.y - new_size.y);
-                new_size.y = min_size.y;
+                if (hit_top) new_pos.y -= (min_height - new_size.y);
+                new_size.y = min_height;
             }
 
             if (new_pos == old_pos && new_size == old_size) return;
@@ -1314,7 +1412,7 @@ namespace auik::v2
                 update_layout(true);
                 redraw_all_commands();
             });
-            ctx.dirty_flags |= (DirtyFlagBits::redraw);
+            ctx.dirty_flags |= DirtyFlagBits::redraw;
             return;
         }
 

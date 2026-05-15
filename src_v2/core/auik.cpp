@@ -121,7 +121,8 @@ namespace auik::v2
                     if (selector_changed)
                     {
                         auto prev_it = ctx.id_map.find(prev_widget_id);
-                        if (prev_it != ctx.id_map.end()) enqueue_style_refresh<detail::HoverEventTraits>(prev_it->second);
+                        if (prev_it != ctx.id_map.end())
+                            enqueue_style_refresh<detail::HoverEventTraits>(prev_it->second);
                         auto it = ctx.id_map.find(widget_id);
                         if (it != ctx.id_map.end() && widget_id != prev_widget_id)
                             enqueue_style_refresh<detail::HoverEventTraits>(it->second);
@@ -593,10 +594,7 @@ namespace auik::v2
                         if (clicked_it->second->has_event_handler(EventFlagBits::hover))
                             clicked_it->second->dispatch_hover(HoverState::enter);
                     }
-                    else if (style_changed)
-                    {
-                        enqueue_style_refresh<detail::HoverEventTraits>(clicked_it->second);
-                    }
+                    else if (style_changed) enqueue_style_refresh<detail::HoverEventTraits>(clicked_it->second);
                 }
             }
 

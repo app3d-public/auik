@@ -69,6 +69,8 @@ namespace auik::v2::detail
         void set_scroll_offset(f32 offset_px) { _behavior.set_scroll_offset(offset_px); }
         bool scroll_by_pixels(f32 delta_px) { return _behavior.scroll_by_pixels(delta_px); }
         bool scroll_to_track_click(const amal::vec2 &mouse_pos);
+        void begin_thumb_drag(const amal::vec2 &mouse_pos);
+        bool scroll_thumb_to_mouse_pos(const amal::vec2 &mouse_pos);
         bool scroll_thumb_by_drag_delta(const amal::vec2 &delta);
         bool is_point_on_thumb(const amal::vec2 &mouse_pos) const;
         const ScrollBehavior &behavior() const { return _behavior; }
@@ -89,6 +91,7 @@ namespace auik::v2::detail
         ScrollBehavior _behavior;
         f32 _content_size = 0.0f;
         f32 _view_size = 0.0f;
+        f32 _thumb_drag_grab_offset = 0.0f;
     };
 
     inline bool is_scrollbar_track_tag(u32 tag_id)

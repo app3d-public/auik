@@ -23,6 +23,7 @@ namespace auik::v2::detail
         void update_layout(const amal::rect &bounds, u16 clip_id);
         void translate(const amal::vec2 &delta);
         void rebuild_clip_rects(u16 clip_id);
+        void reset_draw_records();
         void update_depth(const amal::vec2 &depth_range);
         void draw(DrawCtx &ctx, bool emit_hit_rect);
 

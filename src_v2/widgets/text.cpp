@@ -3,10 +3,20 @@
 #include <auik/v2/pipelines.hpp>
 #include <auik/v2/widgets/text.hpp>
 
-#define AUIK_TOOLTIP_SHOW_DELAY 0.35
+#define AUIK_TOOLTIP_SHOW_DELAY             0.35
+#define AUIK_TEXT_SHRINK_RECORD_RATIO       8
+#define AUIK_TEXT_SHRINK_RECORD_MIN_REMOVED 64
 
 namespace auik::v2
 {
+    static bool should_record_text_shrink(size_t old_count, size_t new_count)
+    {
+        if (old_count <= new_count) return false;
+        if (old_count - new_count < AUIK_TEXT_SHRINK_RECORD_MIN_REMOVED) return false;
+        if (new_count == 0) return true;
+        return old_count >= new_count * AUIK_TEXT_SHRINK_RECORD_RATIO;
+    }
+
     static amal::vec2 resolve_text_size(const Text &widget, const amal::vec2 &measured_size)
     {
         amal::vec2 out = widget.size();
@@ -42,6 +52,12 @@ namespace auik::v2
         const f32 metrics_height = amal::max(layout.ascender - layout.descender, 0.0f);
         if (layout.lines.size() <= 1 && metrics_height > 0.0f) return metrics_height;
         return layout.size.y;
+    }
+
+    static void invalidate_text_draw_ids(DrawStream *stream, acul::vector<DrawDataID> &draw_ids, size_t first)
+    {
+        if (!stream || first >= draw_ids.size()) return;
+        invalidate_data_batch_in_stream(stream, draw_ids.data() + first, static_cast<u32>(draw_ids.size() - first));
     }
 
     StyleUpdateFlags Text::update_style()
@@ -181,6 +197,14 @@ namespace auik::v2
         set_clip_id(parent()->content_clip_id());
     }
 
+    void Text::reset_draw_records()
+    {
+        _draw_ids.clear();
+        _hit_id = AUIK_INVALID_DRAW_DATA_ID;
+        _applied_clip_id = 0xFFFFu;
+        _instances_gpu_dirty = true;
+    }
+
     void Text::draw(DrawCtx &ctx)
     {
         const u16 current_clip = clip_id();
@@ -211,14 +235,22 @@ namespace auik::v2
 
         if (ctx.is_invalidating())
         {
-            for (auto &draw_id : _draw_ids) ctx.emit(textured_quads_stream, draw_id, nullptr, get_rect(), false);
-            _instances_gpu_dirty = true;
+            invalidate_text_draw_ids(textured_quads_stream, _draw_ids, 0);
+            reset_draw_records();
             return;
         }
 
         if (_instances.empty())
         {
-            assert((ctx.is_recording() || _draw_ids.empty()) && "Text instance shrink requires draw record rebuild");
+            if (!ctx.is_recording())
+            {
+                if (should_record_text_shrink(_draw_ids.size(), 0))
+                {
+                    redraw_all_commands();
+                    return;
+                }
+                invalidate_text_draw_ids(textured_quads_stream, _draw_ids, 0);
+            }
             _draw_ids.clear();
             _applied_clip_id = current_clip;
             _instances_gpu_dirty = false;
@@ -236,7 +268,7 @@ namespace auik::v2
             for (auto &instance : _instances)
             {
                 instance.z_order = current_z;
-            instance.tint_color = _render_config.tint_color;
+                instance.tint_color = _render_config.tint_color;
             }
         }
 
@@ -254,11 +286,22 @@ namespace auik::v2
 
         const size_t old_count = _draw_ids.size();
         const size_t new_count = _instances.size();
-        assert(old_count <= new_count && "Text instance shrink requires draw record rebuild");
+        if (should_record_text_shrink(old_count, new_count))
+        {
+            redraw_all_commands();
+            return;
+        }
+
         const size_t update_count = amal::min(old_count, new_count);
         if (update_count > 0)
             update_textured_quads_batch_in_stream(textured_quads_stream, _draw_ids.data(), _instances.data(),
                                                   static_cast<u32>(update_count));
+
+        if (new_count < old_count)
+        {
+            invalidate_text_draw_ids(textured_quads_stream, _draw_ids, new_count);
+            _draw_ids.resize(new_count);
+        }
 
         if (new_count > old_count)
         {

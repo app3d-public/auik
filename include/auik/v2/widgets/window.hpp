@@ -11,6 +11,7 @@
 namespace auik::v2
 {
     class MenuBar;
+    class RubberBand;
 
     struct WindowFlagBits
     {
@@ -24,7 +25,8 @@ namespace auik::v2
             dockable = 0x10,
             scrollable = 0x20,
             no_scrollbar_x = 0x40,
-            no_scrollbar_y = 0x80
+            no_scrollbar_y = 0x80,
+            rubber_band = 0x100
         };
 
         using flag_bitmask = std::true_type;
@@ -72,7 +74,11 @@ namespace auik::v2
         APPLIB_API void add_children(const acul::vector<Widget *> &new_children);
         APPLIB_API void set_menu_bar(MenuBar *menu_bar);
         APPLIB_API void override_content_clip_rect(const amal::vec4 &rect);
+        void set_min_size(const amal::vec2 &value) { _min_size = value; }
+        const amal::vec2 &min_size() const { return _min_size; }
         MenuBar *menu_bar() const { return _menu_bar; }
+        RubberBand *rubber_band() const { return _rubber_band; }
+        RubberBand *get_rubber_band() const { return _rubber_band; }
         using value_type = Widget *;
         using iterator = acul::vector<value_type>::iterator;
         using const_iterator = acul::vector<value_type>::const_iterator;
@@ -108,15 +114,16 @@ namespace auik::v2
     private:
         DrawDataID _bg;
         f32 _header_height = 0.0f;
+        amal::vec2 _min_size{0.0f, 0.0f};
         amal::vec2 _content_offset{0.0f};
         u16 _content_clip_id = 0xFFFFu;
         amal::vec4 _content_clip_rect{0.0f, 0.0f, 0.0f, 0.0f};
         StyleSelector _window_style{Theme::STYLE_ID_INVALID, AUIK_TAG_WINDOW};
         class WindowHeader *_header = nullptr;
         MenuBar *_menu_bar = nullptr;
+        RubberBand *_rubber_band = nullptr;
         detail::Scrollbar *_scrollbar_x = nullptr;
         detail::Scrollbar *_scrollbar_y = nullptr;
-        detail::Scrollbar *_drag_scrollbar = nullptr;
         detail::HitboxZone _resize_zone = detail::HitboxZoneBits::none;
         bool _move_drag_active = false;
         acul::vector<WindowChildLayout> _child_layouts;
@@ -126,6 +133,7 @@ namespace auik::v2
         virtual amal::vec4 get_content_clip_rect() const override { return _content_clip_rect; }
         virtual void on_attach() override;
         virtual void on_detach() override;
+        void sync_rubber_band();
         void redraw_decorations(DrawReasonFlags reason = DrawReasonBits::none);
 
         virtual void on_scroll(const amal::vec2 &delta) override;

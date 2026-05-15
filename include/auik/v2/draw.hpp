@@ -74,6 +74,7 @@ namespace auik::v2
         void (*update_data_in_stream)(DrawStream *, DrawDataID, const void *) = nullptr;
         void (*update_data_batch_in_stream)(DrawStream *, const DrawDataID *, const void *, u32) = nullptr;
         void (*invalidate_data_in_stream)(DrawStream *, DrawDataID) = nullptr;
+        void (*invalidate_data_batch_in_stream)(DrawStream *, const DrawDataID *, u32) = nullptr;
         void (*clear)(DrawStream *, u32) = nullptr;
         void (*render)(DrawStream *, void *, detail::GPUContext *) = nullptr;
         void (*sync_stream)(DrawStream *, u32) = nullptr;
@@ -117,6 +118,15 @@ namespace auik::v2
         assert(data && "data is null");
         assert(stream->update_data_batch_in_stream && "batch update is not configured for this stream");
         stream->update_data_batch_in_stream(stream, draw_data_ids, data, count);
+    }
+
+    inline void invalidate_data_batch_in_stream(DrawStream *stream, const DrawDataID *draw_data_ids, u32 count)
+    {
+        if (count == 0) return;
+        assert(stream && "stream is null");
+        assert(draw_data_ids && "draw_data_ids is null");
+        assert(stream->invalidate_data_batch_in_stream && "batch invalidate is not configured for this stream");
+        stream->invalidate_data_batch_in_stream(stream, draw_data_ids, count);
     }
 
     inline void render_stream(DrawStream &stream, void *render_ctx)

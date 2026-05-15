@@ -120,6 +120,12 @@ namespace auik::v2
         _image_rect.clip_id = clip_id();
     }
 
+    void ImageButton::reset_draw_records()
+    {
+        _bg = {};
+        _image_draw = {};
+    }
+
     void ImageButton::update_depth(const amal::vec2 &depth_range)
     {
         Widget::update_depth(depth_range);

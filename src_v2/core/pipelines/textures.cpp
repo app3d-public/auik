@@ -89,6 +89,32 @@ namespace auik::v2::detail
             ctx.gpu_ctx->textures.invalidate_stream_data(stream, draw_data_id, ctx.frame_id);
     }
 
+    static void invalidate_data_batch_textures_stream(DrawStream *stream, const DrawDataID *draw_data_ids, u32 count)
+    {
+        if (count == 0) return;
+        bool has_valid_id = false;
+        for (u32 i = 0; i < count; ++i)
+        {
+            if (draw_data_ids[i].render_id == AUIK_INVALID_DRAW_DATA_ID) continue;
+            has_valid_id = true;
+            break;
+        }
+        if (!has_valid_id) return;
+
+        auto &ctx = get_context();
+        auto *state = static_cast<StreamSyncState *>(stream->runtime_data);
+        sync_frame_to_master(stream, state, ctx, ctx.frame_id);
+        mark_master_mutation(state, ctx.frame_id, ctx.frames_in_flight);
+        stream->flags |= StreamFlagBits::invalidate;
+        ctx.dirty_flags |= DirtyFlagBits::streams;
+        if (!ctx.gpu_ctx->textures.invalidate_stream_data) return;
+        for (u32 i = 0; i < count; ++i)
+        {
+            if (draw_data_ids[i].render_id == AUIK_INVALID_DRAW_DATA_ID) continue;
+            ctx.gpu_ctx->textures.invalidate_stream_data(stream, draw_data_ids[i], ctx.frame_id);
+        }
+    }
+
     static void update_data_batch_textures_stream(DrawStream *stream, const DrawDataID *draw_data_ids,
                                                   const void *data, u32 count)
     {
@@ -176,6 +202,7 @@ namespace auik::v2
         stream.update_data_in_stream = &detail::update_data_textures_stream;
         stream.update_data_batch_in_stream = &detail::update_data_batch_textures_stream;
         stream.invalidate_data_in_stream = &detail::invalidate_data_textures_stream;
+        stream.invalidate_data_batch_in_stream = &detail::invalidate_data_batch_textures_stream;
         stream.clear = &detail::clear_textures_stream;
         stream.destroy = &detail::destroy_textures_stream;
 

@@ -41,6 +41,7 @@ namespace auik::v2
         void update_layout(bool min_size_known) override;
         void translate(const amal::vec2 &delta) override;
         void rebuild_clip_rects() override;
+        void reset_draw_records() override;
         void draw(DrawCtx &ctx) override;
 
         const acul::string &text() const { return _text; }

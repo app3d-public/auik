@@ -227,6 +227,7 @@ namespace auik::v2
         }
 
         virtual void rebuild_clip_rects() {}
+        virtual void reset_draw_records() {}
 
         void update_draw_commands(DrawReasonFlags reason = DrawReasonBits::none)
         {
