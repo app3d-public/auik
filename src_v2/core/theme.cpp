@@ -2,12 +2,12 @@
 #include <auik/v2/theme.hpp>
 #include <auik/v2/widgets/checkbox.hpp>
 #include <auik/v2/widgets/color_picker.hpp>
+#include <auik/v2/widgets/column.hpp>
 #include <auik/v2/widgets/combobox.hpp>
 #include <auik/v2/widgets/containers.hpp>
 #include <auik/v2/widgets/image_button.hpp>
 #include <auik/v2/widgets/menubar.hpp>
 #include <auik/v2/widgets/radio_button.hpp>
-#include <auik/v2/widgets/titlebar.hpp>
 #include <auik/v2/widgets/rubber_band.hpp>
 #include <auik/v2/widgets/separator.hpp>
 #include <auik/v2/widgets/slider.hpp>
@@ -15,6 +15,7 @@
 #include <auik/v2/widgets/tabbar.hpp>
 #include <auik/v2/widgets/text_button.hpp>
 #include <auik/v2/widgets/textbox.hpp>
+#include <auik/v2/widgets/titlebar.hpp>
 #include <auik/v2/widgets/tooltip.hpp>
 #include <auik/v2/widgets/window.hpp>
 
@@ -184,6 +185,8 @@ namespace auik::v2
         theme->add_style(AUIK_TAG_TEXT_DRAG_ICON, make_style().background_color({0.8f, 0.8f, 0.8f, 1.0f}));
         theme->set_var(AUIK_VAR_COLOR_PICKER_SIZE, 185.0f);
 
+        theme->add_style(AUIK_TAG_COLUMN, make_style().inline_spacing(8.0f));
+
         // Window body.
         theme->add_style(AUIK_TAG_WINDOW, make_style()
                                               .padding(amal::vec2{10.0f, 8.0f})
@@ -320,10 +323,12 @@ namespace auik::v2
         theme->add_style(
             AUIK_TAG_TITLEBAR_MENU_ITEM,
             make_style().margin(amal::vec2{2.0f, 2.0f}).padding(amal::vec2{8.0f, 4.0f}).border_radius(3.0f));
-        theme->add_style(AUIK_TAG_TITLEBAR_MENU_ITEM, make_style().background_color({1.0f, 1.0f, 1.0f, 0.1f}), StyleState::hover);
+        theme->add_style(AUIK_TAG_TITLEBAR_MENU_ITEM, make_style().background_color({1.0f, 1.0f, 1.0f, 0.1f}),
+                         StyleState::hover);
         theme->add_style(AUIK_TAG_TITLEBAR_MENU_ITEM, make_style().background_color(c_surface_light),
                          StyleState::active);
-        theme->add_style(AUIK_TAG_TITLEBAR_MENU_ITEM, make_style().background_color({1.0f, 1.0f, 1.0f, 0.08f}), StyleState::focus);
+        theme->add_style(AUIK_TAG_TITLEBAR_MENU_ITEM, make_style().background_color({1.0f, 1.0f, 1.0f, 0.08f}),
+                         StyleState::focus);
         theme->add_style(
             AUIK_TAG_MENU_SHORTCUT,
             make_style().margin(amal::vec4{50.0f, 0.0f, 0.0f, 0.0f}).text_color({0.72f, 0.72f, 0.72f, 1.0f}));

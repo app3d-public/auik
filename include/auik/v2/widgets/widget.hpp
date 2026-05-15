@@ -60,7 +60,7 @@ namespace auik::v2
     constexpr inline detail::StylePropertyFlags g_style_layout_mask =
         detail::StylePropertiesBits::padding | detail::StylePropertiesBits::text_size |
         detail::StylePropertiesBits::border_thickness | detail::StylePropertiesBits::border_radius |
-        detail::StylePropertiesBits::font;
+        detail::StylePropertiesBits::font | detail::StylePropertiesBits::inline_spacing;
     constexpr inline detail::StylePropertyFlags g_style_parent_layout_mask = detail::StylePropertiesBits::margin;
 
     constexpr inline WidgetFlags get_default_widget_flags()
@@ -486,6 +486,9 @@ namespace auik::v2
             changed |= detail::StylePropertiesBits::text_size;
         if ((union_mask & detail::StylePropertiesBits::font) && prev_style.font() != next_style.font())
             changed |= detail::StylePropertiesBits::font;
+        if ((union_mask & detail::StylePropertiesBits::inline_spacing) &&
+            prev_style.inline_spacing() != next_style.inline_spacing())
+            changed |= detail::StylePropertiesBits::inline_spacing;
 
         if (changed == detail::StylePropertiesBits::none) return StyleUpdateFlagBits::none;
         StyleUpdateFlags out = StyleUpdateFlagBits::redraw;
