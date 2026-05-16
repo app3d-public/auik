@@ -67,7 +67,7 @@ namespace auik::v2
         u32 _selected_index = 0u;
         bool _open = false;
 
-        StyleSelector _style{Theme::STYLE_ID_INVALID, AUIK_TAG_COMBO_BOX};
+        StyleSelector _style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_COMBO_BOX};
         detail::PopupTrigger *_trigger = nullptr;
         Text *_label = nullptr;
         Window *_popup = nullptr;
@@ -119,7 +119,7 @@ namespace auik::v2
         acul::vector<u32> _selected_indices;
         acul::string _placeholder;
         bool _open = false;
-        StyleSelector _style{Theme::STYLE_ID_INVALID, AUIK_TAG_COMBO_BOX};
+        StyleSelector _style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_COMBO_BOX};
         detail::PopupTrigger *_trigger = nullptr;
         Text *_label = nullptr;
         Window *_popup = nullptr;

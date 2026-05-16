@@ -2,9 +2,9 @@
 
 #include <acul/memory/alloc.hpp>
 #include <acul/vector.hpp>
-#include "slider.hpp"
+#include "../pipelines.hpp"
+#include "widget.hpp"
 
-#define AUIK_VAR_COLOR_PICKER_SIZE        0x81C54C6Eu
 #define AUIK_TAG_CIRCLE_COLOR_PICKER      0xD3C6A92Fu
 #define AUIK_TAG_CIRCLE_COLOR_PICKER_GRAB 0x5A9E10C4u
 #define AUIK_TAG_SQUARE_COLOR_PICKER      0x18D73B9Au
@@ -47,7 +47,7 @@ namespace auik::v2
             f32 wheel_radius = 0.0f;
         } _layout{};
 
-        StyleSelector _grab_style{Theme::STYLE_ID_INVALID, AUIK_TAG_GRADIENT_SLIDER_GRAB};
+        StyleSelector _grab_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_GRADIENT_SLIDER_GRAB};
         DrawDataID _wheel_draw_id{};
         DrawDataID _grab_draw_id{};
         DrawDataID _grab_back_draw_id{};
@@ -76,20 +76,16 @@ namespace auik::v2
     {
         auto *theme = get_theme();
         assert(theme && "theme is null");
-        f32 diameter = theme->get_var<f32>(AUIK_VAR_COLOR_PICKER_SIZE);
-        return acul::alloc<CircleColorPicker>(id, value, diameter,
-                                              get_default_widget_flags() | WidgetFlagBits::hittable |
-                                                  WidgetFlagBits::fixed,
-                                              parent);
+        f32 diameter = theme->get_var<f32>(AUIK_STYLE_VAR_COLOR_PICKER_SIZE);
+        return acul::alloc<CircleColorPicker>(
+            id, value, diameter, get_default_widget_flags() | WidgetFlagBits::hittable | WidgetFlagBits::fixed, parent);
     }
 
     inline CircleColorPicker *make_circle_color_picker(u32 id, amal::vec4 *value, f32 diameter,
                                                        Widget *parent = nullptr)
     {
-        return acul::alloc<CircleColorPicker>(id, value, diameter,
-                                              get_default_widget_flags() | WidgetFlagBits::hittable |
-                                                  WidgetFlagBits::fixed,
-                                              parent);
+        return acul::alloc<CircleColorPicker>(
+            id, value, diameter, get_default_widget_flags() | WidgetFlagBits::hittable | WidgetFlagBits::fixed, parent);
     }
 
     class APPLIB_API SquareColorPicker final : public Widget
@@ -136,7 +132,7 @@ namespace auik::v2
             amal::rect sv_rect{};
         } _layout{};
 
-        StyleSelector _grab_style{Theme::STYLE_ID_INVALID, AUIK_TAG_GRADIENT_SLIDER_GRAB};
+        StyleSelector _grab_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_GRADIENT_SLIDER_GRAB};
         DrawDataID _ring_draw_id{};
         DrawDataID _sv_draw_id{};
         DrawDataID _ring_grab_draw_id{};
@@ -177,17 +173,13 @@ namespace auik::v2
 
     inline SquareColorPicker *make_square_color_picker(u32 id, amal::vec4 *value, Widget *parent = nullptr)
     {
-        return acul::alloc<SquareColorPicker>(id, value, 0.0f,
-                                              get_default_widget_flags() | WidgetFlagBits::hittable |
-                                                  WidgetFlagBits::fixed,
-                                              parent);
+        return acul::alloc<SquareColorPicker>(
+            id, value, 0.0f, get_default_widget_flags() | WidgetFlagBits::hittable | WidgetFlagBits::fixed, parent);
     }
 
     inline SquareColorPicker *make_square_color_picker(u32 id, amal::vec4 *value, f32 size, Widget *parent = nullptr)
     {
-        return acul::alloc<SquareColorPicker>(id, value, size,
-                                              get_default_widget_flags() | WidgetFlagBits::hittable |
-                                                  WidgetFlagBits::fixed,
-                                              parent);
+        return acul::alloc<SquareColorPicker>(
+            id, value, size, get_default_widget_flags() | WidgetFlagBits::hittable | WidgetFlagBits::fixed, parent);
     }
 } // namespace auik::v2

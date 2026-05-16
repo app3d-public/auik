@@ -20,7 +20,7 @@ namespace auik::v2
     {
         static inline f32 resolve_color_picker_size()
         {
-            const f32 size = get_theme()->get_var<f32>(AUIK_VAR_COLOR_PICKER_SIZE);
+            const f32 size = get_theme()->get_var<f32>(AUIK_STYLE_VAR_COLOR_PICKER_SIZE);
             return amal::max(size > 0.0f ? size : 120.0f, 1.0f);
         }
 
@@ -517,7 +517,7 @@ namespace auik::v2
         detail::fill_circle_grab_instance(grab_style, _grab_hit_rect.bounds, grab_z, grab_clip,
                                           detail::pack_rgba8(_resolved_color), _grab_visual);
 
-        if (const Style *border_style = get_theme()->get_desc_style(AUIK_TAG_GRADIENT_SLIDER_GRAB_BORDER))
+        if (const Style *border_style = get_theme()->get_desc_style(AUIK_STYLE_TAG_GRADIENT_SLIDER_GRAB_BORDER))
         {
             const amal::vec2 border_size = resolve_grab_size(*border_style);
             const f32 border_w = amal::max(amal::round(border_size.x), _grab_hit_rect.bounds.size.x);
@@ -977,7 +977,7 @@ namespace auik::v2
         detail::fill_circle_grab_instance(grab_style, _sv_grab_hit_rect.bounds, grab_z, grab_clip,
                                           detail::pack_rgba8(_resolved_color), _sv_grab_visual);
 
-        if (const Style *border_style = get_theme()->get_desc_style(AUIK_TAG_GRADIENT_SLIDER_GRAB_BORDER))
+        if (const Style *border_style = get_theme()->get_desc_style(AUIK_STYLE_TAG_GRADIENT_SLIDER_GRAB_BORDER))
         {
             const amal::vec2 border_size = resolve_grab_size(*border_style);
             const f32 border_w = amal::max(amal::round(border_size.x), grab_w);

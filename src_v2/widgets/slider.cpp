@@ -160,15 +160,15 @@ namespace auik::v2
     Slider::Slider(u32 id, f32 *value, f32 min_value, f32 max_value, f32 width, f32 *range_start_value,
                    WidgetFlags widget_flags, Widget *parent)
         : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::drag, parent, {{0.0f, 0.0f}, {width, 0.0f}},
-                 AUIK_TAG_SLIDER),
+                 AUIK_STYLE_TAG_SLIDER),
           _value(value),
           _range_start_value(range_start_value),
           _min_value(min_value),
           _max_value(max_value)
     {
-        _track_style.tag_id = AUIK_TAG_SLIDER;
-        _fill_style.tag_id = AUIK_TAG_SLIDER;
-        _grab_style.tag_id = AUIK_TAG_SLIDER_GRAB;
+        _track_style.tag_id = AUIK_STYLE_TAG_SLIDER;
+        _fill_style.tag_id = AUIK_STYLE_TAG_SLIDER;
+        _grab_style.tag_id = AUIK_STYLE_TAG_SLIDER_GRAB;
         _grab_hit_rect = detail::make_rect_data(id, _grab_style.tag_id);
         if (_max_value < _min_value) std::swap(_min_value, _max_value);
         set_value(value ? *value : _min_value);
@@ -532,8 +532,8 @@ namespace auik::v2
           _min_value(min_value),
           _max_value(max_value)
     {
-        _track_style.tag_id = AUIK_TAG_GRADIENT_SLIDER;
-        _grab_style.tag_id = AUIK_TAG_GRADIENT_SLIDER_GRAB;
+        _track_style.tag_id = AUIK_STYLE_TAG_GRADIENT_SLIDER;
+        _grab_style.tag_id = AUIK_STYLE_TAG_GRADIENT_SLIDER_GRAB;
         _grab_hit_rect = detail::make_rect_data(id, _grab_style.tag_id);
         _colors.reserve(color_count);
         for (u32 i = 0; i < color_count; ++i) _colors.push_back(colors[i]);
@@ -830,7 +830,7 @@ namespace auik::v2
         _grab_visual.z_order = grab_z;
         _grab_back_visual = {};
 
-        if (const Style *border_style = get_theme()->get_desc_style(AUIK_TAG_GRADIENT_SLIDER_GRAB_BORDER))
+        if (const Style *border_style = get_theme()->get_desc_style(AUIK_STYLE_TAG_GRADIENT_SLIDER_GRAB_BORDER))
         {
             const amal::vec2 border_size = resolve_grab_size(*border_style);
             const f32 border_w = amal::max(amal::round(border_size.x), _grab_rect.size.x);
@@ -862,8 +862,8 @@ namespace auik::v2
           _max_value(max_value),
           _color(color)
     {
-        _track_style.tag_id = AUIK_TAG_GRADIENT_SLIDER;
-        _grab_style.tag_id = AUIK_TAG_GRADIENT_SLIDER_GRAB;
+        _track_style.tag_id = AUIK_STYLE_TAG_GRADIENT_SLIDER;
+        _grab_style.tag_id = AUIK_STYLE_TAG_GRADIENT_SLIDER_GRAB;
         _grab_hit_rect = detail::make_rect_data(id, _grab_style.tag_id);
         _colors.resize(2u);
         rebuild_gradient_colors();
@@ -1192,7 +1192,7 @@ namespace auik::v2
         _grab_visual.z_order = grab_z;
         _grab_back_visual = {};
 
-        if (const Style *border_style = get_theme()->get_desc_style(AUIK_TAG_GRADIENT_SLIDER_GRAB_BORDER))
+        if (const Style *border_style = get_theme()->get_desc_style(AUIK_STYLE_TAG_GRADIENT_SLIDER_GRAB_BORDER))
         {
             const amal::vec2 border_size = resolve_grab_size(*border_style);
             const f32 border_w = amal::max(amal::round(border_size.x), _grab_rect.size.x);
@@ -1224,10 +1224,10 @@ namespace auik::v2
           _min_value(min_value),
           _max_value(max_value)
     {
-        _track_style.tag_id = AUIK_TAG_SLIDER;
-        _fill_style.tag_id = AUIK_TAG_SLIDER;
-        _from_grab_style.tag_id = AUIK_TAG_SLIDER_GRAB;
-        _to_grab_style.tag_id = AUIK_TAG_SLIDER_GRAB;
+        _track_style.tag_id = AUIK_STYLE_TAG_SLIDER;
+        _fill_style.tag_id = AUIK_STYLE_TAG_SLIDER;
+        _from_grab_style.tag_id = AUIK_STYLE_TAG_SLIDER_GRAB;
+        _to_grab_style.tag_id = AUIK_STYLE_TAG_SLIDER_GRAB;
         _from_hit_rect = detail::make_rect_data(id, _from_grab_style.tag_id, {}, 0xFFFFu, 0.0f, 0u,
                                                 static_cast<u32>(ActiveGrab::from));
         _to_hit_rect =

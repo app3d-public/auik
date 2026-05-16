@@ -118,7 +118,7 @@ namespace auik::v2
         amal::vec2 _content_offset{0.0f};
         u16 _content_clip_id = 0xFFFFu;
         amal::vec4 _content_clip_rect{0.0f, 0.0f, 0.0f, 0.0f};
-        StyleSelector _window_style{Theme::STYLE_ID_INVALID, AUIK_TAG_WINDOW};
+        StyleSelector _window_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_WINDOW};
         class WindowHeader *_header = nullptr;
         MenuBar *_menu_bar = nullptr;
         RubberBand *_rubber_band = nullptr;

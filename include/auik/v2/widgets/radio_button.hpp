@@ -36,8 +36,8 @@ namespace auik::v2
         bool *_value = nullptr;
         DrawDataID _background_draw{};
         DrawDataID _indicator_draw{};
-        StyleSelector _background_style{Theme::STYLE_ID_INVALID, AUIK_TAG_RADIO_BUTTON};
-        StyleSelector _indicator_style{Theme::STYLE_ID_INVALID, AUIK_TAG_RADIO_BUTTON_INDICATOR};
+        StyleSelector _background_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_RADIO_BUTTON};
+        StyleSelector _indicator_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_RADIO_BUTTON_INDICATOR};
         detail::RectData _indicator_rect{};
         amal::rect _background_rect{};
         amal::vec2 _background_depth_range{0.0f, 1.0f};

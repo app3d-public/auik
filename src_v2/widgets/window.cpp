@@ -64,16 +64,16 @@ namespace auik::v2
     {
         auto *theme = get_theme();
         const Style &window_normal =
-            theme->get_style(theme->get_resolved_style(AUIK_TAG_WINDOW, window.id(), 0, StyleState::normal));
+            theme->get_style(theme->get_resolved_style(AUIK_STYLE_TAG_WINDOW, window.id(), 0, StyleState::normal));
         const Style &window_active =
-            theme->get_style(theme->get_resolved_style(AUIK_TAG_WINDOW, window.id(), 0, StyleState::active));
+            theme->get_style(theme->get_resolved_style(AUIK_STYLE_TAG_WINDOW, window.id(), 0, StyleState::active));
         if (has_layout_style_delta(window_normal, window_active)) return true;
 
         if (!(window.window_flags & WindowFlagBits::decorated)) return false;
         const Style &header_normal = theme->get_style(
-            theme->get_resolved_style(AUIK_TAG_WINDOW_HEADER, AUIK_TAG_WINDOW_HEADER, window.id(), StyleState::normal));
+            theme->get_resolved_style(AUIK_STYLE_TAG_WINDOW_HEADER, AUIK_TAG_WINDOW_HEADER, window.id(), StyleState::normal));
         const Style &header_active = theme->get_style(
-            theme->get_resolved_style(AUIK_TAG_WINDOW_HEADER, AUIK_TAG_WINDOW_HEADER, window.id(), StyleState::active));
+            theme->get_resolved_style(AUIK_STYLE_TAG_WINDOW_HEADER, AUIK_TAG_WINDOW_HEADER, window.id(), StyleState::active));
         return has_layout_style_delta(header_normal, header_active);
     }
 
@@ -160,7 +160,7 @@ namespace auik::v2
             : Widget(AUIK_TAG_WINDOW_HEADER,
                      WidgetFlagBits::visible | (hittable ? WidgetFlagBits::hittable : WidgetFlagBits::none),
                      EventFlagBits::none, parent, {}, AUIK_TAG_WINDOW_HEADER),
-              _style({Theme::STYLE_ID_INVALID, AUIK_TAG_WINDOW_HEADER}),
+              _style({Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_WINDOW_HEADER}),
               _title(acul::alloc<Text>(AUIK_TAG_WINDOW_HEADER, std::move(text), amal::vec2{0.0f, 0.0f},
                                        WidgetFlagBits::visible | WidgetFlagBits::fixed, this))
         {

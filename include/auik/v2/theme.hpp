@@ -8,13 +8,10 @@
 #include <acul/vector.hpp>
 #include <amal/color.hpp>
 #include <amal/vector.hpp>
+#include <auik/v2/widget_tags.hpp>
 
-#define AUIK_TAG_GLOBAL         0x00000000u
-#define AUIK_TAG_CARET          0x069C3BE49u
-#define AUIK_TAG_NO_PAD         0x907B6DA8u
-#define AUIK_TAG_PLACEHOLDER    0xB859984Fu
-#define AUIK_TAG_SELECTION      0xC943AC1Du
-#define AUIK_TAG_TEXT_DRAG_ICON 0x3D493314u
+#define AUIK_THEME_FONT_REGULAR 0
+#define AUIK_THEME_FONT_BOLD    1
 
 namespace auik::v2
 {
@@ -264,7 +261,7 @@ namespace auik::v2
         inline bool has_state_style(u32 type, u32 id, u32 parent, StyleState state) const
         {
             return has_style_desc(id, state) || has_style_desc(type, state) || has_style_desc(parent, state) ||
-                   has_style_desc(AUIK_TAG_GLOBAL, state);
+                   has_style_desc(AUIK_STYLE_TAG_GLOBAL, state);
         }
 
         template <typename T>
@@ -289,7 +286,7 @@ namespace auik::v2
         acul::vector<Style> _resolved_pool;
         acul::hashmap<u32, acul::any> _var_store;
 
-        StyleID add_desc(u32 key, const Style &style, StyleState state);
+        APPLIB_API StyleID add_desc(u32 key, const Style &style, StyleState state);
 
         static u64 make_theme_key(u32 key, StyleState state)
         {
@@ -317,6 +314,4 @@ namespace auik::v2
         StyleID id = Theme::STYLE_ID_INVALID;
         u32 tag_id = 0;
     };
-
-    APPLIB_API Theme *create_default_theme(Font *default_font = nullptr, f32 dpi = 1.0f);
 } // namespace auik::v2

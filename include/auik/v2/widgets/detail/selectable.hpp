@@ -15,7 +15,8 @@ namespace auik::v2::detail
     {
     public:
         Selectable(u32 id, u32 tag_id, u32 element_id, const acul::string &text, amal::vec2 size, Widget *parent,
-                   u32 style_tag_id, WidgetFlags flags, u32 selected_style_tag_id = AUIK_TAG_COMBO_BOX_ITEM_SELECTED,
+                   u32 style_tag_id, WidgetFlags flags,
+                   u32 selected_style_tag_id = AUIK_STYLE_TAG_COMBO_BOX_ITEM_SELECTED,
                    StyleState selected_style_state = StyleState::normal)
             : Text(AUIK_TAG_TEXT, text, size, flags & ~WidgetFlagBits::attachable, parent, style_tag_id),
               _selected_style({Theme::STYLE_ID_INVALID, selected_style_tag_id}),

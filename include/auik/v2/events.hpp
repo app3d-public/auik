@@ -7,7 +7,6 @@
 #include <acul/string/string.hpp>
 #include <acul/vector.hpp>
 #include <amal/vector.hpp>
-#include <functional>
 
 
 #ifndef AUIK_TAG_GLOBAL

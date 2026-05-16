@@ -37,7 +37,7 @@ namespace auik::v2
         _trigger->set_owner(this);
         _trigger->update_style(id, parent ? parent->id() : 0u, StyleState::normal);
         _label = acul::alloc<Text>(AUIK_TAG_TEXT, "", amal::vec2{0.0f, 0.0f},
-                                   get_default_fixed_text_flags() & ~WidgetFlagBits::attachable, this, AUIK_TAG_NO_PAD);
+                                   get_default_fixed_text_flags() & ~WidgetFlagBits::attachable, this, AUIK_STYLE_TAG_NO_PAD);
         _label->set_horizontal_align(detail::TextHorizontalAlign::left);
         _label->set_vertical_align(detail::TextVerticalAlign::center);
         _label->update_style();
@@ -47,7 +47,7 @@ namespace auik::v2
             WidgetFlagBits::visible | WidgetFlagBits::hittable | WidgetFlagBits::fixed);
         _popup->set_depth_zone(DepthZone::foreground);
         _popup->get_rect().widget_id = this->id();
-        _popup->set_window_style_tag(AUIK_TAG_COMBO_BOX_POPUP);
+        _popup->set_window_style_tag(AUIK_STYLE_TAG_COMBO_BOX_POPUP);
         _popup->set_focus_parent(this);
         _popup->update_style();
         _popup->hide();
@@ -394,11 +394,11 @@ namespace auik::v2
 
     void ComboBox::update_popup_layout()
     {
-        _popup->set_window_style_tag(AUIK_TAG_COMBO_BOX_POPUP);
+        _popup->set_window_style_tag(AUIK_STYLE_TAG_COMBO_BOX_POPUP);
         _popup->update_style();
         _popup->window_flags = (get_popup_window_flags() | WindowFlagBits::docked) & ~WindowFlagBits::scrollable;
         const auto &popup_style = get_theme()->get_style(
-            get_theme()->get_resolved_style(AUIK_TAG_COMBO_BOX_POPUP, _popup->id(), 0, StyleState::normal));
+            get_theme()->get_resolved_style(AUIK_STYLE_TAG_COMBO_BOX_POPUP, _popup->id(), 0, StyleState::normal));
         const amal::vec4 popup_padding = popup_style.padding();
         const f32 content_width = amal::max(size().x - popup_padding.x - popup_padding.z, 0.0f);
         const amal::vec2 measure_popup_pos = {position().x, position().y + size().y - 1.0f};
@@ -432,7 +432,7 @@ namespace auik::v2
         const bool fits_below = desired_h <= below_space;
         const bool fits_above = desired_h <= above_space;
         const bool place_above = !fits_below && (fits_above || above_space > below_space);
-        _popup->set_window_style_tag(AUIK_TAG_COMBO_BOX_POPUP);
+        _popup->set_window_style_tag(AUIK_STYLE_TAG_COMBO_BOX_POPUP);
         _popup->update_style();
         const f32 available_h = place_above ? above_space : below_space;
         const bool need_scroll = desired_h > available_h;
@@ -513,7 +513,7 @@ namespace auik::v2
         _trigger->set_owner(this);
         _trigger->update_style(id, parent ? parent->id() : 0u, StyleState::normal);
         _label = acul::alloc<Text>(AUIK_TAG_TEXT, "", amal::vec2{0.0f, 0.0f},
-                                   get_default_fixed_text_flags() & ~WidgetFlagBits::attachable, this, AUIK_TAG_NO_PAD);
+                                   get_default_fixed_text_flags() & ~WidgetFlagBits::attachable, this, AUIK_STYLE_TAG_NO_PAD);
         _label->set_horizontal_align(detail::TextHorizontalAlign::left);
         _label->set_vertical_align(detail::TextVerticalAlign::center);
         _label->update_style();
@@ -523,7 +523,7 @@ namespace auik::v2
             WidgetFlagBits::visible | WidgetFlagBits::hittable | WidgetFlagBits::fixed);
         _popup->set_depth_zone(DepthZone::foreground);
         _popup->get_rect().widget_id = this->id();
-        _popup->set_window_style_tag(AUIK_TAG_COMBO_BOX_POPUP);
+        _popup->set_window_style_tag(AUIK_STYLE_TAG_COMBO_BOX_POPUP);
         _popup->set_focus_parent(this);
         _popup->update_style();
         _popup->hide();
@@ -858,11 +858,11 @@ namespace auik::v2
 
     void MultipleComboBox::update_popup_layout()
     {
-        _popup->set_window_style_tag(AUIK_TAG_COMBO_BOX_POPUP);
+        _popup->set_window_style_tag(AUIK_STYLE_TAG_COMBO_BOX_POPUP);
         _popup->update_style();
         _popup->window_flags = (get_popup_window_flags() | WindowFlagBits::docked) & ~WindowFlagBits::scrollable;
         const auto &popup_style = get_theme()->get_style(
-            get_theme()->get_resolved_style(AUIK_TAG_COMBO_BOX_POPUP, _popup->id(), 0, StyleState::normal));
+            get_theme()->get_resolved_style(AUIK_STYLE_TAG_COMBO_BOX_POPUP, _popup->id(), 0, StyleState::normal));
         const amal::vec4 popup_padding = popup_style.padding();
         const f32 content_width = amal::max(size().x - popup_padding.x - popup_padding.z, 0.0f);
         const amal::vec2 measure_popup_pos = {position().x, position().y + size().y - 1.0f};

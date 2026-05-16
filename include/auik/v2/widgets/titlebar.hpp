@@ -62,9 +62,9 @@ namespace auik::v2
         DrawDataID _bg;
         DrawDataID _icon_bg;
         DrawDataID _leading_region_bg;
-        StyleSelector _style{Theme::STYLE_ID_INVALID, AUIK_TAG_TITLEBAR};
-        StyleSelector _icon_style{Theme::STYLE_ID_INVALID, AUIK_TAG_TITLEBAR_ICON};
-        StyleSelector _leading_region_style{Theme::STYLE_ID_INVALID, AUIK_TAG_TITLEBAR_LEADING_REGION};
+        StyleSelector _style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_TITLEBAR};
+        StyleSelector _icon_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_TITLEBAR_ICON};
+        StyleSelector _leading_region_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_TITLEBAR_LEADING_REGION};
         acul::vector<Widget *> _children;
         Image *_icon = nullptr;
         ImageButton *_caption_buttons[AUIK_WINDOW_CAPTION_BTN_COUNT]{};
@@ -109,8 +109,8 @@ namespace auik::v2
     {
         auto *menu_bar = acul::alloc<MenuBar>(id, std::move(items));
         menu_bar->widget_flags &= ~WidgetFlagBits::fixed;
-        menu_bar->set_menu_style_tag(AUIK_TAG_TITLEBAR_MENU_BAR);
-        menu_bar->set_menu_item_style_tag(AUIK_TAG_TITLEBAR_MENU_ITEM);
+        menu_bar->set_menu_style_tag(AUIK_STYLE_TAG_TITLEBAR_MENU_BAR);
+        menu_bar->set_menu_item_style_tag(AUIK_STYLE_TAG_TITLEBAR_MENU_ITEM);
         menu_bar->set_popup_depth_mode(MenuBar::PopupDepthMode::root_overlay_next);
         return menu_bar;
     }

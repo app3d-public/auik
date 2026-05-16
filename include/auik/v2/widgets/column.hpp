@@ -5,8 +5,6 @@
 #include <utility>
 #include "widget.hpp"
 
-#define AUIK_TAG_COLUMN 0xE14358E9u
-
 namespace auik::v2
 {
     constexpr inline WidgetFlags get_default_column_flags() { return get_default_widget_flags(); }
@@ -19,7 +17,7 @@ namespace auik::v2
 
         explicit Column(u32 id, ColumnItems columns = {}, amal::vec2 size = {0.0f, 0.0f},
                         WidgetFlags flags = get_default_column_flags(), Widget *parent = nullptr,
-                        u32 style_tag_id = AUIK_TAG_COLUMN);
+                        u32 style_tag_id = AUIK_STYLE_TAG_COLUMN);
         ~Column() override;
 
         void clear_columns();
@@ -61,13 +59,13 @@ namespace auik::v2
     inline Column *make_column(u32 id, Column::ColumnItems columns = {}, Widget *parent = nullptr)
     {
         return acul::alloc<Column>(id, std::move(columns), amal::vec2{0.0f, 0.0f}, get_default_column_flags(), parent,
-                                   AUIK_TAG_COLUMN);
+                                   AUIK_STYLE_TAG_COLUMN);
     }
 
     inline Column *make_fixed_column(u32 id, Column::ColumnItems columns = {}, amal::vec2 size = {0.0f, 0.0f},
                                      Widget *parent = nullptr)
     {
         return acul::alloc<Column>(id, std::move(columns), size, get_default_column_flags() | WidgetFlagBits::fixed,
-                                   parent, AUIK_TAG_COLUMN);
+                                   parent, AUIK_STYLE_TAG_COLUMN);
     }
 } // namespace auik::v2

@@ -12,6 +12,7 @@ project(auik
 if(NOT DEFINED ACBT_LOADED)
     include(cmake/utils.cmake)
 endif()
+include(cmake/theme.cmake)
 
 set(IMGUI_SRC_FILES
     modules/3rd-party/imgui/imgui.cpp

@@ -21,7 +21,7 @@ namespace auik::v2
         TextFlags text_flags = TextFlagBits::none;
 
         Text(u32 id, acul::string text, amal::vec2 size, WidgetFlags flags, Widget *parent = nullptr,
-             u32 style_tag_id = AUIK_TAG_NO_PAD,
+             u32 style_tag_id = AUIK_STYLE_TAG_NO_PAD,
              detail::TextOverflowMode overflow = detail::TextOverflowMode::ellipsis,
              detail::TextVerticalAlign vertical_align = detail::TextVerticalAlign::top,
              detail::TextWrapMode wrap = detail::TextWrapMode::none,
@@ -98,7 +98,7 @@ namespace auik::v2
     {
     public:
         TextWithTooltip(u32 id, acul::string text, acul::string tooltip_text, amal::vec2 size, WidgetFlags flags,
-                        Widget *parent = nullptr, u32 style_tag_id = AUIK_TAG_NO_PAD,
+                        Widget *parent = nullptr, u32 style_tag_id = AUIK_STYLE_TAG_NO_PAD,
                         detail::TextOverflowMode overflow = detail::TextOverflowMode::ellipsis,
                         detail::TextVerticalAlign vertical_align = detail::TextVerticalAlign::top,
                         detail::TextWrapMode wrap = detail::TextWrapMode::none)

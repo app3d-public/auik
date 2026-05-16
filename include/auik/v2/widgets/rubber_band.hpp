@@ -47,7 +47,7 @@ namespace auik::v2
         void update_selection_rect();
         void redraw_band();
 
-        StyleSelector _style{Theme::STYLE_ID_INVALID, AUIK_TAG_RUBBER_BAND};
+        StyleSelector _style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_RUBBER_BAND};
         DrawDataID _draw_id;
         amal::vec2 _start{0.0f, 0.0f};
         amal::vec2 _end{0.0f, 0.0f};

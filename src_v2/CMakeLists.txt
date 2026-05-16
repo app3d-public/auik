@@ -15,11 +15,15 @@ endif()
 
 add_files(${PROJECT_NAME} RECURSE "${CMAKE_CURRENT_SOURCE_DIR}/core")
 add_files(${PROJECT_NAME} RECURSE "${CMAKE_CURRENT_SOURCE_DIR}/widgets")
+compile_auik_default_style_ids("${CMAKE_CURRENT_SOURCE_DIR}/theme.css")
+list(APPEND AUIK_V2_SRC ${AUIK_STYLE_IDS_HEADER})
 
 add_library(${PROJECT_NAME} SHARED ${AUIK_V2_SRC})
+add_dependencies(${PROJECT_NAME} ${AUIK_STYLE_IDS_TARGET})
 
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
 target_compile_definitions(${PROJECT_NAME} PRIVATE -DAPPLIB_BUILD)
+target_include_directories(${PROJECT_NAME} PUBLIC "${AUIK_STYLE_IDS_INCLUDE_DIR}")
 
 if(PROJECT_IS_TOP_LEVEL)
     add_subdirectory(modules/acul)

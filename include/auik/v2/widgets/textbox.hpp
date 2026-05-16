@@ -27,7 +27,7 @@ namespace auik::v2
         TextFlags text_flags = TextFlagBits::none;
 
         TextBox(u32 id, const acul::string &value, amal::vec2 size, WidgetFlags flags, Widget *parent = nullptr,
-                u32 style_tag_id = AUIK_TAG_TEXTBOX, TextFlags text_flags = TextFlagBits::none,
+                u32 style_tag_id = AUIK_STYLE_TAG_TEXTBOX, TextFlags text_flags = TextFlagBits::none,
                 const acul::string &placeholder = {}, bool read_only = false,
                 detail::TextVerticalAlign text_vertical_align = detail::TextVerticalAlign::center,
                 detail::TextWrapMode text_wrap = detail::TextWrapMode::none);
@@ -200,7 +200,7 @@ namespace auik::v2
         TextBoxEditData *_edit = nullptr;
         detail::TextEditState _edit_state{};
         DrawDataID _bg{};
-        StyleSelector _style{Theme::STYLE_ID_INVALID, AUIK_TAG_TEXTBOX};
+        StyleSelector _style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_TEXTBOX};
         amal::vec2 _content_pos{0.0f, 0.0f};
         amal::vec2 _content_size{0.0f, 0.0f};
         u16 _content_clip_id = 0xFFFFu;

@@ -36,7 +36,7 @@ namespace auik::v2
         bool *_value = nullptr;
         DrawDataID _box_bg{};
         DrawDataID _checkmark_draw{};
-        StyleSelector _style{Theme::STYLE_ID_INVALID, AUIK_TAG_CHECKBOX};
+        StyleSelector _style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_CHECKBOX};
         detail::RectData _checkmark_rect{};
         amal::rect _box_rect{};
         TextureID _checkmark_texture{};

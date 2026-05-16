@@ -33,10 +33,10 @@ namespace auik::v2
         PopupItem(u32 owner_id, u32 item_id, u32 hit_element_id, const ItemData *data, Widget *parent)
             : Widget(AUIK_TAG_COMBO_BOX_ITEM, WidgetFlagBits::visible | WidgetFlagBits::hittable, EventFlagBits::none,
                      parent, {}, AUIK_TAG_COMBO_BOX_ITEM),
-              _style({Theme::STYLE_ID_INVALID, AUIK_TAG_COMBO_BOX_ITEM}),
-              _selected_style({Theme::STYLE_ID_INVALID, AUIK_TAG_COMBO_BOX_ITEM_SELECTED}),
+              _style({Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_COMBO_BOX_ITEM}),
+              _selected_style({Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_COMBO_BOX_ITEM_SELECTED}),
               _label(acul::alloc<Text>(AUIK_TAG_TEXT, data ? data->text : "", amal::vec2{0.0f, 0.0f},
-                                       WidgetFlagBits::visible, this, AUIK_TAG_NO_PAD,
+                                       WidgetFlagBits::visible, this, AUIK_STYLE_TAG_NO_PAD,
                                        detail::TextOverflowMode::ellipsis, detail::TextVerticalAlign::center)),
               _shortcut(acul::alloc<Text>(AUIK_TAG_TEXT, data ? data->shortcut : "", amal::vec2{0.0f, 0.0f},
                                           WidgetFlagBits::visible, this, AUIK_TAG_MENU_SHORTCUT,
@@ -68,7 +68,17 @@ namespace auik::v2
 
         void set_selected(bool value) { _selected = value; }
         u32 item_id() const { return _item_id; }
-        bool has_draw_record() const { return _bg.render_id != AUIK_INVALID_DRAW_DATA_ID; }
+        bool has_draw_record() const { return _draw_recorded; }
+
+        void reset_draw_records() override
+        {
+            _bg = {};
+            _selected_bg = {};
+            _next_icon_draw = {};
+            _label->reset_draw_records();
+            _shortcut->reset_draw_records();
+            _draw_recorded = false;
+        }
 
         void update_layout_min_size() override
         {
@@ -130,7 +140,7 @@ namespace auik::v2
             }
             if (has_shortcut)
             {
-                const auto shortcut_style_id = get_theme()->get_resolved_style(AUIK_TAG_MENU_SHORTCUT, _shortcut->id(),
+                const auto shortcut_style_id = get_theme()->get_resolved_style(AUIK_STYLE_TAG_MENU_SHORTCUT, _shortcut->id(),
                                                                                id(), _shortcut->style_state());
                 const auto &shortcut_style = get_theme()->get_style(shortcut_style_id);
                 const amal::vec4 shortcut_margin = shortcut_style.margin();
@@ -174,6 +184,8 @@ namespace auik::v2
 
         void draw(DrawCtx &ctx) override
         {
+            if (ctx.is_recording()) _draw_recorded = true;
+            else if (ctx.is_invalidating()) _draw_recorded = false;
             auto *quads_stream = get_primary_quads_stream();
             QuadsInstanceData bg{};
             bg.rect = bounds();
@@ -253,16 +265,17 @@ namespace auik::v2
         u32 _item_id = 0u;
         bool _has_next = false;
         bool _selected = false;
+        bool _draw_recorded = false;
     };
 
     MenuBar::MenuBar(u32 id, acul::vector<acul::string> items, amal::vec2 size, WidgetFlags widget_flags,
                      Widget *parent)
         : TabBar(id, std::move(items), TabBarFlagBits::none, size, widget_flags, parent, 0.0f, 0u,
-                 AUIK_TAG_MENU_BAR_ITEM, AUIK_TAG_COMBO_BOX_ITEM)
+                 AUIK_STYLE_TAG_MENU_BAR_ITEM, AUIK_STYLE_TAG_MENU_BAR_ITEM, AUIK_STYLE_TAG_COMBO_BOX_ITEM)
     {
         add_event_flags(EventFlagBits::focus);
-        set_style_tag(AUIK_TAG_WINDOW_MENU_BAR);
-        _menu_style = {Theme::STYLE_ID_INVALID, AUIK_TAG_WINDOW_MENU_BAR};
+        set_style_tag(AUIK_STYLE_TAG_WINDOW_MENU_BAR);
+        _menu_style = {Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_WINDOW_MENU_BAR};
         for (u32 i = 0; i < _tabs.size(); ++i)
         {
             if (i < _element_ids.size() && _tabs[i]) ensure_item(_element_ids[i], _tabs[i]->text());
@@ -753,7 +766,7 @@ namespace auik::v2
                                           WidgetFlagBits::visible | WidgetFlagBits::hittable | WidgetFlagBits::fixed);
         popup->set_depth_zone(DepthZone::foreground);
         popup->get_rect().widget_id = id();
-        popup->set_window_style_tag(AUIK_TAG_MENU_POPUP);
+        popup->set_window_style_tag(AUIK_STYLE_TAG_MENU_POPUP);
         popup->set_focus_parent(this);
         popup->hide();
         _popups[depth] = popup;
@@ -802,7 +815,7 @@ namespace auik::v2
             ++row_index;
         }
         const auto &popup_style = get_theme()->get_style(
-            get_theme()->get_resolved_style(AUIK_TAG_MENU_POPUP, popup->id(), 0, StyleState::normal));
+            get_theme()->get_resolved_style(AUIK_STYLE_TAG_MENU_POPUP, popup->id(), 0, StyleState::normal));
         const amal::vec4 padding = popup_style.padding();
         const f32 popup_w = content_w + padding.x + padding.z;
         const f32 popup_h = amal::max(content_h + padding.y + padding.w, AUIK_MENU_POPUP_ITEM_FALLBACK_HEIGHT);

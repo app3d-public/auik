@@ -6,7 +6,7 @@
 namespace auik::v2
 {
     Checkbox::Checkbox(u32 id, bool *value, WidgetFlags widget_flags, Widget *parent)
-        : Widget(id, widget_flags, EventFlagBits::click, parent, {{0.0f, 0.0f}, {0.0f, 0.0f}}, AUIK_TAG_CHECKBOX),
+        : Widget(id, widget_flags, EventFlagBits::click, parent, {{0.0f, 0.0f}, {0.0f, 0.0f}}, AUIK_STYLE_TAG_CHECKBOX),
           _value(value),
           _checkmark_rect(detail::make_rect_data(AUIK_TAG_CHECKBOX_CHECKMARK, AUIK_TAG_CHECKBOX_CHECKMARK))
     {

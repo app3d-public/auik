@@ -25,7 +25,7 @@ namespace auik::v2
         TextButton(u32 id, acul::string text, amal::vec2 size, WidgetFlags widget_flags, EventFlags event_flags,
                    Widget *parent)
             : Widget(id, widget_flags, event_flags, parent, {}, AUIK_TAG_TEXT_BUTTON),
-              _style({Theme::STYLE_ID_INVALID, AUIK_TAG_TEXT_BUTTON}),
+              _style({Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_TEXT_BUTTON}),
               _text(acul::alloc<Text>(AUIK_TAG_TEXT, std::move(text), amal::vec2{0.0f, 0.0f},
                                       WidgetFlagBits::visible | WidgetFlagBits::fixed, this))
         {

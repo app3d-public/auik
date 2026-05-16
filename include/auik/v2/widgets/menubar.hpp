@@ -162,7 +162,7 @@ namespace auik::v2
         acul::vector<Window *> _popups;
         acul::vector<u32> _open_path;
         acul::vector<u32> _selected_item_ids;
-        StyleSelector _menu_style{Theme::STYLE_ID_INVALID, AUIK_TAG_WINDOW_MENU_BAR};
+        StyleSelector _menu_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_WINDOW_MENU_BAR};
         PopupDepthMode _popup_depth_mode = PopupDepthMode::workzone_overlay;
     };
 
@@ -180,8 +180,8 @@ namespace auik::v2
     inline MenuBar *make_main_menu_bar(u32 id, acul::vector<acul::string> items = {})
     {
         auto *menu_bar = acul::alloc<MenuBar>(id, std::move(items));
-        menu_bar->set_menu_style_tag(AUIK_TAG_MAIN_MENU_BAR);
-        menu_bar->set_menu_item_style_tag(AUIK_TAG_MAIN_MENU_ITEM);
+        menu_bar->set_menu_style_tag(AUIK_STYLE_TAG_MAIN_MENU_BAR);
+        menu_bar->set_menu_item_style_tag(AUIK_STYLE_TAG_MAIN_MENU_ITEM);
         menu_bar->set_popup_depth_mode(MenuBar::PopupDepthMode::root_overlay);
         return menu_bar;
     }

@@ -34,7 +34,7 @@ namespace auik::v2
         void reset_source_state();
 
         DrawDataID _bg;
-        StyleSelector _style{Theme::STYLE_ID_INVALID, AUIK_TAG_TOOLTIP};
+        StyleSelector _style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_TOOLTIP};
         f32 _anchor_x = 0.0f;
         const acul::string *_text_source = nullptr;
         bool _dismissed_for_current_source = false;

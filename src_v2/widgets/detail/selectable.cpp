@@ -6,8 +6,10 @@ namespace auik::v2::detail
     StyleUpdateFlags Selectable::update_style()
     {
         const u32 parent_id = parent() ? parent()->id() : 0u;
-        auto flags = resolve_style_selector(_style, id(), parent_id, style_state());
-        flags |= resolve_style_selector(_selected_style, id(), parent_id, _selected_style_state);
+        const StyleState current_state = style_state();
+        auto flags = resolve_style_selector(_style, id(), parent_id, current_state);
+        flags |= resolve_style_selector(_selected_style, id(), parent_id,
+                                        _selected ? current_state : _selected_style_state);
         const auto &style = get_theme()->get_style(_style.id);
         _layout_config.size_px = round_font_px(style.text_size());
         const u32 text_color = style.text_color();
@@ -99,14 +101,13 @@ namespace auik::v2::detail
         selected_bg.rect = bounds();
         selected_bg.z_order = _selected_bg_z;
         const bool selected_visible =
-            _selected && style_state() == StyleState::normal &&
-            fill_quads_instance_by_style(get_theme()->get_style(_selected_style.id), bg_clip_id, selected_bg);
+            _selected && fill_quads_instance_by_style(get_theme()->get_style(_selected_style.id), bg_clip_id, selected_bg);
         emit_quads_instance(ctx, quads_stream, _selected_bg, selected_bg, get_rect(), selected_visible, false);
 
         QuadsInstanceData bg{};
         bg.rect = bounds();
         bg.z_order = _bg_z;
-        const bool draw_state_bg = !_selected || style_state() != StyleState::normal;
+        const bool draw_state_bg = !_selected;
         const bool bg_visible =
             draw_state_bg && fill_quads_instance_by_style(get_theme()->get_style(_style.id), bg_clip_id, bg);
         emit_quads_instance(ctx, quads_stream, _bg, bg, get_rect(), bg_visible, ctx.emit_hit_rect);

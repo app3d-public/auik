@@ -53,7 +53,9 @@ namespace auik::v2
         TabBar(u32 id, acul::vector<acul::string> items = {}, TabBarFlags tab_flags = TabBarFlagBits::none,
                amal::vec2 size = {0.0f, 0.0f}, WidgetFlags widget_flags = get_default_tab_bar_flags(),
                Widget *parent = nullptr, f32 tab_width = 0.0f, u32 tab_width_key = 0u,
-               u32 item_style_tag = AUIK_TAG_TAB_BAR_ITEM, u32 popup_item_style_tag = AUIK_TAG_COMBO_BOX_ITEM);
+               u32 item_style_tag = AUIK_STYLE_TAG_TAB_BAR_ITEM,
+               u32 selected_item_style_tag = AUIK_STYLE_TAG_TAB_BAR_ITEM_SELECTED,
+               u32 popup_item_style_tag = AUIK_STYLE_TAG_COMBO_BOX_ITEM);
         ~TabBar() override;
 
         StyleUpdateFlags update_style() override;
@@ -118,8 +120,9 @@ namespace auik::v2
         void sync_selection_to_widgets();
         void update_popup_layout();
         void open_popup();
-        void close_popup();
+        void close_popup(bool refresh_style = true);
         void toggle_popup();
+        void update_overflow_button_style();
         void clamp_scroll_offset();
         void handle_item_click(u32 element_id);
         void close_item(u32 element_id);
@@ -166,8 +169,9 @@ namespace auik::v2
         f32 _tab_width = 0.0f;
         f32 _resolved_tab_width = 0.0f;
         u32 _tab_width_key = 0u;
-        u32 _item_style_tag = AUIK_TAG_TAB_BAR_ITEM;
-        u32 _popup_item_style_tag = AUIK_TAG_COMBO_BOX_ITEM;
+        u32 _item_style_tag = AUIK_STYLE_TAG_TAB_BAR_ITEM;
+        u32 _selected_item_style_tag = AUIK_STYLE_TAG_TAB_BAR_ITEM_SELECTED;
+        u32 _popup_item_style_tag = AUIK_STYLE_TAG_COMBO_BOX_ITEM;
         u16 _full_clip_id = 0xFFFFu;
         u16 _content_clip_id = 0xFFFFu;
         StyleSelector _style{Theme::STYLE_ID_INVALID, AUIK_TAG_TAB_BAR};

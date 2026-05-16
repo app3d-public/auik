@@ -106,9 +106,9 @@ namespace auik::v2
         acul::vector<DrawDataID> selections;
         DrawDataID caret{};
         DrawDataID selection_drag_dots[AUIK_TEXTBOX_SELECTION_DRAG_DOT_COUNT]{};
-        StyleSelector caret_style{Theme::STYLE_ID_INVALID, AUIK_TAG_CARET};
-        StyleSelector selection_style{Theme::STYLE_ID_INVALID, AUIK_TAG_SELECTION};
-        StyleSelector drag_icon_style{Theme::STYLE_ID_INVALID, AUIK_TAG_TEXT_DRAG_ICON};
+        StyleSelector caret_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_CARET};
+        StyleSelector selection_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_SELECTION};
+        StyleSelector drag_icon_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_TEXT_DRAG_ICON};
         f64 caret_anim_reset_time = 0.0;
         u8 flags = 0;
     };
@@ -121,7 +121,7 @@ namespace auik::v2
           _text(AUIK_TAG_TEXT, value, amal::vec2{0.0f, 0.0f},
                 WidgetFlagBits::visible |
                     ((flags & WidgetFlagBits::fixed) ? WidgetFlagBits::fixed : WidgetFlagBits::none),
-                this, AUIK_TAG_NO_PAD, detail::TextOverflowMode::clip, text_vertical_align, text_wrap,
+                this, AUIK_STYLE_TAG_NO_PAD, detail::TextOverflowMode::clip, text_vertical_align, text_wrap,
                 text_wrap != detail::TextWrapMode::none ? detail::TextLayoutWidthMode::bounds
                                                         : detail::TextLayoutWidthMode::viewport),
           _placeholder(placeholder.empty()
@@ -130,7 +130,7 @@ namespace auik::v2
                                  AUIK_TAG_TEXT, placeholder, amal::vec2{0.0f, 0.0f},
                                  WidgetFlagBits::visible |
                                      ((flags & WidgetFlagBits::fixed) ? WidgetFlagBits::fixed : WidgetFlagBits::none),
-                                 this, AUIK_TAG_PLACEHOLDER, detail::TextOverflowMode::clip, text_vertical_align,
+                                 this, AUIK_STYLE_TAG_PLACEHOLDER, detail::TextOverflowMode::clip, text_vertical_align,
                                  text_wrap)),
           _edit(read_only ? nullptr : acul::alloc<TextBoxEditData>()),
           _read_only(read_only)
@@ -371,7 +371,7 @@ namespace auik::v2
             selection.mask = text_content_clip_id();
 
             ctx.emit(quads_stream, _edit->selections[selection_slot], &selection,
-                     detail::make_rect_data(id(), AUIK_TAG_SELECTION, selection.rect), false);
+                     detail::make_rect_data(id(), AUIK_STYLE_TAG_SELECTION, selection.rect), false);
             ++selection_slot;
         };
 
@@ -933,7 +933,7 @@ namespace auik::v2
                 AUIK_TAG_TEXT, value, amal::vec2{0.0f, 0.0f},
                 WidgetFlagBits::visible |
                     ((widget_flags & WidgetFlagBits::fixed) ? WidgetFlagBits::fixed : WidgetFlagBits::none),
-                this, AUIK_TAG_PLACEHOLDER);
+                this, AUIK_STYLE_TAG_PLACEHOLDER);
             _placeholder->set_overflow_mode(detail::TextOverflowMode::clip);
             _placeholder->set_vertical_align(detail::TextVerticalAlign::center);
             _placeholder->set_position(_content_pos);
@@ -1526,7 +1526,7 @@ namespace auik::v2
     {
         _text.set_trim_trailing_spaces(false);
         if (_placeholder) _placeholder->set_trim_trailing_spaces(false);
-        if (_edit) _edit->caret_style.tag_id = AUIK_TAG_MULTILINE_CARET;
+        if (_edit) _edit->caret_style.tag_id = AUIK_STYLE_TAG_MULTILINE_CARET;
         detail::text_edit_initialize_state(&_edit_state, false);
     }
 

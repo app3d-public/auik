@@ -13,7 +13,7 @@ namespace auik::v2
     {
     public:
         Separator(amal::axis axis, WidgetFlags widget_flags = WidgetFlagBits::visible, Widget *parent = nullptr,
-                  u32 style_tag = AUIK_TAG_SEPARATOR);
+                  u32 style_tag = AUIK_STYLE_TAG_SEPARATOR);
 
         StyleUpdateFlags update_style() override;
         void update_layout_min_size() override;
@@ -25,7 +25,7 @@ namespace auik::v2
 
     protected:
         amal::axis _axis = amal::axis::x;
-        StyleSelector _style{Theme::STYLE_ID_INVALID, AUIK_TAG_SEPARATOR};
+        StyleSelector _style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_SEPARATOR};
         DrawDataID _line{};
         amal::rect _line_rect{};
     };
@@ -34,7 +34,7 @@ namespace auik::v2
     {
     public:
         HSeparator(WidgetFlags widget_flags = WidgetFlagBits::visible, Widget *parent = nullptr,
-                   u32 style_tag = AUIK_TAG_SEPARATOR)
+                   u32 style_tag = AUIK_STYLE_TAG_SEPARATOR)
             : Separator(amal::axis::x, widget_flags, parent, style_tag)
         {
         }
@@ -44,7 +44,7 @@ namespace auik::v2
     {
     public:
         VSeparator(WidgetFlags widget_flags = WidgetFlagBits::visible, Widget *parent = nullptr,
-                   u32 style_tag = AUIK_TAG_SEPARATOR)
+                   u32 style_tag = AUIK_STYLE_TAG_SEPARATOR)
             : Separator(amal::axis::y, widget_flags, parent, style_tag)
         {
         }

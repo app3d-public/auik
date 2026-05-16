@@ -20,10 +20,10 @@ namespace auik::v2
         ImageButton(u32 id, TextureID texture_id, amal::vec2 image_size = {0.0f, 0.0f}, amal::vec2 size = {0.0f, 0.0f},
                     amal::rect uv_rect = {{0.0f, 0.0f}, {1.0f, 1.0f}},
                     WidgetFlags widget_flags = get_default_image_button_flags(), Widget *parent = nullptr,
-                    u32 style_tag = AUIK_TAG_IMAGE_BUTTON);
+                    u32 style_tag = AUIK_STYLE_TAG_IMAGE_BUTTON);
         ImageButton(u32 id, Image *image, amal::vec2 image_size = {0.0f, 0.0f}, amal::vec2 size = {0.0f, 0.0f},
                     WidgetFlags widget_flags = get_default_image_button_flags(), Widget *parent = nullptr,
-                    u32 style_tag = AUIK_TAG_IMAGE_BUTTON);
+                    u32 style_tag = AUIK_STYLE_TAG_IMAGE_BUTTON);
 
         StyleUpdateFlags update_style() override;
         void update_layout_min_size() override;
@@ -55,7 +55,7 @@ namespace auik::v2
     private:
         DrawDataID _bg{};
         DrawDataID _image_draw{};
-        StyleSelector _style{Theme::STYLE_ID_INVALID, AUIK_TAG_IMAGE_BUTTON};
+        StyleSelector _style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_IMAGE_BUTTON};
         TextureID _texture_id{};
         Image *_image = nullptr;
         amal::rect _uv_rect{};

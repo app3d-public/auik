@@ -46,13 +46,14 @@ namespace auik::v2
 
     TabBar::TabBar(u32 id, acul::vector<acul::string> items, TabBarFlags tab_flags, amal::vec2 size,
                    WidgetFlags widget_flags, Widget *parent, f32 tab_width, u32 tab_width_key, u32 item_style_tag,
-                   u32 popup_item_style_tag)
+                   u32 selected_item_style_tag, u32 popup_item_style_tag)
         : Widget(id, widget_flags, make_tab_bar_event_flags(tab_flags), parent, {{0.0f, 0.0f}, size}, AUIK_TAG_TAB_BAR),
           _tab_flags(normalize_tab_bar_flags(tab_flags)),
           _tab_width(tab_width),
           _tab_width_key(tab_width_key)
     {
         _item_style_tag = item_style_tag;
+        _selected_item_style_tag = selected_item_style_tag;
         _popup_item_style_tag = popup_item_style_tag;
         if (popup())
         {
@@ -66,7 +67,7 @@ namespace auik::v2
                                          get_popup_window_flags(),
                                          WidgetFlagBits::visible | WidgetFlagBits::hittable | WidgetFlagBits::fixed);
             _popup->get_rect().widget_id = id;
-            _popup->set_window_style_tag(AUIK_TAG_TAB_BAR_POPUP);
+            _popup->set_window_style_tag(AUIK_STYLE_TAG_TAB_BAR_POPUP);
             _popup->set_focus_parent(this);
             _popup->update_style();
             _popup->hide();
@@ -78,7 +79,7 @@ namespace auik::v2
 
     TabBar::~TabBar()
     {
-        close_popup();
+        close_popup(false);
         if (_popup) acul::release(_popup);
         if (_overflow_button) acul::release(_overflow_button);
         for (auto *tab : _tabs) acul::release(tab);
@@ -172,7 +173,7 @@ namespace auik::v2
             _element_ids.push_back(element_id);
             auto *tab = acul::alloc<detail::Selectable>(
                 _item_style_tag, _item_style_tag, element_id, items[i], amal::vec2{0.0f, 0.0f}, this, _item_style_tag,
-                detail::get_selectable_item_flags(), _item_style_tag, StyleState::focus);
+                detail::get_selectable_item_flags(), _selected_item_style_tag);
             tab->get_rect().widget_id = id();
             tab->set_focus_parent(this);
             tab->update_style();
@@ -305,8 +306,9 @@ namespace auik::v2
 
         if (_overflow_button)
         {
-            StyleState overflow_state = _open ? StyleState::active : StyleState::normal;
-            if (transition.current_id.tag_id == AUIK_TAG_TABBAR_POPUP_BTN) overflow_state = transition.current_state;
+            StyleState overflow_state = _open ? StyleState::focus : StyleState::normal;
+            if (transition.current_id.tag_id == AUIK_TAG_TABBAR_POPUP_BTN)
+                overflow_state = _open ? StyleState::focus : transition.current_state;
             _overflow_button->set_style_state(overflow_state);
             out |= _overflow_button->update_style(AUIK_TAG_TABBAR_POPUP_BTN, id(), overflow_state);
         }
@@ -371,6 +373,14 @@ namespace auik::v2
     {
         if (!_overflow_button) return;
         _overflow_button->set_icons(AUIK_ICON_CHEVRON_DOWN, AUIK_ICON_CHEVRON_UP);
+    }
+
+    void TabBar::update_overflow_button_style()
+    {
+        if (!_overflow_button) return;
+        const StyleState state = _open ? StyleState::focus : StyleState::normal;
+        _overflow_button->set_style_state(state);
+        _overflow_button->update_style(AUIK_TAG_TABBAR_POPUP_BTN, id(), state);
     }
 
     f32 TabBar::resolve_tab_width() const
@@ -1213,13 +1223,13 @@ namespace auik::v2
         if (!_popup || _overflow_start >= _tabs.size()) return;
 
         _popup->set_parent(parent());
-        _popup->set_window_style_tag(AUIK_TAG_TAB_BAR_POPUP);
+        _popup->set_window_style_tag(AUIK_STYLE_TAG_TAB_BAR_POPUP);
         _popup->window_flags = (get_popup_window_flags() | WindowFlagBits::docked) & ~WindowFlagBits::scrollable;
         _popup->show();
         _popup->update_style();
 
         const auto &popup_style = get_theme()->get_style(
-            get_theme()->get_resolved_style(AUIK_TAG_TAB_BAR_POPUP, _popup->id(), 0, StyleState::normal));
+            get_theme()->get_resolved_style(AUIK_STYLE_TAG_TAB_BAR_POPUP, _popup->id(), 0, StyleState::normal));
         const amal::vec4 popup_padding = popup_style.padding();
 
         f32 content_width = 0.0f;
@@ -1275,19 +1285,21 @@ namespace auik::v2
         if (_overflow_button)
         {
             _overflow_button->set_open(true);
+            update_overflow_button_style();
             _overflow_button->start_icon_animation(true);
         }
         update_popup_layout();
     }
 
-    void TabBar::close_popup()
+    void TabBar::close_popup(bool refresh_style)
     {
         const bool was_open = _open;
         _open = false;
         if (_overflow_button)
         {
             _overflow_button->set_open(false);
-            if (was_open) _overflow_button->start_icon_animation(false);
+            if (refresh_style) update_overflow_button_style();
+            if (refresh_style && was_open) _overflow_button->start_icon_animation(false);
         }
         if (_popup) _popup->hide();
     }

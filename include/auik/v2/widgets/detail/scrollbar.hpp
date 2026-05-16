@@ -39,7 +39,7 @@ namespace auik::v2::detail
     {
     public:
         Scrollbar(u32 id, u32 track_tag_id, u32 thumb_tag_id, Widget *parent = nullptr, amal::axis axis = amal::axis::y,
-                  u32 track_style_tag = AUIK_TAG_SCROLLBAR_TRACK, u32 thumb_style_tag = AUIK_TAG_SCROLLBAR_THUMB)
+                  u32 track_style_tag = AUIK_STYLE_TAG_SCROLLBAR_TRACK, u32 thumb_style_tag = AUIK_STYLE_TAG_SCROLLBAR_THUMB)
             : Widget(id, WidgetFlagBits::visible | WidgetFlagBits::hittable, EventFlagBits::none, parent, {},
                      track_tag_id),
               _track_style({Theme::STYLE_ID_INVALID, track_style_tag}),

@@ -46,21 +46,45 @@ Styles can be linked by:
 - parent hierarchy
 - global defaults
 
-### Supported properties
-| Property         | Description                         |
-|------------------|-------------------------------------|
-| padding          | The padding of the widget.          |
-| margin           | The margin of the widget.           |
-| background_color | The background color of the widget. |
-| border_color     | The border color of the widget.     |
-| border_radius    | The border radius of the widget.    |
-| border_thickness | The border thickness of the widget. |
-| corner_mask      | The corner mask of the widget.      |
-| text_color       | The text color of the widget.       |
-| text_size        | The text size of the widget.        |
----
+Themes can be created directly through the C++ Theme API or generated from CSS sources with the CSS transpiler.
+The CSS transpiler is intended for application styling and generates a small `theme_style_sheet.hpp/.cpp` pair that the host application compiles into its own target.
 
-The Theme API supports named style values stored in a typed key-value registry.
+The CSS transpiler currently supports:
+
+- class selectors for style tags
+- state selectors: `:hover`, `:active`, `:focus`
+- CSS custom properties in `:root`
+- `var(...)`
+- `calc(...)`
+- colors: `rgb(...)`, `rgba(...)`
+- units: raw numbers, `px`, `pt`
+- properties: `padding`, `margin`, `background-color`, `color`, `font-size`, `font-family`, `inline-spacing`,
+  `border-radius`, `border`
+
+When `INPUT_FOLDER` is provided, application-only tags and variables are cached and exported through generated `theme_style_sheet.hpp`. Existing IDs are preserved across rebuilds, new tags/variables are appended to the appropriate cache, and removed tags/variables are dropped.
+
+### CSS theme generation
+After adding auik, call `compile_auik_css_theme()` from the application CMake scope:
+
+```cmake
+compile_auik_css_theme(
+    "${CMAKE_SOURCE_DIR}/modules/auik/src_v2/theme.css"
+    INPUT_FOLDER "${CMAKE_CURRENT_SOURCE_DIR}/ui"
+)
+
+target_sources(app3d PRIVATE ${AUIK_CSS_THEME_SRC} ${AUIK_CSS_THEME_HEADER})
+target_include_directories(${PROJECT_NAME} PRIVATE ${AUIK_CSS_THEME_INCLUDE_DIR})
+add_dependencies(${PROJECT_NAME} ${AUIK_CSS_THEME_TARGET})
+```
+
+`INPUT_FOLDER` is optional. When it is provided, all CSS files in that folder are parsed after the base CSS file, so an
+application can override default tags and variables without modifying auik sources. 
+At runtime, pass the theme fonts and DPI to the generated function:
+
+```cpp
+auik::v2::Font *theme_fonts[] = {regular_font, bold_font};
+auik::v2::set_theme(auik::v2::create_style_sheet_theme(theme_fonts, dpi));
+```
 
 ## Configuration and session history
 Auik supports:
@@ -90,6 +114,7 @@ Before adding the subdirectory, define:
 > Auik also provides a helper function (`initialize_agrb_adopted_device`) that configures agrb with UI-specific defaults (descriptor pools, resource counts, etc.) for seamless integration. To enable this mode, define `AUIK_BACKEND_AGRB_ADOPTED`.
 
 ### Supported compilers:
+> 
 - GNU GCC
 - Clang
 
@@ -105,6 +130,9 @@ The following dependencies are included as git submodules and must be checked ou
 - [umbf](https://github.com/app3d-public/umbf)
 
 The following dependencies must be installed on your system:
+- [Python 3](https://www.python.org/)
+- [Jinja2](https://pypi.org/project/Jinja2/)
+- [tinycss2](https://pypi.org/project/tinycss2/)
 - [fontconfig](https://www.freedesktop.org/wiki/Software/fontconfig/)
 - [freetype](https://www.freetype.org/)
 - [harfbuzz](https://github.com/harfbuzz/harfbuzz)
@@ -162,7 +190,8 @@ if (!auik::v2::load_fonts(fonts)) throw acul::runtime_error("Failed to load UI f
 const f32 dpi = awin::get_dpi(env::get_main_window());
 if (!auik::v2::load_win32_icons(fonts, dpi)) throw acul::runtime_error("Failed to load OS icons");
 if (!auik::v2::load_font(fonts, default_font, "Segoe UI")) throw acul::runtime_error("Failed to load UI font");
-auik::v2::set_theme(auik::v2::create_default_theme(&default_font, dpi));
+auik::v2::Font *theme_fonts[] = {&default_font, nullptr};
+auik::v2::set_theme(auik::v2::create_style_sheet_theme(theme_fonts, dpi));
 ```
 > [!NOTE]
 > For MS Windows, we provide support for loading icons from `Segoe Fluent Icons` / `Segoe MDL2 Assets`.     

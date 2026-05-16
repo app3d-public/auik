@@ -37,8 +37,8 @@ namespace auik::v2
         bool *_value = nullptr;
         DrawDataID _track_draw{};
         DrawDataID _grab_draw{};
-        StyleSelector _track_style{Theme::STYLE_ID_INVALID, AUIK_TAG_SWITCH_BUTTON};
-        StyleSelector _grab_style{Theme::STYLE_ID_INVALID, AUIK_TAG_SWITCH_BUTTON_GRAB};
+        StyleSelector _track_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_SWITCH_BUTTON};
+        StyleSelector _grab_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_SWITCH_BUTTON_GRAB};
         detail::RectData _grab_rect{};
         amal::rect _track_rect{};
         amal::vec2 _track_depth_range{0.0f, 1.0f};
