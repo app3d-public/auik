@@ -26,6 +26,13 @@ main-menu-item,0xDD0667CD
 menu-bar-item,0x62F8CAAA
 menu-popup,0x0EF2EE30
 menu-shortcut,0x94020AC8
+modal-batch-label,0xBE4E3AEA
+modal-controls-area,0xECEB5187
+modal-header,0x01BC9DB3
+modal-icon,0x02C36C01
+modal-message-area,0xB1C3113D
+modal-title,0xDFCAD7A0
+modal-window,0x02076CEE
 multiline-caret,0x7D6F3E2A
 no-pad,0x907B6DA8
 placeholder,0xB859984F
@@ -56,6 +63,7 @@ titlebar-leading-region,0xB20D45EF
 titlebar-menu-bar,0x6541ADB5
 titlebar-menu-item,0xD9F76C8A
 tooltip,0x1E1CB209
+transparent-button,0x5E496C05
 window,0xB4382179
 window-caption-button,0xEF0A4C09
 window-caption-close-button,0x561CF733

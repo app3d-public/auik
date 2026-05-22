@@ -243,6 +243,13 @@ namespace auik::v2
             _title_draw_dirty = true;
         }
 
+        void reset_draw_records() override
+        {
+            _bg = {};
+            _title->reset_draw_records();
+            _title_draw_dirty = true;
+        }
+
         void draw(DrawCtx &ctx) override
         {
             auto *theme = get_theme();
@@ -617,6 +624,18 @@ namespace auik::v2
             _scrollbar_x->set_clip_id(clip_id());
             _scrollbar_x->rebuild_clip_rects();
         }
+    }
+
+    void Window::reset_draw_records()
+    {
+        _bg = {};
+        if (_header) _header->reset_draw_records();
+        if (_menu_bar) _menu_bar->reset_draw_records();
+        if (_rubber_band) _rubber_band->reset_draw_records();
+        for (auto *child : children)
+            if (child) child->reset_draw_records();
+        if (_scrollbar_y) _scrollbar_y->reset_draw_records();
+        if (_scrollbar_x) _scrollbar_x->reset_draw_records();
     }
 
     void Window::update_layout_min_size()
@@ -1230,7 +1249,9 @@ namespace auik::v2
 
         auto &ctx = detail::get_context();
         _move_drag_active =
-            (window_flags & WindowFlagBits::decorated) && (ctx.hover_id.tag_id == AUIK_TAG_WINDOW_HEADER);
+            ((window_flags & WindowFlagBits::decorated) && ctx.hover_id.tag_id == AUIK_TAG_WINDOW_HEADER) ||
+            (!(window_flags & WindowFlagBits::decorated) && ctx.hover_id.widget_id == id() &&
+             ctx.hover_id.tag_id == get_rect().tag_id);
         _resize_zone = detail::HitboxZoneBits::none;
         if ((window_flags & WindowFlagBits::resizable) && !(window_flags & WindowFlagBits::docked) &&
             ctx.hover_id.tag_id == AUIK_TAG_HITBOX)
@@ -1452,9 +1473,18 @@ namespace auik::v2
                 break;
             }
         }
-        if (index >= count || index == count - 1) return;
+        if (index >= count) return;
 
-        Widget *top = tree[count - 1];
+        u32 top_index = count;
+        for (u32 i = count; i > 0u; --i)
+        {
+            if (!as_root_window(tree[i - 1u])) continue;
+            top_index = i - 1u;
+            break;
+        }
+        if (top_index >= count || index == top_index) return;
+
+        Widget *top = tree[top_index];
         Window *top_window = as_root_window(top);
         const amal::vec2 self_range = self_window->depth_range();
         const amal::vec2 top_range = top->depth_range();
@@ -1462,7 +1492,7 @@ namespace auik::v2
         top->update_depth(self_range);
         self_window->update_depth(top_range);
         tree[index] = top;
-        tree[count - 1] = self_window;
+        tree[top_index] = self_window;
 
         const bool self_needs_layout = needs_layout_on_active(*self_window);
         add_render_command<detail::FocusEventTraits>(self_window, [self_window, self_needs_layout]() {
@@ -1472,12 +1502,8 @@ namespace auik::v2
                 self_window->update_layout(true);
                 flags |= StyleUpdateFlagBits::layout | StyleUpdateFlagBits::redraw;
             }
-            if (flags & StyleUpdateFlagBits::redraw)
-            {
-                const auto reason = get_draw_reason_from_style_update(flags);
-                if (reason == DrawReasonBits::none) self_window->redraw_decorations();
-                else self_window->update_draw_commands(reason);
-            }
+            const auto reason = get_draw_reason_from_style_update(flags);
+            self_window->update_draw_commands(reason == DrawReasonBits::none ? DrawReasonBits::external : reason);
             detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
         });
 
@@ -1491,12 +1517,8 @@ namespace auik::v2
                     top_window->update_layout(true);
                     flags |= StyleUpdateFlagBits::layout | StyleUpdateFlagBits::redraw;
                 }
-                if (flags & StyleUpdateFlagBits::redraw)
-                {
-                    const auto reason = get_draw_reason_from_style_update(flags);
-                    if (reason == DrawReasonBits::none) top_window->redraw_decorations();
-                    else top_window->update_draw_commands(reason);
-                }
+                const auto reason = get_draw_reason_from_style_update(flags);
+                top_window->update_draw_commands(reason == DrawReasonBits::none ? DrawReasonBits::external : reason);
                 detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
             });
         }

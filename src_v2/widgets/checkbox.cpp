@@ -2,7 +2,6 @@
 #include <auik/v2/pipelines.hpp>
 #include <auik/v2/widgets/checkbox.hpp>
 #include <auik/v2/widgets/image.hpp>
-
 namespace auik::v2
 {
     Checkbox::Checkbox(u32 id, bool *value, WidgetFlags widget_flags, Widget *parent)
@@ -48,16 +47,7 @@ namespace auik::v2
         const amal::vec4 margin = style.margin();
         const amal::vec2 box_size = resolve_box_size(style);
 
-        amal::vec2 min_size = size();
-        if (!is_fixed()) min_size.x = 0.0f;
-
-        if (min_size.x <= 0.0f) min_size.x = box_size.x;
-        else min_size.x = amal::max(min_size.x, box_size.x);
-        if (min_size.y <= 0.0f) min_size.y = box_size.y;
-        else min_size.y = amal::max(min_size.y, box_size.y);
-
-        set_required_size(
-            {min_size.x + margin.x + margin.z, min_size.y + margin.y + margin.w});
+        set_required_size({box_size.x + margin.x + margin.z, box_size.y + margin.y + margin.w});
     }
 
     void Checkbox::rebuild_checkmark_layout()
@@ -95,9 +85,8 @@ namespace auik::v2
         set_clip_id(parent()->content_clip_id());
 
         const amal::vec2 box_size = resolve_box_size(style);
-        const f32 outer_h = widget_size.y + margin.y + margin.w;
         _box_rect.offset = {pos.x + amal::max((widget_size.x - box_size.x) * 0.5f, 0.0f),
-                            layout_origin.y + amal::max((outer_h - box_size.y) * 0.5f, 0.0f)};
+                            pos.y + amal::max((widget_size.y - box_size.y) * 0.5f, 0.0f)};
         _box_rect.size = box_size;
 
         rebuild_checkmark_layout();

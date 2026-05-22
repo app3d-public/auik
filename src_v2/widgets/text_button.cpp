@@ -29,10 +29,19 @@ namespace auik::v2
         const amal::vec2 text_size = _text->required_size();
 
         amal::vec2 min_size = size();
-        if (!is_fixed()) min_size.x = 0.0f;
-        else if (min_size.x <= 0.0f) min_size.x = amal::max(120.0f, text_size.x + padding.x + padding.z);
-        if (min_size.y <= 0.0f) min_size.y = amal::max(style.text_size(), text_size.y) + padding.y + padding.w;
-        if (min_size.x > 0.0f) min_size.x = amal::max(min_size.x, text_size.x + padding.x + padding.z);
+        const f32 content_min_width = text_size.x + padding.x + padding.z;
+        const f32 content_min_height = amal::max(style.text_size(), text_size.y) + padding.y + padding.w;
+        if (!is_fixed())
+        {
+            min_size.x = content_min_width;
+            min_size.y = content_min_height;
+        }
+        else
+        {
+            if (min_size.x <= 0.0f) min_size.x = amal::max(120.0f, content_min_width);
+            if (min_size.y <= 0.0f) min_size.y = content_min_height;
+        }
+        if (min_size.x > 0.0f) min_size.x = amal::max(min_size.x, content_min_width);
         set_required_size({min_size.x + margin.x + margin.z, min_size.y + margin.y + margin.w});
     }
 
@@ -48,9 +57,16 @@ namespace auik::v2
         const amal::vec2 min_button = {amal::max(min_required.x - margin.x - margin.z, 0.0f),
                                        amal::max(min_required.y - margin.y - margin.w, 0.0f)};
         amal::vec2 button_size = size();
-        if (!is_fixed()) button_size.x = amal::max(button_size.x - margin.x - margin.z, min_button.x);
-        else button_size.x = amal::max(button_size.x, min_button.x);
-        button_size.y = amal::max(button_size.y, min_button.y);
+        if (!is_fixed())
+        {
+            button_size.x = min_button.x;
+            button_size.y = min_button.y;
+        }
+        else
+        {
+            button_size.x = amal::max(button_size.x, min_button.x);
+            button_size.y = amal::max(button_size.y, min_button.y);
+        }
 
         const amal::vec2 pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
         set_position(pos);

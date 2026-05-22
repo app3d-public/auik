@@ -23,9 +23,9 @@ namespace auik::v2
     {
     public:
         TextButton(u32 id, acul::string text, amal::vec2 size, WidgetFlags widget_flags, EventFlags event_flags,
-                   Widget *parent)
-            : Widget(id, widget_flags, event_flags, parent, {}, AUIK_TAG_TEXT_BUTTON),
-              _style({Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_TEXT_BUTTON}),
+                   Widget *parent, u32 style_tag_id = AUIK_STYLE_TAG_TEXT_BUTTON)
+            : Widget(id, widget_flags, event_flags, parent, {}, style_tag_id),
+              _style({Theme::STYLE_ID_INVALID, style_tag_id}),
               _text(acul::alloc<Text>(AUIK_TAG_TEXT, std::move(text), amal::vec2{0.0f, 0.0f},
                                       WidgetFlagBits::visible | WidgetFlagBits::fixed, this))
         {
@@ -51,15 +51,17 @@ namespace auik::v2
         bool _text_draw_dirty = true;
     };
 
-    inline TextButton *make_text_button(u32 id, const acul::string &text = "")
+    inline TextButton *make_text_button(u32 id, const acul::string &text = "",
+                                        u32 style_tag_id = AUIK_STYLE_TAG_TEXT_BUTTON)
     {
         return acul::alloc<TextButton>(id, text, amal::vec2{0.0f, 0.0f}, get_default_text_button_flags(),
-                                       EventFlagBits::none, nullptr);
+                                       EventFlagBits::none, nullptr, style_tag_id);
     }
 
-    inline TextButton *make_fixed_text_button(u32 id, const acul::string &text = "", amal::vec2 size = {120.0f, 0.0f})
+    inline TextButton *make_fixed_text_button(u32 id, const acul::string &text = "", amal::vec2 size = {120.0f, 0.0f},
+                                              u32 style_tag_id = AUIK_STYLE_TAG_TEXT_BUTTON)
     {
         return acul::alloc<TextButton>(id, text, size, get_default_fixed_text_button_flags(), EventFlagBits::none,
-                                       nullptr);
+                                       nullptr, style_tag_id);
     }
 } // namespace auik::v2

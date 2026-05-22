@@ -27,6 +27,8 @@ namespace auik::v2
     class Tooltip;
     struct DrawStream;
     struct DrawPipeline;
+    struct PostEffect;
+    struct SoundContext;
 
     namespace detail
     {

@@ -6,6 +6,25 @@
 namespace auik::v2
 {
 #ifdef _WIN32
+    static CustomTitlebarPadding resolve_custom_titlebar_padding(const awin::Window &window)
+    {
+        const awin::WindowFlags flags = awin::get_window_flags(window);
+        if (flags & awin::WindowFlagBits::decorated) return {};
+        if (flags & awin::WindowFlagBits::fullscreen) return {};
+        if (flags & awin::WindowFlagBits::maximized) return {};
+        if (!(flags & awin::WindowFlagBits::extended_nc_area)) return {};
+
+        HWND hwnd = awin::native_access::get_hwnd(window);
+        const UINT dpi = hwnd ? GetDpiForWindow(hwnd) : 96;
+        const i32 frame_x = GetSystemMetricsForDpi(SM_CXFRAME, dpi);
+        const i32 frame_y = GetSystemMetricsForDpi(SM_CYFRAME, dpi);
+        const i32 padded_border = GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi);
+        const i32 border_x = frame_x + padded_border;
+        const i32 border_y = frame_y + padded_border;
+        if (hwnd && IsZoomed(hwnd)) return {};
+        return {border_x, 0, border_x, border_y};
+    }
+
     static HICON resolve_window_icon(HWND hwnd)
     {
         HICON icon = reinterpret_cast<HICON>(SendMessageW(hwnd, WM_GETICON, ICON_SMALL2, 0));
@@ -238,14 +257,20 @@ namespace auik::v2
         auto &global_ctx = detail::get_context();
         bind_window_events(awin_ctx->window, *global_ctx.ed, awin_ctx);
         window_ctx->host_state = resolve_host_window_state(awin_ctx->window);
-        auto dimensions = awin_ctx->window.dimensions();
+#ifdef _WIN32
+        awin_ctx->custom_titlebar_supported = is_custom_titlebar_supported(awin_ctx->window);
+        awin_ctx->custom_titlebar_padding = get_custom_titlebar_padding(awin_ctx->window);
+#endif
+        auto dimensions = awin_ctx->initial_display_size;
+        if (dimensions.x <= 0 || dimensions.y <= 0) dimensions = awin_ctx->window.dimensions();
         global_ctx.io.display_size.x = dimensions.x;
         global_ctx.io.display_size.y = dimensions.y;
     }
 
-    APPLIB_API detail::WindowContext *create_awin_backend(awin::Window &window)
+    APPLIB_API detail::WindowContext *create_awin_backend(awin::Window &window,
+                                                          acul::point2D<i32> initial_display_size)
     {
-        detail::AwinBackend *ctx = acul::alloc<detail::AwinBackend>(window);
+        detail::AwinBackend *ctx = acul::alloc<detail::AwinBackend>(window, initial_display_size);
         ctx->get_window_handle = &get_window_handle;
         ctx->set_cursor = &set_window_cursor;
         ctx->get_clipboard_string = &get_clipboard_string;
@@ -258,5 +283,38 @@ namespace auik::v2
         ctx->get_window_icon_image = &get_window_icon_image;
 #endif
         return ctx;
+    }
+
+    bool is_custom_titlebar_supported()
+    {
+        auto *window_ctx = detail::get_context().window_ctx;
+        auto *backend = static_cast<detail::AwinBackend *>(window_ctx);
+        return backend && backend->custom_titlebar_supported;
+    }
+
+    bool is_custom_titlebar_supported(const awin::Window &)
+    {
+#ifdef _WIN32
+        return true;
+#else
+        return false;
+#endif
+    }
+
+    CustomTitlebarPadding get_custom_titlebar_padding()
+    {
+        auto *window_ctx = detail::get_context().window_ctx;
+        auto *backend = static_cast<detail::AwinBackend *>(window_ctx);
+        if (!backend) return {};
+        return backend->custom_titlebar_padding;
+    }
+
+    CustomTitlebarPadding get_custom_titlebar_padding(const awin::Window &window)
+    {
+#ifdef _WIN32
+        return resolve_custom_titlebar_padding(window);
+#else
+        return {};
+#endif
     }
 } // namespace auik::v2

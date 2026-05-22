@@ -42,6 +42,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 )
 
 if(WIN32)
+    target_link_libraries(${PROJECT_NAME} PRIVATE Winmm)
     target_compile_definitions(${PROJECT_NAME} PRIVATE -DWIN32_LEAN_AND_MEAN -DNOMINMAX -DWINVER=0x0A00)
 
     # Manifest
@@ -56,6 +57,10 @@ if(WIN32)
         gen_manifest_lib("fontconfig" ${FONTCONFIG_VERSION})
         gen_manifest_lib("harfbuzz" ${HARFBUZZ_VERSION})
     endif()
+endif()
+
+if(UNIX AND NOT APPLE)
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${CMAKE_DL_LIBS})
 endif()
 
 set_target_properties(${PROJECT_NAME}

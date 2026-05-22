@@ -28,8 +28,6 @@ struct FT_LibraryRec_;
 
 namespace auik::v2
 {
-    struct PostEffect;
-
     struct DirtyFlagBits
     {
         enum enum_type
@@ -142,6 +140,7 @@ namespace auik::v2
             int root_depth_counts[3] = {};
             GPUContext *gpu_ctx = nullptr;
             WindowContext *window_ctx = nullptr;
+            SoundContext *sound_ctx = nullptr;
             ::FT_LibraryRec_ *ft_library = nullptr;
             IO io;
             u32 frame_id = 0;

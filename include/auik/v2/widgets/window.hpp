@@ -105,6 +105,7 @@ namespace auik::v2
 
         virtual StyleUpdateFlags update_style() override;
         void rebuild_clip_rects() override;
+        void reset_draw_records() override;
         virtual void translate(const amal::vec2 &delta) override;
         virtual void update_depth(const amal::vec2 &depth_range) override;
         virtual void update_layout_min_size() override;

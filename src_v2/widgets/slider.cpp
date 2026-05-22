@@ -115,6 +115,17 @@ namespace auik::v2
             return depth_zone_range(work_range, DepthZone::background).x;
         }
 
+        static inline bool has_render_record(const DrawDataID &draw_id)
+        {
+            return draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID;
+        }
+
+        static inline bool has_any_track_record(const SliderTrackVisual &visual)
+        {
+            return has_render_record(visual.background_draw_id) || has_render_record(visual.fill_draw_id) ||
+                   has_render_record(visual.border_draw_id);
+        }
+
         static inline RectData make_slider_track_hit_rect(u32 widget_id, u32 tag_id, const amal::rect &track_rect,
                                                           u16 clip_id, f32 depth)
         {
@@ -339,11 +350,7 @@ namespace auik::v2
 
     bool Slider::has_draw_record() const
     {
-        if (_grab_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
-        if (_track_visual.background_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
-        if (_track_visual.fill_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
-        if (_track_visual.border_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
-        return true;
+        return detail::has_render_record(_grab_draw_id) || detail::has_any_track_record(_track_visual);
     }
 
     void Slider::set_value(f32 new_value)
@@ -454,11 +461,11 @@ namespace auik::v2
         const auto &fill_style = get_theme()->get_style(_fill_style.id);
         _track_visual.fill.rect = _track_rect;
         _track_visual.fill.rect.offset.x = left_x;
-        _track_visual.fill.rect.size.x = fill_w > 0.0f ? fill_w : 1.0f;
+        _track_visual.fill.rect.size.x = fill_w;
         _track_visual.fill.z_order = next_depth(_track_depth_range);
-        const bool fill_visible = fill_quads_instance_by_style(fill_style, clip_id(), _track_visual.fill) &&
-                                  fill_w > 0.0f && !amal::is_rect_empty(_track_rect);
-        if (!fill_visible)
+        const bool fill_drawable =
+            fill_quads_instance_by_style(fill_style, clip_id(), _track_visual.fill) && !amal::is_rect_empty(_track_rect);
+        if (!fill_drawable)
         {
             _track_visual.clear_layer(detail::SliderTrackVisual::LayerBits::fill);
             _track_visual.fill.background_color = 0;
@@ -710,12 +717,8 @@ namespace auik::v2
 
     bool GradientSlider::has_draw_record() const
     {
-        if (_grab_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
-        if (_grab_back_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
-        if (_track_visual.background_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
-        if (_track_visual.border_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
-        if (_gradient_visual.valid && _gradient_visual.draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
-        return true;
+        return detail::has_render_record(_grab_draw_id) || detail::has_render_record(_grab_back_draw_id) ||
+               detail::has_any_track_record(_track_visual) || detail::has_render_record(_gradient_visual.draw_id);
     }
 
     void GradientSlider::set_value(f32 new_value)
@@ -1045,12 +1048,8 @@ namespace auik::v2
 
     bool TransparencySlider::has_draw_record() const
     {
-        if (_grab_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
-        if (_grab_back_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
-        if (_track_visual.background_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
-        if (_track_visual.border_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
-        if (_gradient_visual.valid && _gradient_visual.draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
-        return true;
+        return detail::has_render_record(_grab_draw_id) || detail::has_render_record(_grab_back_draw_id) ||
+               detail::has_any_track_record(_track_visual) || detail::has_render_record(_gradient_visual.draw_id);
     }
 
     void TransparencySlider::set_value(f32 new_value)
@@ -1410,11 +1409,8 @@ namespace auik::v2
 
     bool RangeSlider::has_draw_record() const
     {
-        if (_from_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
-        if (_to_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
-        if (_track_visual.background_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
-        if (_track_visual.fill_draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
-        return true;
+        return detail::has_render_record(_from_draw_id) || detail::has_render_record(_to_draw_id) ||
+               detail::has_any_track_record(_track_visual);
     }
 
     f32 RangeSlider::clamped_value(f32 value) const

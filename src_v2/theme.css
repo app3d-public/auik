@@ -59,8 +59,15 @@
     border-radius: 6px;
 }
 
-.window-header {
+.modal-window {
     padding: 10px 8px;
+    background-color: var(--color_surface);
+    border: 1px solid var(--color_border);
+    border-radius: 6px;
+}
+
+.window-header {
+    padding: 4px 8px;
     background-color: var(--color_active);
     border-radius: 6px 6px 0px 0px;
 }
@@ -83,10 +90,9 @@
 }
 
 .text-button {
-    padding: 10px 2px;
+    padding: 14px 4px;
     background-color: var(--color_surface-light);
-    border: 1px solid var(--color_border);
-    border-radius: 4px;
+    border-radius: 3px;
 }
 
 .text-button:hover {
@@ -95,6 +101,46 @@
 
 .text-button:active {
     background-color: var(--color_surface-light);
+}
+
+.transparent-button {
+    padding: 14px 4px;
+    border-radius: 3px;
+}
+
+.transparent-button:hover {
+    background-color: var(--color_hover);
+}
+
+.transparent-button:active {
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.modal-title {
+    padding: 0px;
+    font-family: var(--system-font-bold);
+    font-size: calc(14px * var(--dpi));
+}
+
+.modal-header {
+    margin-bottom: 8px;
+}
+
+.modal-message-area {
+    margin: 8px 8px 8px 4px;
+}
+
+.modal-icon {
+    margin-right: 22px;
+    margin-bottom: 22px;
+}
+
+.modal-batch-label {
+    font-size: calc(11px * var(--dpi));
+}
+
+.modal-controls-area {
+    margin: 0px 15px 0px 6px;
 }
 
 .image-button {

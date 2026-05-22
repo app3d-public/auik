@@ -48,11 +48,10 @@ namespace auik::v2
         {
             none = 0x0,
             layout = 0x1,
-            host_resize = 0x2,
-            full_redraw = 0x4,
-            external = 0x8,
-            transient = 0x10,
-            record = 0x20
+            full_redraw = 0x2,
+            external = 0x4,
+            transient = 0x8,
+            record = 0x10
         };
         using flag_bitmask = std::true_type;
     };

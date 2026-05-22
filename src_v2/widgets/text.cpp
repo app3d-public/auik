@@ -197,6 +197,13 @@ namespace auik::v2
         set_clip_id(parent()->content_clip_id());
     }
 
+    void Text::update_depth(const amal::vec2 &depth_range)
+    {
+        const f32 prev_z = get_z_order();
+        Widget::update_depth(depth_range);
+        if (prev_z != get_z_order()) _instances_gpu_dirty = true;
+    }
+
     void Text::reset_draw_records()
     {
         _draw_ids.clear();
@@ -224,7 +231,6 @@ namespace auik::v2
             update_hit_rect(_hit_id, hit_rect, force_update);
         }
 
-        const f32 current_z = get_z_order();
         auto *textured_quads_stream = get_primary_textured_quads_stream();
         if (!textured_quads_stream)
         {
@@ -257,7 +263,8 @@ namespace auik::v2
             return;
         }
 
-        const bool draw_state_changed = (_applied_clip_id != current_clip);
+        const f32 current_z = get_z_order();
+        const bool draw_state_changed = _applied_clip_id != current_clip;
         const bool instances_changed = _instances_gpu_dirty;
         if (draw_state_changed || instances_changed)
         {

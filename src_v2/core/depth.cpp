@@ -54,10 +54,12 @@ namespace auik::v2
 {
     void Widget::update_depth(const amal::vec2 &depth_range)
     {
+        const f32 prev_depth = _rect.depth;
         _depth_range = detail::normalize_depth_range(depth_range);
         const amal::vec2 active_range = detail::depth_zone_range(_depth_range, _depth_zone);
         _depth_range = detail::normalize_depth_range(active_range);
         _rect.depth = (_depth_range.x + _depth_range.y) * 0.5f;
+        if (prev_depth != _rect.depth) detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
     }
 
     void assign_next_depth(const amal::vec2 &parent_range, amal::vec2 &dst_range)

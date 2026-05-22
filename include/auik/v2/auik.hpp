@@ -512,21 +512,4 @@ namespace auik::v2
 
     APPLIB_API bool load_win32_icons(const FontRegistry &fonts, f32 dpi = 1.0f);
 #endif
-    inline bool is_window_size_modified()
-    {
-        auto *window_ctx = detail::get_context().window_ctx;
-        return window_ctx && window_ctx->is_size_modified;
-    }
-
-    inline acul::point2D<i32> get_window_modified_size()
-    {
-        auto *window_ctx = detail::get_window_context();
-        return detail::get_window_modified_size(window_ctx);
-    }
-
-    inline acul::point2D<i32> get_window_modified_pos()
-    {
-        auto *window_ctx = detail::get_window_context();
-        return detail::get_window_modified_pos(window_ctx);
-    }
 } // namespace auik::v2

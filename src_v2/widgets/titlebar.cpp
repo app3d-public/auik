@@ -485,52 +485,6 @@ namespace auik::v2
         if (is_maximized) area->top -= border_y;
     }
 
-    static acul::point2D<i32> get_win32_modified_window_size(detail::WindowContext *window_ctx)
-    {
-        HWND hwnd = (HWND)window_ctx->get_window_handle(window_ctx);
-        if (!hwnd) return {0, 0};
-        auto *state = reinterpret_cast<Win32TitlebarState *>(GetPropW(hwnd, AUIK_TITLEBAR_STATE));
-        RECT rect{};
-        if (!GetClientRect(hwnd, &rect)) return {0, 0};
-        if (state) add_frame_to_client_area(&rect, IsZoomed(hwnd), 1, state);
-        return {rect.right - rect.left, rect.bottom - rect.top};
-    }
-
-    static acul::point2D<i32> get_win32_modified_window_pos(detail::WindowContext *window_ctx)
-    {
-        HWND hwnd = (HWND)window_ctx->get_window_handle(window_ctx);
-        if (!hwnd) return {0, 0};
-        RECT rect{};
-        if (!GetWindowRect(hwnd, &rect)) return {0, 0};
-        return {rect.left, rect.top};
-    }
-
-    static bool uses_custom_client_area(const Win32TitlebarState *state)
-    {
-        if (!state) return false;
-        if (state->flags & TitlebarCreateFlagBits::decorated) return false;
-        if (state->flags & TitlebarCreateFlagBits::fullscreen) return false;
-        return true;
-    }
-
-    static void sync_initial_win32_titlebar_client_size(Win32TitlebarState *state)
-    {
-        if (!uses_custom_client_area(state)) return;
-
-        auto &ctx = detail::get_context();
-        RECT client_rect{};
-        client_rect.right = static_cast<LONG>(ctx.io.display_size.x);
-        client_rect.bottom = static_cast<LONG>(ctx.io.display_size.y);
-        add_frame_to_client_area(&client_rect, IsZoomed(state->hwnd), -1, state);
-
-        const LONG rect_width = client_rect.right - client_rect.left;
-        const LONG rect_height = client_rect.bottom - client_rect.top;
-        const f32 width = static_cast<f32>(rect_width > 0 ? rect_width : 1);
-        const f32 height = static_cast<f32>(rect_height > 0 ? rect_height : 1);
-        ctx.io.display_size = {width, height};
-        reset_main_viewport();
-    }
-
     static i32 hit_test_caption_button_index(const TitlebarState &state, const amal::ivec2 &pos, i32 client_width)
     {
         if (state.caption_button_size.x <= 0.0f || state.caption_button_size.y <= 0.0f) return -1;
@@ -747,13 +701,6 @@ namespace auik::v2
     static void destroy_win32_titlebar_state(TitlebarState *state)
     {
         auto *win32_state = static_cast<Win32TitlebarState *>(state);
-        auto *window_ctx = detail::get_context().window_ctx;
-        if (window_ctx && window_ctx->get_window_modified_size == &get_win32_modified_window_size)
-        {
-            window_ctx->is_size_modified = false;
-            window_ctx->get_window_modified_size = nullptr;
-            window_ctx->get_window_modified_pos = nullptr;
-        }
         HWND hwnd = win32_state->hwnd;
         if (hwnd && GetPropW(hwnd, AUIK_TITLEBAR_STATE) == state)
         {
@@ -803,16 +750,8 @@ namespace auik::v2
         if (!state->prev_proc) return false;
 
         SetPropW(hwnd, AUIK_TITLEBAR_STATE, state);
-        auto *wnd_ctx = detail::get_context().window_ctx;
-        wnd_ctx->is_size_modified = true;
-        wnd_ctx->get_window_modified_size = &get_win32_modified_window_size;
-        wnd_ctx->get_window_modified_pos = &get_win32_modified_window_pos;
-        sync_initial_win32_titlebar_client_size(state);
-        RECT size_rect{};
-        if (GetWindowRect(hwnd, &size_rect))
-            SetWindowPos(hwnd, NULL, size_rect.left, size_rect.top, size_rect.right - size_rect.left,
-                         size_rect.bottom - size_rect.top, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE);
-
+        SetWindowPos(hwnd, NULL, 0, 0, 0, 0,
+                     SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
         return true;
     }
 

@@ -3,6 +3,7 @@
 #include <auik/v2/detail/depth.hpp>
 #include <auik/v2/detail/events.hpp>
 #include <auik/v2/detail/gpu_context.hpp>
+#include <auik/v2/sound.hpp>
 #include <auik/v2/widgets/image.hpp>
 #include <auik/v2/widgets/slider.hpp>
 #include <auik/v2/widgets/tooltip.hpp>
@@ -158,6 +159,7 @@ namespace auik::v2
         ctx.main_viewport = {0.0f, 0.0f, 0.0f, 0.0f};
         ctx.window_ctx = create_info.window_ctx;
         detail::construct_window_backend(ctx.window_ctx);
+        ctx.sound_ctx = init_sound_system();
         reset_main_viewport();
         ctx.dirty_flags = DirtyFlagBits::redraw;
         detail::construct_shared_buffer_sync_state(ctx.shared_sync_state[AUIK_SYNC_CLIP_RECT], ctx.frames_in_flight);
@@ -187,6 +189,8 @@ namespace auik::v2
             detail::g_context->ft_library = nullptr;
         }
         detail::destroy_gpu_context(detail::g_context->gpu_ctx);
+        destroy_sound_system(detail::g_context->sound_ctx);
+        detail::g_context->sound_ctx = nullptr;
         detail::destroy_window_context(detail::g_context->window_ctx);
         acul::release(detail::g_context->streams.default_streams);
         acul::release(detail::g_context);

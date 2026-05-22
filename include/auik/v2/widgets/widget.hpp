@@ -205,7 +205,11 @@ namespace auik::v2
         inline amal::vec2 &size() { return _rect.bounds.size; }
         inline const amal::vec2 &size() const { return _rect.bounds.size; }
         inline void set_position(const amal::vec2 &pos) { _rect.bounds.offset = pos; }
-        virtual void translate(const amal::vec2 &delta) { set_position(position() + delta); }
+        virtual void translate(const amal::vec2 &delta)
+        {
+            set_position(position() + delta);
+            detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
+        }
         inline void set_size(const amal::vec2 &size) { _rect.bounds.size = size; }
         inline const amal::vec2 &required_size() const { return _required_size; }
         inline void set_required_size(const amal::vec2 &size) { _required_size = size; }

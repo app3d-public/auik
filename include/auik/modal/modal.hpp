@@ -26,7 +26,7 @@ namespace auik
         };
     } // namespace style
 
-    using ModalBtn = acul::pair<awin::popup::Buttons, acul::unique_function<void()>>;
+    using ModalButton = acul::pair<awin::popup::Buttons, acul::unique_function<void()>>;
     struct ModalMessage
     {
         acul::string header;
@@ -36,9 +36,9 @@ namespace auik
     };
 
     template <typename... Args>
-    acul::vector<ModalBtn> make_modal_btn_list(Args &&...args)
+    acul::vector<ModalButton> make_modal_btn_list(Args &&...args)
     {
-        acul::vector<ModalBtn> v;
+        acul::vector<ModalButton> v;
         (v.emplace_back(std::forward<Args>(args)), ...);
         return v;
     }

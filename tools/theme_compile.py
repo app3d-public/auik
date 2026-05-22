@@ -396,6 +396,25 @@ def resolve_box(tokens: list, variables: dict[str, str], ctor: str) -> str:
     raise ValueError(f"{ctor} expects 1, 2, or 4 values")
 
 
+def resolve_box_values(tokens: list, variables: dict[str, str], ctor: str) -> list[str]:
+    words = split_words(tokens)
+    values = [resolve_value(word, variables) for word in words]
+    if len(values) == 1:
+        return [values[0], values[0], values[0], values[0]]
+    if len(values) == 2:
+        return [values[0], values[1], values[0], values[1]]
+    if len(values) == 4:
+        return values
+    raise ValueError(f"{ctor} expects 1, 2, or 4 values")
+
+
+def resolve_box_side(tokens: list, variables: dict[str, str], ctor: str, side: str) -> str:
+    words = split_words(tokens)
+    if len(words) != 1:
+        raise ValueError(f"{ctor}-{side} expects 1 value")
+    return resolve_value(words[0], variables)
+
+
 def resolve_border_radius(tokens: list, variables: dict[str, str]) -> list[str]:
     words = split_words(tokens)
     values = [resolve_value(word, variables) for word in words]
@@ -438,6 +457,10 @@ def declaration_calls(declaration: CssDeclaration, variables: dict[str, str]) ->
         return [f"padding({resolve_box(tokens, variables, name)})"]
     if name == "margin":
         return [f"margin({resolve_box(tokens, variables, name)})"]
+    if name in ("padding-left", "padding-top", "padding-right", "padding-bottom"):
+        return []
+    if name in ("margin-left", "margin-top", "margin-right", "margin-bottom"):
+        return []
     if name == "background-color":
         return [f"background_color({resolve_value(tokens, variables)})"]
     if name == "color":
@@ -467,6 +490,37 @@ def style_expression(calls: list[str]) -> str:
     lines = ["make_style()"]
     lines.extend(f"            .{call}" for call in calls)
     return "\n".join(lines)
+
+
+BOX_SIDE_INDEX = {
+    "left": 0,
+    "top": 1,
+    "right": 2,
+    "bottom": 3,
+}
+
+
+def update_box_property(style_rule: dict, name: str, tokens: list, variables: dict[str, str]) -> bool:
+    ctor = ""
+    if name == "padding" or name.startswith("padding-"):
+        ctor = "padding"
+    elif name == "margin" or name.startswith("margin-"):
+        ctor = "margin"
+    else:
+        return False
+
+    boxes = style_rule.setdefault("boxes", {})
+    values = boxes.get(ctor, ["0.0f", "0.0f", "0.0f", "0.0f"])
+    if name == ctor:
+        values = resolve_box_values(tokens, variables, ctor)
+    else:
+        side = name.removeprefix(f"{ctor}-")
+        if side not in BOX_SIDE_INDEX:
+            return False
+        values[BOX_SIDE_INDEX[side]] = resolve_box_side(tokens, variables, ctor, side)
+    boxes[ctor] = values
+    style_rule["properties"][ctor] = [f"{ctor}(amal::vec4{{{values[0]}, {values[1]}, {values[2]}, {values[3]}}})"]
+    return True
 
 
 def build_defines(ids: dict[str, str], variable_names: set[str]) -> list[dict[str, str]]:
@@ -514,6 +568,8 @@ def build_generated_model(tree: ThemeTree, ids: dict[str, str], header_ids: dict
                 },
             )
             for declaration in rule.declarations:
+                if update_box_property(style_rule, declaration.name, declaration.tokens, variables):
+                    continue
                 calls = declaration_calls(declaration, variables)
                 if calls:
                     style_rule["properties"][declaration.name] = calls

@@ -16,8 +16,8 @@ namespace auik::v2
     {
     public:
         Image(u32 id, TextureID texture_id, amal::vec2 size, amal::rect uv_rect = {{0.0f, 0.0f}, {1.0f, 1.0f}},
-              Widget *parent = nullptr)
-            : Widget(id, get_default_image_flags(), EventFlagBits::none, parent, {{0.0f}, size}, AUIK_TAG_IMAGE),
+              Widget *parent = nullptr, WidgetFlags flags = get_default_image_flags())
+            : Widget(id, flags, EventFlagBits::none, parent, {{0.0f}, size}, AUIK_TAG_IMAGE),
               _texture_id(texture_id),
               _uv_rect(uv_rect)
         {
