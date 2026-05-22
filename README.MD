@@ -121,7 +121,6 @@ Before adding the subdirectory, define:
 > Auik also provides a helper function (`initialize_agrb_adopted_device`) that configures agrb with UI-specific defaults (descriptor pools, resource counts, etc.) for seamless integration. To enable this mode, define `AUIK_BACKEND_AGRB_ADOPTED`.
 
 ### Supported compilers:
-> 
 - GNU GCC
 - Clang
 
