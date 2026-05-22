@@ -61,27 +61,34 @@ The CSS transpiler currently supports:
 - properties: `padding`, `margin`, `background-color`, `color`, `font-size`, `font-family`, `inline-spacing`,
   `border-radius`, `border`
 
-When `INPUT_FOLDER` is provided, application-only tags and variables are cached and exported through generated `theme_style_sheet.hpp`. Existing IDs are preserved across rebuilds, new tags/variables are appended to the appropriate cache, and removed tags/variables are dropped.
+When `AUIK_CSS_DIR` is provided before adding auik, application-only tags and variables are cached and exported through generated `theme_style_sheet.hpp`. Existing IDs are preserved across rebuilds, new tags/variables are appended to the appropriate cache, and removed tags/variables are dropped.
 
 ### CSS theme generation
-After adding auik, call `compile_auik_css_theme()` from the application CMake scope:
+Before adding auik, set the optional application CSS directory:
 
 ```cmake
-compile_auik_css_theme(
-    "${CMAKE_SOURCE_DIR}/modules/auik/src_v2/theme.css"
-    INPUT_FOLDER "${CMAKE_CURRENT_SOURCE_DIR}/ui"
-)
-
-target_sources(app3d PRIVATE ${AUIK_CSS_THEME_SRC} ${AUIK_CSS_THEME_HEADER})
-target_include_directories(${PROJECT_NAME} PRIVATE ${AUIK_CSS_THEME_INCLUDE_DIR})
-add_dependencies(${PROJECT_NAME} ${AUIK_CSS_THEME_TARGET})
+set(AUIK_CSS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/ui")
+add_subdirectory("modules/auik")
 ```
 
-`INPUT_FOLDER` is optional. When it is provided, all CSS files in that folder are parsed after the base CSS file, so an
-application can override default tags and variables without modifying auik sources. 
+Auik always prepares its base CSS theme. When `AUIK_CSS_DIR` is set, all CSS files in that folder are parsed after the base CSS file, so an application can override default tags and variables without modifying auik sources.
+
+The default style ID header remains part of `auik-v2`, because widgets use those default defines internally. The generated application theme source is intentionally compiled by the host target, so `auik-v2` itself does not become application-specific.
+
+Auik publishes the generated files through CMake variables:
+
+```cmake
+set_source_files_properties(${AUIK_CSS_SRC} ${AUIK_CSS_HEADER} PROPERTIES GENERATED TRUE)
+target_sources(${PROJECT_NAME} PRIVATE ${AUIK_CSS_SRC} ${AUIK_CSS_HEADER})
+target_include_directories(${PROJECT_NAME} PRIVATE ${AUIK_CSS_INCLUDE_DIR})
+add_dependencies(${PROJECT_NAME} ${AUIK_CSS_TARGET})
+```
+
 At runtime, pass the theme fonts and DPI to the generated function:
 
 ```cpp
+#include "theme_style_sheet.hpp"
+
 auik::v2::Font *theme_fonts[] = {regular_font, bold_font};
 auik::v2::set_theme(auik::v2::create_style_sheet_theme(theme_fonts, dpi));
 ```
@@ -124,10 +131,10 @@ Before adding the subdirectory, define:
 
 ### Bundled submodules
 The following dependencies are included as git submodules and must be checked out when cloning:
-- [acbt](https://github.com/app3d-public/acbt)
-- [acul](https://github.com/app3d-public/acul)
-- [amal](https://github.com/app3d-public/amal)
-- [umbf](https://github.com/app3d-public/umbf)
+- [acbt](https://github.com/${PROJECT_NAME}-public/acbt)
+- [acul](https://github.com/${PROJECT_NAME}-public/acul)
+- [amal](https://github.com/${PROJECT_NAME}-public/amal)
+- [umbf](https://github.com/${PROJECT_NAME}-public/umbf)
 
 The following dependencies must be installed on your system:
 - [Python 3](https://www.python.org/)

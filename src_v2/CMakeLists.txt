@@ -18,6 +18,12 @@ add_files(${PROJECT_NAME} RECURSE "${CMAKE_CURRENT_SOURCE_DIR}/widgets")
 compile_auik_default_style_ids("${CMAKE_CURRENT_SOURCE_DIR}/theme.css")
 list(APPEND AUIK_V2_SRC ${AUIK_STYLE_IDS_HEADER})
 
+set(AUIK_CSS_THEME_ARGS)
+if(DEFINED AUIK_CSS_DIR)
+    list(APPEND AUIK_CSS_THEME_ARGS INPUT_FOLDER "${AUIK_CSS_DIR}")
+endif()
+compile_auik_css_theme("${CMAKE_CURRENT_SOURCE_DIR}/theme.css" ${AUIK_CSS_THEME_ARGS})
+
 add_library(${PROJECT_NAME} SHARED ${AUIK_V2_SRC})
 add_dependencies(${PROJECT_NAME} ${AUIK_STYLE_IDS_TARGET})
 
