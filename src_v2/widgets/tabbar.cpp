@@ -66,7 +66,7 @@ namespace auik::v2
             _popup = acul::alloc<Window>(AUIK_TAG_TAB_BAR_POPUP, "", amal::rect{{0.0f, 0.0f}, {0.0f, 0.0f}},
                                          get_popup_window_flags(),
                                          WidgetFlagBits::visible | WidgetFlagBits::hittable | WidgetFlagBits::fixed);
-            _popup->get_rect().widget_id = id;
+            _popup->get_rect().id.widget_id = id;
             _popup->set_window_style_tag(AUIK_STYLE_TAG_TAB_BAR_POPUP);
             _popup->set_focus_parent(this);
             _popup->update_style();
@@ -97,7 +97,7 @@ namespace auik::v2
                 AUIK_TAG_CLOSE_BUTTON, get_cached_image(AUIK_ICON_CLOSE), amal::vec2{0.0f, 0.0f},
                 amal::vec2{0.0f, 0.0f}, WidgetFlagBits::visible | WidgetFlagBits::hittable | WidgetFlagBits::fixed,
                 this, AUIK_TAG_CLOSE_BUTTON);
-            button->get_rect().widget_id = id();
+            button->get_rect().id.widget_id = id();
             button->set_focus_parent(this);
             button->update_style();
             _close_buttons.push_back(button);
@@ -112,16 +112,16 @@ namespace auik::v2
         {
             const u32 element_id = _element_ids[i];
             auto *tab = _tabs[i];
-            tab->get_rect().element_id = element_id;
-            _close_buttons[i]->get_rect().widget_id = id();
-            _close_buttons[i]->get_rect().element_id = element_id;
+            tab->get_rect().id.element_id = element_id;
+            _close_buttons[i]->get_rect().id.widget_id = id();
+            _close_buttons[i]->get_rect().id.element_id = element_id;
 
             if (_popup)
             {
                 auto *popup_item = acul::alloc<detail::Selectable>(
                     _popup_item_style_tag, _popup_item_style_tag, element_id, tab->text(), amal::vec2{0.0f, 0.0f},
                     _popup, _popup_item_style_tag, detail::get_selectable_item_flags());
-                popup_item->get_rect().widget_id = id();
+                popup_item->get_rect().id.widget_id = id();
                 popup_item->set_focus_parent(_popup);
                 _popup->add_child(popup_item, WindowChildLayout::block);
             }
@@ -174,7 +174,7 @@ namespace auik::v2
             auto *tab = acul::alloc<detail::Selectable>(
                 _item_style_tag, _item_style_tag, element_id, items[i], amal::vec2{0.0f, 0.0f}, this, _item_style_tag,
                 detail::get_selectable_item_flags(), _selected_item_style_tag);
-            tab->get_rect().widget_id = id();
+            tab->get_rect().id.widget_id = id();
             tab->set_focus_parent(this);
             tab->update_style();
             _tabs.push_back(tab);

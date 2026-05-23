@@ -29,7 +29,7 @@ namespace auik::v2
         const u32 parent_id = parent() ? parent()->id() : 0u;
         StyleUpdateFlags out = StyleUpdateFlagBits::none;
         out |= resolve_style_selector(_background_style, id(), parent_id, style_state());
-        out |= resolve_style_selector(_indicator_style, _indicator_rect.tag_id, parent_id, style_state());
+        out |= resolve_style_selector(_indicator_style, _indicator_rect.id.tag_id, parent_id, style_state());
         return out;
     }
 

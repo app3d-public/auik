@@ -240,9 +240,9 @@ namespace auik::v2
         {
             if (!child) return;
             auto &rect = child->get_rect();
-            rect.widget_id = _owner_id;
-            rect.tag_id = tag_id;
-            rect.element_id = element_id;
+            rect.id.widget_id = _owner_id;
+            rect.id.tag_id = tag_id;
+            rect.id.element_id = element_id;
         }
 
         void place_child(Widget *child, const amal::vec2 &pos)
@@ -579,9 +579,7 @@ namespace auik::v2
         ctx.emit(get_overlay_quads_stream(), _backdrop_draw, &backdrop, backdrop_hit, true);
 
         auto &modal_hit = modal->get_rect();
-        modal_hit.widget_id = id();
-        modal_hit.tag_id = AUIK_TAG_MODAL_WINDOW;
-        modal_hit.element_id = 0u;
+        modal_hit.id = detail::make_element_id(id(), AUIK_TAG_MODAL_WINDOW);
 
         DrawCtx modal_ctx = ctx;
         modal_ctx.emit_hit_rect = true;
@@ -613,7 +611,7 @@ namespace auik::v2
         }
         if (state != KeyPressState::press) return;
         if (point_in_rect(get_mouse_pos(), modal->bounds())) return;
-        play_system_hand_sound();
+        play_system_hand_sound(get_sound_context());
     }
 
     void ModalQueue::on_drag(const amal::vec2 &delta, KeyPressState state)
@@ -701,19 +699,17 @@ namespace auik::v2
         auto *theme = get_theme();
         const auto &modal_style =
             theme->get_style(theme->get_resolved_style(AUIK_STYLE_TAG_MODAL_WINDOW, AUIK_TAG_MODAL_WINDOW, id()));
-        const auto &message_area_style =
-            theme->get_style(theme->get_resolved_style(AUIK_STYLE_TAG_MODAL_MESSAGE_AREA, AUIK_MODAL_MESSAGE_ID,
-                                                       AUIK_TAG_MODAL_WINDOW));
+        const auto &message_area_style = theme->get_style(
+            theme->get_resolved_style(AUIK_STYLE_TAG_MODAL_MESSAGE_AREA, AUIK_MODAL_MESSAGE_ID, AUIK_TAG_MODAL_WINDOW));
         f32 text_width = modal_width - modal_style.padding().x - modal_style.padding().z -
                          message_area_style.margin().x - message_area_style.margin().z -
                          message_area_style.padding().x - message_area_style.padding().z;
         if (_icon.valid)
         {
-            const auto &icon_style =
-                theme->get_style(theme->get_resolved_style(AUIK_STYLE_TAG_MODAL_ICON, AUIK_MODAL_DEFAULT_ICON,
-                                                           AUIK_MODAL_MESSAGE_ID));
-            text_width -= _icon.size.x + icon_style.margin().x + icon_style.margin().z +
-                          message_area_style.inline_spacing();
+            const auto &icon_style = theme->get_style(
+                theme->get_resolved_style(AUIK_STYLE_TAG_MODAL_ICON, AUIK_MODAL_DEFAULT_ICON, AUIK_MODAL_MESSAGE_ID));
+            text_width -=
+                _icon.size.x + icon_style.margin().x + icon_style.margin().z + message_area_style.inline_spacing();
         }
         text_width = amal::max(text_width, 120.0f);
         Image *icon = nullptr;
@@ -734,23 +730,20 @@ namespace auik::v2
                                        detail::TextWrapMode::word);
         body->set_tight_content_height(true);
 
-        auto *header_block =
-            acul::alloc<Block>(AUIK_MODAL_HEADER_ID, MODAL_INTERNAL_WIDGET_FLAGS, nullptr, AUIK_TAG_BLOCK,
-                               AUIK_STYLE_TAG_MODAL_HEADER);
+        auto *header_block = acul::alloc<Block>(AUIK_MODAL_HEADER_ID, MODAL_INTERNAL_WIDGET_FLAGS, nullptr,
+                                                AUIK_TAG_BLOCK, AUIK_STYLE_TAG_MODAL_HEADER);
         header_block->add_child(title);
 
         auto *message_block = acul::alloc<Block>(AUIK_MODAL_MESSAGE_ID, MODAL_INTERNAL_WIDGET_FLAGS);
         message_block->add_child(header_block);
         message_block->add_child(body);
 
-        auto *message_row =
-            acul::alloc<InlineBlock>(AUIK_MODAL_MESSAGE_ID, MODAL_INTERNAL_WIDGET_FLAGS, nullptr,
-                                     AUIK_STYLE_TAG_MODAL_MESSAGE_AREA);
+        auto *message_row = acul::alloc<InlineBlock>(AUIK_MODAL_MESSAGE_ID, MODAL_INTERNAL_WIDGET_FLAGS, nullptr,
+                                                     AUIK_STYLE_TAG_MODAL_MESSAGE_AREA);
         if (icon)
         {
-            auto *icon_box =
-                acul::alloc<InlineBlock>(AUIK_MODAL_DEFAULT_ICON, MODAL_INTERNAL_WIDGET_FLAGS, nullptr,
-                                         AUIK_STYLE_TAG_MODAL_ICON);
+            auto *icon_box = acul::alloc<InlineBlock>(AUIK_MODAL_DEFAULT_ICON, MODAL_INTERNAL_WIDGET_FLAGS, nullptr,
+                                                      AUIK_STYLE_TAG_MODAL_ICON);
             icon_box->add_child(icon);
             message_row->add_child(icon_box);
         }

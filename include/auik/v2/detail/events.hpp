@@ -196,9 +196,7 @@ namespace auik::v2::detail
 
     struct RectData
     {
-        u32 widget_id = 0;
-        u32 tag_id = 0;
-        u32 element_id = 0;
+        ElementID id{};
         u32 reserved = 0;
         amal::rect bounds;
         f32 depth = 0.0f;
@@ -211,9 +209,7 @@ namespace auik::v2::detail
                                    f32 depth = 0.0f, u16 flags = 0, u32 element_id = 0)
     {
         RectData rect{};
-        rect.widget_id = widget_id;
-        rect.tag_id = tag_id;
-        rect.element_id = element_id;
+        rect.id = make_element_id(widget_id, tag_id, element_id);
         rect.bounds = bounds;
         rect.depth = depth;
         rect.clip_id = clip_id;

@@ -54,6 +54,11 @@ tab-bar-item,0x6F421EAC
 tab-bar-item-selected,0x7E54D686
 tab-bar-popup,0x2E443728
 tabbar-popup-button,0x9041AD68
+table,0xFEE8E80E
+table-cell,0x2D3BE140
+table-header-cell,0x19B02E75
+table-resize-border,0x707F56C1
+table-row-alt,0x5A24AA47
 text-button,0x6544FF93
 text-drag-icon,0x3D493314
 textbox,0x37C7A6D1

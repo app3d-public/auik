@@ -286,9 +286,7 @@ namespace auik::v2
         {
             auto &transition = get_context().style_selector;
             const u8 encoded_state = static_cast<u8>(state);
-            if (transition.current_id.widget_id == id.widget_id && transition.current_id.tag_id == id.tag_id &&
-                transition.current_id.element_id == id.element_id && transition.current_state == encoded_state)
-                return false;
+            if (transition.current_id == id && transition.current_state == encoded_state) return false;
             transition.prev_id = transition.current_id;
             transition.prev_state = transition.current_state;
             transition.current_id = id;
@@ -469,4 +467,6 @@ namespace auik::v2
         auto it = ctx.texture_bind_slots.find(handle);
         return (it != ctx.texture_bind_slots.end()) ? it->second : AUIK_INVALID_DRAW_DATA_ID;
     }
+
+    inline SoundContext *get_sound_context() { return detail::get_context().sound_ctx; }
 } // namespace auik::v2

@@ -173,7 +173,7 @@ namespace auik::v2
         inline void set_depth_zone(DepthZone::enum_type zone) { _depth_zone = zone; }
         inline detail::RectData &get_rect() { return _rect; }
         inline const detail::RectData &get_rect() const { return _rect; }
-        inline void set_rect_tag_id(u32 tag_id) { _rect.tag_id = tag_id; }
+        inline void set_rect_tag_id(u32 tag_id) { _rect.id.tag_id = tag_id; }
         inline bool is_visible() const { return (widget_flags & WidgetFlagBits::visible); }
         inline void set_visible(bool value)
         {
@@ -444,7 +444,7 @@ namespace auik::v2
         if (state == StyleState::normal) return true;
         auto *theme = detail::get_context().theme;
         const u32 parent_id = widget.parent() ? widget.parent()->id() : 0u;
-        return theme && theme->has_state_style(widget.get_rect().tag_id, widget.id(), parent_id, state);
+        return theme && theme->has_state_style(widget.get_rect().id.tag_id, widget.id(), parent_id, state);
     }
 
     inline StyleState resolve_widget_visual_state(const Widget &widget, StyleState state)

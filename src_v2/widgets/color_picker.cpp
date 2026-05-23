@@ -279,10 +279,10 @@ namespace auik::v2
         if (_grab_style.id == Theme::STYLE_ID_INVALID) out |= resolve_grab_state(StyleState::normal);
 
         const auto transition = detail::get_widget_style_selector_transition(id());
-        if (transition.prev_id.tag_id == _grab_hit_rect.tag_id &&
-            (transition.current_id.tag_id != _grab_hit_rect.tag_id || transition.prev_state != transition.current_state))
+        if (transition.prev_id.tag_id == _grab_hit_rect.id.tag_id &&
+            (transition.current_id.tag_id != _grab_hit_rect.id.tag_id || transition.prev_state != transition.current_state))
             out |= resolve_grab_state(StyleState::normal);
-        if (transition.current_id.tag_id == _grab_hit_rect.tag_id) out |= resolve_grab_state(transition.current_state);
+        if (transition.current_id.tag_id == _grab_hit_rect.id.tag_id) out |= resolve_grab_state(transition.current_state);
 
         const StyleState widget_grab_state = detail::resolve_grab_visual_state(style_state());
         if (widget_grab_state == StyleState::active || widget_grab_state == StyleState::focus)
@@ -1105,3 +1105,4 @@ namespace auik::v2
         add_render_command<detail::DragEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
     }
 } // namespace auik::v2
+

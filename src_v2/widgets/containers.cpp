@@ -26,7 +26,7 @@ namespace auik::v2
     {
         auto *theme = get_theme();
         const u32 parent_id = parent() ? parent()->id() : 0u;
-        const u32 style_tag = _style_tag_id != 0u ? _style_tag_id : get_rect().tag_id;
+        const u32 style_tag = _style_tag_id != 0u ? _style_tag_id : get_rect().id.tag_id;
         const StyleID style_id = theme->get_resolved_style(style_tag, id(), parent_id, style_state());
         return amal::max(theme->get_style(style_id).inline_spacing(), 0.0f);
     }
@@ -346,3 +346,4 @@ namespace auik::v2
         Widget::update_layout(true);
     }
 } // namespace auik::v2
+

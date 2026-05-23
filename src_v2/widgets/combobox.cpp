@@ -46,7 +46,7 @@ namespace auik::v2
             AUIK_TAG_COMBO_BOX_POPUP, "", amal::rect{{0.0f, 0.0f}, {0.0f, 0.0f}}, WindowFlagBits::scrollable,
             WidgetFlagBits::visible | WidgetFlagBits::hittable | WidgetFlagBits::fixed);
         _popup->set_depth_zone(DepthZone::foreground);
-        _popup->get_rect().widget_id = this->id();
+        _popup->get_rect().id.widget_id = this->id();
         _popup->set_window_style_tag(AUIK_STYLE_TAG_COMBO_BOX_POPUP);
         _popup->set_focus_parent(this);
         _popup->update_style();
@@ -98,7 +98,7 @@ namespace auik::v2
             auto *item = acul::alloc<detail::Selectable>(AUIK_TAG_COMBO_BOX_ITEM, AUIK_TAG_COMBO_BOX_ITEM, i, items[i],
                                                          amal::vec2{0.0f, 0.0f}, _popup, AUIK_TAG_COMBO_BOX_ITEM,
                                                          detail::get_selectable_item_flags());
-            item->get_rect().widget_id = id();
+            item->get_rect().id.widget_id = id();
             item->set_focus_parent(_popup);
             _popup->add_child(item, WindowChildLayout::block);
         }
@@ -522,7 +522,7 @@ namespace auik::v2
             AUIK_TAG_COMBO_BOX_POPUP, "", amal::rect{{0.0f, 0.0f}, {0.0f, 0.0f}}, WindowFlagBits::scrollable,
             WidgetFlagBits::visible | WidgetFlagBits::hittable | WidgetFlagBits::fixed);
         _popup->set_depth_zone(DepthZone::foreground);
-        _popup->get_rect().widget_id = this->id();
+        _popup->get_rect().id.widget_id = this->id();
         _popup->set_window_style_tag(AUIK_STYLE_TAG_COMBO_BOX_POPUP);
         _popup->set_focus_parent(this);
         _popup->update_style();
@@ -564,7 +564,7 @@ namespace auik::v2
             auto *item = acul::alloc<detail::Selectable>(AUIK_TAG_COMBO_BOX_ITEM, AUIK_TAG_COMBO_BOX_ITEM, i, items[i],
                                                          amal::vec2{0.0f, 0.0f}, _popup, AUIK_TAG_COMBO_BOX_ITEM,
                                                          detail::get_selectable_item_flags());
-            item->get_rect().widget_id = id();
+            item->get_rect().id.widget_id = id();
             item->set_focus_parent(_popup);
             _popup->add_child(item, WindowChildLayout::block);
         }
@@ -630,7 +630,7 @@ namespace auik::v2
             {
                 auto *item = static_cast<detail::Selectable *>(_popup->children[transition.prev_id.element_id]);
                 item->set_style_state(StyleState::normal);
-                item->set_selected(is_selected(item->get_rect().element_id));
+                item->set_selected(is_selected(item->get_rect().id.element_id));
                 flags |= item->update_style();
             }
             if (transition.current_id.tag_id == AUIK_TAG_COMBO_BOX_ITEM &&
@@ -638,7 +638,7 @@ namespace auik::v2
             {
                 auto *item = static_cast<detail::Selectable *>(_popup->children[transition.current_id.element_id]);
                 item->set_style_state(transition.current_state);
-                item->set_selected(is_selected(item->get_rect().element_id));
+                item->set_selected(is_selected(item->get_rect().id.element_id));
                 flags |= item->update_style();
             }
         }
@@ -954,3 +954,5 @@ namespace auik::v2
     bool MultipleComboBox::has_draw_record() const { return _trigger && _trigger->has_draw_record(); }
 
 } // namespace auik::v2
+
+

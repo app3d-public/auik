@@ -50,10 +50,10 @@ namespace auik::v2::detail
             assert(parent);
             set_depth_zone(DepthZone::foreground);
             u32 owner_id = parent->id();
-            _rect.widget_id = owner_id;
-            _thumb_rect.widget_id = owner_id;
-            _rect.tag_id = track_tag_id;
-            _thumb_rect.tag_id = thumb_tag_id;
+            _rect.id.widget_id = owner_id;
+            _thumb_rect.id.widget_id = owner_id;
+            _rect.id.tag_id = track_tag_id;
+            _thumb_rect.id.tag_id = thumb_tag_id;
             _thumb_rect.clip_id = parent->clip_id();
         }
 

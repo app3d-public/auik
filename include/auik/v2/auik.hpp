@@ -25,7 +25,6 @@ struct FT_FaceRec_;
 
 namespace auik::v2
 {
-    class Font;
     namespace detail
     {
         struct TextFontAccess;
@@ -60,6 +59,7 @@ namespace auik::v2
         u32 streams_count = 0;
         detail::GPUContext *gpu_ctx = nullptr;
         detail::WindowContext *window_ctx = nullptr;
+        SoundContext *sound_ctx = nullptr;
         u32 frames_in_flight = 0;
         u32 max_textures_size = 32;
         SyncOptions sync_options{};
@@ -86,6 +86,12 @@ namespace auik::v2
         CreateInfo &set_window_backend(detail::WindowContext *window_backend)
         {
             this->window_ctx = window_backend;
+            return *this;
+        }
+
+        CreateInfo &set_sound_backend(SoundContext *sound_backend)
+        {
+            this->sound_ctx = sound_backend;
             return *this;
         }
 

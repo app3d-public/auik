@@ -81,7 +81,7 @@ namespace auik::v2
     {
         if (!widget) return nullptr;
         if (widget->parent()) return nullptr;
-        if (widget->get_rect().tag_id != AUIK_TAG_WINDOW) return nullptr;
+        if (widget->get_rect().id.tag_id != AUIK_TAG_WINDOW) return nullptr;
         return static_cast<Window *>(widget);
     }
 
@@ -166,7 +166,7 @@ namespace auik::v2
         {
             assert(parent);
             set_depth_zone(DepthZone::foreground);
-            _rect.widget_id = parent->id();
+            _rect.id.widget_id = parent->id();
             _rect.clip_id = parent->clip_id();
             _title->set_horizontal_align(detail::TextHorizontalAlign::left);
             _title->set_vertical_align(detail::TextVerticalAlign::center);
@@ -1251,7 +1251,7 @@ namespace auik::v2
         _move_drag_active =
             ((window_flags & WindowFlagBits::decorated) && ctx.hover_id.tag_id == AUIK_TAG_WINDOW_HEADER) ||
             (!(window_flags & WindowFlagBits::decorated) && ctx.hover_id.widget_id == id() &&
-             ctx.hover_id.tag_id == get_rect().tag_id);
+             ctx.hover_id.tag_id == get_rect().id.tag_id);
         _resize_zone = detail::HitboxZoneBits::none;
         if ((window_flags & WindowFlagBits::resizable) && !(window_flags & WindowFlagBits::docked) &&
             ctx.hover_id.tag_id == AUIK_TAG_HITBOX)

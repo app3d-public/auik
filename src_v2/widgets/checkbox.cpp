@@ -2,6 +2,7 @@
 #include <auik/v2/pipelines.hpp>
 #include <auik/v2/widgets/checkbox.hpp>
 #include <auik/v2/widgets/image.hpp>
+
 namespace auik::v2
 {
     Checkbox::Checkbox(u32 id, bool *value, WidgetFlags widget_flags, Widget *parent)

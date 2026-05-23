@@ -266,10 +266,10 @@ namespace auik::v2::detail
         const auto transition = detail::get_widget_style_selector_transition(parent_id);
         StyleState track_state = StyleState::normal;
         StyleState thumb_state = StyleState::normal;
-        if (transition.current_id.tag_id == _rect.tag_id) track_state = transition.current_state;
-        else if (transition.current_id.tag_id == _thumb_rect.tag_id) thumb_state = transition.current_state;
-        out |= resolve_style_selector(_track_style, _rect.tag_id, parent_id, track_state);
-        out |= resolve_style_selector(_thumb_style, _thumb_rect.tag_id, parent_id, thumb_state);
+        if (transition.current_id.tag_id == _rect.id.tag_id) track_state = transition.current_state;
+        else if (transition.current_id.tag_id == _thumb_rect.id.tag_id) thumb_state = transition.current_state;
+        out |= resolve_style_selector(_track_style, _rect.id.tag_id, parent_id, track_state);
+        out |= resolve_style_selector(_thumb_style, _thumb_rect.id.tag_id, parent_id, thumb_state);
         return out;
     }
 

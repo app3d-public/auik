@@ -159,7 +159,8 @@ namespace auik::v2
         ctx.main_viewport = {0.0f, 0.0f, 0.0f, 0.0f};
         ctx.window_ctx = create_info.window_ctx;
         detail::construct_window_backend(ctx.window_ctx);
-        ctx.sound_ctx = init_sound_system();
+        ctx.sound_ctx = create_info.sound_ctx ? create_info.sound_ctx : get_default_sound_context();
+        init_sound_system(ctx.sound_ctx);
         reset_main_viewport();
         ctx.dirty_flags = DirtyFlagBits::redraw;
         detail::construct_shared_buffer_sync_state(ctx.shared_sync_state[AUIK_SYNC_CLIP_RECT], ctx.frames_in_flight);
@@ -306,11 +307,11 @@ namespace auik::v2
         if (widget->is_viewport_reserved() && widget->is_visible())
         {
             reset_main_viewport();
+            for (Widget *root_widget : ctx.widget_tree) root_widget->update_layout(false);
             for (Widget *root_widget : ctx.widget_tree)
-                root_widget->update_layout(false);
-            for (Widget *root_widget : ctx.widget_tree)
-                root_widget->update_draw_commands(root_widget == widget ? DrawReasonBits::full_redraw | DrawReasonBits::record
-                                                                        : DrawReasonBits::layout);
+                root_widget->update_draw_commands(root_widget == widget
+                                                      ? DrawReasonBits::full_redraw | DrawReasonBits::record
+                                                      : DrawReasonBits::layout);
         }
         else widget->update_draw_commands(DrawReasonBits::full_redraw | DrawReasonBits::record);
         ctx.dirty_flags |= DirtyFlagBits::redraw;

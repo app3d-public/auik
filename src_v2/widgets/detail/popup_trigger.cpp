@@ -130,8 +130,8 @@ namespace auik::v2::detail
         _icon_rect = {{_icon_slot.offset.x + amal::max((_icon_slot.size.x - icon_size.x) * 0.5f, 0.0f),
                        _icon_slot.offset.y + amal::max((_icon_slot.size.y - icon_size.y) * 0.5f, 0.0f)},
                       icon_size};
-        _hit_rect.widget_id = _owner ? _owner->id() : 0u;
-        _hit_rect.tag_id = _hit_tag;
+        _hit_rect.id.widget_id = _owner ? _owner->id() : 0u;
+        _hit_rect.id.tag_id = _hit_tag;
         _hit_rect.bounds = _bounds;
         _hit_rect.clip_id = clip_id;
         _hit_rect.depth = next_depth(_content_depth_range);

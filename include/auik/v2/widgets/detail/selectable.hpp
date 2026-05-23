@@ -22,8 +22,8 @@ namespace auik::v2::detail
               _selected_style({Theme::STYLE_ID_INVALID, selected_style_tag_id}),
               _selected_style_state(selected_style_state)
         {
-            _rect.tag_id = tag_id;
-            _rect.element_id = element_id;
+            _rect.id.tag_id = tag_id;
+            _rect.id.element_id = element_id;
             set_vertical_align(TextVerticalAlign::center);
         }
 
@@ -38,7 +38,7 @@ namespace auik::v2::detail
         void set_selected(bool value) { _selected = value; }
         void set_style_tag(u32 tag_id)
         {
-            _rect.tag_id = tag_id;
+            _rect.id.tag_id = tag_id;
             _style = {Theme::STYLE_ID_INVALID, tag_id};
         }
         void set_selected_style_tag(u32 tag_id) { _selected_style = {Theme::STYLE_ID_INVALID, tag_id}; }

@@ -44,8 +44,8 @@ namespace auik::v2
               _item_id(item_id),
               _has_next(data && !data->next.empty())
         {
-            _rect.widget_id = owner_id;
-            _rect.element_id = hit_element_id;
+            _rect.id.widget_id = owner_id;
+            _rect.id.element_id = hit_element_id;
             _label->set_horizontal_align(detail::TextHorizontalAlign::left);
             _shortcut->set_horizontal_align(detail::TextHorizontalAlign::right);
         }
@@ -499,7 +499,7 @@ namespace auik::v2
             {
                 if (!popup_child) continue;
                 const auto &rect = popup_child->get_rect();
-                if (rect.tag_id != id.tag_id || rect.element_id != id.element_id) continue;
+                if (rect.id != id) continue;
                 if (!fallback) fallback = popup_child;
                 const StyleState state = popup_child->style_state();
                 if (state == StyleState::hover || state == StyleState::active) return popup_child;
@@ -539,7 +539,7 @@ namespace auik::v2
                 for (auto *child : popup->children)
                 {
                     if (!child) continue;
-                    if (child->get_rect().tag_id == AUIK_TAG_COMBO_BOX_ITEM)
+                    if (child->get_rect().id.tag_id == AUIK_TAG_COMBO_BOX_ITEM)
                         static_cast<PopupItem *>(child)->set_selected(is_item_selected(popup_child_item_id(child)));
                     child->set_style_state(resolve_popup_item_state(child));
                     out |= child->update_style();
@@ -568,7 +568,7 @@ namespace auik::v2
             for (auto *child : popup->children)
             {
                 if (!child || child == current_transition_child) continue;
-                if (child->get_rect().tag_id != AUIK_TAG_COMBO_BOX_ITEM) continue;
+                if (child->get_rect().id.tag_id != AUIK_TAG_COMBO_BOX_ITEM) continue;
                 const StyleState state = child->style_state();
                 if (state != StyleState::hover && state != StyleState::active) continue;
                 const u32 item_id = popup_child_item_id(child);
@@ -691,7 +691,7 @@ namespace auik::v2
                 {
                     if (!child) continue;
                     const auto &rect = child->get_rect();
-                    if (rect.tag_id != element_id.tag_id || rect.element_id != element_id.element_id) continue;
+                    if (rect.id != element_id) continue;
                     if (!fallback) fallback = child;
                     const StyleState state = child->style_state();
                     if (state != StyleState::hover && state != StyleState::active) continue;
@@ -734,7 +734,7 @@ namespace auik::v2
         const bool visible = fill_quads_instance_by_style(get_theme()->get_style(_menu_style.id), clip_id(), bg);
         emit_quads_instance(ctx, quads_stream, _bg, bg, get_rect(), visible, ctx.emit_hit_rect);
         TabBar::draw(ctx);
-        if (parent() && parent()->get_rect().tag_id == AUIK_TAG_WINDOW)
+        if (parent() && parent()->get_rect().id.tag_id == AUIK_TAG_WINDOW)
         {
             // Window draws menu popups after its content during full redraws.
             // A direct MenuBar update has no such parent pass, so refresh popups here.
@@ -765,7 +765,7 @@ namespace auik::v2
                                           get_popup_window_flags(),
                                           WidgetFlagBits::visible | WidgetFlagBits::hittable | WidgetFlagBits::fixed);
         popup->set_depth_zone(DepthZone::foreground);
-        popup->get_rect().widget_id = id();
+        popup->get_rect().id.widget_id = id();
         popup->set_window_style_tag(AUIK_STYLE_TAG_MENU_POPUP);
         popup->set_focus_parent(this);
         popup->hide();
@@ -801,8 +801,8 @@ namespace auik::v2
                               : static_cast<Widget *>(acul::alloc<PopupItem>(id(), item_id, row_index, item, popup));
             if (item->separator)
             {
-                row->get_rect().widget_id = id();
-                row->get_rect().element_id = row_index;
+                row->get_rect().id.widget_id = id();
+                row->get_rect().id.element_id = row_index;
             }
             row->set_focus_parent(popup);
             if (!item->separator) static_cast<PopupItem *>(row)->set_selected(is_item_selected(item_id));
@@ -970,7 +970,7 @@ namespace auik::v2
         const auto &ctx = detail::get_context();
         const auto transition = detail::get_widget_style_selector_transition(id());
         if (transition.current_id.tag_id == AUIK_TAG_COMBO_BOX_ITEM &&
-            transition.current_id.element_id == child->get_rect().element_id)
+            transition.current_id.element_id == child->get_rect().id.element_id)
         {
             auto *hovered_child = find_popup_child_at(transition.current_id.element_id, ctx.io.mouse_pos);
             if (hovered_child == child) return transition.current_state;
@@ -986,7 +986,7 @@ namespace auik::v2
             for (auto *child : popup->children)
             {
                 if (!child) continue;
-                if (child->get_rect().tag_id == AUIK_TAG_COMBO_BOX_ITEM)
+                if (child->get_rect().id.tag_id == AUIK_TAG_COMBO_BOX_ITEM)
                     static_cast<PopupItem *>(child)->set_selected(is_item_selected(popup_child_item_id(child)));
                 child->set_style_state(resolve_popup_item_state(child));
                 child->update_style();
@@ -1019,7 +1019,7 @@ namespace auik::v2
             for (auto *child : popup->children)
             {
                 if (!child || !child->is_visible()) continue;
-                if (child->get_rect().element_id != element_id) continue;
+                if (child->get_rect().id.element_id != element_id) continue;
                 const auto rect = child->bounds();
                 const bool inside_x = pos.x >= rect.offset.x && pos.x <= rect.offset.x + rect.size.x;
                 const bool inside_y = pos.y >= rect.offset.y && pos.y <= rect.offset.y + rect.size.y;
@@ -1033,7 +1033,7 @@ namespace auik::v2
 
     u32 MenuBar::popup_child_item_id(const Widget *child) const
     {
-        if (!child || child->get_rect().tag_id != AUIK_TAG_COMBO_BOX_ITEM) return 0u;
+        if (!child || child->get_rect().id.tag_id != AUIK_TAG_COMBO_BOX_ITEM) return 0u;
         return static_cast<const PopupItem *>(child)->item_id();
     }
 
@@ -1147,3 +1147,4 @@ namespace auik::v2
         }
     }
 } // namespace auik::v2
+
