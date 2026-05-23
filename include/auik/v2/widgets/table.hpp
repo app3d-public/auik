@@ -5,6 +5,7 @@
 #include <acul/vector.hpp>
 #include <utility>
 #include "../theme.hpp"
+#include "detail/table_base.hpp"
 #include "text.hpp"
 #include "widget.hpp"
 
@@ -271,20 +272,11 @@ namespace auik::v2
         void on_detach() override;
 
     private:
-        struct CellVisual
-        {
-            detail::RectData rect{};
-            DrawDataID draw{};
-        };
-
-        struct TrackMetrics
-        {
-            f32 value = 0.0f;
-            f32 min_value = 0.0f;
-        };
+        using CellVisual = detail::TableCellVisual;
+        using TrackMetrics = detail::TableTrackMetrics;
 
         void rebuild_cells();
-        void clear_cells();
+        void clear_cells(bool invalidate_draw = true);
         Text *make_cell_text(const acul::string &value, u32 style_tag_id);
         size_t resolve_column_count() const;
         u32 cell_element_id(size_t row, size_t column) const;

@@ -20,6 +20,18 @@ namespace auik::v2
         for (size_t index = old_size; index < size; ++index) values[index] = {0.0f, 0.0f};
     }
 
+    static inline detail::TableColumnLayoutSettings to_layout_settings(const TableColumnSettings &settings)
+    {
+        u8 sizing = 2u;
+        switch (settings.sizing)
+        {
+            case TableColumnSizing::shrink: sizing = 0u; break;
+            case TableColumnSizing::fixed: sizing = 1u; break;
+            case TableColumnSizing::stretch: sizing = 2u; break;
+        }
+        return {sizing, settings.value, settings.min_width};
+    }
+
     static StyleState resolve_element_state(const detail::RectData &rect)
     {
         const auto &ctx = detail::get_context();
@@ -44,16 +56,6 @@ namespace auik::v2
         data.z_order = visual.rect.depth;
         const bool visible = fill_quads_instance_by_style(style, clip_id, data);
         emit_quads_instance(ctx, stream, visual.draw, data, visual.rect, visible, emit_hit_rect);
-    }
-
-    static void emit_service_hit_rect(const DrawCtx &ctx, DrawDataID &draw_id, const detail::RectData &rect,
-                                      bool emit_hit_rect)
-    {
-        if (!emit_hit_rect || ctx.is_invalidating()) return;
-        if (ctx.is_recording()) draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
-        auto &global_ctx = detail::get_context();
-        const bool force_update = ctx.is_recording() || (global_ctx.dirty_flags & DirtyFlagBits::hit_rect_update);
-        update_hit_rect(draw_id.hit_id, rect, force_update);
     }
 
     static inline bool contains_index(const acul::vector<size_t> &values, size_t value)
@@ -97,7 +99,7 @@ namespace auik::v2
         rebuild_cells();
     }
 
-    Table::~Table() { clear_cells(); }
+    Table::~Table() { clear_cells(false); }
 
     void Table::clear()
     {
@@ -512,11 +514,14 @@ namespace auik::v2
     StyleUpdateFlags Table::update_style()
     {
         const u32 parent_id = parent() ? parent()->id() : 0u;
+        const auto transition = detail::get_widget_style_selector_transition(id());
         StyleUpdateFlags out = resolve_style_selector(_style, id(), parent_id, style_state());
         out |= resolve_style_selector(_header_cell_style, AUIK_TAG_TABLE_HEADER_CELL, id(), StyleState::normal);
         out |= resolve_style_selector(_cell_style, AUIK_TAG_TABLE_CELL, id(), StyleState::normal);
         out |= resolve_style_selector(_alternating_row_style, _alternating_row_style.tag_id, id(), StyleState::normal);
         out |= resolve_style_selector(_resize_border_style, _resize_border_style.tag_id, id(), StyleState::normal);
+        if (is_resize_border_tag(transition.prev_id.tag_id) || is_resize_border_tag(transition.current_id.tag_id))
+            out |= StyleUpdateFlagBits::redraw;
         out |= update_resize_indicator();
 
         for (auto *cell : _header_cells)
@@ -852,26 +857,13 @@ namespace auik::v2
                 {
                     auto &visuals = _resize_border_hit_visuals[index];
                     if (column_resizable() && index < column_resize_count)
-                        emit_service_hit_rect(ctx, visuals.x.draw, visuals.x.rect, ctx.emit_hit_rect);
+                        detail::draw_table_resize_border_visual(ctx, quads_stream, visuals.x, theme,
+                                                                _resize_border_style.tag_id, id(), clip_id(),
+                                                                ctx.emit_hit_rect);
                     if (row_resizable() && index < row_resize_count)
-                        emit_service_hit_rect(ctx, visuals.y.draw, visuals.y.rect, ctx.emit_hit_rect);
-                }
-
-                if (has_table_flag(_table_flags, AUIK_TABLE_FLAG_RESIZE_INDICATOR_ACTIVE))
-                {
-                    const StyleState state = resolve_element_state(_resize_indicator_visual.rect);
-                    const StyleID style_id = theme->get_resolved_style(_resize_border_style.tag_id,
-                                                                       _resize_border_style.tag_id, id(), state);
-                    draw_cell_visual(ctx, quads_stream, _resize_indicator_visual, theme->get_style(style_id), clip_id(),
-                                     false);
-                }
-                else if (_resize_indicator_visual.draw.render_id != AUIK_INVALID_DRAW_DATA_ID)
-                {
-                    QuadsInstanceData data{};
-                    data.rect = _resize_indicator_visual.rect.bounds;
-                    data.z_order = _resize_indicator_visual.rect.depth;
-                    emit_quads_instance(ctx, quads_stream, _resize_indicator_visual.draw, data,
-                                        _resize_indicator_visual.rect, false, false);
+                        detail::draw_table_resize_border_visual(ctx, quads_stream, visuals.y, theme,
+                                                                _resize_border_style.tag_id, id(), clip_id(),
+                                                                ctx.emit_hit_rect);
                 }
             }
         }
@@ -899,14 +891,26 @@ namespace auik::v2
     {
         auto &ctx = detail::get_context();
         detail::CursorID::enum_type cursor = detail::CursorID::arrow;
+        bool resize_border_state = state == HoverState::leave;
         if (state != HoverState::leave && ctx.hover_id.widget_id == id())
         {
             if (column_resizable() && ctx.hover_id.tag_id == AUIK_TAG_TABLE_RESIZE_BORDER_V)
+            {
                 cursor = detail::CursorID::resize_ew;
+                resize_border_state = true;
+            }
             else if (row_resizable() && ctx.hover_id.tag_id == AUIK_TAG_TABLE_RESIZE_BORDER_H)
+            {
                 cursor = detail::CursorID::resize_ns;
+                resize_border_state = true;
+            }
         }
         detail::set_window_cursor(cursor, ctx.window_ctx);
+        if (resize_border_state)
+        {
+            ctx.dirty_flags |= DirtyFlagBits::redraw;
+            detail::mark_host_refresh_request();
+        }
     }
 
     void Table::on_drag(const amal::vec2 &delta, KeyPressState state)
@@ -963,60 +967,11 @@ namespace auik::v2
         bool changed = false;
         if (column_resizable() && _resizing_column != static_cast<size_t>(-1) && _resizing_column < _column_count)
         {
-            if (_resize_size_basis.size() < _column_count)
-            {
-                resize_size_points(_resize_size_basis, _column_count);
-                if (has_table_flag(_table_flags, AUIK_TABLE_FLAG_COLUMN_SIZE_OVERRIDES))
-                    for (size_t column = 0; column < _column_count; ++column)
-                        _resize_size_basis[column].x =
-                            column < _size_overrides.size() ? _size_overrides[column].x : 0.0f;
-                else
-                    for (size_t column = 0; column < _column_count; ++column)
-                        _resize_size_basis[column].x = _layout_metrics[column].x.value;
-            }
-            if (_size_overrides.size() < _column_count) resize_size_points(_size_overrides, _column_count);
-            for (size_t column = 0; column < _column_count; ++column)
-                _size_overrides[column].x = _resize_size_basis[column].x;
-            set_table_flag(_table_flags, AUIK_TABLE_FLAG_COLUMN_SIZE_OVERRIDES, true);
-            auto shrink_columns = [&](size_t first, size_t last, f32 amount) -> f32 {
-                if (amount <= 0.0f || first > last || last >= _size_overrides.size()) return 0.0f;
-                f32 remaining = amount;
-                size_t active_count = last - first + 1u;
-                while (remaining > 0.0f && active_count > 0u)
-                {
-                    const f32 share = remaining / static_cast<f32>(active_count);
-                    f32 taken = 0.0f;
-                    size_t next_active_count = 0u;
-                    for (size_t column = first; column <= last; ++column)
-                    {
-                        const f32 min_width = amal::max(settings_for_column(column).min_width, 1.0f);
-                        const f32 available = amal::max(_size_overrides[column].x - min_width, 0.0f);
-                        if (available <= 0.0f) continue;
-                        const f32 take = amal::min(share, available);
-                        _size_overrides[column].x -= take;
-                        taken += take;
-                        if (available > take) ++next_active_count;
-                    }
-                    if (taken <= 0.0f) break;
-                    remaining -= taken;
-                    active_count = next_active_count;
-                }
-                return amount - remaining;
-            };
-
-            if (_resize_drag_accum.x > 0.0f)
-            {
-                const f32 taken = shrink_columns(_resizing_column + 1u, _column_count - 1u, _resize_drag_accum.x);
-                _size_overrides[_resizing_column].x += taken;
-                changed = taken > 0.0f;
-            }
-            else if (_resize_drag_accum.x < 0.0f && _resizing_column + 1u < _column_count)
-            {
-                const f32 amount = -_resize_drag_accum.x;
-                const f32 taken = shrink_columns(0u, _resizing_column, amount);
-                _size_overrides[_resizing_column + 1u].x += taken;
-                changed = taken > 0.0f;
-            }
+            changed = detail::apply_table_column_resize(
+                _layout_metrics, _size_overrides, _resize_size_basis, _column_count, _resizing_column,
+                _resize_drag_accum.x, has_table_flag(_table_flags, AUIK_TABLE_FLAG_COLUMN_SIZE_OVERRIDES),
+                [this](size_t column) { return to_layout_settings(settings_for_column(column)); });
+            if (changed) set_table_flag(_table_flags, AUIK_TABLE_FLAG_COLUMN_SIZE_OVERRIDES, true);
         }
         if (row_resizable() && _resizing_row != static_cast<size_t>(-1) && _resizing_row < _rows.size())
         {
@@ -1071,17 +1026,27 @@ namespace auik::v2
             cells.reserve(row.size());
             for (const auto &value : row) cells.push_back(make_cell_text(value, _cell_style.tag_id));
         }
+        sync_cell_parents();
+        update_depth(depth_range());
     }
 
-    void Table::clear_cells()
+    void Table::clear_cells(bool invalidate_draw)
     {
         for (auto *cell : _header_cells)
-            if (cell) acul::release(cell);
+            if (cell)
+            {
+                if (invalidate_draw) cell->invalidate_draw_records();
+                acul::release(cell);
+            }
         _header_cells.clear();
 
         for (auto &row : _cells)
             for (auto *cell : row)
-                if (cell) acul::release(cell);
+                if (cell)
+                {
+                    if (invalidate_draw) cell->invalidate_draw_records();
+                    acul::release(cell);
+                }
         _cells.clear();
         _header_visuals.clear();
         _cell_visuals.clear();
@@ -1090,9 +1055,11 @@ namespace auik::v2
 
     Text *Table::make_cell_text(const acul::string &value, u32 style_tag_id)
     {
-        return acul::alloc<Text>(AUIK_TAG_TEXT, value, amal::vec2{0.0f, 0.0f},
-                                 WidgetFlagBits::visible | WidgetFlagBits::fixed, this, style_tag_id,
-                                 detail::TextOverflowMode::ellipsis, detail::TextVerticalAlign::center);
+        auto *text = acul::alloc<Text>(AUIK_TAG_TEXT, value, amal::vec2{0.0f, 0.0f},
+                                       WidgetFlagBits::visible | WidgetFlagBits::fixed, this, style_tag_id,
+                                       detail::TextOverflowMode::ellipsis, detail::TextVerticalAlign::center);
+        if (detail::g_context) text->update_style();
+        return text;
     }
 
     size_t Table::resolve_column_count() const
@@ -1125,69 +1092,10 @@ namespace auik::v2
 
     void Table::update_column_widths(f32 inner_width)
     {
-        if (_layout_metrics.size() < _column_count) _layout_metrics.resize(_column_count);
-        for (size_t column = 0; column < _column_count; ++column) _layout_metrics[column].x.value = 0.0f;
-
-        f32 non_stretch_width = 0.0f;
-        f32 stretch_weight = 0.0f;
-        for (size_t column = 0; column < _column_count; ++column)
-        {
-            const auto &settings = settings_for_column(column);
-            const f32 measured = _layout_metrics[column].x.min_value;
-            const f32 min_width = amal::max(settings.min_width, 0.0f);
-            switch (settings.sizing)
-            {
-                case TableColumnSizing::fixed:
-                    _layout_metrics[column].x.value =
-                        settings.value > 0.0f ? amal::max(settings.value, min_width) : amal::max(measured, min_width);
-                    non_stretch_width += _layout_metrics[column].x.value;
-                    break;
-                case TableColumnSizing::shrink:
-                    _layout_metrics[column].x.value = amal::max(measured, min_width);
-                    non_stretch_width += _layout_metrics[column].x.value;
-                    break;
-                case TableColumnSizing::stretch:
-                    _layout_metrics[column].x.value = amal::max(min_width, 0.0f);
-                    stretch_weight += settings.value > 0.0f ? settings.value : 1.0f;
-                    break;
-            }
-        }
-
-        if (stretch_weight <= 0.0f)
-        {
-            if (inner_width <= non_stretch_width || _column_count == 0u) return;
-            const f32 extra_width = (inner_width - non_stretch_width) / static_cast<f32>(_column_count);
-            for (size_t column = 0; column < _column_count; ++column) _layout_metrics[column].x.value += extra_width;
-            return;
-        }
-
-        const f32 stretch_width = amal::max(inner_width - non_stretch_width, 0.0f);
-        for (size_t column = 0; column < _column_count; ++column)
-        {
-            const auto &settings = settings_for_column(column);
-            if (settings.sizing != TableColumnSizing::stretch) continue;
-            const f32 weight = settings.value > 0.0f ? settings.value : 1.0f;
-            const f32 min_width = _layout_metrics[column].x.value;
-            _layout_metrics[column].x.value = amal::max(stretch_width * (weight / stretch_weight), min_width);
-        }
-
-        if (has_table_flag(_table_flags, AUIK_TABLE_FLAG_COLUMN_SIZE_OVERRIDES))
-        {
-            f32 overrides_width = 0.0f;
-            for (size_t column = 0; column < _column_count && column < _size_overrides.size(); ++column)
-                overrides_width += _size_overrides[column].x;
-            if (overrides_width > 0.0f)
-            {
-                const f32 scale = inner_width > 0.0f ? inner_width / overrides_width : 1.0f;
-                for (size_t column = 0; column < _column_count; ++column)
-                {
-                    const auto &settings = settings_for_column(column);
-                    const f32 min_width = amal::max(settings.min_width, 0.0f);
-                    const f32 override_width = column < _size_overrides.size() ? _size_overrides[column].x : 0.0f;
-                    _layout_metrics[column].x.value = amal::max(override_width * scale, min_width);
-                }
-            }
-        }
+        detail::update_table_column_widths(
+            _layout_metrics, _column_count, inner_width, _size_overrides,
+            has_table_flag(_table_flags, AUIK_TABLE_FLAG_COLUMN_SIZE_OVERRIDES),
+            [this](size_t column) { return to_layout_settings(settings_for_column(column)); });
     }
 
     void Table::invalidate_layout()
@@ -1205,6 +1113,9 @@ namespace auik::v2
     {
         auto &ctx = detail::get_context();
         ctx.dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
+        const auto &style = get_theme()->get_style(_style.id);
+        const amal::vec4 margin = style.margin();
+        set_position({position().x - margin.x, position().y - margin.y});
         update_layout(false);
         update_draw_commands(DrawReasonBits::layout);
         detail::mark_host_refresh_request();

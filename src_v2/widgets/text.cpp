@@ -212,6 +212,15 @@ namespace auik::v2
         _instances_gpu_dirty = true;
     }
 
+    void Text::invalidate_draw_records()
+    {
+        if (!detail::g_context || !detail::get_context().streams.default_streams) return;
+        auto *stream = get_primary_textured_quads_stream();
+        if (!stream || !stream->runtime_data) return;
+        invalidate_text_draw_ids(stream, _draw_ids, 0);
+        reset_draw_records();
+    }
+
     void Text::draw(DrawCtx &ctx)
     {
         const u16 current_clip = clip_id();

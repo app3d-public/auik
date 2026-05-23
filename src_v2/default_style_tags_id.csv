@@ -59,6 +59,12 @@ table-cell,0x2D3BE140
 table-header-cell,0x19B02E75
 table-resize-border,0x707F56C1
 table-row-alt,0x5A24AA47
+table-tree,0xF1F56AFC
+table-tree-cell,0x713C2149
+table-tree-collapse-icon,0x161A23F1
+table-tree-line,0x460DA211
+table-tree-resize-border,0x8F432A4A
+table-tree-row-alt,0x13CB596A
 text-button,0x6544FF93
 text-drag-icon,0x3D493314
 textbox,0x37C7A6D1

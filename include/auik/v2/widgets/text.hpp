@@ -35,7 +35,6 @@ namespace auik::v2
             _layout_config.width_mode = width_mode;
             _render_config.vertical_align = vertical_align;
         }
-
         StyleUpdateFlags update_style() override;
         void update_layout_min_size() override;
         void update_layout(bool min_size_known) override;
@@ -43,6 +42,7 @@ namespace auik::v2
         void update_depth(const amal::vec2 &depth_range) override;
         void rebuild_clip_rects() override;
         void reset_draw_records() override;
+        void invalidate_draw_records();
         void draw(DrawCtx &ctx) override;
 
         const acul::string &text() const { return _text; }

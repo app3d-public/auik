@@ -235,7 +235,9 @@ The recommended integration model is:
 4. The host waits for OS events or timeout expiration.
 5. After wakeup, the host applies its own frame pacing / pending-filter policy.
 6. Only in an allowed frame does the host dispatch delayed auik tasks, process resize work, and render UI.
-7. After rendering, the host clears its latched refresh request.
+7. Before processing the allowed frame work, the host clears the refresh request that woke the current iteration.
+   Any new request raised during rendering, picker readback, `next_frame(...)`, or delayed-task dispatch must remain
+   latched for the next host iteration.
 
 In practice, it is useful to treat the host loop and auik as two different lifetimes:
 
@@ -250,7 +252,7 @@ These two lifetimes are intentionally connected through only a small contract:
 - `dispatch_delayed_tasks(...)`
 
 ### Integration notes
-- `host_refresh_request` is a request/response latch between auik and the host application. Auik may raise it many times, but the host should clear it only after it has completed an iteration that can observe and process the requested work.
+- `host_refresh_request` is a request/response latch between auik and the host application. Auik may raise it many times. The host should clear the request it is about to service before dispatching/rendering that allowed frame, so requests raised during that frame are not lost.
 - `PendingFilter` belongs to the host pacing policy. Auik can participate in it, but should not replace it.
 - Delayed auik tasks should normally be dispatched only in a frame that is allowed by the host pacing policy. This avoids running UI work more often than the renderer can present it.
 - The timeout used by `wait_events_timeout()` should be resolved from the nearest valid wake source, not from sentinel values such as "infinite timeout".
@@ -275,10 +277,11 @@ while (!window.ready_to_close())
     pending_filter.sync(awin::get_time());
     if (!pending_filter.allow()) continue;
 
-    if (has_ui_delay) auik::v2::dispatch_delayed_tasks(awin::get_time());
-    renderer.draw();
     pending_filter.reset();
     host_refresh_request = false;
+
+    if (has_ui_delay) auik::v2::dispatch_delayed_tasks(awin::get_time());
+    renderer.draw();
 }
 ```
 
