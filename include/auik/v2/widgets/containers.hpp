@@ -1,16 +1,15 @@
 #pragma once
 
-#include <acul/memory/alloc.hpp>
-#include <acul/string/string.hpp>
-#include <acul/vector.hpp>
+#include "detail/popup_trigger.hpp"
 #include "text.hpp"
-#include "widget.hpp"
 
 #define AUIK_TAG_GROUP                    0x2F4D3A13u
 #define AUIK_TAG_BLOCK                    0x237AFC8Eu
 #define AUIK_TAG_INLINE_BLOCK             0xB2F15B07u
 #define AUIK_TAG_DUMMY                    0xD5A4C970u
 #define AUIK_TAG_LABEL_WIDGET             0xDB9EBBC9u
+#define AUIK_TAG_COLLAPSE_HEADER          0x565C9C5Eu
+#define AUIK_TAG_COLLAPSE_HEADER_TRIGGER  0x4ABB6689u
 #define AUIK_DEFAULT_LABEL_WIDGET_LABEL_W 100.0f
 
 namespace auik::v2
@@ -139,6 +138,62 @@ namespace auik::v2
         u32 _width_key = 0u;
     };
 
+    class APPLIB_API CollapseHeader final : public Block
+    {
+    public:
+        explicit CollapseHeader(u32 id, acul::string label, bool expanded = true,
+                                WidgetFlags widget_flags = get_default_block_flags() | WidgetFlagBits::hittable,
+                                Widget *parent = nullptr,
+                                u32 style_tag_id = AUIK_STYLE_TAG_COLLAPSE_HEADER);
+        ~CollapseHeader() override;
+
+        void set_label(acul::string value);
+        const acul::string &label() const;
+        void set_expanded(bool value);
+        bool expanded() const { return _expanded; }
+        void toggle() { set_expanded(!_expanded); }
+        void set_style_tag(u32 tag_id);
+        u32 style_tag() const { return _style.tag_id; }
+        void set_closed_style_tag(u32 tag_id);
+        u32 closed_style_tag() const { return _closed_style_tag; }
+        void set_content_style_tag(u32 tag_id);
+        u32 content_style_tag() const { return _content_style.tag_id; }
+        void set_trigger_style_tag(u32 tag_id);
+        u32 trigger_style_tag() const { return _trigger_style_tag; }
+
+        StyleUpdateFlags update_style() override;
+        void update_layout_min_size() override;
+        void update_layout(bool min_size_known) override;
+        void translate(const amal::vec2 &delta) override;
+        void rebuild_clip_rects() override;
+        void reset_draw_records() override;
+        void update_depth(const amal::vec2 &depth_range) override;
+        void draw(DrawCtx &ctx) override;
+        void on_click(MouseKey key, KeyPressState state, u32 click_count) override;
+        void on_attach() override;
+        void on_detach() override;
+
+    protected:
+        amal::vec2 compute_content_min_size() override;
+        void layout_children(const amal::vec2 &content_pos, const amal::vec2 &content_size) override;
+
+    private:
+        u32 current_header_style_tag() const;
+        void invalidate_layout();
+
+        Text *_label = nullptr;
+        detail::PopupTrigger *_trigger = nullptr;
+        DrawDataID _header_bg{};
+        DrawDataID _content_bg{};
+        detail::RectData _header_rect{};
+        detail::RectData _content_rect{};
+        StyleSelector _style;
+        StyleSelector _content_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_COLLAPSE_HEADER_CONTENT};
+        u32 _closed_style_tag = AUIK_STYLE_TAG_COLLAPSE_HEADER_CLOSED;
+        u32 _trigger_style_tag = AUIK_STYLE_TAG_COLLAPSE_HEADER_TRIGGER;
+        bool _expanded = true;
+    };
+
     class APPLIB_API Dummy final : public Widget
     {
     public:
@@ -186,5 +241,13 @@ namespace auik::v2
     {
         return acul::alloc<LabelWidget>(id, text, widget, label_width, label_width_key, get_default_block_flags(),
                                         parent);
+    }
+
+    inline CollapseHeader *make_collapse_header(u32 id, const acul::string &label, bool expanded = true,
+                                                Widget *parent = nullptr)
+    {
+        return acul::alloc<CollapseHeader>(id, label, expanded,
+                                           get_default_block_flags() | WidgetFlagBits::hittable, parent,
+                                           AUIK_STYLE_TAG_COLLAPSE_HEADER);
     }
 } // namespace auik::v2

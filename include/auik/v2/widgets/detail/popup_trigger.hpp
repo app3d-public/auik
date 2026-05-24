@@ -1,5 +1,6 @@
 #pragma once
 
+#include <amal/trigonometric.hpp>
 #include <auik/v2/auik.hpp>
 #include <auik/v2/post_effects.hpp>
 #include "../widget.hpp"
@@ -9,7 +10,8 @@ namespace auik::v2::detail
     class APPLIB_API PopupTrigger final
     {
     public:
-        PopupTrigger(u32 style_tag, u32 hit_tag, u32 closed_icon, u32 open_icon, bool animated = true);
+        PopupTrigger(u32 style_tag, u32 hit_tag, u32 closed_icon, u32 open_icon, bool animated = true,
+                     f32 open_angle = amal::pi<f32>());
         ~PopupTrigger();
 
         void set_owner(Widget *owner) { _owner = owner; }
@@ -44,6 +46,7 @@ namespace auik::v2::detail
         u32 _hit_tag = 0u;
         u32 _closed_icon = 0u;
         u32 _open_icon = 0u;
+        f32 _open_angle = amal::pi<f32>();
         bool _animated = true;
         bool _open = false;
 
@@ -55,6 +58,7 @@ namespace auik::v2::detail
         TextureID _icon_texture{};
         amal::rect _icon_uv_rect{{0.0f, 0.0f}, {1.0f, 1.0f}};
         amal::vec2 _icon_size{0.0f, 0.0f};
+        amal::rect _outer_bounds{};
         amal::rect _bounds{};
         amal::rect _icon_slot{};
         amal::rect _icon_rect{};

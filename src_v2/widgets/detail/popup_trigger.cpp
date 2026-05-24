@@ -15,6 +15,12 @@ namespace auik::v2::detail
         return get_rotate_post_effect_data(get_rotate_post_effect(), id);
     }
 
+    static inline amal::vec2 resolve_icon_size(u32 icon_id)
+    {
+        if (auto *cached = get_cached_image(icon_id)) return cached->size();
+        return {0.0f, 0.0f};
+    }
+
     static inline void build_animated_icon_vertices(TexturedVertexStreamVertex (&vertices)[4],
                                                     const amal::rect &icon_rect, const amal::rect &uv_rect, f32 z,
                                                     u32 clip_id, bool visible)
@@ -36,10 +42,12 @@ namespace auik::v2::detail
         vertices[3] = {{min.x, max.y}, z, 0.0f, {uv_min.x, uv_max.y}, clip_id};
     }
 
-    PopupTrigger::PopupTrigger(u32 style_tag, u32 hit_tag, u32 closed_icon, u32 open_icon, bool animated)
+    PopupTrigger::PopupTrigger(u32 style_tag, u32 hit_tag, u32 closed_icon, u32 open_icon, bool animated,
+                               f32 open_angle)
         : _hit_tag(hit_tag),
           _closed_icon(closed_icon),
           _open_icon(open_icon),
+          _open_angle(open_angle),
           _animated(animated),
           _style({Theme::STYLE_ID_INVALID, style_tag}),
           _hit_rect(make_rect_data(0u, hit_tag))
@@ -93,7 +101,7 @@ namespace auik::v2::detail
         const auto &style = get_theme()->get_style(_style.id);
         const amal::vec4 margin = style.margin();
         const amal::vec4 padding = style.padding();
-        amal::vec2 icon_size = _icon_size;
+        amal::vec2 icon_size = amal::max(resolve_icon_size(_closed_icon), resolve_icon_size(_open_icon));
         if (icon_size.x <= 0.0f || icon_size.y <= 0.0f) icon_size = {style.text_size(), style.text_size()};
         const amal::vec2 content_required = {icon_size.x + padding.x + padding.z, icon_size.y + padding.y + padding.w};
 
@@ -103,8 +111,7 @@ namespace auik::v2::detail
             const f32 side = amal::max(content_required.x, content_required.y);
             min_size = {side, side};
         }
-        else if (!fixed)
-            min_size.x = 0.0f;
+        else if (!fixed) min_size.x = 0.0f;
 
         if (min_size.x <= 0.0f) min_size.x = content_required.x;
         else min_size.x = amal::max(min_size.x, content_required.x);
@@ -117,16 +124,22 @@ namespace auik::v2::detail
     void PopupTrigger::update_layout(const amal::rect &bounds, u16 clip_id)
     {
         ensure_icon_resources();
-        _bounds = bounds;
+        _outer_bounds = bounds;
         const auto &style = get_theme()->get_style(_style.id);
+        const amal::vec4 margin = style.margin();
         const amal::vec4 padding = style.padding();
+        _bounds = {{bounds.offset.x + margin.x, bounds.offset.y + margin.y},
+                   {amal::max(bounds.size.x - margin.x - margin.z, 0.0f),
+                    amal::max(bounds.size.y - margin.y - margin.w, 0.0f)}};
         const f32 content_h = amal::max(_bounds.size.y - padding.y - padding.w, 0.0f);
+        amal::vec2 slot_size = amal::max(resolve_icon_size(_closed_icon), resolve_icon_size(_open_icon));
+        if (slot_size.x <= 0.0f || slot_size.y <= 0.0f) slot_size = {style.text_size(), style.text_size()};
         amal::vec2 icon_size = _icon_size;
-        if (icon_size.x <= 0.0f || icon_size.y <= 0.0f) icon_size = {style.text_size(), style.text_size()};
+        if (icon_size.x <= 0.0f || icon_size.y <= 0.0f) icon_size = slot_size;
 
-        _icon_slot = {{_bounds.offset.x + _bounds.size.x - padding.z - icon_size.x,
-                       _bounds.offset.y + padding.y + amal::max((content_h - icon_size.y) * 0.5f, 0.0f)},
-                      icon_size};
+        _icon_slot = {{_bounds.offset.x + _bounds.size.x - padding.z - slot_size.x,
+                       _bounds.offset.y + padding.y + amal::max((content_h - slot_size.y) * 0.5f, 0.0f)},
+                      slot_size};
         _icon_rect = {{_icon_slot.offset.x + amal::max((_icon_slot.size.x - icon_size.x) * 0.5f, 0.0f),
                        _icon_slot.offset.y + amal::max((_icon_slot.size.y - icon_size.y) * 0.5f, 0.0f)},
                       icon_size};
@@ -140,6 +153,7 @@ namespace auik::v2::detail
     void PopupTrigger::translate(const amal::vec2 &delta)
     {
         if (delta.x == 0.0f && delta.y == 0.0f) return;
+        _outer_bounds.offset += delta;
         _bounds.offset += delta;
         _icon_slot.offset += delta;
         _icon_rect.offset += delta;
@@ -188,7 +202,8 @@ namespace auik::v2::detail
             QuadsInstanceData bg_data{};
             bg_data.rect = _bounds;
             bg_data.z_order = next_depth(_bg_depth_range);
-            const bool bg_visible = fill_quads_instance_by_style(theme->get_style(_style.id), _hit_rect.clip_id, bg_data);
+            const bool bg_visible =
+                fill_quads_instance_by_style(theme->get_style(_style.id), _hit_rect.clip_id, bg_data);
             emit_quads_instance(ctx, quads_stream, _bg_draw, bg_data, _hit_rect, bg_visible, emit_hit_rect);
 
             ensure_icon_resources();
@@ -273,8 +288,8 @@ namespace auik::v2::detail
         auto *rotate_data = get_rotate_post_effect_data(rotate_effect, _rotate_post_id);
         if (!rotate_data) return;
         rotate_data->animation_start = detail::get_context().window_ctx->time;
-        rotate_data->animation_from = opening ? 0.0f : amal::pi<f32>();
-        rotate_data->animation_to = opening ? amal::pi<f32>() : 0.0f;
+        rotate_data->animation_from = opening ? 0.0f : _open_angle;
+        rotate_data->animation_to = opening ? _open_angle : 0.0f;
         rotate_data->angle = rotate_data->animation_from;
         rotate_data->animating = true;
         push_widget_to_transient_cache(_owner);
@@ -315,7 +330,7 @@ namespace auik::v2::detail
             clear_animated_icon_draw();
             erase_widget_from_transient_cache(_owner);
             ensure_icon_resources();
-            update_layout(_bounds, _hit_rect.clip_id);
+            update_layout(_outer_bounds, _hit_rect.clip_id);
         }
         else schedule_icon_tick();
 
