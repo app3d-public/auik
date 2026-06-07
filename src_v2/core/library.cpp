@@ -4,20 +4,162 @@
 #include <auik/v2/detail/events.hpp>
 #include <auik/v2/detail/gpu_context.hpp>
 #include <auik/v2/sound.hpp>
+#include <auik/v2/widgets/dockspace.hpp>
 #include <auik/v2/widgets/image.hpp>
 #include <auik/v2/widgets/slider.hpp>
 #include <auik/v2/widgets/tooltip.hpp>
 #include <freetype/freetype.h>
 #include "pipelines/stream_data.hpp"
 
+
 namespace auik::v2
 {
     namespace
     {
-        static inline amal::vec2 get_root_overlay_depth_range()
+        static inline amal::vec2 get_root_overlay_depth_range() { return detail::get_global_foreground_depth_range(); }
+
+        static inline ViewportLayout get_effective_viewport_layout(const Widget &widget)
         {
-            // Reserve the very top foreground root lane for transient overlays such as tooltips.
-            return detail::get_root_depth_range(DepthZone::foreground, 31);
+            auto layout = widget.viewport_layout();
+            if (layout.mode != ViewportLayoutMode::none) return layout;
+            if (widget.is_viewport_flow()) return {ViewportLayoutMode::flow, ViewportEdge::top};
+            if (widget.is_viewport_fill()) return {ViewportLayoutMode::fill, ViewportEdge::top};
+            return layout;
+        }
+
+        static inline amal::rect make_edge_rect(const amal::vec4 &viewport, ViewportEdge edge, const amal::vec2 &size)
+        {
+            if (edge == ViewportEdge::top) return {{viewport.x, viewport.y}, {viewport.z, size.y}};
+            if (edge == ViewportEdge::bottom)
+                return {{viewport.x, viewport.y + amal::max(viewport.w - size.y, 0.0f)}, {viewport.z, size.y}};
+            if (edge == ViewportEdge::left) return {{viewport.x, viewport.y}, {size.x, viewport.w}};
+            return {{viewport.x + amal::max(viewport.z - size.x, 0.0f), viewport.y}, {size.x, viewport.w}};
+        }
+
+        static inline f32 get_edge_extent(ViewportEdge edge, const amal::vec2 &size)
+        {
+            return (edge == ViewportEdge::top || edge == ViewportEdge::bottom) ? size.y : size.x;
+        }
+
+        static inline bool is_viewport_reservation(const Widget &widget)
+        {
+            return get_effective_viewport_layout(widget).mode == ViewportLayoutMode::reserve;
+        }
+
+        static void update_root_widget_layout(Widget *widget)
+        {
+            if (!widget) return;
+            if (widget->parent())
+            {
+                widget->update_layout(false);
+                return;
+            }
+
+            const auto layout = get_effective_viewport_layout(*widget);
+            if (layout.mode == ViewportLayoutMode::reserve || layout.mode == ViewportLayoutMode::flow)
+            {
+                auto *viewport = resolve_viewport(widget->viewport());
+                widget->update_layout_min_size();
+                const f32 available_extent = (layout.edge == ViewportEdge::top || layout.edge == ViewportEdge::bottom)
+                                                 ? viewport->available.w
+                                                 : viewport->available.z;
+                const f32 extent =
+                    amal::clamp(get_edge_extent(layout.edge, widget->required_size()), 0.0f, available_extent);
+                const amal::vec2 size = (layout.edge == ViewportEdge::top || layout.edge == ViewportEdge::bottom)
+                                            ? amal::vec2{viewport->available.z, extent}
+                                            : amal::vec2{extent, viewport->available.w};
+                const auto rect = make_edge_rect(viewport->available, layout.edge, size);
+                widget->set_position(rect.offset);
+                widget->set_size(rect.size);
+                widget->update_layout(true);
+                if (widget->is_visible())
+                    reserve_viewport(viewport, layout.edge, get_edge_extent(layout.edge, widget->size()));
+                return;
+            }
+
+            if (layout.mode == ViewportLayoutMode::fill)
+            {
+                const auto viewport = get_viewport_rect(widget->viewport());
+                widget->set_position({viewport.x, viewport.y});
+                widget->set_size({viewport.z, viewport.w});
+                widget->update_layout(false);
+                return;
+            }
+
+            widget->update_layout(false);
+        }
+
+        static void update_root_widgets_layout_pass(bool reserved)
+        {
+            auto &ctx = detail::get_context();
+            for (Widget *widget : ctx.widget_tree)
+            {
+                if (!widget) continue;
+                if (widget->parent()) continue;
+                if (is_viewport_reservation(*widget) != reserved) continue;
+                update_root_widget_layout(widget);
+            }
+        }
+
+        static void reset_base_linked_viewports()
+        {
+            auto &ctx = detail::get_context();
+            for (u32 i = 1u; i < ctx.viewports.size(); ++i)
+            {
+                auto *viewport = ctx.viewports[i];
+                if (!viewport || !viewport->base_viewport) continue;
+                viewport->base = get_viewport_rect(viewport->base_viewport);
+                viewport->available = viewport->base;
+            }
+        }
+
+        static void record_root_widget_draw_commands(DrawReasonFlags reason)
+        {
+            for (Widget *widget : detail::get_context().widget_tree)
+            {
+                if (!widget) continue;
+                widget->update_draw_commands(reason);
+            }
+        }
+
+        static bool is_widget_or_descendant(const Widget *root, const Widget *widget)
+        {
+            for (auto *current = widget; current; current = current->parent())
+            {
+                if (current == root) return true;
+            }
+            return false;
+        }
+
+        static bool element_belongs_to_widget(const detail::Context &ctx, ElementID id, const Widget *widget)
+        {
+            if (!id || !widget) return false;
+            const auto it = ctx.id_map.find(id.widget_id);
+            return it != ctx.id_map.end() && is_widget_or_descendant(widget, it->second);
+        }
+
+        static bool widget_id_belongs_to_widget(const detail::Context &ctx, u32 id, const Widget *widget)
+        {
+            if (!id || !widget) return false;
+            const auto it = ctx.id_map.find(id);
+            return it != ctx.id_map.end() && is_widget_or_descendant(widget, it->second);
+        }
+
+        static void clear_input_refs_for_widget(detail::Context &ctx, const Widget *widget)
+        {
+            if (widget_id_belongs_to_widget(ctx, ctx.focus_id, widget)) ctx.focus_id = 0u;
+            if (widget_id_belongs_to_widget(ctx, ctx.active_id, widget)) ctx.active_id = 0u;
+            if (element_belongs_to_widget(ctx, ctx.hover_id, widget)) ctx.hover_id = {};
+            if (element_belongs_to_widget(ctx, ctx.io.clicked_id, widget)) ctx.io.clicked_id = {};
+            if (element_belongs_to_widget(ctx, ctx.io.drag_id, widget)) ctx.io.drag_id = {};
+        }
+
+        static void update_root_widgets_layout_impl()
+        {
+            reset_main_viewport();
+            update_root_widgets_layout_pass(true);
+            reset_base_linked_viewports();
+            update_root_widgets_layout_pass(false);
         }
 
         static void compact_delayed_tasks(detail::Context &ctx)
@@ -36,11 +178,12 @@ namespace auik::v2
             for (u32 stream_id = 0; stream_id < ctx.streams.stream_count; ++stream_id)
             {
                 auto &stream = ctx.streams.attached_streams[stream_id];
-                if (stream.draw_sizes[ctx.frame_id] <= 0)
-                {
-                    detail::mark_stream_frame_synced(&stream, ctx.frame_id);
-                    continue;
-                }
+                auto *state = static_cast<detail::StreamSyncState *>(stream.runtime_data);
+                const bool can_skip_clear =
+                    state && state->buffer_versions && stream.draw_sizes && state->master_id < ctx.frames_in_flight &&
+                    stream.draw_sizes[ctx.frame_id] == 0 && stream.draw_sizes[state->master_id] == 0 &&
+                    state->buffer_versions[ctx.frame_id] == state->master_version && state->invalidation_count == 0;
+                if (can_skip_clear) continue;
                 clear_draw_stream(&stream, ctx.frame_id);
             }
         }
@@ -70,6 +213,17 @@ namespace auik::v2
         static void reset_clip_rects()
         {
             auto &ctx = detail::get_context();
+            for (Widget *widget : ctx.widget_tree)
+            {
+                if (!widget) continue;
+                widget->reset_clip_rect_records();
+            }
+            for (Widget *widget : ctx.transient_cache)
+            {
+                if (!widget) continue;
+                widget->reset_clip_rect_records();
+            }
+
             reset_gpu_clip_rects();
             clear_hit_rects();
             for (Widget *widget : ctx.widget_tree)
@@ -77,8 +231,39 @@ namespace auik::v2
                 if (!widget) continue;
                 widget->rebuild_clip_rects();
             }
+            for (Widget *widget : ctx.transient_cache)
+            {
+                if (!widget) continue;
+                widget->rebuild_clip_rects();
+            }
         }
     } // namespace
+
+    namespace detail
+    {
+        static inline Window *as_counted_root_window(Widget *widget)
+        {
+            if (!widget || widget->parent()) return nullptr;
+            if (widget->get_rect().id.tag_id != AUIK_TAG_WINDOW) return nullptr;
+            auto *window = static_cast<Window *>(widget);
+            if (window->window_flags & WindowFlagBits::docked) return nullptr;
+            if (get_effective_viewport_layout(*window).mode != ViewportLayoutMode::none) return nullptr;
+            return window;
+        }
+
+        void setup_root_window(Widget *widget)
+        {
+            if (!as_counted_root_window(widget)) return;
+            ++get_context().root_window_count;
+        }
+
+        void teardown_root_window(Widget *widget)
+        {
+            if (!as_counted_root_window(widget)) return;
+            auto &count = get_context().root_window_count;
+            if (count > 0u) --count;
+        }
+    } // namespace detail
 
     namespace detail
     {
@@ -153,10 +338,10 @@ namespace auik::v2
         frame_cache.char_repeat_count = 0;
         ctx.hover_id = {};
         detail::reset_style_selector();
-        ctx.hover_hitbox_zone = detail::HitboxZoneBits::none;
         ctx.active_id = 0;
         ctx.focus_id = 0;
-        ctx.main_viewport = {0.0f, 0.0f, 0.0f, 0.0f};
+        ctx.viewports.clear();
+        ctx.root_window_count = 0;
         ctx.window_ctx = create_info.window_ctx;
         detail::construct_window_backend(ctx.window_ctx);
         ctx.sound_ctx = create_info.sound_ctx ? create_info.sound_ctx : get_default_sound_context();
@@ -173,7 +358,9 @@ namespace auik::v2
     void destroy_library()
     {
         if (!detail::g_context) return;
+        detail::g_context->disposal_queue.flush();
         for (auto *widget : detail::g_context->widget_tree) acul::release(widget);
+        detail::g_context->disposal_queue.discard();
         detail::destroy_atlas_state(detail::g_context->atlas_state);
         destroy_cached_images(*detail::g_context);
         for (auto *effect : detail::g_context->post_effects)
@@ -182,6 +369,9 @@ namespace auik::v2
             destroy_post_effect(effect);
         }
         detail::g_context->post_effects.clear();
+        destroy_dockspace_context();
+        for (auto *viewport : detail::g_context->viewports) acul::release(viewport);
+        detail::g_context->viewports.clear();
         detail::destroy_shared_buffer_sync_state(detail::g_context->shared_sync_state[AUIK_SYNC_CLIP_RECT]);
         detail::destroy_shared_buffer_sync_state(detail::g_context->shared_sync_state[AUIK_SYNC_HIT_RECT]);
         if (detail::g_context->ft_library)
@@ -198,29 +388,43 @@ namespace auik::v2
         detail::g_context = nullptr;
     }
 
-    void record_layout_commands()
+    void update_root_widgets_layout()
     {
         auto &ctx = detail::get_context();
-        if (!(ctx.dirty_flags & DirtyFlagBits::layout)) return;
         ctx.dirty_flags |= DirtyFlagBits::redraw;
         const bool need_hit_rect_draw = ctx.dirty_flags & DirtyFlagBits::hit_rect_draw;
         if (!detail::is_hit_rects_frame_synced(ctx.frame_id)) sync_hit_rect_cache();
         assert(detail::is_hit_rects_frame_synced(ctx.frame_id) &&
-               "record_layout_commands() started with stale current-frame hit rect cache");
-        reset_main_viewport();
+               "update_root_widgets_layout() started with stale current-frame hit rect cache");
         reset_clip_rects();
+        update_root_widgets_layout_impl();
         clear_all_streams(ctx);
-        for (Widget *widget : ctx.widget_tree)
-        {
-            widget->update_layout(false);
-            widget->update_draw_commands(DrawReasonBits::layout | DrawReasonBits::record);
-        }
+        record_root_widget_draw_commands(DrawReasonBits::layout | DrawReasonBits::record);
         ctx.dirty_flags &= ~DirtyFlagBits::layout;
         if (need_hit_rect_draw)
         {
             ctx.dirty_flags &= ~DirtyFlagBits::hit_rect_draw;
             ctx.dirty_flags |= DirtyFlagBits::hit_rect_sync;
         }
+    }
+
+    void record_layout_commands()
+    {
+        auto &ctx = detail::get_context();
+        if (!(ctx.dirty_flags & DirtyFlagBits::layout)) return;
+        update_root_widgets_layout();
+    }
+
+    Viewport *make_viewport()
+    {
+        auto &ctx = detail::get_context();
+        auto *main_viewport = get_main_viewport_handle();
+        auto *viewport = acul::alloc<Viewport>();
+        viewport->base_viewport = main_viewport;
+        viewport->base = get_main_viewport();
+        viewport->available = viewport->base;
+        ctx.viewports.push_back(viewport);
+        return viewport;
     }
 
     void redraw_all_commands()
@@ -290,31 +494,122 @@ namespace auik::v2
         if (state.invalidation_count == 0) ctx.dirty_flags &= ~DirtyFlagBits::hit_rect_sync;
     }
 
-    APPLIB_API void add_widget_to_root(Widget *widget)
+    APPLIB_API void rebuild_root_widget_depths()
+    {
+        auto &ctx = detail::get_context();
+        ctx.root_depth_counts[0] = 0u;
+        ctx.root_depth_counts[1] = 0u;
+        ctx.root_depth_counts[2] = 0u;
+
+        for (Widget *widget : ctx.widget_tree)
+        {
+            if (!widget) continue;
+            const DepthZone zone = detail::root_widget_depth_zone(widget);
+            const u32 zone_index = static_cast<u32>(zone);
+            assert(zone_index < 3u && "Invalid root depth zone");
+            const int lane_index = ctx.root_depth_counts[zone_index];
+            assert(lane_index < 32 && "Max depth zone exceeded");
+            widget->update_depth(detail::get_root_depth_range(zone, lane_index));
+            ++ctx.root_depth_counts[zone_index];
+        }
+    }
+
+    APPLIB_API void add_widget_to_root(Widget *widget, DepthZone zone)
     {
         assert(widget && "widget is null");
         assert(widget->parent() == nullptr && "Root widget must not have a parent");
         auto &ctx = detail::get_context();
+        if (auto *root_data = detail::root_widget_user_data(widget)) *root_data = zone;
+        else widget->emplace_user_data_head<detail::RootWidgetUserData>(AUIK_ROOT_WIDGET_USER_DATA, zone);
         ctx.widget_tree.push_back(widget);
         if (widget->widget_flags & WidgetFlagBits::attachable) widget->on_attach();
-        const auto zone = widget->depth_zone();
-        const int lane_index = ctx.root_depth_counts[zone];
-        assert(lane_index < 32 && "Max depth zone exceeded");
-        widget->update_depth(detail::get_root_depth_range(zone, lane_index));
-        ++ctx.root_depth_counts[zone];
+        rebuild_root_widget_depths();
         widget->update_style();
-        widget->update_layout(false);
-        if (widget->is_viewport_reserved() && widget->is_visible())
+        if (is_viewport_reservation(*widget))
         {
-            reset_main_viewport();
-            for (Widget *root_widget : ctx.widget_tree) root_widget->update_layout(false);
-            for (Widget *root_widget : ctx.widget_tree)
-                root_widget->update_draw_commands(root_widget == widget
-                                                      ? DrawReasonBits::full_redraw | DrawReasonBits::record
-                                                      : DrawReasonBits::layout);
+            update_root_widget_layout(widget);
+            widget->update_draw_commands(DrawReasonBits::full_redraw | DrawReasonBits::record);
+            ctx.dirty_flags |= DirtyFlagBits::redraw;
         }
-        else widget->update_draw_commands(DrawReasonBits::full_redraw | DrawReasonBits::record);
-        ctx.dirty_flags |= DirtyFlagBits::redraw;
+    }
+
+    APPLIB_API bool remove_widget_from_root_unsync(Widget *widget)
+    {
+        if (!widget || widget->parent()) return false;
+        auto &ctx = detail::get_context();
+        for (size_t i = 0; i < ctx.widget_tree.size(); ++i)
+        {
+            if (ctx.widget_tree[i] != widget) continue;
+            if (widget->widget_flags & WidgetFlagBits::attachable) widget->on_detach();
+            widget->pop_user_data_head(AUIK_ROOT_WIDGET_USER_DATA);
+            ctx.widget_tree.erase(ctx.widget_tree.begin() + i);
+            if (ctx.focus_id && ctx.id_map.find(ctx.focus_id) == ctx.id_map.end()) ctx.focus_id = 0u;
+            if (ctx.active_id && ctx.id_map.find(ctx.active_id) == ctx.id_map.end()) ctx.active_id = 0u;
+            if (ctx.hover_id && ctx.id_map.find(ctx.hover_id.widget_id) == ctx.id_map.end()) ctx.hover_id = {};
+            if (ctx.io.clicked_id && ctx.id_map.find(ctx.io.clicked_id.widget_id) == ctx.id_map.end())
+                ctx.io.clicked_id = {};
+            if (ctx.io.drag_id && ctx.id_map.find(ctx.io.drag_id.widget_id) == ctx.id_map.end()) ctx.io.drag_id = {};
+            rebuild_root_widget_depths();
+            detail::mark_host_refresh_request();
+            return true;
+        }
+        return false;
+    }
+
+    APPLIB_API bool remove_widget_from_root_unsync(u32 id)
+    {
+        if (!id) return false;
+        auto &ctx = detail::get_context();
+        auto it = ctx.id_map.find(id);
+        return it != ctx.id_map.end() ? remove_widget_from_root_unsync(it->second) : false;
+    }
+
+    APPLIB_API bool remove_widget(Widget *widget)
+    {
+        if (!remove_widget_from_root_unsync(widget)) return false;
+        redraw_all_commands();
+        return true;
+    }
+
+    APPLIB_API bool remove_widget(u32 id)
+    {
+        if (!remove_widget_from_root_unsync(id)) return false;
+        redraw_all_commands();
+        return true;
+    }
+
+    APPLIB_API bool hide_widget(Widget *widget)
+    {
+        if (!widget || !widget->is_visible()) return false;
+        auto &ctx = detail::get_context();
+        clear_input_refs_for_widget(ctx, widget);
+        widget->hide();
+        redraw_all_commands();
+        return true;
+    }
+
+    APPLIB_API bool hide_widget(u32 id)
+    {
+        if (!id) return false;
+        auto &ctx = detail::get_context();
+        const auto it = ctx.id_map.find(id);
+        return it != ctx.id_map.end() ? hide_widget(it->second) : false;
+    }
+
+    APPLIB_API bool show_widget(Widget *widget)
+    {
+        if (!widget || widget->is_visible()) return false;
+        widget->show();
+        redraw_all_commands();
+        return true;
+    }
+
+    APPLIB_API bool show_widget(u32 id)
+    {
+        if (!id) return false;
+        auto &ctx = detail::get_context();
+        const auto it = ctx.id_map.find(id);
+        return it != ctx.id_map.end() ? show_widget(it->second) : false;
     }
 
     APPLIB_API void push_widget_to_transient_cache(Widget *widget)

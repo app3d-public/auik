@@ -22,6 +22,7 @@ struct FT_FaceRec_;
 #define AUIK_ICON_CLOSE         0xBF822112u
 #define AUIK_ICON_MENU          0xDDD65C07u
 #define AUIK_ICON_SIX_DOTS      0x2CD6CBF3u
+#define AUIK_HITBOX_PAD         4.0f
 
 namespace auik::v2
 {
@@ -116,9 +117,19 @@ namespace auik::v2
 
     APPLIB_API bool init_library(const CreateInfo &create_info);
     APPLIB_API void destroy_library();
+    APPLIB_API void update_root_widgets_layout();
     APPLIB_API void record_layout_commands();
     APPLIB_API void redraw_all_commands();
-    APPLIB_API void add_widget_to_root(Widget *widget);
+    APPLIB_API void rebuild_root_widget_depths();
+    APPLIB_API void add_widget_to_root(Widget *widget, DepthZone zone = DepthZone::work);
+    APPLIB_API bool remove_widget_from_root_unsync(Widget *widget);
+    APPLIB_API bool remove_widget_from_root_unsync(u32 id);
+    APPLIB_API bool remove_widget(Widget *widget);
+    APPLIB_API bool remove_widget(u32 id);
+    APPLIB_API bool hide_widget(Widget *widget);
+    APPLIB_API bool hide_widget(u32 id);
+    APPLIB_API bool show_widget(Widget *widget);
+    APPLIB_API bool show_widget(u32 id);
     APPLIB_API void focus_widget(Widget *widget);
     APPLIB_API void push_widget_to_transient_cache(Widget *widget);
     APPLIB_API bool erase_widget_from_transient_cache(Widget *widget);
@@ -134,9 +145,12 @@ namespace auik::v2
     APPLIB_API void sync_draw_streams();
     APPLIB_API void sync_clip_rect_cache();
     APPLIB_API void sync_hit_rect_cache();
+    APPLIB_API Viewport *make_viewport();
     inline void sync_gpu_cache();
     template <class Traits, class F>
     inline bool add_render_command(Widget *widget, F &&fn);
+    template <class F>
+    inline bool add_render_command(F &&fn);
     template <class F>
     inline u64 schedule_delayed_host_task(u64 owner_id, f64 due_time, F &&fn);
 
@@ -145,34 +159,84 @@ namespace auik::v2
     inline void reset_main_viewport()
     {
         auto &ctx = detail::get_context();
-        ctx.main_viewport = {0.0f, 0.0f, ctx.io.display_size.x, ctx.io.display_size.y};
+        if (ctx.viewports.empty()) ctx.viewports.push_back(acul::alloc<Viewport>());
+        else if (!ctx.viewports[0]) ctx.viewports[0] = acul::alloc<Viewport>();
+        auto *main_viewport = ctx.viewports[0];
+        main_viewport->base_viewport = nullptr;
+        main_viewport->base = {0.0f, 0.0f, ctx.io.display_size.x, ctx.io.display_size.y};
+        main_viewport->available = main_viewport->base;
+        for (u32 i = 1u; i < ctx.viewports.size(); ++i)
+        {
+            auto *viewport = ctx.viewports[i];
+            if (!viewport) continue;
+            if (!viewport->base_viewport) viewport->available = viewport->base;
+        }
     }
 
-    inline void set_main_viewport(const amal::vec4 &viewport) { detail::get_context().main_viewport = viewport; }
-
-    inline const amal::vec4 &get_main_viewport() { return detail::get_context().main_viewport; }
-
-    inline void reserve_main_viewport_top(f32 height)
+    inline void set_main_viewport(const amal::vec4 &viewport)
     {
-        auto &viewport = detail::get_context().main_viewport;
-        const f32 consumed = amal::clamp(height, 0.0f, viewport.w);
-        viewport.y += consumed;
-        viewport.w -= consumed;
+        auto &ctx = detail::get_context();
+        if (ctx.viewports.empty()) ctx.viewports.push_back(acul::alloc<Viewport>());
+        else if (!ctx.viewports[0]) ctx.viewports[0] = acul::alloc<Viewport>();
+        auto *main_viewport = ctx.viewports[0];
+        main_viewport->base_viewport = nullptr;
+        main_viewport->base = viewport;
+        main_viewport->available = viewport;
     }
 
-    inline void reserve_main_viewport_bottom(f32 height)
+    inline Viewport *get_main_viewport_handle()
     {
-        auto &viewport = detail::get_context().main_viewport;
-        const f32 consumed = amal::clamp(height, 0.0f, viewport.w);
-        viewport.w -= consumed;
+        auto &ctx = detail::get_context();
+        if (ctx.viewports.empty() || !ctx.viewports[0]) reset_main_viewport();
+        return ctx.viewports[0];
     }
+
+    inline const amal::vec4 &get_main_viewport() { return get_main_viewport_handle()->available; }
+
+    inline Viewport *resolve_viewport(Viewport *viewport)
+    {
+        auto *main_viewport = get_main_viewport_handle();
+        if (!viewport) return main_viewport;
+        return viewport;
+    }
+
+    inline const amal::vec4 &get_viewport_rect(Viewport *viewport) { return resolve_viewport(viewport)->available; }
+
+    inline const amal::vec4 &get_widget_viewport_rect(const Widget *widget)
+    {
+        return get_viewport_rect(widget ? widget->viewport() : nullptr);
+    }
+
+    inline void reserve_viewport(Viewport *viewport, ViewportEdge edge, f32 amount)
+    {
+        auto *target = resolve_viewport(viewport);
+        auto &rect = target->available;
+        const bool vertical = edge == ViewportEdge::top || edge == ViewportEdge::bottom;
+        const f32 consumed = amal::clamp(amount, 0.0f, vertical ? rect.w : rect.z);
+        if (edge == ViewportEdge::top)
+        {
+            rect.y += consumed;
+            rect.w -= consumed;
+        }
+        else if (edge == ViewportEdge::bottom) rect.w -= consumed;
+        else if (edge == ViewportEdge::left)
+        {
+            rect.x += consumed;
+            rect.z -= consumed;
+        }
+        else if (edge == ViewportEdge::right) rect.z -= consumed;
+    }
+
+    inline void reserve_main_viewport_top(f32 height) { reserve_viewport(nullptr, ViewportEdge::top, height); }
+
+    inline void reserve_main_viewport_bottom(f32 height) { reserve_viewport(nullptr, ViewportEdge::bottom, height); }
 
     inline void sync_pending_events()
     {
         auto &ctx = detail::get_context();
         auto *pf = ctx.pending_filter;
         if (!pf || !pf->allow()) return;
-        if (pf->has(PendingMaskBits::resize)) ctx.dirty_flags |= DirtyFlagBits::layout;
+        if (pf->has(PendingMaskBits::resize)) detail::mark_layout_dirty();
         if (pf->has(PendingMaskBits::mouse_move)) detail::on_mouse_move({0, 0});
     }
 
@@ -312,6 +376,15 @@ namespace auik::v2
         }
 
         assert(widget && "widget is null");
+        auto &ctx = detail::get_context();
+        ctx.disposal_queue.emplace(std::forward<F>(fn));
+        detail::mark_host_refresh_request();
+        return true;
+    }
+
+    template <class F>
+    inline bool add_render_command(F &&fn)
+    {
         auto &ctx = detail::get_context();
         ctx.disposal_queue.emplace(std::forward<F>(fn));
         detail::mark_host_refresh_request();

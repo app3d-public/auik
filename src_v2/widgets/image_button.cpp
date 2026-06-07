@@ -11,8 +11,7 @@ namespace auik::v2
           _texture_id(texture_id),
           _uv_rect(uv_rect),
           _image_rect(detail::make_rect_data(AUIK_TAG_IMAGE, AUIK_TAG_IMAGE)),
-          _image_size(image_size),
-          _requested_size(size)
+          _image_size(image_size)
     {
     }
 
@@ -54,7 +53,10 @@ namespace auik::v2
         const amal::vec2 content_required = {image_size.x + padding.x + padding.z,
                                              image_size.y + padding.y + padding.w};
 
-        amal::vec2 min_size = _requested_size;
+        amal::vec2 min_size = {is_size_concrete(requested_size().x) ? requested_size().x : 0.0f,
+                               is_size_concrete(requested_size().y) ? requested_size().y : 0.0f};
+        if (stretch_width()) min_size.x = content_required.x;
+        if (stretch_height()) min_size.y = content_required.y;
         if (is_fixed() && min_size.x <= 0.0f && min_size.y <= 0.0f)
         {
             const f32 side = amal::max(content_required.x, content_required.y);
@@ -82,13 +84,24 @@ namespace auik::v2
                                          amal::max(required_size().y - margin.y - margin.w, 0.0f)};
 
         amal::vec2 widget_size = size();
-        if (!is_fixed()) widget_size.x = amal::max(widget_size.x - margin.x - margin.z, min_required.x);
-        else widget_size.x = amal::max(_requested_size.x > 0.0f ? _requested_size.x : widget_size.x, min_required.x);
-        widget_size.y = amal::max(_requested_size.y > 0.0f ? _requested_size.y : widget_size.y, min_required.y);
+        if (stretch_width())
+            widget_size.x = amal::max(widget_size.x - margin.x - margin.z, min_required.x);
+        else if (!is_fixed()) widget_size.x = amal::max(widget_size.x - margin.x - margin.z, min_required.x);
+        else
+            widget_size.x =
+                amal::max(is_size_concrete(requested_size().x) && requested_size().x > 0.0f ? requested_size().x
+                                                                                              : widget_size.x,
+                          min_required.x);
+        if (stretch_height()) widget_size.y = amal::max(widget_size.y - margin.y - margin.w, min_required.y);
+        else
+            widget_size.y =
+                amal::max(is_size_concrete(requested_size().y) && requested_size().y > 0.0f ? requested_size().y
+                                                                                              : widget_size.y,
+                          min_required.y);
 
         const amal::vec2 pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
         set_position(pos);
-        set_size(widget_size);
+        set_layout_size(widget_size);
         Widget::update_layout(true);
         assert(parent() && "ImageButton must have parent");
         set_clip_id(parent()->content_clip_id());
@@ -102,6 +115,7 @@ namespace auik::v2
         _image_rect.bounds = {image_pos, image_size};
         _image_rect.clip_id = clip_id();
         _image_rect.depth = next_depth(_content_depth_range);
+        _image_rect.hit_depth = _image_rect.depth;
     }
 
     void ImageButton::translate(const amal::vec2 &delta)
@@ -131,6 +145,19 @@ namespace auik::v2
         Widget::update_depth(depth_range);
         assign_next_depth(this->depth_range(), _content_depth_range);
         _image_rect.depth = next_depth(_content_depth_range);
+        _image_rect.hit_depth = _image_rect.depth;
+    }
+
+    void ImageButton::back_hit_depth()
+    {
+        Widget::back_hit_depth();
+        _image_rect.hit_depth = get_rect().hit_depth;
+    }
+
+    void ImageButton::restore_hit_depth()
+    {
+        Widget::restore_hit_depth();
+        _image_rect.hit_depth = _image_rect.depth;
     }
 
     void ImageButton::draw(DrawCtx &ctx)

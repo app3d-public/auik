@@ -32,8 +32,7 @@ namespace auik::v2
     {
     public:
         APPLIB_API explicit Titlebar(u32 id = AUIK_TAG_TITLEBAR,
-                                     WidgetFlags widget_flags = get_default_widget_flags() | WidgetFlagBits::fixed |
-                                                                WidgetFlagBits::viewport_reserved);
+                                     WidgetFlags widget_flags = get_default_widget_flags() | WidgetFlagBits::fixed_layout);
         ~Titlebar() override;
 
         void set_show_icon(bool value);
@@ -47,6 +46,9 @@ namespace auik::v2
         void update_layout_min_size() override;
         void update_layout(bool min_size_known) override;
         void update_depth(const amal::vec2 &depth_range) override;
+        void back_hit_depth() override;
+        void restore_hit_depth() override;
+        void reset_clip_rect_records() override;
         void rebuild_clip_rects() override;
         void draw(DrawCtx &ctx) override;
         void translate(const amal::vec2 &delta) override;
@@ -101,17 +103,16 @@ namespace auik::v2
 
     inline Titlebar *make_titlebar(u32 id = AUIK_TAG_TITLEBAR)
     {
-        return acul::alloc<Titlebar>(id, get_default_widget_flags() | WidgetFlagBits::fixed |
-                                             WidgetFlagBits::viewport_reserved);
+        return acul::alloc<Titlebar>(id, get_default_widget_flags() | WidgetFlagBits::fixed_layout);
     }
 
     inline MenuBar *make_titlebar_menu_bar(u32 id, acul::vector<acul::string> items = {})
     {
         auto *menu_bar = acul::alloc<MenuBar>(id, std::move(items));
-        menu_bar->widget_flags &= ~WidgetFlagBits::fixed;
+        menu_bar->widget_flags &= ~WidgetFlagBits::fixed_layout;
         menu_bar->set_menu_style_tag(AUIK_STYLE_TAG_TITLEBAR_MENU_BAR);
         menu_bar->set_menu_item_style_tag(AUIK_STYLE_TAG_TITLEBAR_MENU_ITEM);
-        menu_bar->set_popup_depth_mode(MenuBar::PopupDepthMode::root_overlay_next);
+        menu_bar->set_popup_depth_mode(MenuBar::PopupDepthMode::root_overlay);
         return menu_bar;
     }
 } // namespace auik::v2

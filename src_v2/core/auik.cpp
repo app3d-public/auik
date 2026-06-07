@@ -4,10 +4,30 @@
 
 #define AUIK_MOUSE_DOUBLE_CLICK_TIME     0.45
 #define AUIK_MOUSE_DOUBLE_CLICK_MAX_DIST 8.0
-#define AUIK_HITBOX_PAD                  4.0f
 
 namespace auik::v2
 {
+    void Widget::clear_user_data()
+    {
+        while (_user_data)
+        {
+            auto *next = _user_data->pNext;
+            if (_user_data->destroy && _user_data->handle) _user_data->destroy(_user_data->handle);
+            acul::release(_user_data);
+            _user_data = next;
+        }
+    }
+
+    void Widget::pop_user_data_head(u32 expected_tag)
+    {
+        if (!_user_data || _user_data->tag_id != expected_tag) return;
+        auto *next = _user_data->pNext;
+        _user_data->pNext = nullptr;
+        if (_user_data->destroy && _user_data->handle) _user_data->destroy(_user_data->handle);
+        acul::release(_user_data);
+        _user_data = next;
+    }
+
     Widget::~Widget()
     {
         if (_user_bind)
@@ -15,6 +35,7 @@ namespace auik::v2
             acul::release(_user_bind);
             _user_bind = nullptr;
         }
+        clear_user_data();
         if (detail::g_context)
         {
             cancel_delayed_tasks(id());
@@ -30,51 +51,36 @@ namespace auik::v2
 
     namespace detail
     {
-        HitboxZone get_hitbox_zone(const RectData &rect, const amal::vec2 &mouse_pos)
-        {
-            HitboxZone zone = HitboxZoneBits::none;
-            if (!(rect.flags & RectBits::hitbox)) return zone;
-            const auto &bounds = rect.bounds;
-
-            const f32 left = amal::get_rect_left(bounds);
-            const f32 right = amal::get_rect_right(bounds);
-            const f32 top = amal::get_rect_top(bounds);
-            const f32 bottom = amal::get_rect_bottom(bounds);
-
-            if (amal::abs(mouse_pos.x - left) <= AUIK_HITBOX_PAD) zone |= HitboxZoneBits::left;
-            if (amal::abs(mouse_pos.x - right) <= AUIK_HITBOX_PAD) zone |= HitboxZoneBits::right;
-            if (amal::abs(mouse_pos.y - top) <= AUIK_HITBOX_PAD) zone |= HitboxZoneBits::top;
-            if (amal::abs(mouse_pos.y - bottom) <= AUIK_HITBOX_PAD) zone |= HitboxZoneBits::bottom;
-            return zone;
-        }
-
-        CursorID::enum_type get_cursor_for_hitbox_zone(HitboxZone zone)
-        {
-            const bool has_left = zone & HitboxZoneBits::left;
-            const bool has_right = zone & HitboxZoneBits::right;
-            const bool has_top = zone & HitboxZoneBits::top;
-            const bool has_bottom = zone & HitboxZoneBits::bottom;
-
-            if ((has_left && has_top) || (has_right && has_bottom)) return CursorID::resize_nwse;
-            if ((has_right && has_top) || (has_left && has_bottom)) return CursorID::resize_nesw;
-            if (has_left || has_right) return CursorID::resize_ew;
-            if (has_top || has_bottom) return CursorID::resize_ns;
-            return CursorID::arrow;
-        }
-
         template <class Traits>
         static void enqueue_style_refresh(Widget *widget)
         {
             if (!widget) return;
-            add_render_command<Traits>(widget, [widget]() {
+            const u32 widget_id = widget->id();
+            Widget *expected_widget = widget;
+            add_render_command<Traits>(widget, [widget_id, expected_widget]() {
                 auto &ctx = detail::get_context();
+                auto it = ctx.id_map.find(widget_id);
+                if (it == ctx.id_map.end() || it->second != expected_widget) return;
+                Widget *widget = it->second;
                 const auto style_flags = widget->update_style();
                 if (style_flags == StyleUpdateFlagBits::none) return;
                 if (style_flags & StyleUpdateFlagBits::parent_layout)
                 {
-                    if (auto *parent = widget->parent()) parent->update_layout(false);
-                    else widget->update_layout(false);
-                    ctx.dirty_flags |= DirtyFlagBits::layout;
+                    Widget *target = widget->parent() ? widget->parent() : widget;
+                    while (target->parent() && !target->is_fixed_bounds() &&
+                           target->viewport_layout().mode == ViewportLayoutMode::none)
+                        target = target->parent();
+
+                    const bool needs_root_layout = !target->parent() &&
+                                                   target->viewport_layout().mode != ViewportLayoutMode::none;
+                    target->update_layout(false);
+                    if (needs_root_layout) mark_layout_dirty();
+                    else
+                    {
+                        target->update_draw_commands(get_draw_reason_from_style_update(style_flags));
+                        ctx.dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
+                    }
+                    return;
                 }
                 else if (style_flags & StyleUpdateFlagBits::layout) widget->update_layout(false);
                 if (style_flags & StyleUpdateFlagBits::redraw)
@@ -99,7 +105,6 @@ namespace auik::v2
             const u32 prev_widget_id = prev_hover.widget_id;
             const u32 widget_id = hover.widget_id;
             const bool widget_changed = prev_widget_id != widget_id;
-            const bool element_changed = prev_hover != hover;
             const bool selector_changed =
                 !is_dragging && detail::set_style_selector(hover, hover ? StyleState::hover : StyleState::normal);
             auto dispatch_hover = [&](u32 id, HoverState state) {
@@ -111,6 +116,41 @@ namespace auik::v2
                 if (widget->has_event_handler(EventFlagBits::hover)) widget->dispatch_hover(state);
                 if (apply_hover_style_state(*widget, state)) enqueue_style_refresh<detail::HoverEventTraits>(widget);
             };
+
+            if (is_dragging)
+            {
+                auto accepts_drag_hover = [&](const ElementID &id) -> Widget * {
+                    if (!id) return nullptr;
+                    auto it = ctx.id_map.find(id.widget_id);
+                    if (it == ctx.id_map.end()) return nullptr;
+                    Widget *widget = it->second;
+                    if (!widget || !widget->accepts_drag_hover(ctx.io.drag_id, id)) return nullptr;
+                    return widget;
+                };
+
+                Widget *prev_widget = accepts_drag_hover(prev_hover);
+                Widget *widget = accepts_drag_hover(hover);
+                const bool drag_widget_changed = prev_widget != widget;
+                const bool drag_selector_changed =
+                    widget ? detail::set_style_selector(hover, StyleState::hover)
+                           : (prev_widget && detail::get_style_selector_id() == prev_hover
+                                  ? detail::set_style_selector({}, StyleState::normal)
+                                  : false);
+
+                if (drag_widget_changed)
+                {
+                    if (prev_widget) dispatch_hover(prev_hover.widget_id, HoverState::leave);
+                    if (widget) dispatch_hover(hover.widget_id, HoverState::enter);
+                }
+                else if (widget) dispatch_hover(hover.widget_id, HoverState::active);
+
+                if (drag_selector_changed)
+                {
+                    if (prev_widget) enqueue_style_refresh<detail::HoverEventTraits>(prev_widget);
+                    if (widget) enqueue_style_refresh<detail::HoverEventTraits>(widget);
+                }
+                return;
+            }
 
             if (!is_dragging)
             {
@@ -130,10 +170,10 @@ namespace auik::v2
                 }
                 else if (selector_changed)
                 {
-                    if (element_changed) dispatch_hover(widget_id, HoverState::active);
                     auto it = ctx.id_map.find(widget_id);
                     if (it != ctx.id_map.end()) enqueue_style_refresh<detail::HoverEventTraits>(it->second);
                 }
+                if (!widget_changed && hover) dispatch_hover(widget_id, HoverState::active);
             }
         }
 
@@ -273,7 +313,6 @@ namespace auik::v2
                     }
                 }
             }
-            ctx.hover_hitbox_zone = HitboxZoneBits::none;
             set_window_cursor(CursorID::arrow, ctx.window_ctx);
         }
 
@@ -564,6 +603,12 @@ namespace auik::v2
             frame_cache.drag_widget_id = 0;
             frame_cache.drag_delta = {0.0f, 0.0f};
             frame_cache.changes &= ~FrameChangesBits::drag_delta;
+
+            it = ctx.id_map.find(hover_id.widget_id);
+            if (io.drag_id && hover_id && it != ctx.id_map.end() &&
+                it->second->has_event_handler(EventFlagBits::drop) &&
+                it->second->accepts_drag_hover(io.drag_id, hover_id))
+                it->second->dispatch_drop(io.drag_id, hover_id);
 
             it = ctx.id_map.find(io.drag_id.widget_id);
             if (it != ctx.id_map.end() && it->second->has_event_handler(EventFlagBits::drag))

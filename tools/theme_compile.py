@@ -390,9 +390,9 @@ def resolve_box(tokens: list, variables: dict[str, str], ctor: str) -> str:
     if len(values) == 1:
         return f"amal::vec2{{{values[0]}}}"
     if len(values) == 2:
-        return f"amal::vec2{{{values[0]}, {values[1]}}}"
+        return f"amal::vec2{{{values[1]}, {values[0]}}}"
     if len(values) == 4:
-        return f"amal::vec4{{{values[0]}, {values[1]}, {values[2]}, {values[3]}}}"
+        return f"amal::vec4{{{values[3]}, {values[0]}, {values[1]}, {values[2]}}}"
     raise ValueError(f"{ctor} expects 1, 2, or 4 values")
 
 
@@ -402,9 +402,9 @@ def resolve_box_values(tokens: list, variables: dict[str, str], ctor: str) -> li
     if len(values) == 1:
         return [values[0], values[0], values[0], values[0]]
     if len(values) == 2:
-        return [values[0], values[1], values[0], values[1]]
+        return [values[1], values[0], values[1], values[0]]
     if len(values) == 4:
-        return values
+        return [values[3], values[0], values[1], values[2]]
     raise ValueError(f"{ctor} expects 1, 2, or 4 values")
 
 

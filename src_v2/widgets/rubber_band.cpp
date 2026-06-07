@@ -7,7 +7,6 @@ namespace auik::v2
     RubberBand::RubberBand(u32 id, WidgetFlags widget_flags, Widget *parent)
         : Widget(id, widget_flags, EventFlagBits::drag, parent, {{0.0f, 0.0f}, {0.0f, 0.0f}}, AUIK_TAG_RUBBER_BAND)
     {
-        set_depth_zone(DepthZone::foreground);
     }
 
     amal::rect RubberBand::make_rect_from_points(const amal::vec2 &a, const amal::vec2 &b)
@@ -79,7 +78,7 @@ namespace auik::v2
             const amal::rect overlay_rect = {{parent_content.x, parent_content.y},
                                              {parent_content.z, parent_content.w}};
             set_position(overlay_rect.offset);
-            set_size(overlay_rect.size);
+            set_layout_size(overlay_rect.size);
             set_clip_id(parent()->content_clip_id());
         }
 
@@ -105,6 +104,19 @@ namespace auik::v2
     {
         Widget::update_depth(depth_range);
         _rect.depth = next_depth(this->depth_range());
+        _rect.hit_depth = _rect.depth;
+    }
+
+    void RubberBand::back_hit_depth()
+    {
+        Widget::back_hit_depth();
+        _rect.hit_depth = get_rect().hit_depth;
+    }
+
+    void RubberBand::restore_hit_depth()
+    {
+        Widget::restore_hit_depth();
+        _rect.hit_depth = _rect.depth;
     }
 
     void RubberBand::draw(DrawCtx &ctx)
@@ -152,7 +164,7 @@ namespace auik::v2
             _committed = true;
             redraw_band();
             hide();
-            dispatch_change();
+            mark_changed();
             return;
         }
 
@@ -170,7 +182,7 @@ namespace auik::v2
             const amal::vec4 parent_content = parent()->get_content_clip_rect();
             clip_bounds = rect_from_vec4(parent_content);
             set_position(clip_bounds.offset);
-            set_size(clip_bounds.size);
+            set_layout_size(clip_bounds.size);
             set_clip_id(parent()->content_clip_id());
         }
         _selection_rect = clamp_rect_to_rect(make_rect_from_points(_start, _end), clip_bounds);

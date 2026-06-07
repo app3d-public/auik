@@ -16,7 +16,7 @@ namespace auik::v2
 
     constexpr inline WidgetFlags get_default_fixed_text_button_flags()
     {
-        return get_default_text_button_flags() | WidgetFlagBits::fixed;
+        return get_default_text_button_flags() | WidgetFlagBits::fixed_layout;
     }
 
     class APPLIB_API TextButton : public Widget
@@ -24,10 +24,10 @@ namespace auik::v2
     public:
         TextButton(u32 id, acul::string text, amal::vec2 size, WidgetFlags widget_flags, EventFlags event_flags,
                    Widget *parent, u32 style_tag_id = AUIK_STYLE_TAG_TEXT_BUTTON)
-            : Widget(id, widget_flags, event_flags, parent, {}, style_tag_id),
+            : Widget(id, widget_flags, event_flags, parent, {{0.0f, 0.0f}, size}, style_tag_id),
               _style({Theme::STYLE_ID_INVALID, style_tag_id}),
               _text(acul::alloc<Text>(AUIK_TAG_TEXT, std::move(text), amal::vec2{0.0f, 0.0f},
-                                      WidgetFlagBits::visible | WidgetFlagBits::fixed, this))
+                                      WidgetFlagBits::visible | WidgetFlagBits::fixed_layout, this))
         {
             _text->set_horizontal_align(detail::TextHorizontalAlign::center);
             _text->set_vertical_align(detail::TextVerticalAlign::center);
@@ -40,6 +40,8 @@ namespace auik::v2
         void translate(const amal::vec2 &delta) override;
         void rebuild_clip_rects() override;
         void update_depth(const amal::vec2 &depth_range) override;
+        void back_hit_depth() override;
+        void restore_hit_depth() override;
 
         void draw(DrawCtx &ctx) override;
 

@@ -64,7 +64,7 @@ namespace auik::v2
         const amal::vec2 inner_size = {amal::max(cell_size.x - margin.x - margin.z, 0.0f),
                                        amal::max(cell_size.y - margin.y - margin.w, 0.0f)};
         set_position(layout_origin + unorient_size({margin.x, margin.y}, _axis));
-        set_size(unorient_size(inner_size, _axis));
+        set_layout_size(unorient_size(inner_size, _axis));
         Widget::update_layout(true);
         set_clip_id(parent() ? parent()->content_clip_id() : clip_id());
 

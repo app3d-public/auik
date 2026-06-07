@@ -12,7 +12,7 @@ namespace auik::v2
 
     constexpr inline WidgetFlags get_default_fixed_text_flags()
     {
-        return get_default_text_flags() | WidgetFlagBits::fixed;
+        return get_default_text_flags() | WidgetFlagBits::fixed_layout;
     }
 
     class APPLIB_API Text : public Widget
@@ -46,38 +46,76 @@ namespace auik::v2
         void draw(DrawCtx &ctx) override;
 
         const acul::string &text() const { return _text; }
-        void set_text(const acul::string &text);
+        void set_text(const acul::string &text)
+        {
+            if (_text == text) return;
+            _text = text;
+        }
+
         const detail::TextLayoutResult &layout_result() const { return _layout_result; }
 
         bool multiline() const { return _layout_config.wrap == detail::TextWrapMode::word; }
-        void set_multiline(bool value);
+        void set_multiline(bool value)
+        {
+            const auto next = value ? detail::TextWrapMode::word : detail::TextWrapMode::none;
+            if (_layout_config.wrap == next) return;
+            _layout_config.wrap = next;
+        }
 
         detail::TextOverflowMode overflow_mode() const { return _layout_config.overflow; }
-        void set_overflow_mode(detail::TextOverflowMode value);
+        void set_overflow_mode(detail::TextOverflowMode value)
+        {
+            if (_layout_config.overflow == value) return;
+            _layout_config.overflow = value;
+        }
 
         bool trim_trailing_spaces() const { return _layout_config.trim_trailing_spaces; }
-        void set_trim_trailing_spaces(bool value);
+        void set_trim_trailing_spaces(bool value)
+        {
+            if (_layout_config.trim_trailing_spaces == value) return;
+            _layout_config.trim_trailing_spaces = value;
+        }
 
         detail::TextLayoutWidthMode width_mode() const { return _layout_config.width_mode; }
-        void set_width_mode(detail::TextLayoutWidthMode value);
+        void set_width_mode(detail::TextLayoutWidthMode value)
+        {
+            if (_layout_config.width_mode == value) return;
+            _layout_config.width_mode = value;
+        }
 
         detail::TextHorizontalAlign horizontal_align() const { return _render_config.horizontal_align; }
-        void set_horizontal_align(detail::TextHorizontalAlign value);
+        void set_horizontal_align(detail::TextHorizontalAlign value)
+        {
+            if (_render_config.horizontal_align == value) return;
+            _render_config.horizontal_align = value;
+        }
 
         detail::TextVerticalAlign vertical_align() const { return _render_config.vertical_align; }
-        void set_vertical_align(detail::TextVerticalAlign value);
+        void set_vertical_align(detail::TextVerticalAlign value)
+        {
+            assert(value != detail::TextVerticalAlign::none && "Text vertical alignment does not support none");
+            if (_render_config.vertical_align == value) return;
+            _render_config.vertical_align = value;
+        }
 
         u32 max_lines() const { return _layout_config.max_lines; }
-        void set_max_lines(u32 value);
+        void set_max_lines(u32 value)
+        {
+            if (_layout_config.max_lines == value) return;
+            _layout_config.max_lines = value;
+        }
 
         bool tight_content_height() const { return _tight_content_height; }
-        void set_tight_content_height(bool value);
+        void set_tight_content_height(bool value)
+        {
+            if (_tight_content_height == value) return;
+            _tight_content_height = value;
+        }
+
         size_t draw_record_count() const { return _draw_ids.size(); }
         size_t layout_instance_count() const { return _instances.size(); }
 
     protected:
-        void mark_layout_dirty();
-        void update_content_bounds();
         acul::string _text;
         StyleSelector _style;
         detail::TextLayoutConfig _layout_config{};
@@ -90,6 +128,8 @@ namespace auik::v2
         bool _instances_gpu_dirty = true;
         bool _tight_content_height = false;
         u16 _applied_clip_id = 0xFFFFu;
+
+        void update_content_bounds();
 
     private:
         bool rebuild_text_buffers(const amal::vec2 &bounds_size);
@@ -122,10 +162,9 @@ namespace auik::v2
 
     inline Text *make_text(u32 id, const acul::string &text = "")
     {
-        auto *out =
-            acul::alloc<Text>(id, text, amal::vec2{0.0f, 0.0f}, get_default_text_flags(), nullptr,
-                              Theme::STYLE_ID_INVALID, detail::TextOverflowMode::ellipsis,
-                              detail::TextVerticalAlign::center);
+        auto *out = acul::alloc<Text>(id, text, amal::vec2{0.0f, 0.0f}, get_default_text_flags(), nullptr,
+                                      Theme::STYLE_ID_INVALID, detail::TextOverflowMode::ellipsis,
+                                      detail::TextVerticalAlign::center);
         return out;
     }
 
@@ -140,8 +179,7 @@ namespace auik::v2
     {
         auto *out = acul::alloc<TextWithTooltip>(id, text, tooltip_text, amal::vec2{0.0f, 0.0f},
                                                  get_default_text_flags(), nullptr, Theme::STYLE_ID_INVALID,
-                                                 detail::TextOverflowMode::ellipsis,
-                                                 detail::TextVerticalAlign::center);
+                                                 detail::TextOverflowMode::ellipsis, detail::TextVerticalAlign::center);
         return out;
     }
 

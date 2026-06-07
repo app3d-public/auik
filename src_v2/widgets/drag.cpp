@@ -148,8 +148,9 @@ namespace auik::v2
             if (_value) *_value = value;
             else _fallback_value = value;
             _last_value = value;
-            dispatch_change();
+            const bool prevented = mark_changed();
             sync_text_from_value();
+            if (!prevented) apply_render_update(true);
         }
 
         template <typename T>
@@ -179,10 +180,10 @@ namespace auik::v2
         template <typename T>
         void Draggable<T>::on_focus(bool focused)
         {
-            if (!focused && text_changed())
+            if (!focused && _pending_text_commit)
             {
                 if (!commit_text_value()) sync_text_from_value();
-                mark_text_unchanged();
+                _pending_text_commit = false;
             }
             TextBox::on_focus(focused);
             if (focused && has_drag_interaction_flag(_interaction_flags, drag_interaction_select_all_on_next_focus))
@@ -308,7 +309,7 @@ namespace auik::v2
             if (key == Key::enter || key == Key::kp_enter)
             {
                 if (!commit_text_value()) sync_text_from_value();
-                mark_text_unchanged();
+                _pending_text_commit = false;
                 add_render_command<KeyEventTraits>(this, [this]() { apply_render_update(true); });
                 focus_widget(focus_parent() ? focus_parent() : parent());
                 return;
@@ -320,6 +321,7 @@ namespace auik::v2
                 return;
             }
             TextBox::on_key(key, state, mods);
+            _pending_text_commit = true;
         }
 
         template <typename T>
@@ -335,13 +337,15 @@ namespace auik::v2
                 }
             }
             TextBox::on_char_input(char_code, count);
+            _pending_text_commit = true;
         }
 
         template <typename T>
         void Draggable<T>::sync_text_from_value()
         {
             _last_value = value();
-            TextBox::set_value(format_value(value()));
+            TextBox::set_value_internal(format_value(value()));
+            _pending_text_commit = false;
         }
 
         template <typename T>

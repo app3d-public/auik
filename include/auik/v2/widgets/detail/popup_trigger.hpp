@@ -7,6 +7,8 @@
 
 namespace auik::v2::detail
 {
+    class WRotateTransient;
+
     class APPLIB_API PopupTrigger final
     {
     public:
@@ -14,10 +16,16 @@ namespace auik::v2::detail
                      f32 open_angle = amal::pi<f32>());
         ~PopupTrigger();
 
-        void set_owner(Widget *owner) { _owner = owner; }
+        void set_update_target(Widget *target)
+        {
+            _update_target = target;
+        }
+        void set_hit_id(ElementID id) { _hit_rect.id = id; }
         void set_open(bool value) { _open = value; }
+        void set_element_id(u32 value) { _hit_rect.id.element_id = value; }
         bool is_open() const { return _open; }
         void set_style_state(StyleState value) { _style_state = value; }
+        void set_style_tag(u32 style_tag);
         void set_icons(u32 closed_icon, u32 open_icon);
 
         StyleUpdateFlags update_style(u32 self_id, u32 parent_id, StyleState state);
@@ -26,7 +34,10 @@ namespace auik::v2::detail
         void translate(const amal::vec2 &delta);
         void rebuild_clip_rects(u16 clip_id);
         void reset_draw_records();
+        u32 get_depth_requirement() const { return 2u; }
         void update_depth(const amal::vec2 &depth_range);
+        void back_hit_depth();
+        void restore_hit_depth();
         void draw(DrawCtx &ctx, bool emit_hit_rect);
 
         void start_icon_animation(bool opening);
@@ -38,12 +49,10 @@ namespace auik::v2::detail
 
     private:
         void ensure_icon_resources();
-        void clear_animated_icon_draw();
         void schedule_icon_tick();
         void tick_icon_animation();
 
-        Widget *_owner = nullptr;
-        u32 _hit_tag = 0u;
+        Widget *_update_target = nullptr;
         u32 _closed_icon = 0u;
         u32 _open_icon = 0u;
         f32 _open_angle = amal::pi<f32>();
@@ -54,7 +63,6 @@ namespace auik::v2::detail
         StyleSelector _style{Theme::STYLE_ID_INVALID, 0u};
         DrawDataID _bg_draw{};
         DrawDataID _icon_draw{};
-        DrawDataID _animated_icon_draw{};
         TextureID _icon_texture{};
         amal::rect _icon_uv_rect{{0.0f, 0.0f}, {1.0f, 1.0f}};
         amal::vec2 _icon_size{0.0f, 0.0f};
@@ -66,6 +74,6 @@ namespace auik::v2::detail
         amal::vec2 _required_size{0.0f, 0.0f};
         amal::vec2 _bg_depth_range{0.0f, 1.0f};
         amal::vec2 _content_depth_range{0.0f, 1.0f};
-        u32 _rotate_post_id = AUIK_INVALID_POST_EFFECT_DATA_ID;
+        WRotateTransient *_rotate_transient = nullptr;
     };
 } // namespace auik::v2::detail

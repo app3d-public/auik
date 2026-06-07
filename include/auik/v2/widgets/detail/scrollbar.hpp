@@ -48,7 +48,6 @@ namespace auik::v2::detail
               _behavior(axis)
         {
             assert(parent);
-            set_depth_zone(DepthZone::foreground);
             u32 owner_id = parent->id();
             _rect.id.widget_id = owner_id;
             _thumb_rect.id.widget_id = owner_id;
@@ -78,6 +77,8 @@ namespace auik::v2::detail
         StyleUpdateFlags update_style() override;
         void translate(const amal::vec2 &delta) override;
         void rebuild_clip_rects() override;
+        void back_hit_depth() override;
+        void restore_hit_depth() override;
 
         void draw(DrawCtx &ctx) override;
         bool has_draw_record() const;
@@ -128,6 +129,13 @@ namespace auik::v2::detail
                                       AUIK_TAG_SCROLLBAR_THUMB_INTERNAL);
     }
 
+    inline Scrollbar *make_internal_x_scrollbar(Widget *parent)
+    {
+        return acul::alloc<Scrollbar>(AUIK_ID_SCROLLBAR_X, AUIK_TAG_SCROLLBAR_TRACK_X, AUIK_TAG_SCROLLBAR_THUMB_X,
+                                      parent, amal::axis::x, AUIK_TAG_SCROLLBAR_TRACK_INTERNAL,
+                                      AUIK_TAG_SCROLLBAR_THUMB_INTERNAL);
+    }
+
     inline void ensure_x_scrollbar(Scrollbar *&scrollbar, Widget *parent)
     {
         if (scrollbar) return;
@@ -145,4 +153,28 @@ namespace auik::v2::detail
         if (scrollbar) return;
         scrollbar = make_internal_y_scrollbar(parent);
     }
+
+    inline void ensure_internal_x_scrollbar(Scrollbar *&scrollbar, Widget *parent)
+    {
+        if (scrollbar) return;
+        scrollbar = make_internal_x_scrollbar(parent);
+    }
+
+    inline bool is_scrollbar_x_drag(ElementID drag_id, u32 owner_id)
+    {
+        return drag_id.widget_id == owner_id &&
+               (drag_id.tag_id == AUIK_TAG_SCROLLBAR_TRACK_X || drag_id.tag_id == AUIK_TAG_SCROLLBAR_THUMB_X);
+    }
+
+    inline bool is_scrollbar_y_drag(ElementID drag_id, u32 owner_id)
+    {
+        return drag_id.widget_id == owner_id &&
+               (drag_id.tag_id == AUIK_TAG_SCROLLBAR_TRACK_Y || drag_id.tag_id == AUIK_TAG_SCROLLBAR_THUMB_Y);
+    }
+
+    inline bool is_scrollbar_thumb_drag(ElementID drag_id)
+    {
+        return drag_id.tag_id == AUIK_TAG_SCROLLBAR_THUMB_X || drag_id.tag_id == AUIK_TAG_SCROLLBAR_THUMB_Y;
+    }
+
 } // namespace auik::v2::detail

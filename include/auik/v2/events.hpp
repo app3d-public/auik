@@ -8,7 +8,6 @@
 #include <acul/vector.hpp>
 #include <amal/vector.hpp>
 
-
 #ifndef AUIK_TAG_GLOBAL
     #define AUIK_TAG_GLOBAL 0x00000000u
 #endif
@@ -207,7 +206,8 @@ namespace auik::v2
             key_input = 0x20,
             char_input = 0x40,
             shortcut = 0x80,
-            change = 0x100
+            change = 0x100,
+            drop = 0x200
         };
         using flag_bitmask = std::true_type;
     };
@@ -258,6 +258,32 @@ namespace auik::v2
     {
         amal::vec2 delta{0.0f, 0.0f};
         KeyPressState state = KeyPressState::release;
+    };
+
+    struct ElementID
+    {
+        u32 widget_id = 0;
+        u32 tag_id = 0;
+        u32 element_id = 0;
+
+        constexpr bool is_valid() const { return widget_id != 0; }
+        constexpr explicit operator bool() const { return is_valid(); }
+        constexpr bool operator==(const ElementID &other) const
+        {
+            return widget_id == other.widget_id && tag_id == other.tag_id && element_id == other.element_id;
+        }
+        constexpr bool operator!=(const ElementID &other) const { return !(*this == other); }
+    };
+
+    inline constexpr ElementID make_element_id(u32 widget_id = 0, u32 tag_id = 0, u32 element_id = 0)
+    {
+        return {widget_id, tag_id, element_id};
+    }
+
+    struct DropEvent : EventBase
+    {
+        ElementID drag_id{};
+        ElementID drop_id{};
     };
 
     struct ScrollEvent : EventBase

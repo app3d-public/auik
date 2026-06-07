@@ -8,6 +8,7 @@ namespace auik::v2
     {
     public:
         acul::vector<Widget *> children;
+        acul::vector<ChildLayoutFlags> child_layouts;
         f32 inline_spacing = 0.0f;
 
         explicit Slot(Column *parent, ColumnChildren slot_children)
@@ -27,15 +28,23 @@ namespace auik::v2
                 acul::release(child);
             }
             children.clear();
+            child_layouts.clear();
         }
 
-        void add_child(Widget *child)
+        void add_child(Widget *child, ChildLayoutFlags layout = default_child_layout_flags())
         {
             assert(child && "child is null");
             child->set_parent(this);
             child->set_focus_parent(this);
             child->update_style();
             children.push_back(child);
+            child_layouts.push_back(layout);
+        }
+
+        void set_child_layout(size_t row_index, ChildLayoutFlags layout)
+        {
+            assert(row_index < child_layouts.size() && "row index out of range");
+            child_layouts[row_index] = layout;
         }
 
         StyleUpdateFlags update_style() override
@@ -66,6 +75,45 @@ namespace auik::v2
             set_required_size(required);
         }
 
+        static f32 row_child_offset_y(ChildLayoutFlags layout, f32 row_height, f32 child_height)
+        {
+            if (layout & ChildLayoutFlagBits::vcenter) return amal::floor(amal::max(row_height - child_height, 0.0f) * 0.5f);
+            if (layout & ChildLayoutFlagBits::bottom) return amal::max(row_height - child_height, 0.0f);
+            return 0.0f;
+        }
+
+        static bool has_row_vertical_align(ChildLayoutFlags layout)
+        {
+            return layout & (ChildLayoutFlagBits::vcenter | ChildLayoutFlagBits::bottom);
+        }
+
+        void update_layout_with_rows(bool min_size_known, const acul::vector<f32> &row_heights)
+        {
+            if (!min_size_known) update_layout_min_size();
+
+            Widget::update_layout(true);
+            f32 cursor_y = position().y;
+            for (size_t i = 0; i < children.size(); ++i)
+            {
+                auto *child = children[i];
+                if (!child) continue;
+                if (i > 0u) cursor_y += inline_spacing;
+                const f32 row_height = i < row_heights.size() ? row_heights[i] : child->required_size().y;
+                const ChildLayoutFlags layout = i < child_layouts.size() ? child_layouts[i] : default_child_layout_flags();
+                if (!child->is_fixed()) child->set_layout_size({size().x, child->size().y});
+                f32 child_y = cursor_y;
+                if (has_row_vertical_align(layout))
+                {
+                    const f32 child_height = child->required_size().y;
+                    child_y += row_child_offset_y(layout, row_height, child_height);
+                }
+                child->set_position({position().x, child_y});
+                child->update_layout(true);
+                child->set_clip_id(clip_id());
+                cursor_y += row_height;
+            }
+        }
+
         void update_layout(bool min_size_known) override
         {
             if (!min_size_known) update_layout_min_size();
@@ -77,7 +125,7 @@ namespace auik::v2
             {
                 if (!child) continue;
                 if (has_child) cursor_y += inline_spacing;
-                if (!child->is_fixed()) child->set_size({size().x, child->size().y});
+                if (!child->is_fixed()) child->set_layout_size({size().x, child->size().y});
                 child->set_position({position().x, cursor_y});
                 child->update_layout(true);
                 child->set_clip_id(clip_id());
@@ -119,6 +167,13 @@ namespace auik::v2
             }
         }
 
+        void reset_clip_rect_records() override
+        {
+            Widget::reset_clip_rect_records();
+            for (auto *child : children)
+                if (child) child->reset_clip_rect_records();
+        }
+
         void reset_draw_records() override
         {
             for (auto *child : children)
@@ -131,15 +186,25 @@ namespace auik::v2
         void update_depth(const amal::vec2 &depth_range) override
         {
             Widget::update_depth(depth_range);
-            amal::vec2 next_range = this->depth_range();
             for (auto *child : children)
             {
                 if (!child) continue;
-                amal::vec2 child_range{};
-                assign_next_depth(next_range, child_range);
-                child->update_depth(child_range);
-                next_range = child_range;
+                child->update_depth(this->depth_range());
             }
+        }
+
+        void back_hit_depth() override
+        {
+            Widget::back_hit_depth();
+            for (auto *child : children)
+                if (child) child->back_hit_depth();
+        }
+
+        void restore_hit_depth() override
+        {
+            Widget::restore_hit_depth();
+            for (auto *child : children)
+                if (child) child->restore_hit_depth();
         }
 
         void draw(DrawCtx &ctx) override
@@ -189,26 +254,34 @@ namespace auik::v2
         }
         _columns.clear();
         _column_widths.clear();
+        _row_heights.clear();
     }
 
     void Column::set_columns(ColumnItems columns)
     {
         clear_columns();
         for (auto &column : columns) add_slot(std::move(column));
-        detail::get_context().dirty_flags |= DirtyFlagBits::layout;
+        detail::mark_layout_dirty();
     }
 
     void Column::add_column(ColumnChildren children)
     {
         add_slot(std::move(children));
-        detail::get_context().dirty_flags |= DirtyFlagBits::layout;
+        detail::mark_layout_dirty();
     }
 
-    void Column::add_child(size_t column_index, Widget *child)
+    void Column::add_child(size_t column_index, Widget *child, ChildLayoutFlags layout)
     {
         assert(column_index < _columns.size() && "column index out of range");
-        _columns[column_index]->add_child(child);
-        detail::get_context().dirty_flags |= DirtyFlagBits::layout;
+        _columns[column_index]->add_child(child, layout);
+        detail::mark_layout_dirty();
+    }
+
+    void Column::set_child_layout(size_t column_index, size_t row_index, ChildLayoutFlags layout)
+    {
+        assert(column_index < _columns.size() && "column index out of range");
+        _columns[column_index]->set_child_layout(row_index, layout);
+        detail::mark_layout_dirty();
     }
 
     const Column::ColumnChildren &Column::column_children(size_t index) const
@@ -228,7 +301,7 @@ namespace auik::v2
         if (_style.tag_id == tag_id) return;
         _style = {Theme::STYLE_ID_INVALID, tag_id};
         set_rect_tag_id(tag_id);
-        detail::get_context().dirty_flags |= DirtyFlagBits::layout;
+        detail::mark_layout_dirty();
     }
 
     StyleUpdateFlags Column::update_style()
@@ -252,6 +325,7 @@ namespace auik::v2
 
         _column_widths.clear();
         _column_widths.reserve(_columns.size());
+        _row_heights.clear();
 
         amal::vec2 content_required{0.0f, 0.0f};
         bool has_column = false;
@@ -263,9 +337,20 @@ namespace auik::v2
             const amal::vec2 slot_required = slot->required_size();
             if (has_column) content_required.x += spacing;
             content_required.x += slot_required.x;
-            content_required.y = amal::max(content_required.y, slot_required.y);
             _column_widths.push_back(slot_required.x);
+            for (size_t i = 0; i < slot->children.size(); ++i)
+            {
+                auto *child = slot->children[i];
+                if (!child) continue;
+                while (i >= _row_heights.size()) _row_heights.push_back(0.0f);
+                _row_heights[i] = amal::max(_row_heights[i], child->required_size().y);
+            }
             has_column = true;
+        }
+        for (size_t i = 0; i < _row_heights.size(); ++i)
+        {
+            if (i > 0u) content_required.y += spacing;
+            content_required.y += _row_heights[i];
         }
 
         f32 required_width = size().x;
@@ -301,7 +386,7 @@ namespace auik::v2
         if (!is_fixed()) { outer_size.y = amal::max(outer_size.y, required_inner.y); }
 
         set_position(outer_pos);
-        set_size(outer_size);
+        set_layout_size(outer_size);
         Widget::update_layout(true);
         update_column_clip_rects();
 
@@ -330,8 +415,8 @@ namespace auik::v2
                                          : stretch_column_width;
             slot->inline_spacing = spacing;
             slot->set_position({cursor_x, inner_pos.y});
-            slot->set_size({column_width, inner_size.y});
-            slot->update_layout(true);
+            slot->set_layout_size({column_width, inner_size.y});
+            slot->update_layout_with_rows(true, _row_heights);
             cursor_x += column_width + spacing;
             ++width_index;
         }
@@ -349,6 +434,13 @@ namespace auik::v2
             slot->translate(delta);
         }
         update_column_clip_rects();
+    }
+
+    void Column::reset_clip_rect_records()
+    {
+        Widget::reset_clip_rect_records();
+        for (auto *slot : _columns)
+            if (slot) slot->reset_clip_rect_records();
     }
 
     void Column::rebuild_clip_rects()
@@ -374,15 +466,25 @@ namespace auik::v2
     void Column::update_depth(const amal::vec2 &depth_range)
     {
         Widget::update_depth(depth_range);
-        amal::vec2 next_range = this->depth_range();
         for (auto *slot : _columns)
         {
             if (!slot) continue;
-            amal::vec2 slot_range{};
-            assign_next_depth(next_range, slot_range);
-            slot->update_depth(slot_range);
-            next_range = slot_range;
+            slot->update_depth(this->depth_range());
         }
+    }
+
+    void Column::back_hit_depth()
+    {
+        Widget::back_hit_depth();
+        for (auto *slot : _columns)
+            if (slot) slot->back_hit_depth();
+    }
+
+    void Column::restore_hit_depth()
+    {
+        Widget::restore_hit_depth();
+        for (auto *slot : _columns)
+            if (slot) slot->restore_hit_depth();
     }
 
     void Column::draw(DrawCtx &ctx)
@@ -424,7 +526,8 @@ namespace auik::v2
 
     void Column::add_slot(ColumnChildren children)
     {
-        _columns.push_back(acul::alloc<Slot>(this, std::move(children)));
+        auto *slot = acul::alloc<Slot>(this, std::move(children));
+        _columns.push_back(slot);
         _column_widths.push_back(0.0f);
     }
 

@@ -43,7 +43,7 @@ namespace auik::v2
     static inline void measure_table_cell(Text *cell)
     {
         if (!cell) return;
-        cell->set_size({0.0f, 0.0f});
+        cell->set_layout_size({0.0f, 0.0f});
         cell->update_layout_min_size();
     }
 
@@ -604,7 +604,7 @@ namespace auik::v2
         if (!is_fixed()) outer_size.y = amal::max(outer_size.y, required_inner.y);
 
         set_position(outer_pos);
-        set_size(outer_size);
+        set_layout_size(outer_size);
         Widget::update_layout(true);
         rebuild_clip_rects();
 
@@ -638,8 +638,10 @@ namespace auik::v2
                 auto *cell = header_text(column);
                 if (cell)
                 {
+                    const auto &settings = settings_for_column(column);
+                    detail::apply_table_cell_alignment(cell, settings.halign, settings.valign);
                     cell->set_position({cursor_x, cursor_y});
-                    cell->set_size({column_w, header_h});
+                    cell->set_layout_size({column_w, header_h});
                     cell->update_layout(true);
                 }
                 if (column < _header_visuals.size())
@@ -672,8 +674,10 @@ namespace auik::v2
                 auto *cell = cell_text(row, column);
                 if (cell)
                 {
+                    const auto &settings = settings_for_column(column);
+                    detail::apply_table_cell_alignment(cell, settings.halign, settings.valign);
                     cell->set_position({cursor_x, cursor_y});
-                    cell->set_size({column_w, row_h});
+                    cell->set_layout_size({column_w, row_h});
                     cell->update_layout(true);
                 }
                 if (visual_index < _cell_visuals.size())
@@ -789,26 +793,61 @@ namespace auik::v2
     void Table::update_depth(const amal::vec2 &depth_range)
     {
         Widget::update_depth(depth_range);
-        amal::vec2 next_range = this->depth_range();
         for (auto *cell : _header_cells)
         {
             if (!cell) continue;
-            amal::vec2 cell_range{};
-            assign_next_depth(next_range, cell_range);
-            cell->update_depth(cell_range);
-            next_range = cell_range;
+            cell->update_depth(this->depth_range());
         }
         for (auto &row : _cells)
         {
             for (auto *cell : row)
             {
                 if (!cell) continue;
-                amal::vec2 cell_range{};
-                assign_next_depth(next_range, cell_range);
-                cell->update_depth(cell_range);
-                next_range = cell_range;
+                cell->update_depth(this->depth_range());
             }
         }
+    }
+
+    void Table::back_hit_depth()
+    {
+        Widget::back_hit_depth();
+        for (auto *cell : _header_cells)
+            if (cell) cell->back_hit_depth();
+        for (auto &row : _cells)
+            for (auto *cell : row)
+                if (cell) cell->back_hit_depth();
+        auto lower = [&](CellVisual &visual) { visual.rect.hit_depth = get_rect().hit_depth; };
+        for (auto &visual : _header_visuals) lower(visual);
+        for (auto &visual : _cell_visuals) lower(visual);
+        for (auto &visual : _alt_row_visuals) lower(visual);
+        for (auto &visuals : _resize_border_hit_visuals)
+        {
+            lower(visuals.x);
+            lower(visuals.y);
+        }
+        lower(_resize_indicator_visual);
+        detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
+    }
+
+    void Table::restore_hit_depth()
+    {
+        Widget::restore_hit_depth();
+        for (auto *cell : _header_cells)
+            if (cell) cell->restore_hit_depth();
+        for (auto &row : _cells)
+            for (auto *cell : row)
+                if (cell) cell->restore_hit_depth();
+        auto restore = [](CellVisual &visual) { visual.rect.hit_depth = visual.rect.depth; };
+        for (auto &visual : _header_visuals) restore(visual);
+        for (auto &visual : _cell_visuals) restore(visual);
+        for (auto &visual : _alt_row_visuals) restore(visual);
+        for (auto &visuals : _resize_border_hit_visuals)
+        {
+            restore(visuals.x);
+            restore(visuals.y);
+        }
+        restore(_resize_indicator_visual);
+        detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
     }
 
     void Table::draw(DrawCtx &ctx)
@@ -1056,7 +1095,7 @@ namespace auik::v2
     Text *Table::make_cell_text(const acul::string &value, u32 style_tag_id)
     {
         auto *text = acul::alloc<Text>(AUIK_TAG_TEXT, value, amal::vec2{0.0f, 0.0f},
-                                       WidgetFlagBits::visible | WidgetFlagBits::fixed, this, style_tag_id,
+                                       WidgetFlagBits::visible | WidgetFlagBits::fixed_layout, this, style_tag_id,
                                        detail::TextOverflowMode::ellipsis, detail::TextVerticalAlign::center);
         if (detail::g_context) text->update_style();
         return text;
@@ -1165,7 +1204,7 @@ namespace auik::v2
         const bool prev_active = has_table_flag(_table_flags, AUIK_TABLE_FLAG_RESIZE_INDICATOR_ACTIVE);
         const auto &ctx = detail::get_context();
         const auto transition = detail::get_widget_style_selector_transition(id());
-        auto target = ctx.io.mouse_down ? ctx.io.drag_id : detail::ElementID{};
+        auto target = ctx.io.mouse_down ? ctx.io.drag_id : ElementID{};
         if (target.widget_id != id() || !is_resize_border_tag(target.tag_id)) target = transition.current_id;
         const bool resize_indicator_active =
             target.widget_id == id() && ((column_resizable() && target.tag_id == AUIK_TAG_TABLE_RESIZE_BORDER_V) ||

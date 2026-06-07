@@ -60,20 +60,6 @@ namespace auik::v2::detail
         };
     };
 
-    struct HitboxZoneBits
-    {
-        enum enum_type : u8
-        {
-            none = 0x0,
-            left = 0x1,
-            right = 0x2,
-            top = 0x4,
-            bottom = 0x8
-        };
-        using flag_bitmask = std::true_type;
-    };
-    using HitboxZone = acul::flags<HitboxZoneBits>;
-
     struct CursorID
     {
         enum enum_type
@@ -100,26 +86,6 @@ namespace auik::v2::detail
     using PFN_construct_window_backend = void (*)(struct WindowContext *);
     using PFN_get_window_icon_image = bool (*)(struct WindowContext *, umbf::Image2D &);
 
-    struct ElementID
-    {
-        u32 widget_id = 0;
-        u32 tag_id = 0;
-        u32 element_id = 0;
-
-        constexpr bool is_valid() const { return widget_id != 0; }
-        constexpr explicit operator bool() const { return is_valid(); }
-        constexpr bool operator==(const ElementID &other) const
-        {
-            return widget_id == other.widget_id && tag_id == other.tag_id && element_id == other.element_id;
-        }
-        constexpr bool operator!=(const ElementID &other) const { return !(*this == other); }
-    };
-
-    inline constexpr ElementID make_element_id(u32 widget_id = 0, u32 tag_id = 0, u32 element_id = 0)
-    {
-        return {widget_id, tag_id, element_id};
-    }
-
     struct WindowContext
     {
         f64 time = 0.0;
@@ -144,9 +110,6 @@ namespace auik::v2::detail
     APPLIB_API void flush_frame_changes();
     APPLIB_API void reset_event_state();
     APPLIB_API void on_hover_id_updated(const ElementID &prev_hover_id, const ElementID &hover_id);
-    HitboxZone get_hitbox_zone(const RectData &rect, const amal::vec2 &mouse_pos);
-    CursorID::enum_type get_cursor_for_hitbox_zone(HitboxZone zone);
-
     inline void *get_window_handle(WindowContext *window_ctx)
     {
         assert(window_ctx && "auik window context is not initialized");
@@ -197,7 +160,7 @@ namespace auik::v2::detail
     struct RectData
     {
         ElementID id{};
-        u32 reserved = 0;
+        f32 hit_depth = 0.0f;
         amal::rect bounds;
         f32 depth = 0.0f;
         u16 clip_id = 0xFFFFu;
@@ -212,6 +175,7 @@ namespace auik::v2::detail
         rect.id = make_element_id(widget_id, tag_id, element_id);
         rect.bounds = bounds;
         rect.depth = depth;
+        rect.hit_depth = depth;
         rect.clip_id = clip_id;
         rect.flags = flags;
         return rect;

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <acul/memory/alloc.hpp>
 #include "widget.hpp"
 
 #define AUIK_TAG_IMAGE 0x8F9A3C21
@@ -9,7 +8,7 @@ namespace auik::v2
 {
     constexpr inline WidgetFlags get_default_image_flags()
     {
-        return get_default_widget_flags() | WidgetFlagBits::fixed;
+        return get_default_widget_flags() | WidgetFlagBits::fixed_layout;
     }
 
     class APPLIB_API Image : public Widget

@@ -169,8 +169,7 @@ namespace auik::v2::detail
         ctx.gpu_ctx->quads.clear_stream(stream, frame_id);
         stream->draw_sizes[frame_id] = 0;
         assert(state && state->buffer_versions);
-        // Keep clear lightweight: just prevent immediate stale resync into this frame.
-        state->buffer_versions[frame_id] = state->master_version;
+        mark_master_mutation(state, frame_id, ctx.frames_in_flight);
         stream->flags |= StreamFlagBits::invalidate;
         ctx.dirty_flags |= DirtyFlagBits::streams;
     }

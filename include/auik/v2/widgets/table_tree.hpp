@@ -86,6 +86,8 @@ namespace auik::v2
         void rebuild_clip_rects() override;
         void reset_draw_records() override;
         void update_depth(const amal::vec2 &depth_range) override;
+        void back_hit_depth() override;
+        void restore_hit_depth() override;
         void draw(DrawCtx &ctx) override;
         void on_click(MouseKey key, KeyPressState state, u32 click_count) override;
         void on_hover(HoverState state) override;
@@ -186,7 +188,7 @@ namespace auik::v2
 
     inline TableTree *make_fixed_table_tree(u32 id, amal::vec2 size, Widget *parent = nullptr)
     {
-        return acul::alloc<TableTree>(id, size, get_default_table_tree_flags() | WidgetFlagBits::fixed, parent,
+        return acul::alloc<TableTree>(id, size, get_default_table_tree_flags() | WidgetFlagBits::fixed_layout, parent,
                                       AUIK_STYLE_TAG_TABLE_TREE);
     }
 } // namespace auik::v2

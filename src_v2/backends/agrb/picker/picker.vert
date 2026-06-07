@@ -5,7 +5,7 @@ struct PickerInstanceData
     uint widget_id;
     uint tag_id;
     uint element_id;
-    uint reserved;
+    float hit_depth;
     vec2 position;
     vec2 size;
     float depth;
@@ -49,7 +49,7 @@ void main()
     vec2 pixel_pos = draw_pos + uv * draw_size;
     vec2 ndc = vec2((pixel_pos.x / window_size.x) * 2.0 - 1.0, (pixel_pos.y / window_size.y) * 2.0 - 1.0);
 
-    gl_Position = vec4(ndc, instance.depth, 1.0);
+    gl_Position = vec4(ndc, instance.hit_depth, 1.0);
     out_widget_id = instance.widget_id;
     out_tag_id = instance.tag_id;
     out_element_id = instance.element_id;

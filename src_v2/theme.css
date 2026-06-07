@@ -14,13 +14,13 @@
     color: var(--color-text);
     font-family: var(--system-font);
     font-size: calc(12.5px * var(--dpi));
-    margin: 0px 5px;
+    margin: 5px 0px;
     inline-spacing: 4px;
 }
 
 .caret,
 .multiline-caret {
-    padding: 1px 0px;
+    padding: 0px 1px;
     background-color: var(--color-text);
 }
 
@@ -53,7 +53,7 @@
 }
 
 .table {
-    margin: 0px 5px;
+    margin: 5px 0px;
     padding: 0px;
     background-color: rgba(0, 0, 0, 0);
     border: 1px solid var(--color-border);
@@ -107,6 +107,96 @@
     border: 1px solid var(--color-accent);
 }
 
+.dockspace-resize-helper {
+    margin: 4px;
+    padding: 2px;
+    background-color: var(--color-surface-light);
+}
+
+.dockspace-resize-helper:hover {
+    background-color: var(--color-surface-light);
+}
+
+.dockspace-resize-helper:focus,
+.dockspace-resize-helper:active {
+    background-color: var(--color-accent);
+}
+
+.dockspace-resize-helper-drag {
+    margin: 4px;
+    padding: 2px;
+    background-color: var(--color-surface-light);
+}
+
+.dockspace-resize-helper-drag:hover,
+.dockspace-resize-helper-drag:focus,
+.dockspace-resize-helper-drag:active {
+    background-color: var(--color-accent);
+}
+
+.dockspace-drop-zone {
+    background-color: rgba(72, 114, 255, 0.5);
+}
+
+.dock-node-tab-panel {
+    margin: 0px;
+    background-color: var(--color-surface-light);
+}
+
+.dock-tabbar {
+    margin: 0px;
+    inline-spacing: 0px;
+}
+
+.dock-tabbar-menu {
+    margin: -2px 4px 0px 4px;
+    padding: 6px;
+    background-color: rgba(0, 0, 0, 0);
+    border-radius: 4px;
+}
+
+.dock-tabbar-menu:hover {
+    background-color: var(--color-hover);
+}
+
+.dock-tabbar-menu:active {
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.window-header-menu {
+    margin: 0px;
+    padding: 6px;
+    background-color: rgba(0, 0, 0, 0);
+    border-radius: 4px;
+}
+
+.window-header-menu:hover {
+    background-color: var(--color-hover);
+}
+
+.window-header-menu:active {
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.dock-tab-item {
+    margin: 0px;
+    padding: 5px 10px;
+}
+
+.dock-tab-item:hover {
+    background-color: var(--color-hover);
+}
+
+.dock-tab-item-selected {
+    margin: 0px;
+    padding: 5px 10px;
+    background-color: var(--color-surface);
+}
+
+.dock-tab-item-selected:hover {
+    background-color: var(--color-hover);
+}
+
 .table-tree {
     border: 1px solid var(--color-border);
     border-radius: 3px;
@@ -129,13 +219,13 @@
 }
 
 .table-tree-collapse-icon {
-    margin: 2px 0px;
+    margin: 0px 2px;
     color: var(--color-text);
 }
 
 .collapse-header {
     margin: 0px;
-    padding: 0px 4px;
+    padding: 4px 0px;
     background-color: var(--color-surface-light);
     border-radius: 3px;
 }
@@ -150,7 +240,7 @@
 
 .collapse-header-closed {
     margin: 0px;
-    padding: 0px 4px;
+    padding: 4px 0px;
     background-color: var(--color-surface);
     border-radius: 3px;
 }
@@ -165,11 +255,11 @@
 
 .collapse-header-content {
     margin: 0px 0px;
-    padding: 8px 4px;
+    padding: 4px 8px;
 }
 
 .collapse-header-trigger {
-    margin: 8px 0px;
+    margin: 0px 8px;
 }
 
 .window {
@@ -179,15 +269,22 @@
     border-radius: 6px;
 }
 
-.modal-window {
+.docked-window {
     padding: 10px 8px;
+    background-color: var(--color-surface);
+    border: 0px solid rgba(0, 0, 0, 0);
+    border-radius: 0px;
+}
+
+.modal-window {
+    padding: 8px 10px;
     background-color: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: 6px;
 }
 
 .window-header {
-    padding: 4px 8px;
+    padding: 8px 4px;
     background-color: var(--color-active);
     border-radius: 6px 6px 0px 0px;
 }
@@ -206,11 +303,11 @@
 }
 
 .titlebar-icon {
-    margin: 8px 0px;
+    margin: 0px 8px;
 }
 
 .text-button {
-    padding: 14px 4px;
+    padding: 4px 14px;
     background-color: var(--color-surface-light);
     border-radius: 3px;
 }
@@ -224,7 +321,7 @@
 }
 
 .transparent-button {
-    padding: 14px 4px;
+    padding: 4px 14px;
     border-radius: 3px;
 }
 
@@ -247,7 +344,7 @@
 }
 
 .modal-message-area {
-    margin: 8px 8px 8px 4px;
+    margin: 8px 8px 4px 8px;
 }
 
 .modal-icon {
@@ -260,7 +357,7 @@
 }
 
 .modal-controls-area {
-    margin: 0px 15px 0px 6px;
+    margin: 15px 0px 6px 0px;
 }
 
 .image-button {
@@ -278,8 +375,8 @@
 }
 
 .textbox {
-    margin: 0px 5px;
-    padding: 8px 2px;
+    margin: 5px 0px;
+    padding: 2px 8px;
     background-color: var(--color-surface-light);
     border-radius: 4px;
 }
@@ -350,7 +447,7 @@
 }
 
 .combo-box {
-    padding: 10px 2px;
+    padding: 2px 10px;
     background-color: var(--color-surface-light);
     border-radius: 4px;
 }
@@ -365,14 +462,20 @@
 
 .combo-box-popup {
     margin: 0px;
-    padding: 0px 2px;
+    padding: 2px 0px;
     background-color: var(--color-active);
     border-radius: 0px 0px 4px 4px;
 }
 
 .combo-box-item {
-    margin: 4px 2px;
-    padding: 6px 2px;
+    margin: 2px 4px;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+.combo-box-item-multi {
+    margin: 2px 4px;
+    padding: 2px 26px 2px 6px;
     border-radius: 3px;
 }
 
@@ -380,8 +483,17 @@
     background-color: var(--color-hover);
 }
 
+.combo-box-item-multi:hover {
+    background-color: var(--color-hover);
+}
+
 .combo-box-item:active,
 .combo-box-item:focus {
+    background-color: var(--color-surface-light);
+}
+
+.combo-box-item-multi:active,
+.combo-box-item-multi:focus {
     background-color: var(--color-surface-light);
 }
 
@@ -397,7 +509,7 @@
 
 .tab-bar-item {
     margin: 0px;
-    padding: 8px 2px;
+    padding: 2px 8px;
     background-color: var(--color-surface-light);
     border-radius: 4px;
 }
@@ -418,7 +530,7 @@
 
 .tabbar-popup-button {
     margin: 0px;
-    padding: 8px 5px;
+    padding: 5px 8px;
     border-radius: 4px;
 }
 
@@ -432,7 +544,7 @@
 
 .tab-bar-popup {
     margin: 0px;
-    padding: 0px 2px;
+    padding: 2px 0px;
     background-color: var(--color-active);
     border-radius: 4px;
 }
@@ -486,13 +598,13 @@
 }
 
 .titlebar-menu-bar {
-    margin: 8px 0px;
+    margin: 0px 8px;
 }
 
 .menu-bar-item,
 .main-menu-item {
     margin: 2px 2px;
-    padding: 8px 2px;
+    padding: 2px 8px;
     border-radius: 3px;
 }
 
@@ -513,7 +625,7 @@
 
 .titlebar-menu-item {
     margin: 2px 2px;
-    padding: 8px 4px;
+    padding: 4px 8px;
     border-radius: 3px;
 }
 
@@ -530,24 +642,24 @@
 }
 
 .menu-shortcut {
-    margin: 50px 0px 0px 0px;
+    margin: 0px 0px 0px 50px;
     color: rgb(184, 184, 184);
 }
 
 .menu-popup {
-    padding: 0px 2px;
+    padding: 2px 0px;
     background-color: var(--color-active);
     border-radius: 0px 0px 4px 4px;
 }
 
 .separator {
-    margin: 4px 2px;
+    margin: 2px 4px;
     padding: 0.5px;
     background-color: rgb(77, 77, 77);
 }
 
 .slider {
-    padding: 0px 4px;
+    padding: 4px 0px;
     background-color: var(--color-surface-light);
     border-radius: 2.5px;
 }
@@ -557,21 +669,21 @@
 }
 
 .slider-grab {
-    margin: 0px 4px;
+    margin: 4px 0px;
     padding: 6px;
     background-color: var(--color-text);
     border-radius: 6px;
 }
 
 .slider-grab:hover {
-    margin: -4px 0px;
+    margin: 0px -4px;
     padding: 10px;
     border: 4px solid rgba(255, 255, 255, 0.25);
     border-radius: 10px;
 }
 
 .slider-grab:active {
-    margin: -4px 0px;
+    margin: 0px -4px;
     padding: 10px;
     border: 4px solid rgba(255, 255, 255, 0.35);
     border-radius: 10px;
@@ -592,14 +704,14 @@
 }
 
 .gradient-slider {
-    padding: 0px 4px;
+    padding: 4px 0px;
     background-color: var(--color-surface-light);
     border-radius: 2px;
 }
 
 .tooltip {
     margin: 0px;
-    padding: 10px 6px;
+    padding: 6px 10px;
     background-color: var(--color-active);
     border: 0px solid var(--color-border);
     border-radius: 3px;
@@ -614,7 +726,7 @@
 
 .scrollbar-thumb {
     margin: 0px;
-    padding: 4px 0px;
+    padding: 0px 4px;
     background-color: rgb(89, 89, 89);
     border-radius: 2px;
 }
@@ -630,7 +742,7 @@
 
 .scrollbar-thumb-internal {
     margin: 0px;
-    padding: 4px 0px;
+    padding: 0px 4px;
     background-color: rgb(89, 89, 89);
     border-radius: 2px;
 }

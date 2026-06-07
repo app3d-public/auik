@@ -81,25 +81,21 @@ namespace auik::v2
     static void update_titlebar_child_depths(const amal::vec2 &parent_depth_range,
                                              const acul::vector<Widget *> &children)
     {
-        const amal::vec2 work_range = detail::depth_zone_range(parent_depth_range, DepthZone::work);
-        amal::vec2 child_range{};
-        assign_next_depth(work_range, child_range);
+        const amal::vec2 work_range = detail::depth_work_range(parent_depth_range);
         for (auto *child : children)
         {
             if (!child) continue;
-            child->update_depth(child_range);
-            assign_next_depth(child_range, child_range);
+            child->update_depth(work_range);
         }
     }
 
     static void update_titlebar_caption_button_depths(const amal::vec2 &parent_depth_range,
                                                       ImageButton *const (&buttons)[AUIK_WINDOW_CAPTION_BTN_COUNT])
     {
-        const amal::vec2 work_range = detail::depth_zone_range(parent_depth_range, DepthZone::work);
+        const amal::vec2 work_range = detail::depth_work_range(parent_depth_range);
         for (auto *button : buttons)
         {
             if (!button) continue;
-            button->set_depth_zone(DepthZone::background);
             button->update_depth(work_range);
         }
     }
@@ -107,13 +103,14 @@ namespace auik::v2
     Titlebar::Titlebar(u32 id, WidgetFlags widget_flags)
         : Widget(id, widget_flags, EventFlagBits::none, nullptr, {}, AUIK_TAG_TITLEBAR)
     {
+        set_viewport_layout(ViewportLayoutMode::reserve, ViewportEdge::top);
     }
 
     void Titlebar::set_show_icon(bool value)
     {
         if (_show_icon == value) return;
         _show_icon = value;
-        detail::get_context().dirty_flags |= DirtyFlagBits::layout;
+        detail::mark_layout_dirty();
         detail::mark_host_refresh_request();
     }
 
@@ -180,7 +177,7 @@ namespace auik::v2
                                                                          : AUIK_TAG_WINDOW_CAPTION_BUTTON;
                 _caption_buttons[i] = acul::alloc<ImageButton>(
                     caption_button_widget_id(i), image, amal::vec2{0.0f, 0.0f}, amal::vec2{0.0f, 0.0f},
-                    WidgetFlagBits::visible | WidgetFlagBits::fixed, nullptr, style_tag);
+                    WidgetFlagBits::visible | WidgetFlagBits::fixed_layout, nullptr, style_tag);
                 _caption_buttons[i]->set_parent(this);
                 _caption_buttons[i]->set_focus_parent(this);
             }
@@ -222,12 +219,11 @@ namespace auik::v2
         const auto display = get_display_size();
         const f32 resolved_height = _state && _state->height > 0.0f ? _state->height : AUIK_TITLEBAR_HEIGHT_DEFAULT;
         set_position({0.0f, 0.0f});
-        set_size({display.x, resolved_height});
+        set_layout_size({display.x, resolved_height});
         set_required_size(size());
         Widget::update_layout(true);
 
         ensure_own_clip_rect({position().x, position().y, size().x, size().y});
-        if (is_viewport_reserved() && !parent() && is_visible()) reserve_main_viewport_top(size().y);
 
         _caption_buttons_width = 0.0f;
         const amal::vec2 caption_button_size = _state ? _state->caption_button_size : amal::vec2{};
@@ -241,7 +237,7 @@ namespace auik::v2
                 if (!button || (_state && !_state->caption_buttons[index])) continue;
                 button_x -= caption_button_size.x;
                 button->set_position({button_x, position().y});
-                button->set_size(caption_button_size);
+                button->set_layout_size(caption_button_size);
                 button->update_style();
                 button->update_layout(true);
                 _caption_buttons_width += caption_button_size.x;
@@ -263,7 +259,7 @@ namespace auik::v2
             if (child == _icon)
             {
                 child->set_position(cursor);
-                child->set_size(child->required_size());
+                child->set_layout_size(child->required_size());
                 child->update_layout(true);
 
                 const f32 centered_y = position().y + amal::round(amal::max((size().y - child->size().y) * 0.5f, 0.0f));
@@ -277,7 +273,7 @@ namespace auik::v2
                     position().y + amal::round(amal::max((size().y - measured_required.y) * 0.5f, 0.0f));
                 const amal::vec2 outer_pos = {cursor.x, outer_y};
                 child->set_position(outer_pos);
-                child->set_size(measured_required);
+                child->set_layout_size(measured_required);
                 child->update_layout(true);
                 cursor.x = outer_pos.x + measured_required.x;
             }
@@ -308,6 +304,33 @@ namespace auik::v2
         update_titlebar_caption_button_depths(this->depth_range(), _caption_buttons);
     }
 
+    void Titlebar::back_hit_depth()
+    {
+        Widget::back_hit_depth();
+        for (auto *child : _children)
+            if (child) child->back_hit_depth();
+        for (auto *button : _caption_buttons)
+            if (button) button->back_hit_depth();
+    }
+
+    void Titlebar::restore_hit_depth()
+    {
+        Widget::restore_hit_depth();
+        for (auto *child : _children)
+            if (child) child->restore_hit_depth();
+        for (auto *button : _caption_buttons)
+            if (button) button->restore_hit_depth();
+    }
+
+    void Titlebar::reset_clip_rect_records()
+    {
+        Widget::reset_clip_rect_records();
+        for (auto *button : _caption_buttons)
+            if (button) button->reset_clip_rect_records();
+        for (auto *child : _children)
+            if (child) child->reset_clip_rect_records();
+    }
+
     void Titlebar::rebuild_clip_rects()
     {
         ensure_own_clip_rect({position().x, position().y, size().x, size().y});
@@ -332,7 +355,7 @@ namespace auik::v2
     {
         auto *theme = get_theme();
         auto *quads_stream = get_primary_quads_stream();
-        const amal::vec2 background_range = detail::depth_zone_range(depth_range(), DepthZone::background);
+        const amal::vec2 background_range = detail::depth_background_range(depth_range());
         const f32 titlebar_bg_z = background_range.x;
         const f32 leading_region_bg_z = next_depth(background_range);
 

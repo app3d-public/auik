@@ -120,18 +120,18 @@ namespace auik::v2
                  {{0.0f, 0.0f}, size}, style_tag_id),
           _text(AUIK_TAG_TEXT, value, amal::vec2{0.0f, 0.0f},
                 WidgetFlagBits::visible |
-                    ((flags & WidgetFlagBits::fixed) ? WidgetFlagBits::fixed : WidgetFlagBits::none),
+                    ((flags & WidgetFlagBits::fixed_layout) ? WidgetFlagBits::fixed_layout : WidgetFlagBits::none),
                 this, AUIK_STYLE_TAG_NO_PAD, detail::TextOverflowMode::clip, text_vertical_align, text_wrap,
                 text_wrap != detail::TextWrapMode::none ? detail::TextLayoutWidthMode::bounds
                                                         : detail::TextLayoutWidthMode::viewport),
           _placeholder(placeholder.empty()
                            ? nullptr
-                           : acul::alloc<Text>(
-                                 AUIK_TAG_TEXT, placeholder, amal::vec2{0.0f, 0.0f},
-                                 WidgetFlagBits::visible |
-                                     ((flags & WidgetFlagBits::fixed) ? WidgetFlagBits::fixed : WidgetFlagBits::none),
-                                 this, AUIK_STYLE_TAG_PLACEHOLDER, detail::TextOverflowMode::clip, text_vertical_align,
-                                 text_wrap)),
+                           : acul::alloc<Text>(AUIK_TAG_TEXT, placeholder, amal::vec2{0.0f, 0.0f},
+                                               WidgetFlagBits::visible | ((flags & WidgetFlagBits::fixed_layout)
+                                                                              ? WidgetFlagBits::fixed_layout
+                                                                              : WidgetFlagBits::none),
+                                               this, AUIK_STYLE_TAG_PLACEHOLDER, detail::TextOverflowMode::clip,
+                                               text_vertical_align, text_wrap)),
           _edit(read_only ? nullptr : acul::alloc<TextBoxEditData>()),
           _read_only(read_only)
     {
@@ -183,7 +183,11 @@ namespace auik::v2
         f32 text_h = _text.required_size().y;
         if (_placeholder) text_h = amal::max(text_h, _placeholder->required_size().y);
 
-        amal::vec2 min_size = is_fixed() ? size() : amal::vec2{0.0f, 0.0f};
+        amal::vec2 min_size = is_fixed() ? amal::vec2{is_size_concrete(requested_size().x) ? requested_size().x : 0.0f,
+                                                      is_size_concrete(requested_size().y) ? requested_size().y : 0.0f}
+                                         : amal::vec2{0.0f, 0.0f};
+        if (stretch_width()) min_size.x = 160.0f;
+        if (stretch_height()) min_size.y = 0.0f;
         if (min_size.x <= 0.0f) min_size.x = 160.0f;
         if (!is_fixed() && size().y > 0.0f && !should_resize_to_content()) min_size.y = size().y;
         if (min_size.y <= 0.0f) min_size.y = amal::max(text_h, style.text_size()) + padding.y + padding.w;
@@ -201,13 +205,14 @@ namespace auik::v2
 
         amal::vec2 box_size = size();
         if (box_size.x <= 0.0f) box_size.x = required_size().x - margin.x - margin.z;
-        if (box_size.y <= 0.0f || should_resize_to_content()) box_size.y = required_size().y - margin.y - margin.w;
+        if (box_size.y <= 0.0f || (!stretch_height() && should_resize_to_content()))
+            box_size.y = required_size().y - margin.y - margin.w;
         box_size.x = amal::max(box_size.x, 1.0f);
         box_size.y = amal::max(box_size.y, style.text_size() + padding.y + padding.w);
 
         const amal::vec2 box_pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
         set_position(box_pos);
-        set_size(box_size);
+        set_layout_size(box_size);
         Widget::update_layout(true);
         assert(parent() && "TextBox must have parent");
         set_clip_id(parent()->content_clip_id());
@@ -228,7 +233,7 @@ namespace auik::v2
             const f32 scrollbar_x = box_pos.x + box_size.x - track_margin.z - bar_w;
             const f32 content_view_w = amal::max(scrollbar_x - track_margin.x - _content_pos.x, 0.0f);
             _text.set_position(_content_pos);
-            _text.set_size({content_view_w, _content_size.y});
+            _text.set_layout_size({content_view_w, _content_size.y});
             _text.set_clip_id(text_content_clip_id());
             _text.update_layout(true);
             _text.set_clip_id(text_content_clip_id());
@@ -243,14 +248,14 @@ namespace auik::v2
                 _scrollbar_y->configure({scrollbar_x, box_pos.y + track_margin.y},
                                         {bar_w, amal::max(box_size.y - track_margin.y - track_margin.w, 0.0f)},
                                         content_h, _content_size.y);
-                _content_scroll_y = _scrollbar_y->scroll_offset();
+                _content_scroll.y = _scrollbar_y->scroll_offset();
             }
             else
             {
                 _scrollbar_y->set_visible(false);
                 remove_event_flags(EventFlagBits::scroll);
                 _scrollbar_y->set_scroll_offset(0.0f);
-                _content_scroll_y = 0.0f;
+                _content_scroll.y = 0.0f;
             }
         }
         else if (_scrollbar_y)
@@ -258,14 +263,14 @@ namespace auik::v2
             _scrollbar_y->set_visible(false);
             remove_event_flags(EventFlagBits::scroll);
             _scrollbar_y->set_scroll_offset(0.0f);
-            _content_scroll_y = 0.0f;
+            _content_scroll.y = 0.0f;
         }
         _text.set_position(_content_pos);
-        _text.set_size(_content_size);
+        _text.set_layout_size(_content_size);
         _text.set_clip_id(text_content_clip_id());
         _text.update_layout(true);
         update_content_scroll_x_for_cursor();
-        _text.translate({-_content_scroll_x, -_content_scroll_y});
+        _text.translate({-_content_scroll.x, -_content_scroll.y});
         _text.set_clip_id(text_content_clip_id());
         refresh_placeholder_layout();
         rebuild_selection_rect_cache();
@@ -318,6 +323,22 @@ namespace auik::v2
             assign_next_depth(text_range, scrollbar_range);
             _scrollbar_y->update_depth(scrollbar_range);
         }
+    }
+
+    void TextBox::back_hit_depth()
+    {
+        Widget::back_hit_depth();
+        _text.back_hit_depth();
+        if (_placeholder) _placeholder->back_hit_depth();
+        if (_scrollbar_y) _scrollbar_y->back_hit_depth();
+    }
+
+    void TextBox::restore_hit_depth()
+    {
+        Widget::restore_hit_depth();
+        _text.restore_hit_depth();
+        if (_placeholder) _placeholder->restore_hit_depth();
+        if (_scrollbar_y) _scrollbar_y->restore_hit_depth();
     }
 
     void TextBox::draw(DrawCtx &ctx)
@@ -426,8 +447,8 @@ namespace auik::v2
         caret.z_order = next_depth(depth_range());
         caret.background_color = visible ? caret_style.background_color() : 0;
         caret.mask = text_content_clip_id();
-        ctx.emit(overlay_stream, _edit->caret, &caret, detail::make_rect_data(id(), _edit->caret_style.tag_id, caret.rect),
-                 false);
+        ctx.emit(overlay_stream, _edit->caret, &caret,
+                 detail::make_rect_data(id(), _edit->caret_style.tag_id, caret.rect), false);
     }
 
     void TextBox::draw_selection_drag_icon(DrawCtx &ctx, f32 selection_z)
@@ -504,7 +525,7 @@ namespace auik::v2
         {
             if (state != KeyPressState::press) return;
             _drag_scrollbar = nullptr;
-            _scrollbar_y->set_scroll_offset(_content_scroll_y);
+            _scrollbar_y->set_scroll_offset(_content_scroll.y);
             bool is_offset_changed = false;
             if (ctx.hover_id.tag_id == AUIK_TAG_SCROLLBAR_THUMB_Y) _drag_scrollbar = _scrollbar_y;
             else if (ctx.hover_id.tag_id == AUIK_TAG_SCROLLBAR_TRACK_Y)
@@ -512,7 +533,7 @@ namespace auik::v2
                 is_offset_changed = _scrollbar_y->scroll_to_track_click(ctx.io.mouse_pos);
                 _drag_scrollbar = _scrollbar_y;
             }
-            _content_scroll_y = _scrollbar_y->scroll_offset();
+            _content_scroll.y = _scrollbar_y->scroll_offset();
             if (is_offset_changed)
                 add_render_command<detail::ClickEventTraits>(this, [this]() {
                     update_layout_from_current_bounds(true);
@@ -551,9 +572,9 @@ namespace auik::v2
         }
         if (_drag_scrollbar)
         {
-            _scrollbar_y->set_scroll_offset(_content_scroll_y);
+            _scrollbar_y->set_scroll_offset(_content_scroll.y);
             const bool is_offset_changed = _scrollbar_y->scroll_thumb_by_drag_delta(delta);
-            _content_scroll_y = _scrollbar_y->scroll_offset();
+            _content_scroll.y = _scrollbar_y->scroll_offset();
             if (is_offset_changed)
                 add_render_command<detail::DragEventTraits>(this, [this]() {
                     update_layout_from_current_bounds(true);
@@ -765,7 +786,7 @@ namespace auik::v2
         _edit_state.cursors.resize(1);
         reset_caret_blink();
         schedule_caret_blink();
-        add_render_command<detail::KeyEventTraits>(this, [this]() { apply_render_update(true); });
+        if (!mark_changed()) add_render_command<detail::KeyEventTraits>(this, [this]() { apply_render_update(true); });
     }
 
     void TextBox::paste_clipboard_at_cursor()
@@ -834,7 +855,8 @@ namespace auik::v2
             layout_dirty = move_selection_to_cursor(cursor_from_point(get_mouse_pos()),
                                                     detail::get_context().io.active_mods & KeyModeBits::control);
         _edit->flags &= ~(AUIK_TEXTBOX_SELECTION_DRAG_PRESS_PENDING_BIT | AUIK_TEXTBOX_SELECTION_DRAG_ACTIVE_BIT);
-        if (layout_dirty) add_render_command<detail::DragEventTraits>(this, [this]() { apply_render_update(true); });
+        if (layout_dirty && !mark_changed())
+            add_render_command<detail::DragEventTraits>(this, [this]() { apply_render_update(true); });
     }
 
     void TextBox::on_key(Key key, KeyPressState state, KeyMode mods)
@@ -899,16 +921,14 @@ namespace auik::v2
         add_render_command<detail::CharEventTraits>(this, [this]() { apply_render_update(true); });
     }
 
-    void TextBox::set_value(const acul::string &value)
+    void TextBox::set_value_internal(const acul::string &value)
     {
         _text.set_text(value);
-        _changed = false;
+        
         auto &cursor = _edit_state.primary_cursor();
         cursor.cursor = static_cast<int>(this->value().size());
         cursor.select_start = cursor.cursor;
         cursor.select_end = cursor.cursor;
-        detail::get_context().dirty_flags |= DirtyFlagBits::layout;
-        detail::mark_host_refresh_request();
     }
 
     void TextBox::set_placeholder(const acul::string &value)
@@ -923,27 +943,17 @@ namespace auik::v2
         {
             if (_placeholder->text() == value) return;
             _placeholder->set_text(value);
-            _placeholder->set_position(_content_pos);
-            _placeholder->set_size(_content_size);
-            _placeholder->set_clip_id(text_content_clip_id());
         }
         else
         {
-            _placeholder = acul::alloc<Text>(
-                AUIK_TAG_TEXT, value, amal::vec2{0.0f, 0.0f},
-                WidgetFlagBits::visible |
-                    ((widget_flags & WidgetFlagBits::fixed) ? WidgetFlagBits::fixed : WidgetFlagBits::none),
-                this, AUIK_STYLE_TAG_PLACEHOLDER);
+            _placeholder = acul::alloc<Text>(AUIK_TAG_TEXT, value, amal::vec2{0.0f, 0.0f},
+                                             WidgetFlagBits::visible | ((widget_flags & WidgetFlagBits::fixed_layout)
+                                                                            ? WidgetFlagBits::fixed_layout
+                                                                            : WidgetFlagBits::none),
+                                             this, AUIK_STYLE_TAG_PLACEHOLDER);
             _placeholder->set_overflow_mode(detail::TextOverflowMode::clip);
             _placeholder->set_vertical_align(detail::TextVerticalAlign::center);
-            _placeholder->set_position(_content_pos);
-            _placeholder->set_size(_content_size);
-            _placeholder->set_clip_id(text_content_clip_id());
-            _placeholder->update_style();
-            _placeholder->update_depth(_text.depth_range());
         }
-        detail::get_context().dirty_flags |= DirtyFlagBits::layout;
-        detail::mark_host_refresh_request();
     }
 
     void TextBox::reset_caret_blink()
@@ -985,7 +995,7 @@ namespace auik::v2
     {
         if (!_scrollbar_y || !_scrollbar_y->is_visible()) return;
         if (!_scrollbar_y->scroll_by_pixels(-delta.y * static_cast<f32>(AUIK_SCROLL_STEP))) return;
-        _content_scroll_y = _scrollbar_y->scroll_offset();
+        _content_scroll.y = _scrollbar_y->scroll_offset();
         add_render_command<detail::ScrollEventTraits>(this, [this]() {
             update_layout_from_current_bounds(true);
             redraw_external(!edit_draw_slots_need_record(), DrawReasonBits::layout);
@@ -1034,8 +1044,8 @@ namespace auik::v2
         if (layout.lines.empty())
             return point.x < _content_pos.x + _content_size.x * 0.5f ? 0 : static_cast<int>(value().size());
 
-        const f32 local_x = point.x - _content_pos.x + _content_scroll_x;
-        const f32 local_y = point.y - _content_pos.y + _content_scroll_y;
+        const f32 local_x = point.x - _content_pos.x + _content_scroll.x;
+        const f32 local_y = point.y - _content_pos.y + _content_scroll.y;
         u32 line_index = 0;
         f32 best_dist = 3.4e38f;
         for (u32 i = 0; i < layout.lines.size(); ++i)
@@ -1154,8 +1164,8 @@ namespace auik::v2
             line_y = static_cast<f32>(line_index) * line_h + amal::max((line_h - caret_h) * 0.5f, 0.0f);
         }
 
-        return {{amal::round(_content_pos.x + x - _content_scroll_x),
-                 amal::round(_content_pos.y + align_y + line_y - _content_scroll_y)},
+        return {{amal::round(_content_pos.x + x - _content_scroll.x),
+                 amal::round(_content_pos.y + align_y + line_y - _content_scroll.y)},
                 {width, caret_h}};
     }
 
@@ -1181,8 +1191,8 @@ namespace auik::v2
                 break;
         }
         if (layout.lines.empty())
-            return {{_content_pos.x + x0 - _content_scroll_x,
-                     _content_pos.y + align_y + amal::max((line_h - selection_h) * 0.5f, 0.0f) - _content_scroll_y},
+            return {{_content_pos.x + x0 - _content_scroll.x,
+                     _content_pos.y + align_y + amal::max((line_h - selection_h) * 0.5f, 0.0f) - _content_scroll.y},
                     {amal::max(x1 - x0, 0.0f), selection_h}};
         if (line_index >= layout.lines.size()) line_index = static_cast<u32>(layout.lines.size() - 1);
 
@@ -1190,24 +1200,24 @@ namespace auik::v2
         f32 line_y = line.glyph_count > 0 ? layout.glyphs[line.glyph_offset].pen.y - layout.ascender
                                           : static_cast<f32>(line_index) * layout.line_height;
         if (accepts_newline()) line_y += amal::max((line_h - selection_h) * 0.5f, 0.0f);
-        return {{_content_pos.x + x0 - _content_scroll_x, _content_pos.y + align_y + line_y - _content_scroll_y},
+        return {{_content_pos.x + x0 - _content_scroll.x, _content_pos.y + align_y + line_y - _content_scroll.y},
                 {amal::max(x1 - x0, 0.0f), selection_h}};
     }
 
     bool TextBox::update_content_scroll_x_for_cursor()
     {
-        const f32 old_scroll_x = _content_scroll_x;
+        const f32 old_scroll_x = _content_scroll.x;
         if (accepts_newline() || value().empty() || _edit_state.cursors.empty())
         {
-            _content_scroll_x = 0.0f;
-            return old_scroll_x != _content_scroll_x;
+            _content_scroll.x = 0.0f;
+            return old_scroll_x != _content_scroll.x;
         }
 
         const auto &layout = _text.layout_result();
         if (layout.lines.empty() || _content_size.x <= 0.0f)
         {
-            _content_scroll_x = 0.0f;
-            return old_scroll_x != _content_scroll_x;
+            _content_scroll.x = 0.0f;
+            return old_scroll_x != _content_scroll.x;
         }
 
         const int cursor = amal::clamp(_edit_state.primary_cursor().cursor, 0, static_cast<int>(value().size()));
@@ -1215,29 +1225,29 @@ namespace auik::v2
         const u32 line_index = line_index_from_cursor(cursor, edit_cursor.cursor_at_end_of_line);
         const f32 cursor_x = cursor_x_on_line(line_index, cursor);
         const f32 max_scroll = amal::max(layout.size.x - _content_size.x, 0.0f);
-        const f32 right_edge = _content_scroll_x + _content_size.x;
+        const f32 right_edge = _content_scroll.x + _content_size.x;
         const f32 caret_margin = 1.0f;
-        if (cursor_x > right_edge - caret_margin) _content_scroll_x = cursor_x - _content_size.x + caret_margin;
-        if (cursor_x < _content_scroll_x) _content_scroll_x = cursor_x;
-        _content_scroll_x = amal::clamp(_content_scroll_x, 0.0f, max_scroll);
-        return old_scroll_x != _content_scroll_x;
+        if (cursor_x > right_edge - caret_margin) _content_scroll.x = cursor_x - _content_size.x + caret_margin;
+        if (cursor_x < _content_scroll.x) _content_scroll.x = cursor_x;
+        _content_scroll.x = amal::clamp(_content_scroll.x, 0.0f, max_scroll);
+        return old_scroll_x != _content_scroll.x;
     }
 
     bool TextBox::update_content_scroll_y_for_cursor()
     {
-        const f32 old_scroll_y = _content_scroll_y;
+        const f32 old_scroll_y = _content_scroll.y;
         if (!accepts_newline() || !has_internal_scrollbar() || value().empty() || _edit_state.cursors.empty())
         {
-            if (!has_internal_scrollbar()) _content_scroll_y = 0.0f;
-            return old_scroll_y != _content_scroll_y;
+            if (!has_internal_scrollbar()) _content_scroll.y = 0.0f;
+            return old_scroll_y != _content_scroll.y;
         }
 
         const auto &layout = _text.layout_result();
         if (layout.lines.empty() || _content_size.y <= 0.0f)
         {
-            _content_scroll_y = 0.0f;
-            if (_scrollbar_y) _scrollbar_y->set_scroll_offset(_content_scroll_y);
-            return old_scroll_y != _content_scroll_y;
+            _content_scroll.y = 0.0f;
+            if (_scrollbar_y) _scrollbar_y->set_scroll_offset(_content_scroll.y);
+            return old_scroll_y != _content_scroll.y;
         }
 
         const auto &edit_cursor = _edit_state.primary_cursor();
@@ -1268,19 +1278,19 @@ namespace auik::v2
         const f32 visible_top = amal::max(clip.y - _content_pos.y, 0.0f);
         const f32 visible_bottom = amal::min(clip.y + clip.w - _content_pos.y, _content_size.y);
         const f32 visible_h = amal::max(visible_bottom - visible_top, 0.0f);
-        const f32 viewport_top = _content_scroll_y + visible_top;
-        const f32 viewport_bottom = _content_scroll_y + (visible_h > 0.0f ? visible_bottom : _content_size.y);
+        const f32 viewport_top = _content_scroll.y + visible_top;
+        const f32 viewport_bottom = _content_scroll.y + (visible_h > 0.0f ? visible_bottom : _content_size.y);
         const f32 caret_top = align_y + line_y;
         const f32 caret_bottom = caret_top + line_h;
 
-        if (caret_bottom > viewport_bottom) _content_scroll_y += caret_bottom - viewport_bottom;
-        if (caret_top < viewport_top) _content_scroll_y -= viewport_top - caret_top;
+        if (caret_bottom > viewport_bottom) _content_scroll.y += caret_bottom - viewport_bottom;
+        if (caret_top < viewport_top) _content_scroll.y -= viewport_top - caret_top;
 
         const f32 max_scroll =
             _scrollbar_y ? _scrollbar_y->max_scroll() : amal::max(layout.size.y - _content_size.y, 0.0f);
-        _content_scroll_y = amal::clamp(_content_scroll_y, 0.0f, max_scroll);
-        if (_scrollbar_y) _scrollbar_y->set_scroll_offset(_content_scroll_y);
-        return old_scroll_y != _content_scroll_y;
+        _content_scroll.y = amal::clamp(_content_scroll.y, 0.0f, max_scroll);
+        if (_scrollbar_y) _scrollbar_y->set_scroll_offset(_content_scroll.y);
+        return old_scroll_y != _content_scroll.y;
     }
 
     void TextBox::update_text_content_clip_rect()
@@ -1334,10 +1344,7 @@ namespace auik::v2
         }
     }
 
-    u32 TextBox::line_index_from_cursor(int cursor) const
-    {
-        return line_index_from_cursor(cursor, false);
-    }
+    u32 TextBox::line_index_from_cursor(int cursor) const { return line_index_from_cursor(cursor, false); }
 
     u32 TextBox::line_index_from_cursor(int cursor, bool cursor_at_end_of_line) const
     {
@@ -1368,11 +1375,11 @@ namespace auik::v2
     void TextBox::refresh_text_layout_for_editing()
     {
         _text.set_position(_content_pos);
-        _text.set_size(_content_size);
+        _text.set_layout_size(_content_size);
         _text.set_clip_id(text_content_clip_id());
         _text.update_layout(true);
         update_content_scroll_x_for_cursor();
-        _text.translate({-_content_scroll_x, -_content_scroll_y});
+        _text.translate({-_content_scroll.x, -_content_scroll.y});
         _text.set_clip_id(text_content_clip_id());
         refresh_placeholder_layout();
         rebuild_selection_rect_cache();
@@ -1382,10 +1389,10 @@ namespace auik::v2
     {
         if (!_placeholder) return;
         _placeholder->set_position(_content_pos);
-        _placeholder->set_size(_content_size);
+        _placeholder->set_layout_size(_content_size);
         _placeholder->set_clip_id(text_content_clip_id());
         _placeholder->update_layout(true);
-        _placeholder->translate({0.0f, -_content_scroll_y});
+        _placeholder->translate({0.0f, -_content_scroll.y});
         _placeholder->set_clip_id(text_content_clip_id());
     }
 
@@ -1413,7 +1420,7 @@ namespace auik::v2
         const bool is_primary = !_edit_state.cursors.empty() && _edit_state.primary_cursor().cursor == cursor;
         const bool at_end = is_primary && _edit_state.primary_cursor().cursor_at_end_of_line;
         const u32 line_index = line_index_from_cursor(cursor, at_end);
-        return {_content_pos.x + cursor_x_on_line(line_index, cursor) - _content_scroll_x, line_screen_y(line_index)};
+        return {_content_pos.x + cursor_x_on_line(line_index, cursor) - _content_scroll.x, line_screen_y(line_index)};
     }
 
     void TextBox::move_cursor_vertical(int dir, bool select)
@@ -1440,9 +1447,9 @@ namespace auik::v2
             const int new_pos = cursor_from_line_x(target_line, cursor.preferred_x);
             const auto &target = layout.lines[target_line];
             const u32 next_line = target_line + 1;
-            cursor.cursor_at_end_of_line =
-                new_pos == static_cast<int>(target.text_end) && next_line < layout.lines.size() &&
-                new_pos == static_cast<int>(layout.lines[next_line].text_start);
+            cursor.cursor_at_end_of_line = new_pos == static_cast<int>(target.text_end) &&
+                                           next_line < layout.lines.size() &&
+                                           new_pos == static_cast<int>(layout.lines[next_line].text_start);
             if (select)
             {
                 if (!cursor.has_selection()) cursor.select_start = cursor.cursor;
@@ -1500,8 +1507,7 @@ namespace auik::v2
         for (int i = 0; text && i < text_len; ++i) out += static_cast<char>(text[i]);
         out.append(value.c_str() + end, value.size() - end);
         self->_text.set_text(out);
-        self->_changed = true;
-        self->dispatch_change();
+        self->mark_changed();
         return true;
     }
 
@@ -1534,7 +1540,5 @@ namespace auik::v2
     {
         if (_can_expand_to_content == value) return;
         _can_expand_to_content = value;
-        detail::get_context().dirty_flags |= DirtyFlagBits::layout;
-        detail::mark_host_refresh_request();
     }
 } // namespace auik::v2

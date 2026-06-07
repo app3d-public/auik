@@ -30,8 +30,8 @@ void main()
     {
         const vec2 half_size = in_rect_size * 0.5;
         const float dist = sd_box(in_local_pos, half_size);
-        if (dist > AUIK_HITBOX_PAD) discard;
-        if (abs(dist) <= AUIK_HITBOX_PAD) out_value.y = uint(0xBF9B2277u);
+        if (abs(dist) > AUIK_HITBOX_PAD) discard;
+        out_value.y = uint(0xBF9B2277u);
     }
     else
     {

@@ -1,3 +1,4 @@
+#include <auik/v2/detail/depth.hpp>
 #include <auik/v2/pipelines.hpp>
 #include <auik/v2/widgets/detail/scrollbar.hpp>
 
@@ -198,7 +199,7 @@ namespace auik::v2::detail
         _view_size = view_size;
         _behavior.set_metrics(content_size, view_size);
         set_position(track_pos);
-        set_size(track_size);
+        set_layout_size(track_size);
 
         auto *theme = get_theme();
         const auto &track_style = theme->get_style(_track_style.id);
@@ -287,6 +288,20 @@ namespace auik::v2::detail
         _thumb_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
     }
 
+    void Scrollbar::back_hit_depth()
+    {
+        Widget::back_hit_depth();
+        _thumb_rect.hit_depth = get_root_depth_zone_range(DepthZone::background).x;
+        get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
+    }
+
+    void Scrollbar::restore_hit_depth()
+    {
+        Widget::restore_hit_depth();
+        _thumb_rect.hit_depth = _thumb_rect.depth;
+        get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
+    }
+
     void Scrollbar::draw(DrawCtx &ctx)
     {
         if (!(widget_flags & WidgetFlagBits::visible)) return;
@@ -303,6 +318,7 @@ namespace auik::v2::detail
         thumb.rect = _thumb_rect.bounds;
         thumb.z_order = next_depth(depth_range());
         _thumb_rect.depth = thumb.z_order;
+        _thumb_rect.hit_depth = _thumb_rect.depth;
         _thumb_rect.clip_id = clip_id();
         const bool thumb_visible = fill_quads_instance_by_style(theme->get_style(_thumb_style.id), clip_id(), thumb);
         emit_quads_instance(ctx, quads_stream, _thumb_draw_id, thumb, _thumb_rect, thumb_visible, ctx.emit_hit_rect);

@@ -8,9 +8,27 @@
 #include "../detail/events.hpp"
 #include "../draw.hpp"
 #include "../theme.hpp"
+#include "../viewport.hpp"
+
+#define AUIK_F32_STRETCH   0xFFFF00p0f
+#define AUIK_F32_IGNORE    0xFFFF01p0f
+#define AUIK_F32_AUTO_EDGE AUIK_F32_STRETCH
+#define AUIK_POS_IGNORE    {AUIK_F32_IGNORE, AUIK_F32_IGNORE}
+#define AUIK_SIZE_IGNORE   {AUIK_F32_IGNORE, AUIK_F32_IGNORE}
+#define AUIK_SIZE_STRETCH  {AUIK_F32_STRETCH, AUIK_F32_STRETCH}
+#define AUIK_CUSTOM_USER_DATA      0xFFFFu
+#define AUIK_ROOT_WIDGET_USER_DATA 0xFFFEu
 
 namespace auik::v2
 {
+    constexpr inline bool is_size_ignored(f32 value) { return value == AUIK_F32_IGNORE; }
+
+    constexpr inline bool is_size_stretch(f32 value) { return value == AUIK_F32_STRETCH; }
+
+    constexpr inline bool is_size_concrete(f32 value) { return value < AUIK_F32_AUTO_EDGE; }
+
+    constexpr inline bool is_size_static_layout(f32 value) { return is_size_concrete(value) && value > 0.0f; }
+
     struct WidgetFlagBits
     {
         enum enum_type
@@ -19,23 +37,52 @@ namespace auik::v2
             visible = 0x1,
             configurable = 0x2,
             attachable = 0x4,
-            fixed = 0x20,
+            fixed_layout = 0x20,
             hittable = 0x40,
-            viewport_reserved = 0x80
+            fixed_bounds = 0x80,
+            viewport_flow = 0x100,
+            viewport_fill = 0x200
         };
         using flag_bitmask = std::true_type;
     };
 
     using WidgetFlags = acul::flags<WidgetFlagBits>;
-    struct DepthZone
+
+    struct ChildLayoutFlagBits
     {
         enum enum_type
         {
-            foreground,
-            work,
-            background
+            none = 0x0,
+            linline = 0x1,
+            aright = 0x2,
+            top = 0x4,
+            vcenter = 0x8,
+            bottom = 0x10
         };
+        using flag_bitmask = std::true_type;
     };
+    using ChildLayoutFlags = acul::flags<ChildLayoutFlagBits>;
+
+    enum class ChildLayout : u8
+    {
+        block,
+        inline_
+    };
+
+    constexpr inline ChildLayoutFlags default_child_layout_flags() { return ChildLayoutFlagBits::none; }
+
+    inline ChildLayoutFlags make_layout_flags(ChildLayout layout = ChildLayout::block, HAlign halign = HAlign::left,
+                                              VAlign valign = VAlign::none)
+    {
+        assert(halign != HAlign::center && "Center child horizontal alignment is not supported");
+        ChildLayoutFlags flags = ChildLayoutFlagBits::none;
+        if (layout == ChildLayout::inline_) flags |= ChildLayoutFlagBits::linline;
+        if (halign == HAlign::right) flags |= ChildLayoutFlagBits::aright;
+        if (valign == VAlign::top) flags |= ChildLayoutFlagBits::top;
+        if (valign == VAlign::center) flags |= ChildLayoutFlagBits::vcenter;
+        else if (valign == VAlign::bottom) flags |= ChildLayoutFlagBits::bottom;
+        return flags;
+    }
 
     struct StyleUpdateFlagBits
     {
@@ -49,6 +96,20 @@ namespace auik::v2
         using flag_bitmask = std::true_type;
     };
     using StyleUpdateFlags = acul::flags<StyleUpdateFlagBits>;
+
+    struct WidgetUserData
+    {
+        u32 tag_id = AUIK_CUSTOM_USER_DATA;
+        void *handle = nullptr;
+        void (*destroy)(void *) = nullptr;
+        WidgetUserData *pNext = nullptr;
+    };
+
+    namespace detail
+    {
+        using RootWidgetUserData = DepthZone;
+    }
+
     constexpr inline DrawReasonFlags get_draw_reason_from_style_update(StyleUpdateFlags flags)
     {
         DrawReasonFlags reason = DrawReasonBits::none;
@@ -96,6 +157,13 @@ namespace auik::v2
                 return *this;
             }
 
+            UserBind &on_drop(acul::unique_function<void(DropEvent &)> fn)
+            {
+                on_drop_fn = std::move(fn);
+                if (_owner && on_drop_fn) _owner->add_event_flags(EventFlagBits::drop);
+                return *this;
+            }
+
             UserBind &on_scroll(acul::unique_function<void(ScrollEvent &)> fn)
             {
                 on_scroll_fn = std::move(fn);
@@ -134,6 +202,7 @@ namespace auik::v2
             acul::unique_function<void(HoverEvent &)> on_hover_fn = nullptr;
             acul::unique_function<void(ClickEvent &)> on_click_fn = nullptr;
             acul::unique_function<void(DragEvent &)> on_drag_fn = nullptr;
+            acul::unique_function<void(DropEvent &)> on_drop_fn = nullptr;
             acul::unique_function<void(ScrollEvent &)> on_scroll_fn = nullptr;
             acul::unique_function<void(FocusEvent &)> on_focus_fn = nullptr;
             acul::unique_function<void(KeyEvent &)> on_key_fn = nullptr;
@@ -153,11 +222,60 @@ namespace auik::v2
               event_flags(event_flags),
               _id(id),
               _parent(parent),
+              _requested_size(bounds.size),
               _rect(detail::make_rect_data(id, tag_id, bounds))
         {
         }
 
         virtual ~Widget();
+        template <class T, class... Args>
+        T *emplace_user_data(Args &&...args)
+        {
+            return emplace_user_data_tagged<T>(AUIK_CUSTOM_USER_DATA, std::forward<Args>(args)...);
+        }
+
+        template <class T, class... Args>
+        T *emplace_user_data_tagged(u32 tag, Args &&...args)
+        {
+            auto *value = acul::alloc<T>(std::forward<Args>(args)...);
+            auto *node = acul::alloc<WidgetUserData>();
+            node->tag_id = tag;
+            node->handle = value;
+            node->destroy = [](void *ptr) { acul::release(static_cast<T *>(ptr)); };
+            append_user_data_node(node);
+            return value;
+        }
+
+        void *get_user_data(u32 tag = AUIK_CUSTOM_USER_DATA) const
+        {
+            for (auto *node = _user_data; node; node = node->pNext)
+                if (node->tag_id == tag) return node->handle;
+            return nullptr;
+        }
+
+        template <class T>
+        T *get_user_data(u32 tag = AUIK_CUSTOM_USER_DATA) const
+        {
+            return static_cast<T *>(get_user_data(tag));
+        }
+
+        const WidgetUserData *user_data_head() const { return _user_data; }
+
+        template <class T, class... Args>
+        T *emplace_user_data_head(u32 tag, Args &&...args)
+        {
+            auto *value = acul::alloc<T>(std::forward<Args>(args)...);
+            auto *node = acul::alloc<WidgetUserData>();
+            node->tag_id = tag;
+            node->handle = value;
+            node->destroy = [](void *ptr) { acul::release(static_cast<T *>(ptr)); };
+            node->pNext = _user_data;
+            _user_data = node;
+            return value;
+        }
+
+        void pop_user_data_head(u32 expected_tag);
+
         UserBind &bind()
         {
             if (!_user_bind) _user_bind = acul::alloc<UserBind>(this);
@@ -169,8 +287,6 @@ namespace auik::v2
         inline void set_parent(Widget *parent) { _parent = parent; }
         inline Widget *focus_parent() const { return _focus_parent; }
         inline void set_focus_parent(Widget *parent) { _focus_parent = parent; }
-        inline DepthZone::enum_type depth_zone() const { return _depth_zone; }
-        inline void set_depth_zone(DepthZone::enum_type zone) { _depth_zone = zone; }
         inline detail::RectData &get_rect() { return _rect; }
         inline const detail::RectData &get_rect() const { return _rect; }
         inline void set_rect_tag_id(u32 tag_id) { _rect.id.tag_id = tag_id; }
@@ -204,18 +320,44 @@ namespace auik::v2
         inline const amal::vec2 &position() const { return _rect.bounds.offset; }
         inline amal::vec2 &size() { return _rect.bounds.size; }
         inline const amal::vec2 &size() const { return _rect.bounds.size; }
+        inline const amal::vec2 &requested_size() const { return _requested_size; }
+        inline bool stretch_width() const { return is_size_stretch(_requested_size.x); }
+        inline bool stretch_height() const { return is_size_stretch(_requested_size.y); }
         inline void set_position(const amal::vec2 &pos) { _rect.bounds.offset = pos; }
         virtual void translate(const amal::vec2 &delta)
         {
             set_position(position() + delta);
             detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
         }
-        inline void set_size(const amal::vec2 &size) { _rect.bounds.size = size; }
+        inline void set_size(const amal::vec2 &size)
+        {
+            _requested_size = size;
+            _rect.bounds.size = {is_size_concrete(size.x) ? size.x : 0.0f,
+                                 is_size_concrete(size.y) ? size.y : 0.0f};
+            if (is_size_static_layout(size.x) && is_size_static_layout(size.y))
+                widget_flags |= WidgetFlagBits::fixed_layout;
+            else widget_flags &= ~WidgetFlagBits::fixed_layout;
+        }
+        inline void set_layout_size(const amal::vec2 &size)
+        {
+            _rect.bounds.size = {is_size_concrete(size.x) ? size.x : 0.0f,
+                                 is_size_concrete(size.y) ? size.y : 0.0f};
+        }
         inline const amal::vec2 &required_size() const { return _required_size; }
         inline void set_required_size(const amal::vec2 &size) { _required_size = size; }
-        inline bool is_fixed() const { return widget_flags & WidgetFlagBits::fixed; }
+        inline bool is_fixed_layout() const { return widget_flags & WidgetFlagBits::fixed_layout; }
+        inline bool is_fixed_bounds() const { return widget_flags & WidgetFlagBits::fixed_bounds; }
+        inline bool is_fixed() const { return is_fixed_layout(); }
         inline bool is_hittable() const { return widget_flags & WidgetFlagBits::hittable; }
-        inline bool is_viewport_reserved() const { return widget_flags & WidgetFlagBits::viewport_reserved; }
+        inline bool is_viewport_flow() const { return widget_flags & WidgetFlagBits::viewport_flow; }
+        inline bool is_viewport_fill() const { return widget_flags & WidgetFlagBits::viewport_fill; }
+        inline Viewport *viewport() const { return _viewport; }
+        inline void attach_to_viewport(Viewport *viewport) { _viewport = viewport; }
+        inline const ViewportLayout &viewport_layout() const { return _viewport_layout; }
+        inline void set_viewport_layout(ViewportLayoutMode mode, ViewportEdge edge = ViewportEdge::top)
+        {
+            _viewport_layout = {mode, edge};
+        }
         inline const amal::vec2 &root_viewport_origin() const { return _root_viewport_origin; }
         inline void set_root_viewport_origin(const amal::vec2 &origin) { _root_viewport_origin = origin; }
         inline bool has_event_handler(EventFlagBits::enum_type event_flag) const { return event_flags & event_flag; }
@@ -230,6 +372,7 @@ namespace auik::v2
             else update_clip_rect(_rect.clip_id, rect);
         }
 
+        virtual void reset_clip_rect_records() { _rect.clip_id = 0xFFFFu; }
         virtual void rebuild_clip_rects() {}
         virtual void reset_draw_records() {}
 
@@ -264,12 +407,22 @@ namespace auik::v2
             detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
         }
 
+        virtual u32 get_depth_requirement() const { return 1u; }
         virtual void update_depth(const amal::vec2 &depth_range);
+        virtual void back_hit_depth();
+        virtual void restore_hit_depth();
         virtual StyleUpdateFlags update_style() = 0;
         virtual void draw(DrawCtx &) = 0;
         // Controls whether a mouse press on this hit target replaces ctx.focus_id.
         // Return false for technical targets that should preserve the current focus leaf.
-        virtual bool accepts_focus_on_mouse_press(detail::ElementID) const { return true; }
+        virtual bool accepts_focus_on_mouse_press(ElementID) const { return true; }
+        // Allows selected widgets to receive hover transitions while another element is being dragged.
+        virtual bool accepts_drag_hover(ElementID drag_id, ElementID hover_id) const
+        {
+            (void)drag_id;
+            (void)hover_id;
+            return false;
+        }
         virtual u16 content_clip_id() const { return clip_id(); }
         virtual amal::vec4 get_content_clip_rect() const { return get_clip_rect(content_clip_id()); }
         bool should_skip_external_draw_update(const amal::vec4 &clip_rect)
@@ -307,6 +460,7 @@ namespace auik::v2
         virtual void on_hover(HoverState state) {}
         virtual void on_click(MouseKey key, KeyPressState state, u32 click_count) {}
         virtual void on_drag(const amal::vec2 &delta, KeyPressState state) {}
+        virtual void on_drop(ElementID drag_id, ElementID drop_id) {}
         virtual void on_key(Key key, KeyPressState state, KeyMode mods) {}
         virtual void on_char_input(u32 char_code, u32 count) {}
 
@@ -347,6 +501,19 @@ namespace auik::v2
                 if (e.is_prevented_default()) return;
             }
             on_drag(delta, state);
+        }
+
+        inline void dispatch_drop(ElementID drag_id, ElementID drop_id)
+        {
+            DropEvent e{};
+            e.drag_id = drag_id;
+            e.drop_id = drop_id;
+            if (_user_bind && _user_bind->on_drop_fn)
+            {
+                _user_bind->on_drop_fn(e);
+                if (e.is_prevented_default()) return;
+            }
+            on_drop(drag_id, drop_id);
         }
 
         inline void dispatch_scroll(const amal::vec2 &delta)
@@ -400,6 +567,11 @@ namespace auik::v2
             on_char_input(char_code, count);
         }
 
+        inline bool mark_changed()
+        {
+            return dispatch_change();
+        }
+
     protected:
         inline bool dispatch_change()
         {
@@ -419,18 +591,87 @@ namespace auik::v2
         u32 _id;
         Widget *_parent = nullptr;
         Widget *_focus_parent = nullptr;
-        DepthZone::enum_type _depth_zone = DepthZone::work;
         amal::vec2 _depth_range{0.0f, 1.0f};
         amal::vec2 _root_viewport_origin{0.0f, 0.0f};
+        amal::vec2 _requested_size{0.0f, 0.0f};
+        Viewport *_viewport = nullptr;
+        ViewportLayout _viewport_layout{};
         detail::RectData _rect{};
         amal::vec2 _required_size{0.0f, 0.0f};
         StyleState _style_state = StyleState::normal;
         bool _external_draw_culled = false;
         bool _external_draw_invalidated = false;
         UserBind *_user_bind = nullptr;
+
+    private:
+        void append_user_data_node(WidgetUserData *node)
+        {
+            if (!_user_data)
+            {
+                _user_data = node;
+                return;
+            }
+            auto *tail = _user_data;
+            while (tail->pNext) tail = tail->pNext;
+            tail->pNext = node;
+        }
+
+        void clear_user_data();
+        WidgetUserData *_user_data = nullptr;
     };
 
+    namespace detail
+    {
+        inline RootWidgetUserData *root_widget_user_data(Widget *widget)
+        {
+            auto *head = widget ? widget->user_data_head() : nullptr;
+            if (!head || head->tag_id != AUIK_ROOT_WIDGET_USER_DATA) return nullptr;
+            return static_cast<RootWidgetUserData *>(head->handle);
+        }
+
+        inline const RootWidgetUserData *root_widget_user_data(const Widget *widget)
+        {
+            auto *head = widget ? widget->user_data_head() : nullptr;
+            if (!head || head->tag_id != AUIK_ROOT_WIDGET_USER_DATA) return nullptr;
+            return static_cast<const RootWidgetUserData *>(head->handle);
+        }
+
+        inline DepthZone root_widget_depth_zone(const Widget *widget)
+        {
+            auto *data = root_widget_user_data(widget);
+            return data ? *data : DepthZone::work;
+        }
+
+        APPLIB_API void setup_root_window(Widget *widget);
+        APPLIB_API void teardown_root_window(Widget *widget);
+    } // namespace detail
+
     APPLIB_API void assign_next_depth(const amal::vec2 &parent_range, amal::vec2 &dst_range);
+
+    struct DepthCursor
+    {
+        amal::vec2 range{0.0f, 1.0f};
+        u32 slots = 1u;
+        u32 used = 0u;
+
+        DepthCursor() = default;
+        DepthCursor(const amal::vec2 &range, u32 slots) : range(range), slots(slots ? slots : 1u) {}
+
+        amal::vec2 next(u32 requirement = 1u)
+        {
+            requirement = requirement ? requirement : 1u;
+            if (used >= slots) return {range.y, range.y};
+            const u32 begin = used;
+            const u32 end = (used + requirement < slots) ? used + requirement : slots;
+            used = end;
+
+            const f32 span = range.y - range.x;
+            const f32 step = span / static_cast<f32>(slots);
+            return {range.x + step * static_cast<f32>(begin), range.x + step * static_cast<f32>(end)};
+        }
+
+        amal::vec2 shared() const { return range; }
+    };
 
     inline f32 next_depth(const amal::vec2 &parent_range)
     {

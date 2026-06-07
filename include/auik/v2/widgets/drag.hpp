@@ -68,6 +68,7 @@ namespace auik::v2
             f64 _drag_value = 0.0;
             T _last_value{};
             u8 _interaction_flags = 0u;
+            bool _pending_text_commit = false;
         };
     } // namespace detail
 
@@ -141,7 +142,7 @@ namespace auik::v2
     {
         return acul::alloc<DragInt>(id, value, min_value, max_value, speed, size,
                                     WidgetFlagBits::visible | WidgetFlagBits::attachable |
-                                        WidgetFlagBits::configurable | WidgetFlagBits::fixed,
+                                        WidgetFlagBits::configurable | WidgetFlagBits::fixed_layout,
                                     nullptr, unit_resolver, default_unit);
     }
 
@@ -153,7 +154,7 @@ namespace auik::v2
     {
         return acul::alloc<DragFloat>(id, value, min_value, max_value, speed, size,
                                       WidgetFlagBits::visible | WidgetFlagBits::attachable |
-                                          WidgetFlagBits::configurable | WidgetFlagBits::fixed,
+                                          WidgetFlagBits::configurable | WidgetFlagBits::fixed_layout,
                                       nullptr, unit_resolver, default_unit);
     }
 
@@ -165,7 +166,7 @@ namespace auik::v2
     {
         return acul::alloc<DragDouble>(id, value, min_value, max_value, speed, size,
                                        WidgetFlagBits::visible | WidgetFlagBits::attachable |
-                                           WidgetFlagBits::configurable | WidgetFlagBits::fixed,
+                                           WidgetFlagBits::configurable | WidgetFlagBits::fixed_layout,
                                        nullptr, unit_resolver, default_unit);
     }
 } // namespace auik::v2

@@ -1,10 +1,10 @@
 #pragma once
 
-#include <auik/v2/detail/text_edit.hpp>
+#include "../detail/text_edit.hpp"
 #include "detail/scrollbar.hpp"
 #include "text.hpp"
 
-#define AUIK_TAG_TEXTBOX 0x37C7A6D1u
+#define AUIK_TAG_TEXTBOX         0x37C7A6D1u
 #define AUIK_TAG_MULTILINE_CARET 0x7D6F3E2Au
 
 namespace auik::v2
@@ -18,7 +18,7 @@ namespace auik::v2
 
     constexpr inline WidgetFlags get_default_fixed_textbox_flags()
     {
-        return get_default_textbox_flags() | WidgetFlagBits::fixed;
+        return get_default_textbox_flags() | WidgetFlagBits::fixed_layout;
     }
 
     class APPLIB_API TextBox : public Widget
@@ -39,6 +39,8 @@ namespace auik::v2
         void translate(const amal::vec2 &delta) override;
         void rebuild_clip_rects() override;
         void update_depth(const amal::vec2 &depth_range) override;
+        void back_hit_depth() override;
+        void restore_hit_depth() override;
         void draw(DrawCtx &ctx) override;
         void on_scroll(const amal::vec2 &delta) override;
         void on_focus(bool focused) override;
@@ -49,7 +51,12 @@ namespace auik::v2
         void on_char_input(u32 char_code, u32 count) override;
 
         const acul::string &value() const { return _text.text(); }
-        void set_value(const acul::string &value);
+        void set_value(const acul::string &value)
+        {
+            if (this->value() == value) return;
+            set_value_internal(value);
+        }
+
         const inline acul::string &placeholder() const
         {
             static const acul::string empty;
@@ -58,6 +65,8 @@ namespace auik::v2
         void set_placeholder(const acul::string &value);
 
     protected:
+        void set_value_internal(const acul::string &value);
+
         inline bool show_placeholder() const
         {
             return detail::get_context().focus_id != id() && value().empty() && _placeholder;
@@ -72,8 +81,7 @@ namespace auik::v2
                     parent()->update_layout(false);
                     rebuild_selection_rect_cache();
                     if (edit_draw_slots_need_record()) redraw_all_commands();
-                    else
-                        parent()->update_draw_commands(DrawReasonBits::layout);
+                    else parent()->update_draw_commands(DrawReasonBits::layout);
                     detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
                     update_transient_draw_commands();
                     return;
@@ -81,9 +89,9 @@ namespace auik::v2
                 if (has_internal_scrollbar())
                 {
                     const size_t text_draw_count = _text.draw_record_count();
-                    const f32 old_scroll_y = _content_scroll_y;
+                    const f32 old_scroll_y = _content_scroll.y;
                     update_layout_from_current_bounds(false);
-                    if (update_content_scroll_y_for_cursor() && old_scroll_y != _content_scroll_y)
+                    if (update_content_scroll_y_for_cursor() && old_scroll_y != _content_scroll.y)
                         update_layout_from_current_bounds(true);
                     rebuild_selection_rect_cache();
                     if (_text.layout_instance_count() < text_draw_count || edit_draw_slots_need_record())
@@ -98,12 +106,12 @@ namespace auik::v2
                 }
                 const size_t text_draw_count = _text.draw_record_count();
                 _text.set_position(_content_pos);
-                _text.set_size(_content_size);
+                _text.set_layout_size(_content_size);
                 _text.set_clip_id(text_content_clip_id());
                 _text.update_layout(false);
                 update_content_scroll_x_for_cursor();
                 update_content_scroll_y_for_cursor();
-                _text.translate({-_content_scroll_x, -_content_scroll_y});
+                _text.translate(-_content_scroll);
                 _text.set_clip_id(text_content_clip_id());
                 refresh_placeholder_layout();
                 detail::get_context().dirty_flags &= ~DirtyFlagBits::layout;
@@ -117,11 +125,10 @@ namespace auik::v2
             }
             else
             {
-                const f32 old_scroll_x = _content_scroll_x;
-                const f32 old_scroll_y = _content_scroll_y;
-                if (update_content_scroll_x_for_cursor() && old_scroll_x != _content_scroll_x)
-                    _text.translate({old_scroll_x - _content_scroll_x, 0.0f});
-                if (update_content_scroll_y_for_cursor() && old_scroll_y != _content_scroll_y)
+                const amal::vec2 old_scroll = _content_scroll;
+                if (update_content_scroll_x_for_cursor() && old_scroll.x != _content_scroll.x)
+                    _text.translate({old_scroll.x - _content_scroll.x, 0.0f});
+                if (update_content_scroll_y_for_cursor() && old_scroll.y != _content_scroll.y)
                     update_layout_from_current_bounds(true);
                 rebuild_selection_rect_cache();
                 if (edit_draw_slots_need_record())
@@ -183,8 +190,6 @@ namespace auik::v2
         bool move_selection_to_cursor(int drop_cursor, bool copy);
         void end_selection_drag(bool commit);
         bool is_read_only() const { return _read_only; }
-        bool text_changed() const { return _changed; }
-        void mark_text_unchanged() { _changed = false; }
         virtual bool accepts_newline() const { return false; }
         virtual bool should_resize_to_content() const { return false; }
         virtual bool has_internal_scrollbar() const { return false; }
@@ -206,9 +211,7 @@ namespace auik::v2
         u16 _content_clip_id = 0xFFFFu;
         detail::Scrollbar *_scrollbar_y = nullptr;
         detail::Scrollbar *_drag_scrollbar = nullptr;
-        f32 _content_scroll_x = 0.0f;
-        f32 _content_scroll_y = 0.0f;
-        bool _changed = false;
+        amal::vec2 _content_scroll{0.0f, 0.0f};
         bool _read_only = false;
 
     private:
@@ -226,8 +229,7 @@ namespace auik::v2
     {
     public:
         MultilineTextBox(u32 id, const acul::string &value, amal::vec2 size, bool can_expand_to_content,
-                         WidgetFlags flags,
-                         Widget *parent = nullptr, TextFlags text_flags = TextFlagBits::none,
+                         WidgetFlags flags, Widget *parent = nullptr, TextFlags text_flags = TextFlagBits::none,
                          const acul::string &placeholder = {}, bool read_only = false);
 
         bool can_expand_to_content() const { return _can_expand_to_content; }
@@ -258,7 +260,7 @@ namespace auik::v2
     {
         return acul::alloc<TextBox>(id, value, amal::vec2{width, 0.0f},
                                     WidgetFlagBits::visible | WidgetFlagBits::attachable |
-                                        WidgetFlagBits::configurable | WidgetFlagBits::fixed,
+                                        WidgetFlagBits::configurable | WidgetFlagBits::fixed_layout,
                                     nullptr, AUIK_TAG_TEXTBOX, text_flags, placeholder, read_only);
     }
 
@@ -291,7 +293,7 @@ namespace auik::v2
     {
         return acul::alloc<MultilineTextBox>(id, value, size, false,
                                              WidgetFlagBits::visible | WidgetFlagBits::attachable |
-                                                 WidgetFlagBits::configurable | WidgetFlagBits::fixed,
+                                                 WidgetFlagBits::configurable | WidgetFlagBits::fixed_layout,
                                              nullptr, text_flags, placeholder, read_only);
     }
 

@@ -147,7 +147,7 @@ namespace auik::v2
     }
 
     struct DrawCtx;
-    using PFN_DrawEmit = DrawDataID (*)(const DrawCtx &, DrawStream *, DrawDataID &, const void *,
+    using PFN_draw_emit = DrawDataID (*)(const DrawCtx &, DrawStream *, DrawDataID &, const void *,
                                         const detail::RectData &, bool);
     APPLIB_API DrawDataID emit_draw_record(const DrawCtx &ctx, DrawStream *stream, DrawDataID &draw_id,
                                            const void *data, const detail::RectData &rect, bool emit_hit_rect);
@@ -158,7 +158,7 @@ namespace auik::v2
 
     struct DrawCtx
     {
-        PFN_DrawEmit emit_fn = nullptr;
+        PFN_draw_emit emit_fn = nullptr;
         bool emit_hit_rect = true;
         DrawReasonFlags reason = DrawReasonBits::none;
         PostEffect *post_effect = nullptr;

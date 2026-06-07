@@ -17,7 +17,7 @@ namespace auik::v2
     public:
         CircleColorPicker(u32 id, amal::vec4 *value, f32 diameter = 0.0f,
                           WidgetFlags widget_flags = get_default_widget_flags() | WidgetFlagBits::hittable |
-                                                     WidgetFlagBits::fixed,
+                                                     WidgetFlagBits::fixed_layout,
                           Widget *parent = nullptr);
 
         StyleUpdateFlags update_style() override;
@@ -26,6 +26,8 @@ namespace auik::v2
         void translate(const amal::vec2 &delta) override;
         void rebuild_clip_rects() override;
         void update_depth(const amal::vec2 &depth_range) override;
+        void back_hit_depth() override;
+        void restore_hit_depth() override;
         void draw(DrawCtx &ctx) override;
         void on_click(MouseKey key, KeyPressState state, u32 click_count) override;
         void on_drag(const amal::vec2 &delta, KeyPressState state) override;
@@ -78,14 +80,14 @@ namespace auik::v2
         assert(theme && "theme is null");
         f32 diameter = theme->get_var<f32>(AUIK_STYLE_VAR_COLOR_PICKER_SIZE);
         return acul::alloc<CircleColorPicker>(
-            id, value, diameter, get_default_widget_flags() | WidgetFlagBits::hittable | WidgetFlagBits::fixed, parent);
+            id, value, diameter, get_default_widget_flags() | WidgetFlagBits::hittable | WidgetFlagBits::fixed_layout, parent);
     }
 
     inline CircleColorPicker *make_circle_color_picker(u32 id, amal::vec4 *value, f32 diameter,
                                                        Widget *parent = nullptr)
     {
         return acul::alloc<CircleColorPicker>(
-            id, value, diameter, get_default_widget_flags() | WidgetFlagBits::hittable | WidgetFlagBits::fixed, parent);
+            id, value, diameter, get_default_widget_flags() | WidgetFlagBits::hittable | WidgetFlagBits::fixed_layout, parent);
     }
 
     class APPLIB_API SquareColorPicker final : public Widget
@@ -93,7 +95,7 @@ namespace auik::v2
     public:
         SquareColorPicker(u32 id, amal::vec4 *value, f32 size = 0.0f,
                           WidgetFlags widget_flags = get_default_widget_flags() | WidgetFlagBits::hittable |
-                                                     WidgetFlagBits::fixed,
+                                                     WidgetFlagBits::fixed_layout,
                           Widget *parent = nullptr);
 
         StyleUpdateFlags update_style() override;
@@ -102,6 +104,8 @@ namespace auik::v2
         void translate(const amal::vec2 &delta) override;
         void rebuild_clip_rects() override;
         void update_depth(const amal::vec2 &depth_range) override;
+        void back_hit_depth() override;
+        void restore_hit_depth() override;
         void draw(DrawCtx &ctx) override;
         void on_click(MouseKey key, KeyPressState state, u32 click_count) override;
         void on_drag(const amal::vec2 &delta, KeyPressState state) override;
@@ -174,12 +178,12 @@ namespace auik::v2
     inline SquareColorPicker *make_square_color_picker(u32 id, amal::vec4 *value, Widget *parent = nullptr)
     {
         return acul::alloc<SquareColorPicker>(
-            id, value, 0.0f, get_default_widget_flags() | WidgetFlagBits::hittable | WidgetFlagBits::fixed, parent);
+            id, value, 0.0f, get_default_widget_flags() | WidgetFlagBits::hittable | WidgetFlagBits::fixed_layout, parent);
     }
 
     inline SquareColorPicker *make_square_color_picker(u32 id, amal::vec4 *value, f32 size, Widget *parent = nullptr)
     {
         return acul::alloc<SquareColorPicker>(
-            id, value, size, get_default_widget_flags() | WidgetFlagBits::hittable | WidgetFlagBits::fixed, parent);
+            id, value, size, get_default_widget_flags() | WidgetFlagBits::hittable | WidgetFlagBits::fixed_layout, parent);
     }
 } // namespace auik::v2

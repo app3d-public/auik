@@ -53,8 +53,15 @@ namespace auik::v2::detail
     inline void measure_table_cell(Text *cell)
     {
         if (!cell) return;
-        cell->set_size({0.0f, 0.0f});
+        cell->set_layout_size({0.0f, 0.0f});
         cell->update_layout_min_size();
+    }
+
+    inline void apply_table_cell_alignment(Text *cell, HAlign halign, VAlign valign)
+    {
+        if (!cell) return;
+        cell->set_horizontal_align(halign);
+        if (valign != VAlign::none) cell->set_vertical_align(valign);
     }
 
     template <class Metrics, class Overrides, class SettingsFn>

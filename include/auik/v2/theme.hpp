@@ -17,6 +17,21 @@ namespace auik::v2
 {
     class Font;
 
+    enum class HAlign : u8
+    {
+        left,
+        center,
+        right
+    };
+
+    enum class VAlign : u8
+    {
+        none,
+        top,
+        center,
+        bottom
+    };
+
     namespace detail
     {
         inline constexpr u32 pack_rgba8(u8 r, u8 g, u8 b, u8 a)

@@ -32,19 +32,18 @@ namespace auik::v2
               _label(label),
               _buttons(std::move(buttons))
         {
-            bind_child(_checkbox);
-            bind_child(_label);
+            add_control(_checkbox, make_layout_flags(ChildLayout::inline_, HAlign::left, VAlign::center));
+            add_control(_label, make_layout_flags(ChildLayout::inline_, HAlign::left, VAlign::center));
             configure_control_hit_rect(_checkbox, AUIK_MODAL_BATCH_ID, 0u);
-            for (auto *button : _buttons) bind_child(button);
+            for (auto *button : _buttons)
+                add_control(button, make_layout_flags(ChildLayout::inline_, HAlign::right, VAlign::center));
             for (u32 i = 0; i < _buttons.size(); ++i) configure_control_hit_rect(_buttons[i], AUIK_MODAL_BUTTON_ID, i);
         }
 
         ~ModalControlsRow() override
         {
-            if (_checkbox) acul::release(_checkbox);
-            if (_label) acul::release(_label);
-            for (auto *button : _buttons)
-                if (button) acul::release(button);
+            for (auto *child : _children)
+                if (child) acul::release(child);
         }
 
         StyleUpdateFlags update_style() override
@@ -80,20 +79,10 @@ namespace auik::v2
             const amal::vec4 controls_margin = controls_style.margin();
             const amal::vec4 controls_padding = controls_style.padding();
             const f32 gap = inline_gap();
-            const f32 checkbox_label_gap = label_gap();
-
-            if (_checkbox) _checkbox->update_layout_min_size();
-            if (_label) _label->update_layout_min_size();
-            for (auto *button : _buttons)
-                if (button) button->update_layout_min_size();
-
-            const f32 left_w = left_controls_width(checkbox_label_gap);
-            const f32 buttons_w = buttons_width(gap);
-            const f32 row_w = left_w + buttons_w;
-            const f32 row_h = amal::max(left_controls_height(), buttons_height());
+            const amal::vec2 row_size = detail::compute_children_layout_required_size(_children, _child_layouts, gap);
             set_required_size(
-                {controls_margin.x + controls_margin.z + controls_padding.x + controls_padding.z + row_w,
-                 controls_margin.y + controls_margin.w + controls_padding.y + controls_padding.w + row_h});
+                {controls_margin.x + controls_margin.z + controls_padding.x + controls_padding.z + row_size.x,
+                 controls_margin.y + controls_margin.w + controls_padding.y + controls_padding.w + row_size.y});
         }
 
         void update_layout(bool min_size_known) override
@@ -106,88 +95,61 @@ namespace auik::v2
             const amal::vec4 controls_margin = controls_style.margin();
             const amal::vec4 controls_padding = controls_style.padding();
             const f32 gap = inline_gap();
-            const f32 checkbox_label_gap = label_gap();
 
             const amal::vec2 origin = position();
             const f32 outer_width = size().x > 0.0f ? size().x : required_size().x;
             const f32 outer_height = required_size().y;
             set_position({origin.x + controls_margin.x, origin.y + controls_margin.y});
-            set_size({amal::max(outer_width - controls_margin.x - controls_margin.z, 0.0f),
-                      amal::max(outer_height - controls_margin.y - controls_margin.w, 0.0f)});
+            set_layout_size({amal::max(outer_width - controls_margin.x - controls_margin.z, 0.0f),
+                             amal::max(outer_height - controls_margin.y - controls_margin.w, 0.0f)});
             Widget::update_layout(true);
 
             const amal::vec2 content_pos = position() + amal::vec2{controls_padding.x, controls_padding.y};
             const amal::vec2 content_size = {amal::max(size().x - controls_padding.x - controls_padding.z, 0.0f),
                                              amal::max(size().y - controls_padding.y - controls_padding.w, 0.0f)};
-            const f32 row_h = amal::max(left_controls_height(), buttons_height());
-            const f32 controls_h = amal::max(content_size.y, row_h);
-            f32 x = content_pos.x;
-            if (_checkbox)
-            {
-                auto *theme = get_theme();
-                const u32 checkbox_parent_id = id();
-                const auto checkbox_style_id =
-                    theme->get_resolved_style(AUIK_STYLE_TAG_CHECKBOX, _checkbox->id(), checkbox_parent_id);
-                const amal::vec4 checkbox_margin = theme->get_style(checkbox_style_id).margin();
-                const f32 checkbox_y =
-                    content_pos.y + center_offset(controls_h, _checkbox->required_size().y) - checkbox_margin.y;
-                place_child(_checkbox, {x, checkbox_y}, _checkbox->required_size());
-                x += _checkbox->required_size().x + (_label ? checkbox_label_gap : 0.0f);
-            }
-            if (_label)
-            {
-                const f32 label_y = content_pos.y + center_offset(controls_h, _label->required_size().y);
-                // Keep auto-height for Text to avoid min-size feedback growth between layout passes.
-                _label->set_position({x, label_y});
-                _label->set_size({_label->required_size().x, 0.0f});
-                _label->update_layout(false);
-            }
-
-            const f32 button_total_w = buttons_width(gap);
-            f32 button_x = content_pos.x + amal::max(content_size.x - button_total_w, 0.0f);
-            for (auto *button : _buttons)
-            {
-                if (!button) continue;
-                const f32 button_y = content_pos.y + center_offset(row_h, button->required_size().y);
-                place_child(button, {button_x, button_y});
-                button_x += button->required_size().x + gap;
-            }
+            detail::layout_child_widgets(_children, _child_layouts, content_pos, content_size.x, gap);
         }
 
         void translate(const amal::vec2 &delta) override
         {
             if (delta.x == 0.0f && delta.y == 0.0f) return;
             Widget::translate(delta);
-            if (_checkbox) _checkbox->translate(delta);
-            if (_label) _label->translate(delta);
-            for (auto *button : _buttons)
-                if (button) button->translate(delta);
+            for (auto *child : _children)
+                if (child) child->translate(delta);
         }
 
         void rebuild_clip_rects() override
         {
             if (parent()) set_clip_id(parent()->content_clip_id());
-            if (_checkbox) _checkbox->rebuild_clip_rects();
-            if (_label) _label->rebuild_clip_rects();
-            for (auto *button : _buttons)
-                if (button) button->rebuild_clip_rects();
+            for (auto *child : _children)
+                if (child) child->rebuild_clip_rects();
         }
 
         void reset_draw_records() override
         {
-            if (_checkbox) _checkbox->reset_draw_records();
-            if (_label) _label->reset_draw_records();
-            for (auto *button : _buttons)
-                if (button) button->reset_draw_records();
+            for (auto *child : _children)
+                if (child) child->reset_draw_records();
         }
 
         void update_depth(const amal::vec2 &depth_range) override
         {
             Widget::update_depth(depth_range);
-            if (_checkbox) _checkbox->update_depth(depth_range);
-            if (_label) _label->update_depth(depth_range);
-            for (auto *button : _buttons)
-                if (button) button->update_depth(depth_range);
+            for (auto *child : _children)
+                if (child) child->update_depth(depth_range);
+        }
+
+        void back_hit_depth() override
+        {
+            Widget::back_hit_depth();
+            for (auto *child : _children)
+                if (child) child->back_hit_depth();
+        }
+
+        void restore_hit_depth() override
+        {
+            Widget::restore_hit_depth();
+            for (auto *child : _children)
+                if (child) child->restore_hit_depth();
         }
 
         void draw(DrawCtx &ctx) override
@@ -227,13 +189,17 @@ namespace auik::v2
         StyleSelector _controls_style;
         Checkbox *_checkbox = nullptr;
         Text *_label = nullptr;
+        acul::vector<Widget *> _children;
+        acul::vector<ChildLayoutFlags> _child_layouts;
         acul::vector<TextButton *> _buttons;
 
-        void bind_child(Widget *child)
+        void add_control(Widget *child, ChildLayoutFlags layout)
         {
             if (!child) return;
             child->set_parent(this);
             child->set_focus_parent(this);
+            _children.push_back(child);
+            _child_layouts.push_back(layout);
         }
 
         void configure_control_hit_rect(Widget *child, u32 tag_id, u32 element_id) const
@@ -245,19 +211,6 @@ namespace auik::v2
             rect.id.element_id = element_id;
         }
 
-        void place_child(Widget *child, const amal::vec2 &pos)
-        {
-            place_child(child, pos, child ? child->required_size() : amal::vec2{0.0f});
-        }
-
-        void place_child(Widget *child, const amal::vec2 &pos, const amal::vec2 &size)
-        {
-            if (!child) return;
-            child->set_position(pos);
-            child->set_size(size);
-            child->update_layout(true);
-        }
-
         f32 inline_gap() const
         {
             if (!parent()) return 4.0f;
@@ -266,49 +219,6 @@ namespace auik::v2
             const auto style_id = theme->get_resolved_style(AUIK_STYLE_TAG_WINDOW, parent()->id(), parent_id);
             return amal::max(theme->get_style(style_id).inline_spacing(), 0.0f);
         }
-
-        f32 left_controls_width(f32 gap) const
-        {
-            const f32 checkbox_w = _checkbox ? _checkbox->required_size().x : 0.0f;
-            const f32 label_w = _label ? _label->required_size().x : 0.0f;
-            return checkbox_w + label_w + (_checkbox && _label ? gap : 0.0f);
-        }
-
-        static f32 label_gap() { return 6.0f; }
-
-        f32 left_controls_height() const
-        {
-            const f32 checkbox_h = _checkbox ? _checkbox->required_size().y : 0.0f;
-            const f32 label_h = _label ? _label->required_size().y : 0.0f;
-            return amal::max(checkbox_h, label_h);
-        }
-
-        f32 buttons_width(f32 gap) const
-        {
-            f32 out = 0.0f;
-            u32 count = 0u;
-            for (auto *button : _buttons)
-            {
-                if (!button) continue;
-                out += button->required_size().x;
-                ++count;
-            }
-            if (count > 1u) out += gap * static_cast<f32>(count - 1u);
-            return out;
-        }
-
-        f32 buttons_height() const
-        {
-            f32 out = 0.0f;
-            for (auto *button : _buttons)
-                if (button) out = amal::max(out, button->required_size().y);
-            return out;
-        }
-
-        static f32 center_offset(f32 parent_h, f32 child_h)
-        {
-            return amal::max(amal::floor((parent_h - child_h) * 0.5f), 0.0f);
-        }
     };
 
     ModalWindow::ModalWindow(u32 id, acul::string title, const amal::rect &bounds, WindowFlags window_flags,
@@ -316,6 +226,11 @@ namespace auik::v2
         : Window(id, std::move(title), bounds, window_flags, widget_flags, parent)
     {
         set_window_style_tag(AUIK_STYLE_TAG_MODAL_WINDOW);
+    }
+
+    void ModalWindow::update_layout(bool min_size_known)
+    {
+        Window::update_layout(min_size_known);
     }
 
     void ModalWindow::close()
@@ -332,7 +247,6 @@ namespace auik::v2
         : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::hover | EventFlagBits::drag, parent, {},
                  AUIK_TAG_MODAL_BACKDROP)
     {
-        set_depth_zone(DepthZone::foreground);
     }
 
     ModalQueue::~ModalQueue() { clear_modal(false); }
@@ -472,7 +386,7 @@ namespace auik::v2
 
         for (u32 i = 0; i < 3u; ++i)
         {
-            modal->set_size(modal_size);
+            modal->set_layout_size(modal_size);
             modal->update_layout(true);
             modal->update_layout_min_size();
 
@@ -481,14 +395,14 @@ namespace auik::v2
             if (refined_size == modal_size) break;
             modal_size = refined_size;
         }
-        modal->set_size(modal_size);
+        modal->set_layout_size(modal_size);
         modal->set_min_size({modal_size.x, 0.0f});
 
         const amal::vec2 manager_pos = position();
         const amal::vec2 manager_size = size();
         const amal::vec2 centered_pos = {manager_pos.x + amal::max((manager_size.x - modal_size.x) * 0.5f, 0.0f),
                                          manager_pos.y + amal::max((manager_size.y - modal_size.y) * 0.5f, 0.0f)};
-        modal->translate(centered_pos - modal->position());
+        modal->set_position(centered_pos);
         modal->update_layout(true);
     }
 
@@ -498,13 +412,13 @@ namespace auik::v2
         if (!active_modal())
         {
             set_position({0.0f, 0.0f});
-            set_size({0.0f, 0.0f});
+            set_layout_size({0.0f, 0.0f});
             Widget::update_layout(true);
             return;
         }
         const auto viewport = get_main_viewport();
         set_position({viewport.x, viewport.y});
-        set_size({viewport.z, viewport.w});
+        set_layout_size({viewport.z, viewport.w});
         Widget::update_layout(true);
         const auto bounds_r = bounds();
         ensure_own_clip_rect({bounds_r.offset.x, bounds_r.offset.y, bounds_r.size.x, bounds_r.size.y});
@@ -517,6 +431,12 @@ namespace auik::v2
         if (delta.x == 0.0f && delta.y == 0.0f) return;
         Widget::translate(delta);
         if (_modal) _modal->translate(delta);
+    }
+
+    void ModalQueue::reset_clip_rect_records()
+    {
+        Widget::reset_clip_rect_records();
+        if (_modal) _modal->reset_clip_rect_records();
     }
 
     void ModalQueue::rebuild_clip_rects()
@@ -543,8 +463,9 @@ namespace auik::v2
     void ModalQueue::update_active_modal_depth()
     {
         if (!active_modal()) return;
-        const amal::vec2 modal_root_range = detail::depth_zone_range(this->depth_range(), DepthZone::foreground);
+        const amal::vec2 modal_root_range = detail::depth_foreground_range(this->depth_range());
         _rect.depth = modal_root_range.x;
+        _rect.hit_depth = _rect.depth;
         amal::vec2 modal_range{};
         assign_next_depth(modal_root_range, modal_range);
         active_modal()->update_depth(modal_range);
@@ -554,6 +475,20 @@ namespace auik::v2
     {
         Widget::update_depth(depth_range);
         update_active_modal_depth();
+    }
+
+    void ModalQueue::back_hit_depth()
+    {
+        Widget::back_hit_depth();
+        _rect.hit_depth = get_rect().hit_depth;
+        if (active_modal()) active_modal()->back_hit_depth();
+    }
+
+    void ModalQueue::restore_hit_depth()
+    {
+        Widget::restore_hit_depth();
+        _rect.hit_depth = _rect.depth;
+        if (active_modal()) active_modal()->restore_hit_depth();
     }
 
     void ModalQueue::draw(DrawCtx &ctx)
@@ -579,7 +514,7 @@ namespace auik::v2
         ctx.emit(get_overlay_quads_stream(), _backdrop_draw, &backdrop, backdrop_hit, true);
 
         auto &modal_hit = modal->get_rect();
-        modal_hit.id = detail::make_element_id(id(), AUIK_TAG_MODAL_WINDOW);
+        modal_hit.id = make_element_id(id(), AUIK_TAG_MODAL_WINDOW);
 
         DrawCtx modal_ctx = ctx;
         modal_ctx.emit_hit_rect = true;
@@ -730,24 +665,24 @@ namespace auik::v2
                                        detail::TextWrapMode::word);
         body->set_tight_content_height(true);
 
-        auto *header_block = acul::alloc<Block>(AUIK_MODAL_HEADER_ID, MODAL_INTERNAL_WIDGET_FLAGS, nullptr,
-                                                AUIK_TAG_BLOCK, AUIK_STYLE_TAG_MODAL_HEADER);
+        auto *header_block = acul::alloc<DrawBlock>(AUIK_MODAL_HEADER_ID, MODAL_INTERNAL_WIDGET_FLAGS, nullptr,
+                                                    AUIK_TAG_BLOCK, AUIK_STYLE_TAG_MODAL_HEADER);
         header_block->add_child(title);
 
         auto *message_block = acul::alloc<Block>(AUIK_MODAL_MESSAGE_ID, MODAL_INTERNAL_WIDGET_FLAGS);
         message_block->add_child(header_block);
         message_block->add_child(body);
 
-        auto *message_row = acul::alloc<InlineBlock>(AUIK_MODAL_MESSAGE_ID, MODAL_INTERNAL_WIDGET_FLAGS, nullptr,
-                                                     AUIK_STYLE_TAG_MODAL_MESSAGE_AREA);
+        auto *message_row = acul::alloc<DrawBlock>(AUIK_MODAL_MESSAGE_ID, MODAL_INTERNAL_WIDGET_FLAGS, nullptr,
+                                                   AUIK_TAG_BLOCK, AUIK_STYLE_TAG_MODAL_MESSAGE_AREA);
         if (icon)
         {
-            auto *icon_box = acul::alloc<InlineBlock>(AUIK_MODAL_DEFAULT_ICON, MODAL_INTERNAL_WIDGET_FLAGS, nullptr,
-                                                      AUIK_STYLE_TAG_MODAL_ICON);
+            auto *icon_box = acul::alloc<DrawBlock>(AUIK_MODAL_DEFAULT_ICON, MODAL_INTERNAL_WIDGET_FLAGS, nullptr,
+                                                    AUIK_TAG_BLOCK, AUIK_STYLE_TAG_MODAL_ICON);
             icon_box->add_child(icon);
-            message_row->add_child(icon_box);
+            message_row->add_child(icon_box, make_layout_flags(ChildLayout::inline_, HAlign::left, VAlign::center));
         }
-        message_row->add_child(message_block);
+        message_row->add_child(message_block, make_layout_flags(ChildLayout::inline_, HAlign::left, VAlign::center));
         modal->add_child(message_row);
 
         Checkbox *batch_checkbox = nullptr;

@@ -111,8 +111,8 @@ namespace auik::v2
 
         static inline f32 resolve_slider_track_hit_depth(const amal::vec2 &widget_depth_range)
         {
-            const amal::vec2 work_range = get_depth_workzone_range(widget_depth_range);
-            return depth_zone_range(work_range, DepthZone::background).x;
+            const amal::vec2 work_range = depth_work_range(widget_depth_range);
+            return depth_background_range(work_range).x;
         }
 
         static inline bool has_render_record(const DrawDataID &draw_id)
@@ -250,9 +250,12 @@ namespace auik::v2
         const amal::vec4 margin = track_style.margin();
         const amal::vec4 padding = track_style.padding();
 
-        amal::vec2 min_size = size();
-        if (!is_fixed()) min_size.x = 0.0f;
+        amal::vec2 min_size = {is_size_concrete(requested_size().x) ? requested_size().x : 0.0f,
+                               is_size_concrete(requested_size().y) ? requested_size().y : 0.0f};
+        if (stretch_width()) min_size.x = 24.0f;
+        else if (!is_fixed()) min_size.x = 0.0f;
         else if (min_size.x <= 0.0f) min_size.x = 160.0f;
+        if (stretch_height()) min_size.y = 0.0f;
 
         const f32 min_track_h =
             amal::max(6.0f, track_style.border_radius() > 0.0f ? track_style.border_radius() * 2.0f : 0.0f);
@@ -274,14 +277,16 @@ namespace auik::v2
         const amal::vec4 margin = style.margin();
         const amal::vec2 min_required = required_size();
         amal::vec2 slider_size = size();
-        if (!is_fixed())
+        if (stretch_width())
+            slider_size.x = amal::max(slider_size.x - margin.x - margin.z, min_required.x - margin.x - margin.z);
+        else if (!is_fixed())
             slider_size.x = amal::max(slider_size.x - margin.x - margin.z, min_required.x - margin.x - margin.z);
         else slider_size.x = amal::max(slider_size.x, min_required.x - margin.x - margin.z);
         slider_size.y = amal::max(slider_size.y, min_required.y - margin.y - margin.w);
 
         const amal::vec2 pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
         set_position(pos);
-        set_size(slider_size);
+        set_layout_size(slider_size);
         Widget::update_layout(true);
         assert(parent() && "Slider must have parent");
         set_clip_id(parent()->content_clip_id());
@@ -325,12 +330,25 @@ namespace auik::v2
         rebuild_grab_visual();
     }
 
+    void Slider::back_hit_depth()
+    {
+        Widget::back_hit_depth();
+        _grab_hit_rect.hit_depth = get_rect().hit_depth;
+    }
+
+    void Slider::restore_hit_depth()
+    {
+        Widget::restore_hit_depth();
+        _grab_hit_rect.hit_depth = _grab_hit_rect.depth;
+    }
+
     void Slider::draw(DrawCtx &ctx)
     {
         auto *quad_stream = get_primary_quads_stream();
         bool hit_pending = ctx.emit_hit_rect;
-        const auto track_hit_rect = detail::make_slider_track_hit_rect(
+        auto track_hit_rect = detail::make_slider_track_hit_rect(
             id(), _track_style.tag_id, _track_rect, clip_id(), detail::resolve_slider_track_hit_depth(depth_range()));
+        if (get_rect().hit_depth != get_rect().depth) track_hit_rect.hit_depth = get_rect().hit_depth;
 
         bool layer_hit = hit_pending;
         emit_quads_instance(ctx, quad_stream, _track_visual.background_draw_id, _track_visual.background,
@@ -365,10 +383,11 @@ namespace auik::v2
         }
         if (*_value == clamped) return;
         *_value = clamped;
-        dispatch_change();
+        const bool prevented = mark_changed();
         detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
         rebuild_track_fill_visual();
         rebuild_grab_visual();
+        if (!prevented) redraw_external(has_draw_record());
     }
 
     void Slider::set_range_start_value_ptr(f32 *value_ptr)
@@ -512,6 +531,7 @@ namespace auik::v2
         _grab_rect = detail::resolve_slider_grab_rect(grab_style, center_x, center_y, {grab_w, grab_h});
         _grab_hit_rect.bounds = _grab_rect;
         _grab_hit_rect.depth = next_depth(_grab_depth_range);
+        _grab_hit_rect.hit_depth = _grab_hit_rect.depth;
 
         const u16 grab_clip_id = clip_id();
         const f32 grab_z = next_depth(_grab_depth_range);
@@ -607,9 +627,12 @@ namespace auik::v2
         const amal::vec4 margin = track_style.margin();
         const amal::vec4 padding = track_style.padding();
 
-        amal::vec2 min_size = size();
-        if (!is_fixed()) min_size.x = 0.0f;
+        amal::vec2 min_size = {is_size_concrete(requested_size().x) ? requested_size().x : 0.0f,
+                               is_size_concrete(requested_size().y) ? requested_size().y : 0.0f};
+        if (stretch_width()) min_size.x = 24.0f;
+        else if (!is_fixed()) min_size.x = 0.0f;
         else if (min_size.x <= 0.0f) min_size.x = 160.0f;
+        if (stretch_height()) min_size.y = 0.0f;
 
         const f32 min_track_h =
             amal::max(6.0f, track_style.border_radius() > 0.0f ? track_style.border_radius() * 2.0f : 0.0f);
@@ -631,14 +654,16 @@ namespace auik::v2
         const amal::vec4 margin = style.margin();
         const amal::vec2 min_required = required_size();
         amal::vec2 slider_size = size();
-        if (!is_fixed())
+        if (stretch_width())
+            slider_size.x = amal::max(slider_size.x - margin.x - margin.z, min_required.x - margin.x - margin.z);
+        else if (!is_fixed())
             slider_size.x = amal::max(slider_size.x - margin.x - margin.z, min_required.x - margin.x - margin.z);
         else slider_size.x = amal::max(slider_size.x, min_required.x - margin.x - margin.z);
         slider_size.y = amal::max(slider_size.y, min_required.y - margin.y - margin.w);
 
         const amal::vec2 pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
         set_position(pos);
-        set_size(slider_size);
+        set_layout_size(slider_size);
         Widget::update_layout(true);
         assert(parent() && "GradientSlider must have parent");
         set_clip_id(parent()->content_clip_id());
@@ -684,14 +709,27 @@ namespace auik::v2
         rebuild_grab_visual();
     }
 
+    void GradientSlider::back_hit_depth()
+    {
+        Widget::back_hit_depth();
+        _grab_hit_rect.hit_depth = get_rect().hit_depth;
+    }
+
+    void GradientSlider::restore_hit_depth()
+    {
+        Widget::restore_hit_depth();
+        _grab_hit_rect.hit_depth = _grab_hit_rect.depth;
+    }
+
     void GradientSlider::draw(DrawCtx &ctx)
     {
         auto *quad_stream = get_primary_quads_stream();
         auto *overlay_quad_stream = get_overlay_quads_stream();
         auto *vertex_stream = get_primary_vertex_stream();
         bool hit_pending = ctx.emit_hit_rect;
-        const auto track_hit_rect = detail::make_slider_track_hit_rect(
+        auto track_hit_rect = detail::make_slider_track_hit_rect(
             id(), _track_style.tag_id, _track_rect, clip_id(), detail::resolve_slider_track_hit_depth(depth_range()));
+        if (get_rect().hit_depth != get_rect().depth) track_hit_rect.hit_depth = get_rect().hit_depth;
 
         bool layer_hit = hit_pending;
         emit_quads_instance(ctx, quad_stream, _track_visual.background_draw_id, _track_visual.background,
@@ -733,9 +771,10 @@ namespace auik::v2
         }
         if (*_value == clamped) return;
         *_value = clamped;
-        dispatch_change();
+        const bool prevented = mark_changed();
         detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
         rebuild_grab_visual();
+        if (!prevented) redraw_external(has_draw_record());
     }
 
     void GradientSlider::set_step(f32 step)
@@ -826,6 +865,7 @@ namespace auik::v2
         _grab_rect = detail::resolve_slider_grab_rect(grab_style, center_x, center_y, {grab_w, grab_h});
         _grab_hit_rect.bounds = _grab_rect;
         _grab_hit_rect.depth = next_depth(_grab_depth_range);
+        _grab_hit_rect.hit_depth = _grab_hit_rect.depth;
 
         const u16 grab_clip_id = clip_id();
         const f32 grab_z = next_depth(_grab_depth_range);
@@ -938,9 +978,12 @@ namespace auik::v2
         const amal::vec4 margin = track_style.margin();
         const amal::vec4 padding = track_style.padding();
 
-        amal::vec2 min_size = size();
-        if (!is_fixed()) min_size.x = 0.0f;
+        amal::vec2 min_size = {is_size_concrete(requested_size().x) ? requested_size().x : 0.0f,
+                               is_size_concrete(requested_size().y) ? requested_size().y : 0.0f};
+        if (stretch_width()) min_size.x = 24.0f;
+        else if (!is_fixed()) min_size.x = 0.0f;
         else if (min_size.x <= 0.0f) min_size.x = 160.0f;
+        if (stretch_height()) min_size.y = 0.0f;
 
         const f32 min_track_h =
             amal::max(6.0f, track_style.border_radius() > 0.0f ? track_style.border_radius() * 2.0f : 0.0f);
@@ -962,14 +1005,16 @@ namespace auik::v2
         const amal::vec4 margin = style.margin();
         const amal::vec2 min_required = required_size();
         amal::vec2 slider_size = size();
-        if (!is_fixed())
+        if (stretch_width())
+            slider_size.x = amal::max(slider_size.x - margin.x - margin.z, min_required.x - margin.x - margin.z);
+        else if (!is_fixed())
             slider_size.x = amal::max(slider_size.x - margin.x - margin.z, min_required.x - margin.x - margin.z);
         else slider_size.x = amal::max(slider_size.x, min_required.x - margin.x - margin.z);
         slider_size.y = amal::max(slider_size.y, min_required.y - margin.y - margin.w);
 
         const amal::vec2 pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
         set_position(pos);
-        set_size(slider_size);
+        set_layout_size(slider_size);
         Widget::update_layout(true);
         assert(parent() && "TransparencySlider must have parent");
         set_clip_id(parent()->content_clip_id());
@@ -1015,14 +1060,27 @@ namespace auik::v2
         rebuild_grab_visual();
     }
 
+    void TransparencySlider::back_hit_depth()
+    {
+        Widget::back_hit_depth();
+        _grab_hit_rect.hit_depth = get_rect().hit_depth;
+    }
+
+    void TransparencySlider::restore_hit_depth()
+    {
+        Widget::restore_hit_depth();
+        _grab_hit_rect.hit_depth = _grab_hit_rect.depth;
+    }
+
     void TransparencySlider::draw(DrawCtx &ctx)
     {
         auto *quad_stream = get_primary_quads_stream();
         auto *overlay_quad_stream = get_overlay_quads_stream();
         auto *vertex_stream = get_primary_vertex_stream();
         bool hit_pending = ctx.emit_hit_rect;
-        const auto track_hit_rect = detail::make_slider_track_hit_rect(
+        auto track_hit_rect = detail::make_slider_track_hit_rect(
             id(), _track_style.tag_id, _track_rect, clip_id(), detail::resolve_slider_track_hit_depth(depth_range()));
+        if (get_rect().hit_depth != get_rect().depth) track_hit_rect.hit_depth = get_rect().hit_depth;
 
         bool layer_hit = hit_pending;
         emit_quads_instance(ctx, quad_stream, _track_visual.background_draw_id, _track_visual.background,
@@ -1064,9 +1122,10 @@ namespace auik::v2
         }
         if (*_value == clamped) return;
         *_value = clamped;
-        dispatch_change();
+        const bool prevented = mark_changed();
         detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
         rebuild_grab_visual();
+        if (!prevented) redraw_external(has_draw_record());
     }
 
     void TransparencySlider::set_step(f32 step)
@@ -1184,6 +1243,7 @@ namespace auik::v2
         _grab_rect = detail::resolve_slider_grab_rect(grab_style, center_x, center_y, {grab_w, grab_h});
         _grab_hit_rect.bounds = _grab_rect;
         _grab_hit_rect.depth = next_depth(_grab_depth_range);
+        _grab_hit_rect.hit_depth = _grab_hit_rect.depth;
 
         const u16 grab_clip_id = clip_id();
         const f32 grab_z = next_depth(_grab_depth_range);
@@ -1308,9 +1368,12 @@ namespace auik::v2
         const amal::vec4 margin = track_style.margin();
         const amal::vec4 padding = track_style.padding();
 
-        amal::vec2 min_size = size();
-        if (!is_fixed()) min_size.x = 0.0f;
+        amal::vec2 min_size = {is_size_concrete(requested_size().x) ? requested_size().x : 0.0f,
+                               is_size_concrete(requested_size().y) ? requested_size().y : 0.0f};
+        if (stretch_width()) min_size.x = 24.0f;
+        else if (!is_fixed()) min_size.x = 0.0f;
         else if (min_size.x <= 0.0f) min_size.x = 160.0f;
+        if (stretch_height()) min_size.y = 0.0f;
 
         const f32 min_track_h =
             amal::max(6.0f, track_style.border_radius() > 0.0f ? track_style.border_radius() * 2.0f : 0.0f);
@@ -1331,14 +1394,16 @@ namespace auik::v2
         const amal::vec4 margin = style.margin();
         const amal::vec2 min_required = required_size();
         amal::vec2 slider_size = size();
-        if (!is_fixed())
+        if (stretch_width())
+            slider_size.x = amal::max(slider_size.x - margin.x - margin.z, min_required.x - margin.x - margin.z);
+        else if (!is_fixed())
             slider_size.x = amal::max(slider_size.x - margin.x - margin.z, min_required.x - margin.x - margin.z);
         else slider_size.x = amal::max(slider_size.x, min_required.x - margin.x - margin.z);
         slider_size.y = amal::max(slider_size.y, min_required.y - margin.y - margin.w);
 
         const amal::vec2 pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
         set_position(pos);
-        set_size(slider_size);
+        set_layout_size(slider_size);
         Widget::update_layout(true);
         assert(parent() && "RangeSlider must have parent");
         set_clip_id(parent()->content_clip_id());
@@ -1386,12 +1451,27 @@ namespace auik::v2
         rebuild_grab_visuals();
     }
 
+    void RangeSlider::back_hit_depth()
+    {
+        Widget::back_hit_depth();
+        _from_hit_rect.hit_depth = get_rect().hit_depth;
+        _to_hit_rect.hit_depth = get_rect().hit_depth;
+    }
+
+    void RangeSlider::restore_hit_depth()
+    {
+        Widget::restore_hit_depth();
+        _from_hit_rect.hit_depth = _from_hit_rect.depth;
+        _to_hit_rect.hit_depth = _to_hit_rect.depth;
+    }
+
     void RangeSlider::draw(DrawCtx &ctx)
     {
         auto *quad_stream = get_primary_quads_stream();
         bool hit_pending = ctx.emit_hit_rect;
-        const auto track_hit_rect = detail::make_slider_track_hit_rect(
+        auto track_hit_rect = detail::make_slider_track_hit_rect(
             id(), _track_style.tag_id, _track_rect, clip_id(), detail::resolve_slider_track_hit_depth(depth_range()));
+        if (get_rect().hit_depth != get_rect().depth) track_hit_rect.hit_depth = get_rect().hit_depth;
 
         bool layer_hit = hit_pending;
         emit_quads_instance(ctx, quad_stream, _track_visual.background_draw_id, _track_visual.background,
@@ -1435,10 +1515,11 @@ namespace auik::v2
         *_from_value = from_clamped;
         *_to_value = to_clamped;
         if (!changed) return;
-        dispatch_change();
+        const bool prevented = mark_changed();
         detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
         rebuild_track_visuals();
         rebuild_grab_visuals();
+        if (!prevented) redraw_external(has_draw_record());
     }
 
     void RangeSlider::set_step(f32 step)
@@ -1538,6 +1619,7 @@ namespace auik::v2
         _from_rect = detail::resolve_slider_grab_rect(from_style, from_center_x, center_y, {from_w, from_h});
         _from_hit_rect.bounds = _from_rect;
         _from_hit_rect.depth = next_depth(_grab_depth_range);
+        _from_hit_rect.hit_depth = _from_hit_rect.depth;
         _from_visual.rect = _from_rect;
         _from_visual.z_order = next_depth(_grab_depth_range);
         fill_quads_instance_by_style(from_style, grab_clip_id, _from_visual);
@@ -1545,6 +1627,7 @@ namespace auik::v2
         _to_rect = detail::resolve_slider_grab_rect(to_style, to_center_x, center_y, {to_w, to_h});
         _to_hit_rect.bounds = _to_rect;
         _to_hit_rect.depth = next_depth(_grab_depth_range);
+        _to_hit_rect.hit_depth = _to_hit_rect.depth;
         _to_visual.rect = _to_rect;
         _to_visual.z_order = next_depth(_grab_depth_range);
         fill_quads_instance_by_style(to_style, grab_clip_id, _to_visual);

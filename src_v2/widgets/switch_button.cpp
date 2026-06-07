@@ -81,6 +81,7 @@ namespace auik::v2
         _grab_rect.bounds = {{grab_x, grab_y}, grab_size};
         _grab_rect.clip_id = clip_id();
         _grab_rect.depth = next_depth(_grab_depth_range);
+        _grab_rect.hit_depth = _grab_rect.depth;
     }
 
     void SwitchButton::update_layout(bool min_size_known)
@@ -101,7 +102,7 @@ namespace auik::v2
 
         const amal::vec2 pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
         set_position(pos);
-        set_size(widget_size);
+        set_layout_size(widget_size);
         Widget::update_layout(true);
         assert(parent() && "SwitchButton must have parent");
         set_clip_id(parent()->content_clip_id());
@@ -137,6 +138,19 @@ namespace auik::v2
         assign_next_depth(this->depth_range(), _track_depth_range);
         assign_next_depth(_track_depth_range, _grab_depth_range);
         _grab_rect.depth = next_depth(_grab_depth_range);
+        _grab_rect.hit_depth = _grab_rect.depth;
+    }
+
+    void SwitchButton::back_hit_depth()
+    {
+        Widget::back_hit_depth();
+        _grab_rect.hit_depth = get_rect().hit_depth;
+    }
+
+    void SwitchButton::restore_hit_depth()
+    {
+        Widget::restore_hit_depth();
+        _grab_rect.hit_depth = _grab_rect.depth;
     }
 
     void SwitchButton::draw(DrawCtx &ctx)
@@ -172,11 +186,11 @@ namespace auik::v2
     {
         if (!_value || *_value == new_value) return;
         *_value = new_value;
-        dispatch_change();
+        const bool prevented = mark_changed();
         sync_track_tag();
         update_style();
         rebuild_grab_layout();
-        redraw_external(has_draw_record());
+        if (!prevented) redraw_external(has_draw_record());
     }
 
     void SwitchButton::on_click(MouseKey key, KeyPressState state, u32 click_count)
@@ -184,10 +198,11 @@ namespace auik::v2
         (void)click_count;
         if (key != MouseKey::left || state != KeyPressState::press || !_value) return;
         *_value = !*_value;
-        dispatch_change();
+        const bool prevented = mark_changed();
         sync_track_tag();
         update_style();
         rebuild_grab_layout();
-        add_render_command<detail::ClickEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
+        if (!prevented)
+            add_render_command<detail::ClickEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
     }
 } // namespace auik::v2

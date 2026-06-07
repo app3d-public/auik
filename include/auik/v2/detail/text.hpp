@@ -37,19 +37,8 @@ namespace auik::v2::detail
         bounds
     };
 
-    enum class TextHorizontalAlign : u8
-    {
-        left,
-        center,
-        right
-    };
-
-    enum class TextVerticalAlign : u8
-    {
-        top,
-        center,
-        bottom
-    };
+    using TextHorizontalAlign = auik::v2::HAlign;
+    using TextVerticalAlign = auik::v2::VAlign;
 
     struct TextLayoutConfig
     {

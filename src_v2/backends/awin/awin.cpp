@@ -178,7 +178,7 @@ namespace auik::v2
                 ctx.io.display_size = {event.position.x, event.position.y};
                 auto *pf = ctx.pending_filter;
                 if (pf && !pf->allow()) pf->set(PendingMaskBits::resize);
-                else ctx.dirty_flags |= DirtyFlagBits::layout;
+                else detail::mark_layout_dirty();
             },
             4);
         ed.bind_event(backend, awin::event_id::mouse_move, [&window](const awin::PosEvent &event) {
@@ -236,7 +236,7 @@ namespace auik::v2
             if (prev_state == next_state) return;
             ctx.window_ctx->host_state = next_state;
             detail::mark_host_refresh_request();
-            ctx.dirty_flags |= DirtyFlagBits::layout;
+            detail::mark_layout_dirty();
         });
         ed.bind_event(backend, awin::event_id::mouse_click, [&window](const awin::MouseClickEvent &event) {
             if (event.window != &window) return;

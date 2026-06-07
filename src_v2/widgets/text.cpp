@@ -84,7 +84,9 @@ namespace auik::v2
         const bool allow_empty_layout = multiline();
         if (!font || (!allow_empty_layout && _text.empty()) || _layout_config.size_px == 0)
         {
-            const amal::vec2 content_size = is_fixed() ? size() : amal::vec2{0.0f, 0.0f};
+            const amal::vec2 content_size = is_fixed() && !stretch_width() && !stretch_height()
+                                               ? requested_size()
+                                               : amal::vec2{0.0f, 0.0f};
             set_required_size({content_size.x + padding.x + padding.z + margin.x + margin.z,
                                content_size.y + padding.y + padding.w + margin.y + margin.w});
             return;
@@ -100,7 +102,9 @@ namespace auik::v2
         if (!is_ok)
         {
             _layout_result.clear();
-            const amal::vec2 content_size = is_fixed() ? size() : amal::vec2{0.0f, 0.0f};
+            const amal::vec2 content_size = is_fixed() && !stretch_width() && !stretch_height()
+                                               ? requested_size()
+                                               : amal::vec2{0.0f, 0.0f};
             set_required_size({content_size.x + padding.x + padding.z + margin.x + margin.z,
                                content_size.y + padding.y + padding.w + margin.y + margin.w});
             return;
@@ -108,12 +112,16 @@ namespace auik::v2
 
         amal::vec2 min_size = _layout_result.size;
         min_size.y = resolve_layout_height_for_widget(*this, _layout_result);
-        if (is_fixed())
+        if (is_fixed() && !stretch_width() && !stretch_height())
         {
-            if (size().x > 0.0f) min_size.x = size().x;
-            if (size().y > 0.0f) min_size.y = size().y;
+            if (is_size_concrete(requested_size().x) && requested_size().x > 0.0f) min_size.x = requested_size().x;
+            if (is_size_concrete(requested_size().y) && requested_size().y > 0.0f) min_size.y = requested_size().y;
         }
-        else if (size().y > 0.0f) min_size.y = amal::max(min_size.y, size().y);
+        else
+        {
+            if (size().x > 0.0f && multiline()) min_size.x = amal::max(min_size.x, size().x);
+            if (size().y > 0.0f) min_size.y = amal::max(min_size.y, size().y);
+        }
 
         set_required_size({min_size.x + padding.x + padding.z + margin.x + margin.z,
                            min_size.y + padding.y + padding.w + margin.y + margin.w});
@@ -136,7 +144,7 @@ namespace auik::v2
         set_position(outer_pos);
 
         amal::vec2 outer_size = resolve_text_size(*this, required_inner);
-        set_size(outer_size);
+        set_layout_size(outer_size);
         Widget::update_layout(true);
         assert(parent() && "Text must have parent");
         set_clip_id(parent()->content_clip_id());
@@ -151,10 +159,11 @@ namespace auik::v2
         if (!is_fixed())
         {
             const f32 resolved_height = resolve_layout_height_for_widget(*this, _layout_result);
+            const f32 resolved_width = auto_width ? _layout_result.size.x : amal::max(_layout_result.size.x, inner_size.x);
             if (auto_width) outer_size.x = _layout_result.size.x + padding.x + padding.z;
             if (auto_height) outer_size.y = resolved_height + padding.y + padding.w;
-            set_size(outer_size);
-            set_required_size({_layout_result.size.x + padding.x + padding.z + margin.x + margin.z,
+            set_layout_size(outer_size);
+            set_required_size({resolved_width + padding.x + padding.z + margin.x + margin.z,
                                resolved_height + padding.y + padding.w + margin.y + margin.w});
         }
     }
@@ -331,70 +340,6 @@ namespace auik::v2
         _instances_gpu_dirty = false;
     }
 
-    void Text::set_text(const acul::string &text)
-    {
-        if (_text == text) return;
-        _text = text;
-        mark_layout_dirty();
-    }
-
-    void Text::set_multiline(bool value)
-    {
-        const auto next = value ? detail::TextWrapMode::word : detail::TextWrapMode::none;
-        if (_layout_config.wrap == next) return;
-        _layout_config.wrap = next;
-        mark_layout_dirty();
-    }
-
-    void Text::set_overflow_mode(detail::TextOverflowMode value)
-    {
-        if (_layout_config.overflow == value) return;
-        _layout_config.overflow = value;
-        mark_layout_dirty();
-    }
-
-    void Text::set_trim_trailing_spaces(bool value)
-    {
-        if (_layout_config.trim_trailing_spaces == value) return;
-        _layout_config.trim_trailing_spaces = value;
-        mark_layout_dirty();
-    }
-
-    void Text::set_width_mode(detail::TextLayoutWidthMode value)
-    {
-        if (_layout_config.width_mode == value) return;
-        _layout_config.width_mode = value;
-        mark_layout_dirty();
-    }
-
-    void Text::set_horizontal_align(detail::TextHorizontalAlign value)
-    {
-        if (_render_config.horizontal_align == value) return;
-        _render_config.horizontal_align = value;
-        mark_layout_dirty();
-    }
-
-    void Text::set_vertical_align(detail::TextVerticalAlign value)
-    {
-        if (_render_config.vertical_align == value) return;
-        _render_config.vertical_align = value;
-        mark_layout_dirty();
-    }
-
-    void Text::set_max_lines(u32 value)
-    {
-        if (_layout_config.max_lines == value) return;
-        _layout_config.max_lines = value;
-        mark_layout_dirty();
-    }
-
-    void Text::set_tight_content_height(bool value)
-    {
-        if (_tight_content_height == value) return;
-        _tight_content_height = value;
-        mark_layout_dirty();
-    }
-
     bool Text::rebuild_text_buffers(const amal::vec2 &bounds_size)
     {
         _instances.clear();
@@ -414,14 +359,6 @@ namespace auik::v2
                                                                &_layout_result)
                            : detail::build_single_line_instances(*font, _text, _layout_config, render_config,
                                                                  _instances, &_layout_result);
-    }
-
-    void Text::mark_layout_dirty()
-    {
-        auto &ctx = detail::get_context();
-        const bool layout_pending = ctx.dirty_flags & DirtyFlagBits::layout;
-        ctx.dirty_flags |= DirtyFlagBits::layout;
-        if (!layout_pending) detail::mark_host_refresh_request();
     }
 
     TextWithTooltip::~TextWithTooltip()

@@ -61,6 +61,7 @@ namespace auik::v2
         _indicator_rect.bounds = {indicator_pos, indicator_size};
         _indicator_rect.clip_id = clip_id();
         _indicator_rect.depth = next_depth(_indicator_depth_range);
+        _indicator_rect.hit_depth = _indicator_rect.depth;
     }
 
     void RadioButton::update_layout(bool min_size_known)
@@ -80,7 +81,7 @@ namespace auik::v2
 
         const amal::vec2 pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
         set_position(pos);
-        set_size(widget_size);
+        set_layout_size(widget_size);
         Widget::update_layout(true);
         assert(parent() && "RadioButton must have parent");
         set_clip_id(parent()->content_clip_id());
@@ -116,6 +117,19 @@ namespace auik::v2
         assign_next_depth(this->depth_range(), _background_depth_range);
         assign_next_depth(_background_depth_range, _indicator_depth_range);
         _indicator_rect.depth = next_depth(_indicator_depth_range);
+        _indicator_rect.hit_depth = _indicator_rect.depth;
+    }
+
+    void RadioButton::back_hit_depth()
+    {
+        Widget::back_hit_depth();
+        _indicator_rect.hit_depth = get_rect().hit_depth;
+    }
+
+    void RadioButton::restore_hit_depth()
+    {
+        Widget::restore_hit_depth();
+        _indicator_rect.hit_depth = _indicator_rect.depth;
     }
 
     void RadioButton::draw(DrawCtx &ctx)
@@ -154,8 +168,7 @@ namespace auik::v2
     {
         if (!_value || *_value == new_value) return;
         *_value = new_value;
-        dispatch_change();
-        redraw_external(has_draw_record());
+        if (!mark_changed()) redraw_external(has_draw_record());
     }
 
     void RadioButton::on_click(MouseKey key, KeyPressState state, u32 click_count)
@@ -163,7 +176,8 @@ namespace auik::v2
         (void)click_count;
         if (key != MouseKey::left || state != KeyPressState::press || !_value) return;
         *_value = !*_value;
-        dispatch_change();
-        add_render_command<detail::ClickEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
+        const bool prevented = mark_changed();
+        if (!prevented)
+            add_render_command<detail::ClickEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
     }
 } // namespace auik::v2

@@ -213,7 +213,7 @@ namespace auik::v2
 
     CircleColorPicker::CircleColorPicker(u32 id, amal::vec4 *value, f32 diameter, WidgetFlags widget_flags,
                                          Widget *parent)
-        : Widget(id, widget_flags | WidgetFlagBits::fixed, EventFlagBits::click | EventFlagBits::drag, parent,
+        : Widget(id, widget_flags | WidgetFlagBits::fixed_layout, EventFlagBits::click | EventFlagBits::drag, parent,
                  {{0.0f, 0.0f}, {diameter, diameter}}, AUIK_TAG_CIRCLE_COLOR_PICKER),
           _preferred_side(diameter),
           _value(value)
@@ -312,7 +312,7 @@ namespace auik::v2
         const amal::vec2 next_pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
 
         set_position(next_pos);
-        set_size({side, side});
+        set_layout_size({side, side});
         set_required_size({side + margin.x + margin.z, side + margin.y + margin.w});
         Widget::update_layout(true);
         assert(parent() && "CircleColorPicker must have parent");
@@ -347,6 +347,18 @@ namespace auik::v2
         assign_next_depth(this->depth_range(), _track_depth_range);
         assign_next_depth(_track_depth_range, _grab_depth_range);
         rebuild_cached_visuals();
+    }
+
+    void CircleColorPicker::back_hit_depth()
+    {
+        Widget::back_hit_depth();
+        _grab_hit_rect.hit_depth = get_rect().hit_depth;
+    }
+
+    void CircleColorPicker::restore_hit_depth()
+    {
+        Widget::restore_hit_depth();
+        _grab_hit_rect.hit_depth = _grab_hit_rect.depth;
     }
 
     void CircleColorPicker::draw(DrawCtx &ctx)
@@ -509,6 +521,7 @@ namespace auik::v2
         _grab_hit_rect.bounds.offset = {pick_pos.x - grab_w * 0.5f, pick_pos.y - grab_h * 0.5f};
         _grab_hit_rect.bounds.size = {grab_w, grab_h};
         _grab_hit_rect.depth = next_depth(_grab_depth_range);
+        _grab_hit_rect.hit_depth = _grab_hit_rect.depth;
 
         const u16 grab_clip = clip_id();
         const f32 grab_z = next_depth(_grab_depth_range);
@@ -604,7 +617,7 @@ namespace auik::v2
     }
 
     SquareColorPicker::SquareColorPicker(u32 id, amal::vec4 *value, f32 size, WidgetFlags widget_flags, Widget *parent)
-        : Widget(id, widget_flags | WidgetFlagBits::fixed, EventFlagBits::click | EventFlagBits::drag, parent,
+        : Widget(id, widget_flags | WidgetFlagBits::fixed_layout, EventFlagBits::click | EventFlagBits::drag, parent,
                  {{0.0f, 0.0f}, {size, size}},
                  AUIK_TAG_SQUARE_COLOR_PICKER),
           _preferred_side(size),
@@ -661,7 +674,7 @@ namespace auik::v2
         const amal::vec2 next_pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
 
         set_position(next_pos);
-        set_size({side, side});
+        set_layout_size({side, side});
         set_required_size({side + margin.x + margin.z, side + margin.y + margin.w});
         Widget::update_layout(true);
         assert(parent() && "SquareColorPicker must have parent");
@@ -703,6 +716,20 @@ namespace auik::v2
         assign_next_depth(_square_depth_range, _square_overlay_depth_range);
         assign_next_depth(_square_overlay_depth_range, _grab_depth_range);
         rebuild_cached_visuals();
+    }
+
+    void SquareColorPicker::back_hit_depth()
+    {
+        Widget::back_hit_depth();
+        _ring_grab_hit_rect.hit_depth = get_rect().hit_depth;
+        _sv_grab_hit_rect.hit_depth = get_rect().hit_depth;
+    }
+
+    void SquareColorPicker::restore_hit_depth()
+    {
+        Widget::restore_hit_depth();
+        _ring_grab_hit_rect.hit_depth = _ring_grab_hit_rect.depth;
+        _sv_grab_hit_rect.hit_depth = _sv_grab_hit_rect.depth;
     }
 
     void SquareColorPicker::draw(DrawCtx &ctx)
@@ -962,10 +989,12 @@ namespace auik::v2
         _ring_grab_hit_rect.bounds.offset = {ring_pos.x - grab_w * 0.5f, ring_pos.y - grab_h * 0.5f};
         _ring_grab_hit_rect.bounds.size = {grab_w, grab_h};
         _ring_grab_hit_rect.depth = grab_z;
+        _ring_grab_hit_rect.hit_depth = _ring_grab_hit_rect.depth;
 
         _sv_grab_hit_rect.bounds.offset = {sv_pos.x - grab_w * 0.5f, sv_pos.y - grab_h * 0.5f};
         _sv_grab_hit_rect.bounds.size = {grab_w, grab_h};
         _sv_grab_hit_rect.depth = grab_z;
+        _sv_grab_hit_rect.hit_depth = _sv_grab_hit_rect.depth;
 
         _ring_grab_visual = {};
         _ring_grab_back_visual = {};

@@ -331,12 +331,14 @@ namespace auik::v2
 
             static f32 resolve_vertical_offset(TextVerticalAlign align, f32 bounds_height, f32 layout_height)
             {
+                assert(align != TextVerticalAlign::none && "Text vertical alignment does not support none");
                 switch (align)
                 {
                     case TextVerticalAlign::center:
                         return (bounds_height - layout_height) * 0.5f;
                     case TextVerticalAlign::bottom:
                         return bounds_height - layout_height;
+                    case TextVerticalAlign::none:
                     case TextVerticalAlign::top:
                     default:
                         return 0.0f;

@@ -60,6 +60,7 @@ namespace auik::v2
         _checkmark_rect.bounds = {mark_pos, mark_size};
         _checkmark_rect.clip_id = clip_id();
         _checkmark_rect.depth = next_depth(_content_depth_range);
+        _checkmark_rect.hit_depth = _checkmark_rect.depth;
     }
 
     void Checkbox::update_layout(bool min_size_known)
@@ -80,7 +81,7 @@ namespace auik::v2
 
         const amal::vec2 pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
         set_position(pos);
-        set_size(widget_size);
+        set_layout_size(widget_size);
         Widget::update_layout(true);
         assert(parent() && "Checkbox must have parent");
         set_clip_id(parent()->content_clip_id());
@@ -116,6 +117,19 @@ namespace auik::v2
         assign_next_depth(this->depth_range(), _box_depth_range);
         assign_next_depth(_box_depth_range, _content_depth_range);
         _checkmark_rect.depth = next_depth(_content_depth_range);
+        _checkmark_rect.hit_depth = _checkmark_rect.depth;
+    }
+
+    void Checkbox::back_hit_depth()
+    {
+        Widget::back_hit_depth();
+        _checkmark_rect.hit_depth = get_rect().hit_depth;
+    }
+
+    void Checkbox::restore_hit_depth()
+    {
+        Widget::restore_hit_depth();
+        _checkmark_rect.hit_depth = _checkmark_rect.depth;
     }
 
     void Checkbox::draw(DrawCtx &ctx)
@@ -164,8 +178,7 @@ namespace auik::v2
     {
         if (!_value || *_value == new_value) return;
         *_value = new_value;
-        dispatch_change();
-        redraw_external(has_draw_record());
+        if (!mark_changed()) redraw_external(has_draw_record());
     }
 
     void Checkbox::on_click(MouseKey key, KeyPressState state, u32 click_count)
@@ -174,7 +187,8 @@ namespace auik::v2
         if (key != MouseKey::left || state != KeyPressState::press) return;
         if (!_value) return;
         *_value = !*_value;
-        dispatch_change();
-        add_render_command<detail::ClickEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
+        const bool prevented = mark_changed();
+        if (!prevented)
+            add_render_command<detail::ClickEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
     }
 } // namespace auik::v2

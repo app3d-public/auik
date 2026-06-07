@@ -1,6 +1,5 @@
 #pragma once
 
-#include <acul/memory/alloc.hpp>
 #include "../theme.hpp"
 #include "image.hpp"
 #include "widget.hpp"
@@ -11,7 +10,7 @@ namespace auik::v2
 {
     constexpr inline WidgetFlags get_default_image_button_flags()
     {
-        return get_default_widget_flags() | WidgetFlagBits::hittable | WidgetFlagBits::fixed;
+        return get_default_widget_flags() | WidgetFlagBits::hittable | WidgetFlagBits::fixed_layout;
     }
 
     class APPLIB_API ImageButton final : public Widget
@@ -32,6 +31,8 @@ namespace auik::v2
         void rebuild_clip_rects() override;
         void reset_draw_records() override;
         void update_depth(const amal::vec2 &depth_range) override;
+        void back_hit_depth() override;
+        void restore_hit_depth() override;
         void draw(DrawCtx &ctx) override;
 
         const TextureID &texture_id() const { return _texture_id; }
@@ -61,7 +62,6 @@ namespace auik::v2
         amal::rect _uv_rect{};
         detail::RectData _image_rect{};
         amal::vec2 _image_size{0.0f, 0.0f};
-        amal::vec2 _requested_size{0.0f, 0.0f};
         amal::vec2 _content_depth_range{0.0f, 1.0f};
         bool _coverage_mode = false;
 

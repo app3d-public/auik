@@ -59,6 +59,7 @@ namespace auik::v2
         ModalQueue *queue() const { return _queue; }
         void set_on_close(acul::unique_function<void()> fn) { _on_close = std::move(fn); }
         void close();
+        void update_layout(bool min_size_known) override;
 
     private:
         friend class ModalQueue;
@@ -93,9 +94,12 @@ namespace auik::v2
         void update_layout_min_size() override;
         void update_layout(bool min_size_known) override;
         void translate(const amal::vec2 &delta) override;
+        void reset_clip_rect_records() override;
         void rebuild_clip_rects() override;
         void reset_draw_records() override;
         void update_depth(const amal::vec2 &depth_range) override;
+        void back_hit_depth() override;
+        void restore_hit_depth() override;
         void draw(DrawCtx &ctx) override;
         void on_click(MouseKey key, KeyPressState state, u32 click_count) override;
         void on_drag(const amal::vec2 &delta, KeyPressState state) override;

@@ -44,7 +44,7 @@ namespace auik::v2
 
     constexpr inline WidgetFlags get_default_fixed_tab_bar_flags()
     {
-        return get_default_tab_bar_flags() | WidgetFlagBits::fixed;
+        return get_default_tab_bar_flags() | WidgetFlagBits::fixed_layout;
     }
 
     class APPLIB_API TabBar : public Widget
@@ -62,8 +62,13 @@ namespace auik::v2
         void update_layout_min_size() override;
         void update_layout(bool min_size_known) override;
         void translate(const amal::vec2 &delta) override;
+        void reset_clip_rect_records() override;
+        void reset_draw_records() override;
         void rebuild_clip_rects() override;
+        u32 get_depth_requirement() const override;
         void update_depth(const amal::vec2 &depth_range) override;
+        void back_hit_depth() override;
+        void restore_hit_depth() override;
         void draw(DrawCtx &ctx) override;
         void on_focus(bool focused) override;
         void on_hover(HoverState state) override;
@@ -96,19 +101,27 @@ namespace auik::v2
         const value_type *data() const { return _tabs.data(); }
 
         TabBarFlags tab_flags() const { return _tab_flags; }
-        bool clipped() const { return !(_tab_flags & g_tab_bar_visual_mask); }
+        bool content_width_fit() const { return is_size_ignored(requested_size().x); }
+        bool clipped() const { return !(_tab_flags & g_tab_bar_visual_mask) && !content_width_fit(); }
         bool popup() const { return _tab_flags & TabBarFlagBits::popup; }
         bool scroll() const { return _tab_flags & TabBarFlagBits::scroll; }
         bool multiple() const { return _tab_flags & TabBarFlagBits::multiple; }
         bool movable() const { return _tab_flags & TabBarFlagBits::movable; }
         bool closable() const { return _tab_flags & TabBarFlagBits::closable; }
 
-        u32 selected_index() const { return _selected_index; }
+        u32 selected_index() const;
         u32 selected_id() const;
-        const acul::vector<u32> &selected_ids() const { return _selected_element_ids; }
+        acul::vector<u32> selected_ids() const;
         void set_selected(u32 element_id);
         void set_selected(const acul::vector<u32> &element_ids);
+        void set_selected_silent(u32 element_id);
         bool is_selected(u32 element_id) const;
+        u32 insertion_index_at(const amal::vec2 &point) const;
+        const amal::vec2 &drag_grab_offset() const { return _drag_grab_offset; }
+        bool has_drag_grab_offset() const { return _drag_grab_offset_valid; }
+        void begin_external_drag(u32 element_id);
+        void cancel_drag();
+        u32 item_style_tag() const { return _item_style_tag; }
         f32 tab_width() const { return _tab_width; }
         u32 tab_width_key() const { return _tab_width_key; }
         void set_tab_width(f32 value);
@@ -117,11 +130,14 @@ namespace auik::v2
     protected:
         bool draw_transition_targets(DrawCtx &ctx);
         void rebuild_items();
-        void sync_selection_to_widgets();
         void update_popup_layout();
         void open_popup();
         void close_popup(bool refresh_style = true);
-        void toggle_popup();
+        void toggle_popup()
+        {
+            if (_open) close_popup();
+            else open_popup();
+        }
         void update_overflow_button_style();
         void clamp_scroll_offset();
         void handle_item_click(u32 element_id);
@@ -134,9 +150,13 @@ namespace auik::v2
         u32 find_drop_index_by_dragged_center() const;
         virtual u16 get_layout_parent_clip_id() const;
         virtual amal::vec4 get_layout_parent_clip_rect() const;
-        void update_drag_realtime_order(f32 delta_x);
-        void swap_drag_with_neighbor(u32 drag_index, u32 neighbor_index);
+        bool update_drag_realtime_order(f32 delta_x);
+        bool swap_drag_with_neighbor(u32 drag_index, u32 neighbor_index);
         void update_drag_depth();
+        virtual StyleState resolve_tab_item_state(u32 index,
+                                                  const detail::WidgetStyleSelectorTransition &transition) const;
+        virtual bool auto_select_first_item() const { return true; }
+        StyleUpdateFlags update_item_state(u32 index, const detail::WidgetStyleSelectorTransition &transition);
         StyleUpdateFlags update_tab_item_style(u32 index, const detail::WidgetStyleSelectorTransition &transition);
         StyleUpdateFlags update_close_button_style(u32 index, const detail::WidgetStyleSelectorTransition &transition);
         StyleUpdateFlags update_popup_item_style(u32 index, const detail::WidgetStyleSelectorTransition &transition);
@@ -147,7 +167,6 @@ namespace auik::v2
         amal::vec2 measure_overflow_size();
 
         acul::vector<u32> _element_ids;
-        acul::vector<u32> _selected_element_ids;
         acul::vector<detail::Selectable *> _tabs;
         acul::vector<ImageButton *> _close_buttons;
         detail::PopupTrigger *_overflow_button = nullptr;
@@ -160,8 +179,10 @@ namespace auik::v2
         u32 _drag_element_id = 0u;
         u32 _drag_preview_index = 0u;
         u32 _last_selected_element_id = 0u;
+        amal::vec2 _drag_grab_offset{0.0f, 0.0f};
         amal::vec2 _drag_offset{0.0f, 0.0f};
         amal::vec2 _drag_applied_offset{0.0f, 0.0f};
+        bool _drag_grab_offset_valid = false;
         bool _drag_moved = false;
         bool _open = false;
         f32 _scroll_offset = 0.0f;

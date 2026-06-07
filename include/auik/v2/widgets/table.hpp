@@ -43,6 +43,8 @@ namespace auik::v2
         TableColumnSizing sizing = TableColumnSizing::stretch;
         f32 value = 1.0f;
         f32 min_width = 0.0f;
+        HAlign halign = HAlign::left;
+        VAlign valign = VAlign::none;
     };
 
     class APPLIB_API Table final : public Widget
@@ -263,6 +265,8 @@ namespace auik::v2
         void rebuild_clip_rects() override;
         void reset_draw_records() override;
         void update_depth(const amal::vec2 &depth_range) override;
+        void back_hit_depth() override;
+        void restore_hit_depth() override;
         void draw(DrawCtx &ctx) override;
         void on_hover(HoverState state) override;
         void on_drag(const amal::vec2 &delta, KeyPressState state) override;
@@ -328,7 +332,7 @@ namespace auik::v2
     inline Table *make_fixed_table(u32 id, Table::Rows rows = {}, amal::vec2 size = {0.0f, 0.0f},
                                    Widget *parent = nullptr)
     {
-        return acul::alloc<Table>(id, std::move(rows), size, get_default_table_flags() | WidgetFlagBits::fixed, parent,
+        return acul::alloc<Table>(id, std::move(rows), size, get_default_table_flags() | WidgetFlagBits::fixed_layout, parent,
                                   AUIK_STYLE_TAG_TABLE);
     }
 } // namespace auik::v2

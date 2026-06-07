@@ -18,8 +18,18 @@ color-text,0x5EF07F34
 column,0xE14358E9
 combo-box,0x48F5BBCA
 combo-box-item,0xF2B7E06E
+combo-box-item-multi,0x56054734
 combo-box-item-selected,0xB7EA954D
 combo-box-popup,0xC94B7B61
+dock-node-tab-panel,0x56124616
+dock-tab-item,0x35F5E10F
+dock-tab-item-selected,0xE8142D2E
+dock-tabbar,0x3F011AC8
+dock-tabbar-menu,0xA7C4E3D1
+docked-window,0x497BE467
+dockspace-drop-zone,0xD7A9D03A
+dockspace-resize-helper,0x6A2C41E8
+dockspace-resize-helper-drag,0x20B9A7D4
 global,0x00000000
 gradient-slider,0x9C0AE52D
 gradient-slider-grab,0x4B49A40E
@@ -83,4 +93,5 @@ window,0xB4382179
 window-caption-button,0xEF0A4C09
 window-caption-close-button,0x561CF733
 window-header,0x663566BE
+window-header-menu,0xF07EF7CE
 window-menu-bar,0xC37C8F4B

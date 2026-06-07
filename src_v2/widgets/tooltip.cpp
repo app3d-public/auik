@@ -32,10 +32,9 @@ namespace auik::v2
     } // namespace
 
     Tooltip::Tooltip(u32 id, Widget *parent)
-        : Widget(id, get_default_widget_flags() | WidgetFlagBits::fixed, EventFlagBits::none, parent, {},
+        : Widget(id, get_default_widget_flags() | WidgetFlagBits::fixed_layout, EventFlagBits::none, parent, {},
                  AUIK_TAG_TOOLTIP)
     {
-        set_depth_zone(DepthZone::foreground);
         _layout_config.wrap = detail::TextWrapMode::word;
         _layout_config.overflow = detail::TextOverflowMode::clip;
         _render_config.horizontal_align = detail::TextHorizontalAlign::left;
@@ -147,7 +146,7 @@ namespace auik::v2
         const amal::vec4 padding = style.padding();
         const amal::vec2 display = get_display_size();
 
-        set_size(required_size());
+        set_layout_size(required_size());
 
         const f32 max_x = amal::max(display.x - size().x - g_tooltip_screen_padding, g_tooltip_screen_padding);
         const f32 pos_x = clamp_axis(_anchor_x, g_tooltip_screen_padding, max_x);

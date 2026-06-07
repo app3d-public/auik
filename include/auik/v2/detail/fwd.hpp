@@ -22,9 +22,12 @@ namespace auik::v2
 
     class Theme;
     class Widget;
+    class Window;
+    class Dockspace;
     class Image;
     class ImageButton;
     class Tooltip;
+    struct Viewport;
     struct DrawStream;
     struct DrawPipeline;
     struct PostEffect;

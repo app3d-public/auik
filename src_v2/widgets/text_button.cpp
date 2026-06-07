@@ -28,10 +28,11 @@ namespace auik::v2
         _text->update_layout_min_size();
         const amal::vec2 text_size = _text->required_size();
 
-        amal::vec2 min_size = size();
+        amal::vec2 min_size = {is_size_concrete(requested_size().x) ? requested_size().x : 0.0f,
+                               is_size_concrete(requested_size().y) ? requested_size().y : 0.0f};
         const f32 content_min_width = text_size.x + padding.x + padding.z;
         const f32 content_min_height = amal::max(style.text_size(), text_size.y) + padding.y + padding.w;
-        if (!is_fixed())
+        if (!is_fixed() || stretch_width())
         {
             min_size.x = content_min_width;
             min_size.y = content_min_height;
@@ -57,7 +58,12 @@ namespace auik::v2
         const amal::vec2 min_button = {amal::max(min_required.x - margin.x - margin.z, 0.0f),
                                        amal::max(min_required.y - margin.y - margin.w, 0.0f)};
         amal::vec2 button_size = size();
-        if (!is_fixed())
+        if (stretch_width())
+        {
+            button_size.x = amal::max(button_size.x, min_button.x);
+            button_size.y = stretch_height() ? amal::max(button_size.y, min_button.y) : min_button.y;
+        }
+        else if (!is_fixed())
         {
             button_size.x = min_button.x;
             button_size.y = min_button.y;
@@ -70,7 +76,7 @@ namespace auik::v2
 
         const amal::vec2 pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
         set_position(pos);
-        set_size(button_size);
+        set_layout_size(button_size);
         Widget::update_layout(true);
         assert(parent() && "TextButton must have parent");
         set_clip_id(parent()->content_clip_id());
@@ -80,7 +86,7 @@ namespace auik::v2
         const amal::vec2 content_size = {amal::max(button_size.x - padding.x - padding.z, 0.0f),
                                          amal::max(button_size.y - padding.y - padding.w, 0.0f)};
         _text->set_position(content_pos);
-        _text->set_size(content_size);
+        _text->set_layout_size(content_size);
         _text->update_layout(true);
     }
 
@@ -107,6 +113,18 @@ namespace auik::v2
         amal::vec2 text_range{};
         assign_next_depth(this->depth_range(), text_range);
         _text->update_depth(text_range);
+    }
+
+    void TextButton::back_hit_depth()
+    {
+        Widget::back_hit_depth();
+        _text->back_hit_depth();
+    }
+
+    void TextButton::restore_hit_depth()
+    {
+        Widget::restore_hit_depth();
+        _text->restore_hit_depth();
     }
 
     void TextButton::draw(DrawCtx &ctx)

@@ -28,6 +28,15 @@ struct FT_LibraryRec_;
 
 namespace auik::v2
 {
+    enum class DepthZone : u8
+    {
+        background = 0,
+        work = 1,
+        foreground = 2
+    };
+
+    struct DockspaceContext;
+
     struct DirtyFlagBits
     {
         enum enum_type
@@ -134,10 +143,9 @@ namespace auik::v2
             acul::hashmap<u64, u32> texture_bind_slots;
             ElementID hover_id{};
             StyleSelectorTransition style_selector{};
-            detail::HitboxZone hover_hitbox_zone = detail::HitboxZoneBits::none;
             u32 active_id = 0;
             u32 focus_id = 0;
-            int root_depth_counts[3] = {};
+            u8 root_depth_counts[3] = {};
             GPUContext *gpu_ctx = nullptr;
             WindowContext *window_ctx = nullptr;
             SoundContext *sound_ctx = nullptr;
@@ -148,11 +156,13 @@ namespace auik::v2
             u32 max_textures_size = 32;
             SharedBufferSyncState shared_sync_state[2];
             AtlasState atlas_state;
-            amal::vec4 main_viewport{0.0f, 0.0f, 0.0f, 0.0f};
+            acul::vector<Viewport *> viewports;
+            u32 root_window_count = 0;
             DirtyFlags dirty_flags = DirtyFlagBits::none;
             Theme *theme = nullptr;
             bool *host_refresh_request = nullptr;
             PendingFilter *pending_filter = nullptr;
+            DockspaceContext *dockspace_context = nullptr;
             FrameCache frame_cache;
             acul::vector<DelayedHostTask> delayed_tasks;
             u64 next_delayed_task_id = 1;
@@ -242,6 +252,11 @@ namespace auik::v2
         }
 #endif
 
+        inline void mark_layout_dirty()
+        {
+            get_context().dirty_flags |= DirtyFlagBits::layout;
+        }
+
         inline void mark_host_refresh_request()
         {
             auto &ctx = get_context();
@@ -263,6 +278,8 @@ namespace auik::v2
             assert(ctx && "auik window context is not initialized");
             return ctx;
         }
+
+        inline DockspaceContext *get_dockspace_context() { return get_context().dockspace_context; }
 
         inline IO &get_io() { return get_context().io; }
 
@@ -336,7 +353,7 @@ namespace auik::v2
     inline void set_theme(Theme *theme)
     {
         auto &ctx = detail::get_context();
-        if (ctx.theme) ctx.dirty_flags |= DirtyFlagBits::layout;
+        if (ctx.theme) detail::mark_layout_dirty();
         ctx.theme = theme;
     }
 

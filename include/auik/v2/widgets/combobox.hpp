@@ -23,7 +23,7 @@ namespace auik::v2
     }
     constexpr inline WidgetFlags get_default_fixed_combo_box_flags()
     {
-        return get_default_combo_box_flags() | WidgetFlagBits::fixed;
+        return get_default_combo_box_flags() | WidgetFlagBits::fixed_layout;
     }
 
     class APPLIB_API ComboBox final : public Widget
@@ -40,6 +40,8 @@ namespace auik::v2
         void translate(const amal::vec2 &delta) override;
         void rebuild_clip_rects() override;
         void update_depth(const amal::vec2 &depth_range) override;
+        void back_hit_depth() override;
+        void restore_hit_depth() override;
         void draw(DrawCtx &ctx) override;
         void on_focus(bool focused) override;
         void on_click(MouseKey key, KeyPressState state, u32 click_count) override;
@@ -90,6 +92,8 @@ namespace auik::v2
         void translate(const amal::vec2 &delta) override;
         void rebuild_clip_rects() override;
         void update_depth(const amal::vec2 &depth_range) override;
+        void back_hit_depth() override;
+        void restore_hit_depth() override;
         void draw(DrawCtx &ctx) override;
         void on_focus(bool focused) override;
         void on_click(MouseKey key, KeyPressState state, u32 click_count) override;
