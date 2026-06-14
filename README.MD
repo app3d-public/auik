@@ -54,7 +54,7 @@ The following dependencies must be installed on your system:
 - [freetype](https://www.freetype.org/)
 - [harfbuzz](https://github.com/harfbuzz/harfbuzz)
 
-## CSS Theme Generation
+### CSS Theme Generation
 
 If `AUIK_CSS_DIR` is set before adding Auik, CSS files from that directory are parsed and converted into generated C++ theme sources.
 

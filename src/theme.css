@@ -1,0 +1,754 @@
+:root {
+    --color-surface: rgb(41, 41, 43);
+    --color-surface-light: rgb(74, 74, 75);
+    --color-hover: rgba(85, 85, 85);
+    --color-active: rgb(31, 31, 31);
+    --color-border: rgb(51, 51, 51);
+    --color-accent: rgb(72, 114, 255);
+    --color-accent-hover: rgb(91, 130, 255);
+    --color-text: rgb(230, 230, 230);
+    --color-picker-size: 185px;
+}
+
+.global {
+    color: var(--color-text);
+    font-family: var(--system-font);
+    font-size: calc(12.5px * var(--dpi));
+    margin: 5px 0px;
+    inline-spacing: 4px;
+}
+
+.caret,
+.multiline-caret {
+    padding: 0px 1px;
+    background-color: var(--color-text);
+}
+
+.no-pad {
+    margin: 0px;
+    padding: 0px;
+}
+
+.placeholder {
+    margin: 0px;
+    padding: 0px;
+    color: rgba(230, 230, 230, 0.5);
+}
+
+.selection {
+    background-color: rgba(72, 114, 255, 0.4);
+}
+
+.rubber-band {
+    background-color: rgba(72, 114, 255, 0.3);
+    border: 1px solid rgba(72, 114, 255, 0.8);
+}
+
+.text-drag-icon {
+    background-color: rgb(204, 204, 204);
+}
+
+.column {
+    inline-spacing: 8px;
+}
+
+.table {
+    margin: 5px 0px;
+    padding: 0px;
+    background-color: rgba(0, 0, 0, 0);
+    border: 1px solid var(--color-border);
+    border-radius: 3px;
+}
+
+.table-header-cell {
+    margin: 0px;
+    padding: 4px 4px;
+    background-color: var(--color-surface-light);
+    border: 1px solid var(--color-border);
+}
+
+.table-header-cell:hover,
+.table-header-cell:active {
+    background-color: var(--color-hover);
+}
+
+.table-cell {
+    margin: 0px;
+    padding: 4px 4px;
+    border: 1px solid var(--color-border);
+}
+
+.table-row-alt {
+    margin: 0px;
+    background-color: rgba(255, 255, 255, 0.035);
+}
+
+.table-resize-border {
+    margin: 0px;
+    padding: 6px;
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.table-resize-border:hover,
+.table-resize-border:active {
+    background-color: var(--color-accent);
+}
+
+.table-tree-resize-border {
+    margin: 0px;
+    padding: 0px;
+    background-color: rgb(100, 100, 100);
+    border: 1px solid rgb(100, 100, 100);
+}
+
+.table-tree-resize-border:hover,
+.table-tree-resize-border:active {
+    background-color: var(--color-accent);
+    border: 1px solid var(--color-accent);
+}
+
+.dockspace-resize-helper {
+    margin: 4px;
+    padding: 2px;
+    background-color: var(--color-surface-light);
+}
+
+.dockspace-resize-helper:hover {
+    background-color: var(--color-surface-light);
+}
+
+.dockspace-resize-helper:focus,
+.dockspace-resize-helper:active {
+    background-color: var(--color-accent);
+}
+
+.dockspace-resize-helper-drag {
+    margin: 4px;
+    padding: 2px;
+    background-color: var(--color-surface-light);
+}
+
+.dockspace-resize-helper-drag:hover,
+.dockspace-resize-helper-drag:focus,
+.dockspace-resize-helper-drag:active {
+    background-color: var(--color-accent);
+}
+
+.dockspace-drop-zone {
+    background-color: rgba(72, 114, 255, 0.5);
+}
+
+.dock-node-tab-panel {
+    margin: 0px;
+    background-color: var(--color-surface-light);
+}
+
+.dock-tabbar {
+    margin: 0px;
+    inline-spacing: 0px;
+}
+
+.dock-tabbar-menu {
+    margin: -2px 4px 0px 4px;
+    padding: 6px;
+    background-color: rgba(0, 0, 0, 0);
+    border-radius: 4px;
+}
+
+.dock-tabbar-menu:hover {
+    background-color: var(--color-hover);
+}
+
+.dock-tabbar-menu:active {
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.window-header-menu {
+    margin: 0px;
+    padding: 6px;
+    background-color: rgba(0, 0, 0, 0);
+    border-radius: 4px;
+}
+
+.window-header-menu:hover {
+    background-color: var(--color-hover);
+}
+
+.window-header-menu:active {
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.dock-tab-item {
+    margin: 0px;
+    padding: 5px 10px;
+}
+
+.dock-tab-item:hover {
+    background-color: var(--color-hover);
+}
+
+.dock-tab-item-selected {
+    margin: 0px;
+    padding: 5px 10px;
+    background-color: var(--color-surface);
+}
+
+.dock-tab-item-selected:hover {
+    background-color: var(--color-hover);
+}
+
+.table-tree {
+    border: 1px solid var(--color-border);
+    border-radius: 3px;
+}
+
+.table-tree-cell {
+    margin: 0px;
+    padding: 4px 4px;
+}
+
+.table-tree-row-alt {
+    margin: 0px;
+    background-color: rgba(255, 255, 255, 0.035);
+}
+
+.table-tree-line {
+    margin: 0px;
+    background-color: rgb(100, 100, 100);
+    border: 1px solid rgb(100, 100, 100);
+}
+
+.table-tree-collapse-icon {
+    margin: 0px 2px;
+    color: var(--color-text);
+}
+
+.collapse-header {
+    margin: 0px;
+    padding: 4px 0px;
+    background-color: var(--color-surface-light);
+    border-radius: 3px;
+}
+
+.collapse-header:hover {
+    background-color: var(--color-hover);
+}
+
+.collapse-header:active {
+    background-color: var(--color-surface-light);
+}
+
+.collapse-header-closed {
+    margin: 0px;
+    padding: 4px 0px;
+    background-color: var(--color-surface);
+    border-radius: 3px;
+}
+
+.collapse-header-closed:hover {
+    background-color: var(--color-hover);
+}
+
+.collapse-header-closed:active {
+    background-color: var(--color-surface);
+}
+
+.collapse-header-content {
+    margin: 0px 0px;
+    padding: 4px 8px;
+}
+
+.collapse-header-trigger {
+    margin: 0px 8px;
+}
+
+.window {
+    padding: 10px 8px;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+}
+
+.docked-window {
+    padding: 10px 8px;
+    background-color: var(--color-surface);
+    border: 0px solid rgba(0, 0, 0, 0);
+    border-radius: 0px;
+}
+
+.modal-window {
+    padding: 8px 10px;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+}
+
+.window-header {
+    padding: 8px 8px;
+    background-color: var(--color-active);
+    border-radius: 6px 6px 0px 0px;
+}
+
+.window-header:focus {
+    background-color: var(--color-surface-light);
+}
+
+.titlebar {
+    background-color: var(--color-active);
+}
+
+.titlebar-leading-region {
+    margin: 0px;
+    background-color: var(--color-surface-light);
+}
+
+.titlebar-icon {
+    margin: 0px 8px;
+}
+
+.text-button {
+    padding: 4px 14px;
+    background-color: var(--color-surface-light);
+    border-radius: 3px;
+}
+
+.text-button:hover {
+    background-color: var(--color-hover);
+}
+
+.text-button:active {
+    background-color: var(--color-surface-light);
+}
+
+.transparent-button {
+    padding: 4px 14px;
+    border-radius: 3px;
+}
+
+.transparent-button:hover {
+    background-color: var(--color-hover);
+}
+
+.transparent-button:active {
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.modal-title {
+    padding: 0px;
+    font-family: var(--system-font-bold);
+    font-size: calc(14px * var(--dpi));
+}
+
+.modal-header {
+    margin-bottom: 8px;
+}
+
+.modal-message-area {
+    margin: 8px 8px 4px 8px;
+}
+
+.modal-icon {
+    margin-right: 22px;
+    margin-bottom: 22px;
+}
+
+.modal-batch-label {
+    font-size: calc(11px * var(--dpi));
+}
+
+.modal-controls-area {
+    margin: 15px 0px 6px 0px;
+}
+
+.image-button {
+    padding: 6px;
+    background-color: var(--color-surface-light);
+    border-radius: 4px;
+}
+
+.image-button:hover {
+    background-color: var(--color-hover);
+}
+
+.image-button:active {
+    background-color: var(--color-surface-light);
+}
+
+.textbox {
+    padding: 4px 8px;
+    background-color: var(--color-surface-light);
+    border-radius: 4px;
+}
+
+.checkbox {
+    padding: 3px;
+    background-color: var(--color-surface-light);
+    border-radius: 3px;
+}
+
+.checkbox:hover {
+    background-color: var(--color-hover);
+}
+
+.checkbox:active {
+    background-color: var(--color-surface-light);
+}
+
+.radio-button {
+    padding: 10px;
+    background-color: var(--color-surface-light);
+    border-radius: 10px;
+}
+
+.radio-button:hover {
+    background-color: var(--color-hover);
+}
+
+.radio-button:active {
+    background-color: var(--color-surface-light);
+}
+
+.radio-button-indicator {
+    margin: 0px;
+    padding: 5px;
+    background-color: var(--color-text);
+    border-radius: 5px;
+}
+
+.switch-button {
+    padding: 2px;
+    background-color: var(--color-surface-light);
+    border-radius: 10px;
+}
+
+.switch-button:hover {
+    background-color: var(--color-hover);
+}
+
+.switch-button:active {
+    background-color: var(--color-surface-light);
+}
+
+.switch-button-on {
+    padding: 2px;
+    background-color: var(--color-accent);
+    border-radius: 10px;
+}
+
+.switch-button-on:hover {
+    background-color: var(--color-accent-hover);
+}
+
+.switch-button-grab {
+    padding: 8px;
+    background-color: var(--color-text);
+    border-radius: 8px;
+}
+
+.combo-box {
+    padding: 4px 8px;
+    background-color: var(--color-surface-light);
+    border-radius: 4px;
+}
+
+.combo-box:hover {
+    background-color: var(--color-hover);
+}
+
+.combo-box:focus {
+    border-radius: 4px 4px 0px 0px;
+}
+
+.combo-box-popup {
+    margin: 0px;
+    padding: 2px 0px;
+    background-color: var(--color-active);
+    border-radius: 0px 0px 4px 4px;
+}
+
+.combo-box-item {
+    margin: 2px 4px;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+.combo-box-item-multi {
+    margin: 2px 4px;
+    padding: 2px 26px 2px 6px;
+    border-radius: 3px;
+}
+
+.combo-box-item:hover {
+    background-color: var(--color-hover);
+}
+
+.combo-box-item-multi:hover {
+    background-color: var(--color-hover);
+}
+
+.combo-box-item:active,
+.combo-box-item:focus {
+    background-color: var(--color-surface-light);
+}
+
+.combo-box-item-multi:active,
+.combo-box-item-multi:focus {
+    background-color: var(--color-surface-light);
+}
+
+.combo-box-item-selected {
+    margin: 2px 4px;
+    padding: 2px 6px;
+    background-color: var(--color-accent);
+    border-radius: 3px;
+}
+
+.combo-box-item-selected:hover,
+.combo-box-item-selected:focus {
+    background-color: var(--color-accent-hover);
+}
+
+.tab-bar-item {
+    margin: 0px;
+    padding: 2px 8px;
+    background-color: var(--color-surface-light);
+    border-radius: 4px;
+}
+
+.tab-bar-item:hover {
+    background-color: var(--color-hover);
+}
+
+.tab-bar-item-selected {
+    background-color: var(--color-accent);
+    border-radius: 4px;
+}
+
+.tab-bar-item-selected:hover,
+.tab-bar-item-selected:focus {
+    background-color: var(--color-accent-hover);
+}
+
+.tabbar-popup-button {
+    margin: 0px;
+    padding: 5px 8px;
+    border-radius: 4px;
+}
+
+.tabbar-popup-button:hover {
+    background-color: var(--color-hover);
+}
+
+.tabbar-popup-button:focus {
+    background-color: var(--color-surface-light);
+}
+
+.tab-bar-popup {
+    margin: 0px;
+    padding: 2px 0px;
+    background-color: var(--color-active);
+    border-radius: 4px;
+}
+
+.close-button {
+    margin: 0px;
+    padding: 8px;
+    border-radius: 4px;
+}
+
+.close-button:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+}
+
+.close-button:active {
+    background-color: var(--color-surface-light);
+}
+
+.window-caption-button {
+    margin: 0px;
+}
+
+.window-caption-button:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+}
+
+.window-caption-button:active {
+    background-color: var(--color-surface-light);
+}
+
+.window-caption-close-button {
+    margin: 0px;
+    padding: 8px;
+    background-color: rgba(0, 0, 0, 0);
+    border-radius: 0px;
+}
+
+.window-caption-close-button:hover,
+.window-caption-close-button:active {
+    background-color: rgb(193, 42, 28);
+}
+
+.window-menu-bar {
+    margin: 0px;
+    background-color: rgba(0, 0, 0, 0.15);
+}
+
+.main-menu-bar {
+    margin: 0px;
+    background-color: var(--color-active);
+}
+
+.titlebar-menu-bar {
+    margin: 0px 8px;
+}
+
+.menu-bar-item,
+.main-menu-item {
+    margin: 2px 2px;
+    padding: 2px 8px;
+    border-radius: 3px;
+}
+
+.menu-bar-item:hover,
+.main-menu-item:hover {
+    background-color: var(--color-hover);
+}
+
+.menu-bar-item:active,
+.main-menu-item:active {
+    background-color: var(--color-surface-light);
+}
+
+.menu-bar-item:focus,
+.main-menu-item:focus {
+    background-color: var(--color-hover);
+}
+
+.titlebar-menu-item {
+    margin: 2px 2px;
+    padding: 4px 8px;
+    border-radius: 3px;
+}
+
+.titlebar-menu-item:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.titlebar-menu-item:active {
+    background-color: var(--color-surface-light);
+}
+
+.titlebar-menu-item:focus {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+.menu-shortcut {
+    margin: 0px 0px 0px 50px;
+    color: rgb(184, 184, 184);
+}
+
+.menu-popup {
+    padding: 2px 0px;
+    background-color: var(--color-active);
+    border-radius: 0px 0px 4px 4px;
+}
+
+.separator {
+    margin: 2px 4px;
+    padding: 0.5px;
+    background-color: rgb(77, 77, 77);
+}
+
+.slider {
+    padding: 4px 0px;
+    background-color: var(--color-surface-light);
+    border-radius: 2.5px;
+}
+
+.slider:active {
+    background-color: var(--color-accent);
+}
+
+.slider-grab {
+    margin: 4px 0px;
+    padding: 6px;
+    background-color: var(--color-text);
+    border-radius: 6px;
+}
+
+.slider-grab:hover {
+    margin: 0px -4px;
+    padding: 10px;
+    border: 4px solid rgba(255, 255, 255, 0.25);
+    border-radius: 10px;
+}
+
+.slider-grab:active {
+    margin: 0px -4px;
+    padding: 10px;
+    border: 4px solid rgba(255, 255, 255, 0.35);
+    border-radius: 10px;
+}
+
+.gradient-slider-grab {
+    padding: 5px;
+    background-color: var(--color-text);
+    border: 1.5px solid rgba(0, 0, 0, 0.5);
+    border-radius: 5px;
+}
+
+.gradient-slider-grab-border {
+    padding: 8px;
+    background-color: var(--color-text);
+    border: 1.5px solid rgba(0, 0, 0, 0.5);
+    border-radius: 8px;
+}
+
+.gradient-slider {
+    padding: 4px 0px;
+    background-color: var(--color-surface-light);
+    border-radius: 2px;
+}
+
+.tooltip {
+    margin: 0px;
+    padding: 6px 10px;
+    background-color: var(--color-active);
+    border: 0px solid var(--color-border);
+    border-radius: 3px;
+    color: rgb(235, 235, 235);
+}
+
+.scrollbar-track {
+    margin: 0px;
+    padding: 2px;
+    background-color: var(--color-active);
+}
+
+.scrollbar-thumb {
+    margin: 0px;
+    padding: 0px 4px;
+    background-color: rgb(89, 89, 89);
+    border-radius: 2px;
+}
+
+.scrollbar-thumb:hover,
+.scrollbar-thumb:active {
+    background-color: rgb(128, 128, 128);
+}
+
+.scrollbar-track-internal {
+    margin: 4px;
+}
+
+.scrollbar-thumb-internal {
+    margin: 0px;
+    padding: 0px 4px;
+    background-color: rgb(89, 89, 89);
+    border-radius: 2px;
+}
+
+.scrollbar-thumb-internal:hover,
+.scrollbar-thumb-internal:active {
+    background-color: rgb(128, 128, 128);
+}

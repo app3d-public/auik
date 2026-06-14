@@ -602,17 +602,17 @@ def write_outputs(output_folder: Path, model: dict) -> None:
     header_template = Template(
         """#pragma once
 
-#include <auik/v2/theme.hpp>
+#include <auik/theme.hpp>
 {% if defines %}
 {% for define in defines %}
 #define {{ define.name }} {{ define.value }}u
 {% endfor %}
 {% endif %}
 
-namespace auik::v2
+namespace auik
 {
     Theme *create_style_sheet_theme(Font **fonts, f32 dpi);
-} // namespace auik::v2
+} // namespace auik
 """
     )
     source_template = Template(
@@ -620,11 +620,11 @@ namespace auik::v2
 
 #include <acul/memory/alloc.hpp>
 #include <amal/color.hpp>
-#include <auik/v2/auik.hpp>
-#include <auik/v2/widget_tags.hpp>
-#include <auik/v2/theme.hpp>
+#include <auik/auik.hpp>
+#include <auik/widget_tags.hpp>
+#include <auik/theme.hpp>
 
-namespace auik::v2
+namespace auik
 {
     Theme *create_style_sheet_theme(Font **fonts, f32 dpi)
     {
@@ -639,7 +639,7 @@ namespace auik::v2
 {% endfor %}
         return theme;
     }
-} // namespace auik::v2
+} // namespace auik
 """
     )
 
