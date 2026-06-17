@@ -71,11 +71,9 @@ namespace auik::detail
     void Selectable::update_layout(bool min_size_known)
     {
         SelectableStyleScope scope(*this);
-        if (!is_fixed())
+        if (!fill_width() && !is_width_fixed() && size().x <= 0.0f)
         {
-            const auto &style = get_theme()->get_style(effective_layout_style_id());
-            const amal::vec4 margin = style.margin();
-            set_layout_size({amal::max(size().x - margin.x - margin.z, 0.0f), size().y});
+            set_layout_size({0.0f, size().y});
         }
         Text::update_layout(min_size_known);
         if (selected_icon_enabled())

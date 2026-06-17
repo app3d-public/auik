@@ -1,6 +1,7 @@
 #include <auik/auik.hpp>
 #include <auik/pipelines.hpp>
 #include <auik/widgets/text_button.hpp>
+#include "../core/session_stream_utils.hpp"
 
 namespace auik
 {
@@ -32,7 +33,7 @@ namespace auik
                                is_size_concrete(requested_size().y) ? requested_size().y : 0.0f};
         const f32 content_min_width = text_size.x + padding.x + padding.z;
         const f32 content_min_height = amal::max(style.text_size(), text_size.y) + padding.y + padding.w;
-        if (!is_fixed() || fill_width())
+        if (!is_width_fixed() || fill_width())
         {
             min_size.x = content_min_width;
             min_size.y = content_min_height;
@@ -58,21 +59,11 @@ namespace auik
         const amal::vec2 min_button = {amal::max(min_required.x - margin.x - margin.z, 0.0f),
                                        amal::max(min_required.y - margin.y - margin.w, 0.0f)};
         amal::vec2 button_size = size();
-        if (fill_width())
-        {
-            button_size.x = amal::max(button_size.x, min_button.x);
-            button_size.y = fill_height() ? amal::max(button_size.y, min_button.y) : min_button.y;
-        }
-        else if (!is_fixed())
-        {
-            button_size.x = min_button.x;
-            button_size.y = min_button.y;
-        }
-        else
-        {
-            button_size.x = amal::max(button_size.x, min_button.x);
-            button_size.y = amal::max(button_size.y, min_button.y);
-        }
+        if (fill_width() || is_width_fixed()) button_size.x = amal::max(button_size.x, min_button.x);
+        else button_size.x = min_button.x;
+
+        if (fill_height() || is_height_fixed()) button_size.y = amal::max(button_size.y, min_button.y);
+        else button_size.y = min_button.y;
 
         const amal::vec2 pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
         set_position(pos);
@@ -141,4 +132,38 @@ namespace auik
         _text->draw_local(ctx);
         _text_draw_dirty = false;
     }
+
+    namespace
+    {
+        void write_text_button(acul::bin_stream &stream, umbf::Block *block)
+        {
+            auto *widget = static_cast<TextButton *>(block);
+            detail::write_widget_common_data(stream, *widget);
+            const bool translated = widget->is_translated_text();
+            const char *literal = translated ? widget->translated_text_literal() : nullptr;
+            detail::write_localized_string(stream, translated ? acul::string(literal ? literal : "") : widget->text(),
+                                           translated);
+            stream.write(widget->style_tag());
+        }
+
+        umbf::Block *read_text_button(acul::bin_stream &stream)
+        {
+            const auto common = detail::read_widget_common_data(stream);
+            const auto text = detail::read_localized_string(stream);
+            u32 style_tag = AUIK_STYLE_TAG_TEXT_BUTTON;
+            stream.read(style_tag);
+            TextButton *text_button = acul::alloc<TextButton>(common.id, StringView{text.text.c_str(), text.translated},
+                                                              common.requested_size,
+                                                              common.widget_flags, EventFlagBits::none, nullptr,
+                                                              style_tag);
+            detail::apply_widget_common_data(text_button, common);
+            return text_button;
+        }
+    } // namespace
+
+    namespace streams
+    {
+        AUIK_EXPORT const umbf::streams::Stream text_button{read_text_button, write_text_button};
+    } // namespace streams
+
 } // namespace auik

@@ -8,6 +8,7 @@
 #include "../draw.hpp"
 #include "window.hpp"
 
+#define AUIK_TAG_MODAL_QUEUE    0xFBEE6E6Cu
 #define AUIK_TAG_MODAL_WINDOW   0x7A0F97D2u
 #define AUIK_TAG_MODAL_BACKDROP 0xE3F8B526u
 #define AUIK_MODAL_DEFAULT_ICON 0x1C3316A6u
@@ -53,8 +54,9 @@ namespace auik
     {
     public:
         AUIK_EXPORT ModalWindow(u32 id, acul::string title = "", const amal::rect &bounds = {},
-                    WindowFlags window_flags = get_default_modal_window_flags(),
-                    WidgetFlags widget_flags = get_default_modal_window_widget_flags(), Widget *parent = nullptr);
+                                WindowFlags window_flags = get_default_modal_window_flags(),
+                                WidgetFlags widget_flags = get_default_modal_window_widget_flags(),
+                                Widget *parent = nullptr);
 
         ModalQueue *queue() const { return _queue; }
         void set_on_close(acul::unique_function<void()> fn) { _on_close = std::move(fn); }
@@ -75,15 +77,14 @@ namespace auik
     {
     public:
         AUIK_EXPORT explicit ModalQueue(u32 id, WidgetFlags widget_flags = get_default_modal_queue_flags(),
-                            Widget *parent = nullptr);
+                                        Widget *parent = nullptr);
         AUIK_EXPORT ~ModalQueue() override;
 
-        AUIK_EXPORT void set_backdrop_color(const amal::vec4 &value);
-        const amal::vec4 &backdrop_color() const { return _backdrop_color; }
         AUIK_EXPORT void set_icon(Image *image);
         void set_icon(TextureID texture_id, const amal::vec2 &size,
                       const amal::rect &uv_rect = {{0.0f, 0.0f}, {1.0f, 1.0f}});
         AUIK_EXPORT void set_modal_width(f32 value);
+        f32 modal_width() const { return _modal_width; }
         AUIK_EXPORT void push(ModalMessage &&message);
         AUIK_EXPORT void close_all_windows();
         bool empty() const { return _messages.empty(); }
@@ -103,6 +104,7 @@ namespace auik
         AUIK_EXPORT void draw(DrawCtx &ctx) override;
         AUIK_EXPORT void on_click(MouseKey key, KeyPressState state, u32 click_count) override;
         AUIK_EXPORT void on_drag(const amal::vec2 &delta, KeyPressState state) override;
+        virtual u32 signature() const override { return AUIK_TAG_MODAL_QUEUE; }
 
     private:
         friend class ModalWindow;
@@ -134,7 +136,6 @@ namespace auik
 
         ModalWindow *_modal = nullptr;
         DrawDataID _backdrop_draw;
-        amal::vec4 _backdrop_color{0.0f, 0.0f, 0.0f, 0.5f};
         acul::vector<ModalMessage> _messages;
         acul::hashmap<u32, u32> _group_counts;
         ModalIcon _icon{};
@@ -151,4 +152,9 @@ namespace auik
     }
 
     inline ModalQueue *make_modal_queue(u32 id) { return acul::alloc<ModalQueue>(id); }
+
+    namespace streams
+    {
+        extern AUIK_EXPORT const umbf::streams::Stream modal_queue;
+    } // namespace streams
 } // namespace auik

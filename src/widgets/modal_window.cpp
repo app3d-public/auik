@@ -8,6 +8,7 @@
 #include <auik/widgets/modal_window.hpp>
 #include <auik/widgets/text.hpp>
 #include <auik/widgets/text_button.hpp>
+#include "../core/session_stream_utils.hpp"
 
 #define MODAL_INTERNAL_WIDGET_FLAGS          (WidgetFlagBits::visible)
 #define MODAL_INTERNAL_HITTABLE_WIDGET_FLAGS (WidgetFlagBits::visible | WidgetFlagBits::hittable)
@@ -84,7 +85,6 @@ namespace auik
                 {controls_margin.x + controls_margin.z + controls_padding.x + controls_padding.z + row_size.x,
                  controls_margin.y + controls_margin.w + controls_padding.y + controls_padding.w + row_size.y});
         }
-
         void update_layout(bool min_size_known) override
         {
             if (!min_size_known) update_layout_min_size();
@@ -107,7 +107,7 @@ namespace auik
             const amal::vec2 content_pos = position() + amal::vec2{controls_padding.x, controls_padding.y};
             const amal::vec2 content_size = {amal::max(size().x - controls_padding.x - controls_padding.z, 0.0f),
                                              amal::max(size().y - controls_padding.y - controls_padding.w, 0.0f)};
-            detail::layout_child_widgets(_children, _child_layouts, content_pos, content_size.x, gap);
+            detail::layout_child_widgets(this, _children, _child_layouts, {content_pos, content_size}, gap);
         }
 
         void translate(const amal::vec2 &delta) override
@@ -337,16 +337,9 @@ namespace auik
         request_redraw();
     }
 
-    void ModalQueue::set_backdrop_color(const amal::vec4 &value)
-    {
-        if (_backdrop_color == value) return;
-        _backdrop_color = value;
-        update_modal_draw_commands(DrawReasonBits::external);
-    }
-
     StyleUpdateFlags ModalQueue::update_style()
     {
-        StyleUpdateFlags out = StyleUpdateFlagBits::none;
+        StyleUpdateFlags out = StyleUpdateFlagBits::redraw;
         if (_modal)
         {
             out |= _modal->update_style();
@@ -503,13 +496,13 @@ namespace auik
 
         QuadsInstanceData backdrop{};
         backdrop.rect = backdrop_rect;
-        backdrop.background_color = detail::pack_rgba8(_backdrop_color);
-        backdrop.border_color = 0u;
-        backdrop.border_radius = 0.0f;
-        backdrop.border_thickness = 0.0f;
         backdrop.z_order = get_z_order();
-        backdrop.mask = static_cast<u32>(clip_id());
-        emit_context_draw(ctx, get_overlay_quads_stream(), _backdrop_draw, &backdrop, backdrop_hit, true);
+        const auto backdrop_style_id =
+            get_theme()->get_resolved_style(AUIK_STYLE_TAG_MODAL_BACKDROP, AUIK_TAG_MODAL_BACKDROP, id());
+        const bool backdrop_visible =
+            fill_quads_instance_by_style(get_theme()->get_style(backdrop_style_id), clip_id(), backdrop);
+        emit_quads_instance(ctx, get_overlay_quads_stream(), _backdrop_draw, backdrop, backdrop_hit, backdrop_visible,
+                            true);
 
         auto &modal_hit = modal->get_rect();
         modal_hit.id = make_element_id(id(), AUIK_TAG_MODAL_WINDOW);
@@ -665,7 +658,7 @@ namespace auik
                                                     AUIK_TAG_BLOCK, AUIK_STYLE_TAG_MODAL_HEADER);
         header_block->add_child(title);
 
-        auto *message_block = acul::alloc<Block>(AUIK_MODAL_MESSAGE_ID, MODAL_INTERNAL_WIDGET_FLAGS);
+        auto *message_block = acul::alloc<::auik::Block>(AUIK_MODAL_MESSAGE_ID, MODAL_INTERNAL_WIDGET_FLAGS);
         message_block->add_child(header_block);
         message_block->add_child(body);
 
@@ -760,4 +753,31 @@ namespace auik
         _batch_apply = false;
         rebuild_modal();
     }
+
+    namespace
+    {
+        void write_modal_queue(acul::bin_stream &stream, umbf::Block *block)
+        {
+            auto *widget = static_cast<ModalQueue *>(block);
+            detail::write_widget_common_data(stream, *widget);
+            stream.write(widget->modal_width());
+        }
+
+        umbf::Block *read_modal_queue(acul::bin_stream &stream)
+        {
+            const auto common = detail::read_widget_common_data(stream);
+            f32 modal_width = AUIK_MODAL_WINDOW_WIDTH;
+            stream.read(modal_width);
+
+            auto *widget = acul::alloc<ModalQueue>(common.id, WidgetFlags(common.widget_flags), nullptr);
+            widget->set_modal_width(modal_width);
+            detail::apply_widget_common_data(widget, common);
+            return widget;
+        }
+    } // namespace
+
+    namespace streams
+    {
+        AUIK_EXPORT const umbf::streams::Stream modal_queue{read_modal_queue, write_modal_queue};
+    } // namespace streams
 } // namespace auik

@@ -336,6 +336,7 @@ namespace auik
         }
         ctx.host_refresh_request = create_info.sync_options.host_refresh_request;
         ctx.pending_filter = create_info.sync_options.pending_filter;
+        ctx.widget_create_options = create_info.widget_create_options;
         detail::init_atlas_state(ctx.atlas_state);
         ctx.raw_mouse_mode = false;
         ctx.frames_in_flight = create_info.frames_in_flight;
@@ -449,7 +450,7 @@ namespace auik
         update_all_root_widgets_layouts();
         clear_all_streams(ctx);
         record_root_widget_draw_commands(DrawReasonBits::layout | DrawReasonBits::record);
-        ctx.dirty_flags &= ~DirtyFlagBits::layout;
+        detail::unmark_layout_dirty();
         if (need_hit_rect_draw)
         {
             ctx.dirty_flags &= ~DirtyFlagBits::hit_rect_draw;
@@ -609,11 +610,18 @@ namespace auik
         auto &ctx = detail::get_context();
         assert(widget->viewport() && "Root widget viewport is not assigned");
         if (auto *root_data = detail::root_widget_user_data(widget)) *root_data = zone;
-        else widget->emplace_user_data_head<detail::RootWidgetUserData>(AUIK_ROOT_WIDGET_USER_DATA, zone);
+        else widget->emplace_user_data_head<detail::RootWidgetUserData>(AUIK_UD_ROOT_DATA, zone);
         ctx.widget_tree.push_back(widget);
         if (widget->widget_flags & WidgetFlagBits::attachable) widget->on_attach();
         rebuild_root_widget_depths();
         widget->update_style();
+    }
+
+    AUIK_EXPORT void mark_locale_changed()
+    {
+        auto &ctx = detail::get_context();
+        ctx.dirty_flags |= DirtyFlagBits::locale | DirtyFlagBits::layout | DirtyFlagBits::redraw;
+        detail::mark_host_refresh_request();
     }
 
     AUIK_EXPORT bool remove_widget_from_root_unsync(Widget *widget)
@@ -624,7 +632,7 @@ namespace auik
         {
             if (ctx.widget_tree[i] != widget) continue;
             if (widget->widget_flags & WidgetFlagBits::attachable) widget->on_detach();
-            widget->pop_user_data_head(AUIK_ROOT_WIDGET_USER_DATA);
+            widget->pop_user_data_head(AUIK_UD_ROOT_DATA);
             ctx.widget_tree.erase(ctx.widget_tree.begin() + i);
             if (ctx.focus_id && ctx.id_map.find(ctx.focus_id) == ctx.id_map.end()) ctx.focus_id = 0u;
             if (ctx.active_id && ctx.id_map.find(ctx.active_id) == ctx.id_map.end()) ctx.active_id = 0u;
@@ -667,7 +675,7 @@ namespace auik
         auto &ctx = detail::get_context();
         const auto it = ctx.id_map.find(id);
         if (it == ctx.id_map.end() || !it->second || !it->second->is_visible()) return false;
-        it->second->set_invisible();
+        it->second->unset_visible();
         it->second->sync_widget_flags();
         return true;
     }

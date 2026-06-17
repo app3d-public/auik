@@ -1,6 +1,7 @@
 #include <auik/auik.hpp>
 #include <auik/pipelines.hpp>
 #include <auik/widgets/image_button.hpp>
+#include "../core/session_stream_utils.hpp"
 
 namespace auik
 {
@@ -57,12 +58,12 @@ namespace auik
                                is_size_concrete(requested_size().y) ? requested_size().y : 0.0f};
         if (fill_width()) min_size.x = content_required.x;
         if (fill_height()) min_size.y = content_required.y;
-        if (is_fixed() && min_size.x <= 0.0f && min_size.y <= 0.0f)
+        if (is_width_fixed() && is_height_fixed() && min_size.x <= 0.0f && min_size.y <= 0.0f)
         {
             const f32 side = amal::max(content_required.x, content_required.y);
             min_size = {side, side};
         }
-        else if (!is_fixed()) min_size.x = 0.0f;
+        else if (!is_width_fixed()) min_size.x = 0.0f;
 
         if (min_size.x <= 0.0f) min_size.x = content_required.x;
         else min_size.x = amal::max(min_size.x, content_required.x);
@@ -86,13 +87,14 @@ namespace auik
         amal::vec2 widget_size = size();
         if (fill_width())
             widget_size.x = amal::max(widget_size.x - margin.x - margin.z, min_required.x);
-        else if (!is_fixed()) widget_size.x = amal::max(widget_size.x - margin.x - margin.z, min_required.x);
+        else if (!is_width_fixed()) widget_size.x = min_required.x;
         else
             widget_size.x =
                 amal::max(is_size_concrete(requested_size().x) && requested_size().x > 0.0f ? requested_size().x
                                                                                               : widget_size.x,
                           min_required.x);
         if (fill_height()) widget_size.y = amal::max(widget_size.y - margin.y - margin.w, min_required.y);
+        else if (!is_height_fixed()) widget_size.y = min_required.y;
         else
             widget_size.y =
                 amal::max(is_size_concrete(requested_size().y) && requested_size().y > 0.0f ? requested_size().y
@@ -199,4 +201,35 @@ namespace auik
         if (resolve_texture_id().handle != 0 && _image_draw.render_id == AUIK_INVALID_DRAW_DATA_ID) return false;
         return true;
     }
+
+    namespace
+    {
+        void write_image_button(acul::bin_stream &stream, umbf::Block *block)
+        {
+            auto *widget = static_cast<ImageButton *>(block);
+            detail::write_widget_common_data(stream, *widget);
+            stream.write(widget->image_size()).write(widget->coverage_mode()).write(widget->style_tag());
+        }
+
+        umbf::Block *read_image_button(acul::bin_stream &stream)
+        {
+            const auto common = detail::read_widget_common_data(stream);
+            amal::vec2 image_size{};
+            bool coverage_mode = false;
+            u32 style_tag = AUIK_STYLE_TAG_IMAGE_BUTTON;
+            stream.read(image_size).read(coverage_mode).read(style_tag);
+
+            auto *widget = acul::alloc<ImageButton>(common.id, AUIK_INVALID_TEXTURE_ID, image_size,
+                                                    common.requested_size, amal::rect{{0.0f, 0.0f}, {1.0f, 1.0f}},
+                                                    WidgetFlags(common.widget_flags), nullptr, style_tag);
+            widget->set_coverage_mode(coverage_mode);
+            detail::apply_widget_common_data(widget, common);
+            return widget;
+        }
+    } // namespace
+
+    namespace streams
+    {
+        AUIK_EXPORT const umbf::streams::Stream image_button{read_image_button, write_image_button};
+    } // namespace streams
 } // namespace auik

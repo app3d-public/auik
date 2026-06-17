@@ -52,7 +52,7 @@ function(compile_auik_css_theme INPUT_BASE)
     set(multi_value_args)
     cmake_parse_arguments(AUIK_THEME "${options}" "${one_value_args}" "${multi_value_args}" ${ARGN})
 
-    set(output_dir "${CMAKE_CURRENT_BINARY_DIR}/theme")
+    set(output_dir "${CMAKE_CURRENT_BINARY_DIR}")
     set(output_header "${output_dir}/theme_style_sheet.hpp")
     set(output_source "${output_dir}/theme_style_sheet.cpp")
     set(output_target "auik_css_theme")

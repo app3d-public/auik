@@ -276,6 +276,10 @@
     border-radius: 0px;
 }
 
+.modal-backdrop {
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
 .modal-window {
     padding: 8px 10px;
     background-color: var(--color-surface);
@@ -707,7 +711,7 @@
 .gradient-slider {
     padding: 4px 0px;
     background-color: var(--color-surface-light);
-    border-radius: 2px;
+    border-radius: 2.5px;
 }
 
 .tooltip {

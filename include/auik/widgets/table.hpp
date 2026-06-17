@@ -1,12 +1,9 @@
 #pragma once
 
-#include <acul/memory/alloc.hpp>
 #include <acul/pair.hpp>
 #include <acul/vector.hpp>
-#include <utility>
 #include "../theme.hpp"
 #include "detail/table_base.hpp"
-#include "text.hpp"
 #include "widget.hpp"
 
 #define AUIK_TAG_TABLE                 0xB82106B6u
@@ -50,7 +47,7 @@ namespace auik
     class Table final : public Widget
     {
     public:
-        using Row = acul::vector<acul::string>;
+        using Row = acul::vector<Widget *>;
         using Rows = acul::vector<Row>;
 
         struct CellRef
@@ -62,7 +59,7 @@ namespace auik
             size_t row() const { return row_index; }
             size_t column() const { return column_index; }
             AUIK_EXPORT bool valid() const;
-            acul::string *value() const;
+            Widget *value() const;
         };
 
         struct ConstCellRef
@@ -74,7 +71,7 @@ namespace auik
             size_t row() const { return row_index; }
             size_t column() const { return column_index; }
             AUIK_EXPORT bool valid() const;
-            AUIK_EXPORT const acul::string *value() const;
+            AUIK_EXPORT const Widget *value() const;
         };
 
         struct CellIterator
@@ -121,8 +118,8 @@ namespace auik
             size_t column_index = 0;
 
             size_t column() const { return column_index; }
-            acul::string *header() const;
-            acul::string *cell(size_t row) const;
+            Widget *header() const;
+            Widget *cell(size_t row) const;
             AUIK_EXPORT TableColumnSettings *settings() const;
             AUIK_EXPORT f32 width() const;
             AUIK_EXPORT f32 *width_override() const;
@@ -136,8 +133,8 @@ namespace auik
             size_t column_index = 0;
 
             size_t column() const { return column_index; }
-            AUIK_EXPORT const acul::string *header() const;
-            AUIK_EXPORT const acul::string *cell(size_t row) const;
+            AUIK_EXPORT const Widget *header() const;
+            AUIK_EXPORT const Widget *cell(size_t row) const;
             AUIK_EXPORT const TableColumnSettings *settings() const;
             AUIK_EXPORT f32 width() const;
             AUIK_EXPORT const f32 *width_override() const;
@@ -198,14 +195,14 @@ namespace auik
         };
 
         AUIK_EXPORT explicit Table(u32 id, Rows rows = {}, amal::vec2 size = {0.0f, 0.0f},
-                       WidgetFlags flags = get_default_table_flags(), Widget *parent = nullptr,
-                       u32 style_tag_id = AUIK_STYLE_TAG_TABLE);
+                                   WidgetFlags flags = get_default_table_flags(), Widget *parent = nullptr,
+                                   u32 style_tag_id = AUIK_STYLE_TAG_TABLE);
         AUIK_EXPORT ~Table() override;
 
         AUIK_EXPORT void clear();
         AUIK_EXPORT void set_rows(Rows rows);
         AUIK_EXPORT void add_row(Row row);
-        AUIK_EXPORT void set_cell(size_t row, size_t column, acul::string value);
+        AUIK_EXPORT void set_cell(size_t row, size_t column, Widget *value);
 
         AUIK_EXPORT void set_header(Row header);
         AUIK_EXPORT void clear_header();
@@ -229,6 +226,10 @@ namespace auik
         bool row_resizable() const { return (_table_flags & AUIK_TABLE_FLAG_ROW_RESIZABLE) != 0u; }
         AUIK_EXPORT void set_resize_border_style_tag(u32 tag_id);
         u32 resize_border_style_tag() const { return _resize_border_style.tag_id; }
+        u32 table_flags() const { return _table_flags; }
+        const acul::vector<acul::point2D<f32>> &size_overrides() const { return _size_overrides; }
+        AUIK_EXPORT void set_size_overrides(acul::vector<acul::point2D<f32>> values, bool column_overrides,
+                                            bool row_overrides);
 
         const Row &header() const { return _header; }
         const Rows &rows() const { return _rows; }
@@ -252,7 +253,9 @@ namespace auik
         AUIK_EXPORT void set_style_tag(u32 tag_id);
         u32 style_tag() const { return _style.tag_id; }
         AUIK_EXPORT void set_header_cell_style_tag(u32 tag_id);
+        u32 header_cell_style_tag() const { return _header_cell_style.tag_id; }
         AUIK_EXPORT void set_cell_style_tag(u32 tag_id);
+        u32 cell_style_tag() const { return _cell_style.tag_id; }
 
         AUIK_EXPORT bool is_header_cell_hovered(size_t column) const;
         AUIK_EXPORT bool is_cell_hovered(size_t row, size_t column) const;
@@ -274,6 +277,7 @@ namespace auik
         AUIK_EXPORT amal::vec4 get_content_clip_rect() const override;
         AUIK_EXPORT void on_attach() override;
         AUIK_EXPORT void on_detach() override;
+        virtual u32 signature() const override { return AUIK_TAG_TABLE; }
 
     private:
         using CellVisual = detail::TableCellVisual;
@@ -281,11 +285,10 @@ namespace auik
 
         void rebuild_cells();
         void clear_cells(bool invalidate_draw = true);
-        Text *make_cell_text(const acul::string &value, u32 style_tag_id);
         size_t resolve_column_count() const;
         u32 cell_element_id(size_t row, size_t column) const;
-        Text *header_text(size_t column) const;
-        Text *cell_text(size_t row, size_t column) const;
+        Widget *header_widget(size_t column) const;
+        Widget *cell_widget(size_t row, size_t column) const;
         const TableColumnSettings &settings_for_column(size_t column) const;
         void update_column_widths(f32 inner_width);
         void invalidate_layout();
@@ -298,8 +301,6 @@ namespace auik
 
         Row _header;
         Rows _rows;
-        acul::vector<Text *> _header_cells;
-        acul::vector<acul::vector<Text *>> _cells;
         acul::vector<acul::point2D<TrackMetrics>> _layout_metrics;
         acul::vector<CellVisual> _header_visuals;
         acul::vector<CellVisual> _cell_visuals;
@@ -323,16 +324,13 @@ namespace auik
         size_t _column_count = 0;
     };
 
-    inline Table *make_table(u32 id, Table::Rows rows = {}, Widget *parent = nullptr)
+    inline Table *make_table(u32 id, Table::Rows rows = {}, amal::vec2 size = AUIK_SIZE_FIT, Widget *parent = nullptr)
     {
-        return acul::alloc<Table>(id, std::move(rows), amal::vec2{0.0f, 0.0f}, get_default_table_flags(), parent,
-                                  AUIK_STYLE_TAG_TABLE);
+        return acul::alloc<Table>(id, std::move(rows), size, get_default_table_flags(), parent, AUIK_STYLE_TAG_TABLE);
     }
 
-    inline Table *make_fixed_table(u32 id, Table::Rows rows = {}, amal::vec2 size = {0.0f, 0.0f},
-                                   Widget *parent = nullptr)
+    namespace streams
     {
-        return acul::alloc<Table>(id, std::move(rows), size, get_default_table_flags() | WidgetFlagBits::fixed_layout, parent,
-                                  AUIK_STYLE_TAG_TABLE);
+        extern AUIK_EXPORT const umbf::streams::Stream table;
     }
 } // namespace auik

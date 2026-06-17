@@ -124,15 +124,15 @@ namespace auik::detail
     inline Scrollbar *make_internal_y_scrollbar(Widget *parent)
     {
         return acul::alloc<Scrollbar>(AUIK_ID_SCROLLBAR_Y, AUIK_TAG_SCROLLBAR_TRACK_Y, AUIK_TAG_SCROLLBAR_THUMB_Y,
-                                      parent, amal::axis::y, AUIK_TAG_SCROLLBAR_TRACK_INTERNAL,
-                                      AUIK_TAG_SCROLLBAR_THUMB_INTERNAL);
+                                      parent, amal::axis::y, AUIK_STYLE_TAG_SCROLLBAR_TRACK_INTERNAL,
+                                      AUIK_STYLE_TAG_SCROLLBAR_THUMB_INTERNAL);
     }
 
     inline Scrollbar *make_internal_x_scrollbar(Widget *parent)
     {
         return acul::alloc<Scrollbar>(AUIK_ID_SCROLLBAR_X, AUIK_TAG_SCROLLBAR_TRACK_X, AUIK_TAG_SCROLLBAR_THUMB_X,
-                                      parent, amal::axis::x, AUIK_TAG_SCROLLBAR_TRACK_INTERNAL,
-                                      AUIK_TAG_SCROLLBAR_THUMB_INTERNAL);
+                                      parent, amal::axis::x, AUIK_STYLE_TAG_SCROLLBAR_TRACK_INTERNAL,
+                                      AUIK_STYLE_TAG_SCROLLBAR_THUMB_INTERNAL);
     }
 
     inline void ensure_x_scrollbar(Scrollbar *&scrollbar, Widget *parent)

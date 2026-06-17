@@ -1,6 +1,8 @@
 #include <auik/auik.hpp>
 #include <auik/detail/rect.hpp>
+#include <auik/widgets/detail/draw_cull.hpp>
 #include <auik/widgets/column.hpp>
+#include "../core/session_stream_utils.hpp"
 
 namespace auik
 {
@@ -77,7 +79,8 @@ namespace auik
 
         static f32 row_child_offset_y(ChildLayoutFlags layout, f32 row_height, f32 child_height)
         {
-            if (layout & ChildLayoutFlagBits::vcenter) return amal::floor(amal::max(row_height - child_height, 0.0f) * 0.5f);
+            if (layout & ChildLayoutFlagBits::vcenter)
+                return amal::floor(amal::max(row_height - child_height, 0.0f) * 0.5f);
             if (layout & ChildLayoutFlagBits::bottom) return amal::max(row_height - child_height, 0.0f);
             return 0.0f;
         }
@@ -99,21 +102,23 @@ namespace auik
                 if (!child) continue;
                 if (i > 0u) cursor_y += inline_spacing;
                 const f32 row_height = i < row_heights.size() ? row_heights[i] : child->required_size().y;
-                const ChildLayoutFlags layout = i < child_layouts.size() ? child_layouts[i] : default_child_layout_flags();
-                if (!child->is_fixed()) child->set_layout_size({size().x, child->size().y});
+                const ChildLayoutFlags layout =
+                    i < child_layouts.size() ? child_layouts[i] : default_child_layout_flags();
                 f32 child_y = cursor_y;
                 if (has_row_vertical_align(layout))
                 {
                     const f32 child_height = child->required_size().y;
                     child_y += row_child_offset_y(layout, row_height, child_height);
                 }
+                const amal::vec2 child_size{child->fill_width() ? size().x : child->required_size().x,
+                                            child->required_size().y};
                 child->set_position({position().x, child_y});
+                child->set_layout_size(child_size);
                 child->update_layout(true);
                 child->set_clip_id(clip_id());
                 cursor_y += row_height;
             }
         }
-
         void update_layout(bool min_size_known) override
         {
             if (!min_size_known) update_layout_min_size();
@@ -125,8 +130,10 @@ namespace auik
             {
                 if (!child) continue;
                 if (has_child) cursor_y += inline_spacing;
-                if (!child->is_fixed()) child->set_layout_size({size().x, child->size().y});
+                const amal::vec2 child_size{child->fill_width() ? size().x : child->required_size().x,
+                                            child->required_size().y};
                 child->set_position({position().x, cursor_y});
+                child->set_layout_size(child_size);
                 child->update_layout(true);
                 child->set_clip_id(clip_id());
                 cursor_y += child->required_size().y;
@@ -210,11 +217,11 @@ namespace auik
         void draw(DrawCtx &ctx) override
         {
             if (!(widget_flags & WidgetFlagBits::visible)) return;
+            const amal::vec4 content_clip = get_content_clip_rect();
             for (auto *child : children)
             {
                 if (!child) continue;
-                DrawCtx child_ctx = ctx;
-                child->draw_local(child_ctx);
+                detail::draw_child_in_clip(child, ctx, content_clip);
             }
         }
 
@@ -260,27 +267,20 @@ namespace auik
     {
         clear_columns();
         for (auto &column : columns) add_slot(std::move(column));
-        detail::mark_layout_dirty();
     }
 
-    void Column::add_column(ColumnChildren children)
-    {
-        add_slot(std::move(children));
-        detail::mark_layout_dirty();
-    }
+    void Column::add_column(ColumnChildren children) { add_slot(std::move(children)); }
 
     void Column::add_child(size_t column_index, Widget *child, ChildLayoutFlags layout)
     {
         assert(column_index < _columns.size() && "column index out of range");
         _columns[column_index]->add_child(child, layout);
-        detail::mark_layout_dirty();
     }
 
     void Column::set_child_layout(size_t column_index, size_t row_index, ChildLayoutFlags layout)
     {
         assert(column_index < _columns.size() && "column index out of range");
         _columns[column_index]->set_child_layout(row_index, layout);
-        detail::mark_layout_dirty();
     }
 
     const Column::ColumnChildren &Column::column_children(size_t index) const
@@ -295,12 +295,17 @@ namespace auik
         return _columns[index]->children;
     }
 
+    const acul::vector<ChildLayoutFlags> &Column::column_layouts(size_t index) const
+    {
+        assert(index < _columns.size() && "column index out of range");
+        return _columns[index]->child_layouts;
+    }
+
     void Column::set_style_tag(u32 tag_id)
     {
         if (_style.tag_id == tag_id) return;
         _style = {Theme::STYLE_ID_INVALID, tag_id};
         set_rect_tag_id(tag_id);
-        detail::mark_layout_dirty();
     }
 
     StyleUpdateFlags Column::update_style()
@@ -353,7 +358,7 @@ namespace auik
         }
 
         f32 required_width = size().x;
-        if (!is_fixed()) required_width = 0.0f;
+        if (fill_width()) required_width = 0.0f;
         else if (required_width <= 0.0f) required_width = content_required.x + padding.x + padding.z;
         if (required_width > 0.0f)
             required_width = amal::max(required_width, content_required.x + padding.x + padding.z);
@@ -379,10 +384,10 @@ namespace auik
                                            amal::max(required_outer.y - margin.y - margin.w, 0.0f)};
 
         amal::vec2 outer_size = size();
-        if (!is_fixed()) outer_size.x = amal::max(outer_size.x - margin.x - margin.z, required_inner.x);
+        if (!is_width_fixed()) outer_size.x = amal::max(outer_size.x - margin.x - margin.z, required_inner.x);
         else if (outer_size.x <= 0.0f) outer_size.x = required_inner.x;
         if (outer_size.y <= 0.0f) outer_size.y = required_inner.y;
-        if (!is_fixed()) { outer_size.y = amal::max(outer_size.y, required_inner.y); }
+        if (!is_height_fixed()) { outer_size.y = amal::max(outer_size.y, required_inner.y); }
 
         set_position(outer_pos);
         set_layout_size(outer_size);
@@ -409,7 +414,7 @@ namespace auik
         for (auto *slot : _columns)
         {
             if (!slot) continue;
-            const f32 column_width = is_fixed()
+            const f32 column_width = is_width_fixed()
                                          ? (width_index < _column_widths.size() ? _column_widths[width_index] : 0.0f)
                                          : stretch_column_width;
             slot->inline_spacing = spacing;
@@ -489,12 +494,13 @@ namespace auik
     void Column::draw(DrawCtx &ctx)
     {
         if (!(widget_flags & WidgetFlagBits::visible)) return;
+        const amal::vec4 content_clip = get_content_clip_rect();
         for (auto *slot : _columns)
         {
             if (!slot) continue;
             DrawCtx slot_ctx = ctx;
             slot_ctx.is_hit_allowed = false;
-            slot->draw_local(slot_ctx);
+            detail::draw_child_in_clip(slot, slot_ctx, content_clip);
         }
     }
 
@@ -506,7 +512,7 @@ namespace auik
 
     void Column::on_attach()
     {
-        detail::get_context().id_map.emplace(id(), this);
+        Widget::on_attach();
         for (auto *slot : _columns)
         {
             if (slot) slot->on_attach();
@@ -515,12 +521,11 @@ namespace auik
 
     void Column::on_detach()
     {
-        auto &map = detail::get_context().id_map;
-        map.erase(id());
         for (auto *slot : _columns)
         {
             if (slot) slot->on_detach();
         }
+        Widget::on_detach();
     }
 
     void Column::add_slot(ColumnChildren children)
@@ -546,5 +551,103 @@ namespace auik
                 if (child) child->set_clip_id(slot->clip_id());
         }
     }
+
+    namespace
+    {
+        struct ColumnChildData
+        {
+            umbf::Block *block = nullptr;
+            ChildLayoutFlags layout = default_child_layout_flags();
+        };
+
+        using ColumnData = acul::vector<acul::vector<ColumnChildData>>;
+
+        ColumnData collect_column_data(const Column &column)
+        {
+            ColumnData out;
+            for (size_t column_i = 0; column_i < column.column_count(); ++column_i)
+            {
+                const auto &children = column.column_children(column_i);
+                const auto &layouts = column.column_layouts(column_i);
+
+                acul::vector<ColumnChildData> items;
+                for (size_t child_i = 0; child_i < children.size(); ++child_i)
+                {
+                    auto *child = children[child_i];
+                    if (!(child->widget_flags & WidgetFlagBits::configurable)) continue;
+                    const ChildLayoutFlags layout =
+                        child_i < layouts.size() ? layouts[child_i] : default_child_layout_flags();
+                    items.push_back({child, layout});
+                }
+                if (!items.empty()) out.push_back(std::move(items));
+            }
+            return out;
+        }
+
+        void write_column(acul::bin_stream &stream, umbf::Block *block)
+        {
+            auto *column = static_cast<Column *>(block);
+            detail::write_widget_common_data(stream, *column);
+            stream.write(column->style_tag());
+
+            ColumnData columns = collect_column_data(*column);
+            stream.write(static_cast<u32>(columns.size()));
+            for (auto &children : columns)
+            {
+                stream.write(static_cast<u32>(children.size()));
+                acul::vector<umbf::Block *> blocks;
+                blocks.reserve(children.size());
+                for (auto &child : children)
+                {
+                    stream.write(static_cast<u32>(child.layout));
+                    blocks.push_back(child.block);
+                }
+                stream.write(blocks);
+            }
+        }
+
+        umbf::Block *read_column(acul::bin_stream &stream)
+        {
+            const auto common = detail::read_widget_common_data(stream);
+            u32 style_tag = AUIK_STYLE_TAG_COLUMN;
+            stream.read(style_tag);
+
+            auto *column = acul::alloc<Column>(common.id, Column::ColumnItems{}, common.requested_size,
+                                               WidgetFlags(common.widget_flags), nullptr, style_tag);
+            detail::apply_widget_common_data(column, common);
+
+            u32 column_count = 0u;
+            stream.read(column_count);
+            for (u32 column_i = 0u; column_i < column_count; ++column_i)
+            {
+                column->add_column();
+
+                u32 child_count = 0u;
+                stream.read(child_count);
+                acul::vector<ChildLayoutFlags> layouts;
+                layouts.reserve(child_count);
+                for (u32 child_i = 0u; child_i < child_count; ++child_i)
+                {
+                    u32 layout = 0u;
+                    stream.read(layout);
+                    layouts.push_back(ChildLayoutFlags(layout));
+                }
+
+                acul::vector<umbf::Block *> children;
+                stream.read(children);
+                for (u32 child_i = 0u; child_i < child_count; ++child_i)
+                {
+                    auto *child = static_cast<Widget *>(children[child_i]);
+                    column->add_child(column_i, child, layouts[child_i]);
+                }
+            }
+            return column;
+        }
+    } // namespace
+
+    namespace streams
+    {
+        AUIK_EXPORT const umbf::streams::Stream column{read_column, write_column};
+    } // namespace streams
 
 } // namespace auik

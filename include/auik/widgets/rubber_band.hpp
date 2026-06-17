@@ -42,6 +42,7 @@ namespace auik
         AUIK_EXPORT void restore_hit_depth() override;
         AUIK_EXPORT void draw(DrawCtx &ctx) override;
         AUIK_EXPORT void on_drag(const amal::vec2 &delta, KeyPressState state) override;
+        virtual u32 signature() const override { return AUIK_TAG_RUBBER_BAND; }
 
     private:
         static amal::rect make_rect_from_points(const amal::vec2 &a, const amal::vec2 &b);
@@ -58,4 +59,8 @@ namespace auik
         bool _committed = false;
     };
 
+    namespace streams
+    {
+        extern AUIK_EXPORT const umbf::streams::Stream rubber_band;
+    } // namespace streams
 } // namespace auik

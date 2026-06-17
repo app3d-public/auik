@@ -10,19 +10,20 @@ namespace auik
 {
     constexpr inline WidgetFlags get_default_image_button_flags()
     {
-        return get_default_widget_flags() | WidgetFlagBits::hittable | WidgetFlagBits::fixed_layout;
+        return get_default_widget_flags() | WidgetFlagBits::hittable;
     }
 
     class ImageButton final : public Widget
     {
     public:
-        AUIK_EXPORT ImageButton(u32 id, TextureID texture_id, amal::vec2 image_size = {0.0f, 0.0f}, amal::vec2 size = {0.0f, 0.0f},
-                    amal::rect uv_rect = {{0.0f, 0.0f}, {1.0f, 1.0f}},
-                    WidgetFlags widget_flags = get_default_image_button_flags(), Widget *parent = nullptr,
-                    u32 style_tag = AUIK_STYLE_TAG_IMAGE_BUTTON);
-        AUIK_EXPORT ImageButton(u32 id, Image *image, amal::vec2 image_size = {0.0f, 0.0f}, amal::vec2 size = {0.0f, 0.0f},
-                    WidgetFlags widget_flags = get_default_image_button_flags(), Widget *parent = nullptr,
-                    u32 style_tag = AUIK_STYLE_TAG_IMAGE_BUTTON);
+        AUIK_EXPORT ImageButton(u32 id, TextureID texture_id, amal::vec2 image_size = {0.0f, 0.0f},
+                                amal::vec2 size = {0.0f, 0.0f}, amal::rect uv_rect = {{0.0f, 0.0f}, {1.0f, 1.0f}},
+                                WidgetFlags widget_flags = get_default_image_button_flags(), Widget *parent = nullptr,
+                                u32 style_tag = AUIK_STYLE_TAG_IMAGE_BUTTON);
+        AUIK_EXPORT ImageButton(u32 id, Image *image, amal::vec2 image_size = {0.0f, 0.0f},
+                                amal::vec2 size = {0.0f, 0.0f},
+                                WidgetFlags widget_flags = get_default_image_button_flags(), Widget *parent = nullptr,
+                                u32 style_tag = AUIK_STYLE_TAG_IMAGE_BUTTON);
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
         AUIK_EXPORT void update_layout_min_size() override;
@@ -52,6 +53,14 @@ namespace auik
 
         bool coverage_mode() const { return _coverage_mode; }
         void set_coverage_mode(bool value) { _coverage_mode = value; }
+        u32 style_tag() const { return _style.tag_id; }
+        void set_style_tag(u32 tag_id)
+        {
+            _style = {Theme::STYLE_ID_INVALID, tag_id};
+            set_rect_tag_id(tag_id);
+        }
+
+        virtual u32 signature() const override { return AUIK_TAG_IMAGE_BUTTON; }
 
     private:
         DrawDataID _bg{};
@@ -84,5 +93,10 @@ namespace auik
                                           amal::vec2 size = {0.0f, 0.0f})
     {
         return acul::alloc<ImageButton>(id, image, image_size, size, get_default_image_button_flags(), nullptr);
+    }
+
+    namespace streams
+    {
+        extern AUIK_EXPORT const umbf::streams::Stream image_button;
     }
 } // namespace auik

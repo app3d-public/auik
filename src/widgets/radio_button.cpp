@@ -1,10 +1,11 @@
 #include <auik/auik.hpp>
 #include <auik/pipelines.hpp>
 #include <auik/widgets/radio_button.hpp>
+#include "../core/session_stream_utils.hpp"
 
 namespace auik
 {
-    RadioButton::RadioButton(u32 id, bool *value, WidgetFlags widget_flags, Widget *parent)
+    RadioButton::RadioButton(u32 id, bool value, WidgetFlags widget_flags, Widget *parent)
         : Widget(id, widget_flags, EventFlagBits::click, parent, {{0.0f, 0.0f}, {0.0f, 0.0f}}, AUIK_TAG_RADIO_BUTTON),
           _value(value),
           _indicator_rect(detail::make_rect_data(AUIK_TAG_RADIO_BUTTON_INDICATOR, AUIK_TAG_RADIO_BUTTON_INDICATOR))
@@ -41,7 +42,7 @@ namespace auik
         const amal::vec2 background_size = resolve_background_size(background_style);
 
         amal::vec2 min_size = size();
-        if (!is_fixed()) min_size.x = 0.0f;
+        if (!is_width_fixed()) min_size.x = 0.0f;
 
         if (min_size.x <= 0.0f) min_size.x = background_size.x;
         else min_size.x = amal::max(min_size.x, background_size.x);
@@ -166,18 +167,44 @@ namespace auik
 
     void RadioButton::set_value(bool new_value)
     {
-        if (!_value || *_value == new_value) return;
-        *_value = new_value;
+        if (_value == new_value) return;
+        _value = new_value;
         if (!mark_changed()) redraw_external(has_draw_record());
     }
 
     void RadioButton::on_click(MouseKey key, KeyPressState state, u32 click_count)
     {
         (void)click_count;
-        if (key != MouseKey::left || state != KeyPressState::press || !_value) return;
-        *_value = !*_value;
+        if (key != MouseKey::left || state != KeyPressState::press) return;
+        _value = !_value;
         const bool prevented = mark_changed();
         if (!prevented)
             add_render_command<detail::ClickEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
     }
+
+    namespace
+    {
+        void write_radio_button(acul::bin_stream &stream, umbf::Block *block)
+        {
+            auto *widget = static_cast<RadioButton *>(block);
+            detail::write_widget_common_data(stream, *widget);
+            stream.write(widget->value());
+        }
+
+        umbf::Block *read_radio_button(acul::bin_stream &stream)
+        {
+            const auto common = detail::read_widget_common_data(stream);
+            bool value = false;
+            stream.read(value);
+            auto *widget = acul::alloc<RadioButton>(common.id, value, WidgetFlags(common.widget_flags), nullptr);
+            detail::apply_widget_common_data(widget, common);
+            return widget;
+        }
+    } // namespace
+
+    namespace streams
+    {
+        AUIK_EXPORT const umbf::streams::Stream radio_button{read_radio_button, write_radio_button};
+    } // namespace streams
+
 } // namespace auik

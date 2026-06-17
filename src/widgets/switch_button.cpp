@@ -1,10 +1,11 @@
 #include <auik/auik.hpp>
 #include <auik/pipelines.hpp>
 #include <auik/widgets/switch_button.hpp>
+#include "../core/session_stream_utils.hpp"
 
 namespace auik
 {
-    SwitchButton::SwitchButton(u32 id, bool *value, WidgetFlags widget_flags, Widget *parent)
+    SwitchButton::SwitchButton(u32 id, bool value, WidgetFlags widget_flags, Widget *parent)
         : Widget(id, widget_flags, EventFlagBits::click, parent, {{0.0f, 0.0f}, {0.0f, 0.0f}}, AUIK_TAG_SWITCH_BUTTON),
           _value(value),
           _grab_rect(detail::make_rect_data(AUIK_TAG_SWITCH_BUTTON_GRAB, AUIK_TAG_SWITCH_BUTTON_GRAB))
@@ -55,7 +56,7 @@ namespace auik
         const amal::vec2 track_size = resolve_track_size(track_style, grab_style);
 
         amal::vec2 min_size = size();
-        if (!is_fixed()) min_size.x = 0.0f;
+        if (!is_width_fixed()) min_size.x = 0.0f;
 
         if (min_size.x <= 0.0f) min_size.x = track_size.x;
         else min_size.x = amal::max(min_size.x, track_size.x);
@@ -184,8 +185,8 @@ namespace auik
 
     void SwitchButton::set_value(bool new_value)
     {
-        if (!_value || *_value == new_value) return;
-        *_value = new_value;
+        if (_value == new_value) return;
+        _value = new_value;
         const bool prevented = mark_changed();
         sync_track_tag();
         update_style();
@@ -196,8 +197,8 @@ namespace auik
     void SwitchButton::on_click(MouseKey key, KeyPressState state, u32 click_count)
     {
         (void)click_count;
-        if (key != MouseKey::left || state != KeyPressState::press || !_value) return;
-        *_value = !*_value;
+        if (key != MouseKey::left || state != KeyPressState::press) return;
+        _value = !_value;
         const bool prevented = mark_changed();
         sync_track_tag();
         update_style();
@@ -205,4 +206,30 @@ namespace auik
         if (!prevented)
             add_render_command<detail::ClickEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
     }
+
+    namespace
+    {
+        void write_switch_button(acul::bin_stream &stream, umbf::Block *block)
+        {
+            auto *widget = static_cast<SwitchButton *>(block);
+            detail::write_widget_common_data(stream, *widget);
+            stream.write(widget->value());
+        }
+
+        umbf::Block *read_switch_button(acul::bin_stream &stream)
+        {
+            const auto common = detail::read_widget_common_data(stream);
+            bool value = false;
+            stream.read(value);
+            auto *switch_button = acul::alloc<SwitchButton>(common.id, value, common.widget_flags, nullptr);
+            detail::apply_widget_common_data(switch_button, common);
+            return switch_button;
+        }
+    } // namespace
+
+    namespace streams
+    {
+        AUIK_EXPORT const umbf::streams::Stream switch_button{read_switch_button, write_switch_button};
+    } // namespace streams
+
 } // namespace auik

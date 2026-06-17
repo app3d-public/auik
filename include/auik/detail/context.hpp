@@ -26,9 +26,47 @@ struct FT_LibraryRec_;
 #define AUIK_PRIMARY_VERTEX_STREAM          2
 #define AUIK_PRIMARY_TEXTURED_VERTEX_STREAM 3
 #define AUIK_PRIMARY_OVERLAY_QUADS_STREAM   4
+#define AUIK_WINDOW_MENU_TYPE_BAR           0
+#define AUIK_WINDOW_MENU_TYPE_POPUP         1
 
 namespace auik
 {
+    using PFN_window_menu_suffix_create = void (*)(class Window *window, class MenuBar *menu);
+    using PFN_widget_attach = void (*)(Widget *widget);
+    using PFN_translate_string = const char *(*)(const char *literal);
+
+    struct WidgetCreateOptions
+    {
+        PFN_window_menu_suffix_create window_menu_suffix_create = nullptr;
+        int window_menu_type = AUIK_WINDOW_MENU_TYPE_BAR;
+        PFN_widget_attach widget_attach = nullptr;
+        PFN_translate_string string_locale = nullptr;
+
+        WidgetCreateOptions &set_window_menu_suffix_create(PFN_window_menu_suffix_create value)
+        {
+            window_menu_suffix_create = value;
+            return *this;
+        }
+
+        WidgetCreateOptions &set_window_menu_type(int value)
+        {
+            window_menu_type = value;
+            return *this;
+        }
+
+        WidgetCreateOptions &set_widget_attach(PFN_widget_attach value)
+        {
+            widget_attach = value;
+            return *this;
+        }
+
+        WidgetCreateOptions &set_string_locale(PFN_translate_string value)
+        {
+            string_locale = value;
+            return *this;
+        }
+    };
+
     enum class DepthZone : u8
     {
         background = 0,
@@ -53,15 +91,23 @@ namespace auik
             hit_rect_update = 0x80,
             textures = 0x100,
             delayed_tasks = 0x200,
-            destroying = 0x400
+            destroying = 0x400,
+            locale = 0x800
         };
         using flag_bitmask = std::true_type;
     };
 
     using DirtyFlags = acul::flags<DirtyFlagBits>;
+    using DirtyMask = DirtyFlags::mask_t;
 
     namespace detail
     {
+        inline constexpr DirtyMask one_frame_dirty_mask =
+            static_cast<DirtyMask>(DirtyFlagBits::redraw | DirtyFlagBits::host_update | DirtyFlagBits::hit_rect_update |
+                                   DirtyFlagBits::textures);
+        inline constexpr DirtyMask layout_dirty_mask =
+            static_cast<DirtyMask>(DirtyFlagBits::layout | DirtyFlagBits::locale);
+
         struct SharedBufferSyncState
         {
             u32 master_id = 0;
@@ -152,6 +198,7 @@ namespace auik
             WindowContext *window_ctx = nullptr;
             SoundContext *sound_ctx = nullptr;
             ::FT_LibraryRec_ *ft_library = nullptr;
+            WidgetCreateOptions widget_create_options{};
             IO io;
             u32 frame_id = 0;
             u32 frames_in_flight = 0;
@@ -255,7 +302,31 @@ namespace auik
         }
 #endif
 
+        inline void clear_dirty_flags(DirtyMask mask)
+        {
+            auto &flags = get_context().dirty_flags;
+            flags = DirtyFlags(static_cast<DirtyMask>(flags) & ~mask);
+        }
+
         inline void mark_layout_dirty() { get_context().dirty_flags |= DirtyFlagBits::layout; }
+        inline void unmark_layout_dirty() { clear_dirty_flags(layout_dirty_mask); }
+
+        inline PFN_translate_string get_default_string_locale_cb()
+        {
+            return get_context().widget_create_options.string_locale;
+        }
+
+        inline int get_default_window_menu_type() { return get_context().widget_create_options.window_menu_type; }
+
+        inline PFN_window_menu_suffix_create get_default_menu_suffix_create_cb()
+        {
+            return get_context().widget_create_options.window_menu_suffix_create;
+        }
+
+        inline PFN_widget_attach get_default_widget_attach_cb()
+        {
+            return get_context().widget_create_options.widget_attach;
+        }
 
         inline void mark_host_refresh_request()
         {

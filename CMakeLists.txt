@@ -18,7 +18,7 @@ include(tools/theme_build.cmake)
 create_version_file()
 create_symbol_export_file()
 
-set(AUIK_BASE_THEME "${CMAKE_CURRENT_SOURCE_DIR}/src/theme.css")
+set(AUIK_BASE_THEME "${CMAKE_CURRENT_SOURCE_DIR}/src/style/theme.css")
 
 add_files(${PROJECT_NAME} RECURSE "${CMAKE_CURRENT_SOURCE_DIR}/src/core")
 add_files(${PROJECT_NAME} RECURSE "${CMAKE_CURRENT_SOURCE_DIR}/src/widgets")

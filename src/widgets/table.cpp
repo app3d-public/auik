@@ -1,7 +1,9 @@
 #include <auik/auik.hpp>
 #include <auik/detail/rect.hpp>
 #include <auik/pipelines.hpp>
+#include <auik/widgets/detail/draw_cull.hpp>
 #include <auik/widgets/table.hpp>
+#include "../core/session_stream_utils.hpp"
 
 namespace auik
 {
@@ -40,13 +42,6 @@ namespace auik
         return StyleState::normal;
     }
 
-    static inline void measure_table_cell(Text *cell)
-    {
-        if (!cell) return;
-        cell->set_layout_size({0.0f, 0.0f});
-        cell->update_layout_min_size();
-    }
-
     template <class Visual>
     static void draw_cell_visual(DrawCtx &ctx, DrawStream *stream, Visual &visual, const Style &style, u16 clip_id,
                                  bool is_hit_allowed)
@@ -54,6 +49,20 @@ namespace auik
         QuadsInstanceData data{};
         data.rect = visual.rect.bounds;
         data.z_order = visual.rect.depth;
+        if (!(ctx.reason & DrawReasonBits::invalidate) && clip_id != 0xFFFFu)
+        {
+            const auto clip = get_clip_rect(clip_id);
+            const auto &rect = visual.rect.bounds;
+            const bool culled = rect.offset.x + rect.size.x <= clip.x || rect.offset.y + rect.size.y <= clip.y ||
+                                rect.offset.x >= clip.x + clip.z || rect.offset.y >= clip.y + clip.w;
+            if (culled)
+            {
+                DrawCtx invalidate_ctx = ctx;
+                invalidate_ctx.reason |= DrawReasonBits::invalidate;
+                emit_quads_instance(invalidate_ctx, stream, visual.draw, data, visual.rect, false, is_hit_allowed);
+                return;
+            }
+        }
         const bool visible = fill_quads_instance_by_style(style, clip_id, data);
         emit_quads_instance(ctx, stream, visual.draw, data, visual.rect, visible, is_hit_allowed);
     }
@@ -103,6 +112,9 @@ namespace auik
 
     void Table::clear()
     {
+        for (auto &row : _rows)
+            for (auto *cell : row)
+                if (cell) acul::release(cell);
         _rows.clear();
         set_table_flag(_table_flags, AUIK_TABLE_FLAG_ROW_SIZE_OVERRIDES, false);
         if (!has_table_flag(_table_flags, AUIK_TABLE_FLAG_COLUMN_SIZE_OVERRIDES)) _size_overrides.clear();
@@ -112,6 +124,9 @@ namespace auik
 
     void Table::set_rows(Rows rows)
     {
+        for (auto &row : _rows)
+            for (auto *cell : row)
+                if (cell) acul::release(cell);
         _rows = std::move(rows);
         set_table_flag(_table_flags, AUIK_TABLE_FLAG_ROW_SIZE_OVERRIDES, false);
         if (!has_table_flag(_table_flags, AUIK_TABLE_FLAG_COLUMN_SIZE_OVERRIDES)) _size_overrides.clear();
@@ -126,10 +141,11 @@ namespace auik
         invalidate_layout();
     }
 
-    void Table::set_cell(size_t row, size_t column, acul::string value)
+    void Table::set_cell(size_t row, size_t column, Widget *value)
     {
         if (row >= _rows.size()) _rows.resize(row + 1);
         if (column >= _rows[row].size()) _rows[row].resize(column + 1);
+        if (_rows[row][column]) acul::release(_rows[row][column]);
         _rows[row][column] = std::move(value);
         rebuild_cells();
         invalidate_layout();
@@ -137,6 +153,8 @@ namespace auik
 
     void Table::set_header(Row header)
     {
+        for (auto *cell : _header)
+            if (cell) acul::release(cell);
         _header = std::move(header);
         rebuild_cells();
         invalidate_layout();
@@ -144,6 +162,8 @@ namespace auik
 
     void Table::clear_header()
     {
+        for (auto *cell : _header)
+            if (cell) acul::release(cell);
         _header.clear();
         rebuild_cells();
         invalidate_layout();
@@ -211,6 +231,14 @@ namespace auik
         invalidate_layout();
     }
 
+    void Table::set_size_overrides(acul::vector<acul::point2D<f32>> values, bool column_overrides, bool row_overrides)
+    {
+        _size_overrides = std::move(values);
+        set_table_flag(_table_flags, AUIK_TABLE_FLAG_COLUMN_SIZE_OVERRIDES, column_overrides);
+        set_table_flag(_table_flags, AUIK_TABLE_FLAG_ROW_SIZE_OVERRIDES, row_overrides);
+        invalidate_layout();
+    }
+
     void Table::set_style_tag(u32 tag_id)
     {
         if (_style.tag_id == tag_id) return;
@@ -223,7 +251,6 @@ namespace auik
     {
         if (_header_cell_style.tag_id == tag_id) return;
         _header_cell_style = {Theme::STYLE_ID_INVALID, tag_id};
-        rebuild_cells();
         invalidate_layout();
     }
 
@@ -231,7 +258,6 @@ namespace auik
     {
         if (_cell_style.tag_id == tag_id) return;
         _cell_style = {Theme::STYLE_ID_INVALID, tag_id};
-        rebuild_cells();
         invalidate_layout();
     }
 
@@ -259,27 +285,27 @@ namespace auik
         return table && row_index < table->_rows.size() && column_index < table->_rows[row_index].size();
     }
 
-    acul::string *Table::CellRef::value() const { return valid() ? &table->_rows[row_index][column_index] : nullptr; }
+    Widget *Table::CellRef::value() const { return valid() ? table->_rows[row_index][column_index] : nullptr; }
 
     bool Table::ConstCellRef::valid() const
     {
         return table && row_index < table->_rows.size() && column_index < table->_rows[row_index].size();
     }
 
-    const acul::string *Table::ConstCellRef::value() const
+    const Widget *Table::ConstCellRef::value() const
     {
-        return valid() ? &table->_rows[row_index][column_index] : nullptr;
+        return valid() ? table->_rows[row_index][column_index] : nullptr;
     }
 
-    acul::string *Table::Column::header() const
+    Widget *Table::Column::header() const
     {
-        return table && column_index < table->_header.size() ? &table->_header[column_index] : nullptr;
+        return table && column_index < table->_header.size() ? table->_header[column_index] : nullptr;
     }
 
-    acul::string *Table::Column::cell(size_t row) const
+    Widget *Table::Column::cell(size_t row) const
     {
         if (!table || row >= table->_rows.size() || column_index >= table->_rows[row].size()) return nullptr;
-        return &table->_rows[row][column_index];
+        return table->_rows[row][column_index];
     }
 
     TableColumnSettings *Table::Column::settings() const
@@ -304,15 +330,15 @@ namespace auik
 
     Table::CellIterator Table::Column::end() const { return {table, table ? table->_rows.size() : 0u, column_index}; }
 
-    const acul::string *Table::ConstColumn::header() const
+    const Widget *Table::ConstColumn::header() const
     {
-        return table && column_index < table->_header.size() ? &table->_header[column_index] : nullptr;
+        return table && column_index < table->_header.size() ? table->_header[column_index] : nullptr;
     }
 
-    const acul::string *Table::ConstColumn::cell(size_t row) const
+    const Widget *Table::ConstColumn::cell(size_t row) const
     {
         if (!table || row >= table->_rows.size() || column_index >= table->_rows[row].size()) return nullptr;
-        return &table->_rows[row][column_index];
+        return table->_rows[row][column_index];
     }
 
     const TableColumnSettings *Table::ConstColumn::settings() const
@@ -524,9 +550,9 @@ namespace auik
             out |= StyleUpdateFlagBits::redraw;
         out |= update_resize_indicator();
 
-        for (auto *cell : _header_cells)
+        for (auto *cell : _header)
             if (cell) out |= cell->update_style();
-        for (auto &row : _cells)
+        for (auto &row : _rows)
             for (auto *cell : row)
                 if (cell) out |= cell->update_style();
         return out;
@@ -540,9 +566,9 @@ namespace auik
         f32 header_height = 0.0f;
         for (size_t column = 0; column < _column_count; ++column)
         {
-            auto *cell = header_text(column);
+            auto *cell = header_widget(column);
             if (!cell) continue;
-            measure_table_cell(cell);
+            cell->update_layout(false);
             _layout_metrics[column].x.min_value =
                 amal::max(_layout_metrics[column].x.min_value, cell->required_size().x);
             header_height = amal::max(header_height, cell->required_size().y);
@@ -552,9 +578,9 @@ namespace auik
         {
             for (size_t column = 0; column < _column_count; ++column)
             {
-                auto *cell = cell_text(row, column);
+                auto *cell = cell_widget(row, column);
                 if (!cell) continue;
-                measure_table_cell(cell);
+                cell->update_layout(false);
                 _layout_metrics[column].x.min_value =
                     amal::max(_layout_metrics[column].x.min_value, cell->required_size().x);
                 _layout_metrics[row].y.min_value = amal::max(_layout_metrics[row].y.min_value, cell->required_size().y);
@@ -576,10 +602,11 @@ namespace auik
         for (size_t row = 0; row < _rows.size(); ++row) content_h += _layout_metrics[row].y.value;
 
         f32 required_width = size().x;
-        if (!is_fixed()) required_width = 0.0f;
+        if (fill_width()) required_width = 0.0f;
         else if (required_width <= 0.0f) required_width = content_w + padding.x + padding.z;
 
         f32 required_height = size().y;
+        if (fill_height()) required_height = 0.0f;
         if (required_height <= 0.0f) required_height = content_h + padding.y + padding.w;
 
         set_required_size({required_width + margin.x + margin.z, required_height + margin.y + margin.w});
@@ -598,10 +625,10 @@ namespace auik
                                            amal::max(required_size().y - margin.y - margin.w, 0.0f)};
 
         amal::vec2 outer_size = size();
-        if (!is_fixed()) outer_size.x = amal::max(outer_size.x - margin.x - margin.z, required_inner.x);
+        if (!is_width_fixed()) outer_size.x = amal::max(outer_size.x - margin.x - margin.z, required_inner.x);
         else if (outer_size.x <= 0.0f) outer_size.x = required_inner.x;
         if (outer_size.y <= 0.0f) outer_size.y = required_inner.y;
-        if (!is_fixed()) outer_size.y = amal::max(outer_size.y, required_inner.y);
+        if (!is_height_fixed()) outer_size.y = amal::max(outer_size.y, required_inner.y);
 
         set_position(outer_pos);
         set_layout_size(outer_size);
@@ -628,14 +655,14 @@ namespace auik
         if (has_header())
         {
             f32 header_h = 0.0f;
-            for (auto *cell : _header_cells)
+            for (auto *cell : _header)
                 if (cell) header_h = amal::max(header_h, cell->required_size().y);
 
             f32 cursor_x = inner_pos.x;
             for (size_t column = 0; column < _column_count; ++column)
             {
                 const f32 column_w = _layout_metrics[column].x.value;
-                auto *cell = header_text(column);
+                auto *cell = header_widget(column);
                 if (cell)
                 {
                     const auto &settings = settings_for_column(column);
@@ -671,7 +698,7 @@ namespace auik
             for (size_t column = 0; column < _column_count; ++column)
             {
                 const f32 column_w = _layout_metrics[column].x.value;
-                auto *cell = cell_text(row, column);
+                auto *cell = cell_widget(row, column);
                 if (cell)
                 {
                     const auto &settings = settings_for_column(column);
@@ -752,9 +779,9 @@ namespace auik
             visuals.y.rect.bounds.offset += delta;
         }
         _resize_indicator_visual.rect.bounds.offset += delta;
-        for (auto *cell : _header_cells)
+        for (auto *cell : _header)
             if (cell) cell->translate(delta);
-        for (auto &row : _cells)
+        for (auto &row : _rows)
             for (auto *cell : row)
                 if (cell) cell->translate(delta);
         const amal::vec4 parent_clip = parent() ? parent()->get_content_clip_rect() : get_main_viewport_rect();
@@ -783,9 +810,9 @@ namespace auik
             visuals.y.draw = {};
         }
         _resize_indicator_visual.draw = {};
-        for (auto *cell : _header_cells)
+        for (auto *cell : _header)
             if (cell) cell->reset_draw_records();
-        for (auto &row : _cells)
+        for (auto &row : _rows)
             for (auto *cell : row)
                 if (cell) cell->reset_draw_records();
     }
@@ -793,12 +820,12 @@ namespace auik
     void Table::update_depth(const amal::vec2 &depth_range)
     {
         Widget::update_depth(depth_range);
-        for (auto *cell : _header_cells)
+        for (auto *cell : _header)
         {
             if (!cell) continue;
             cell->update_depth(this->depth_range());
         }
-        for (auto &row : _cells)
+        for (auto &row : _rows)
         {
             for (auto *cell : row)
             {
@@ -811,9 +838,9 @@ namespace auik
     void Table::back_hit_depth()
     {
         Widget::back_hit_depth();
-        for (auto *cell : _header_cells)
+        for (auto *cell : _header)
             if (cell) cell->back_hit_depth();
-        for (auto &row : _cells)
+        for (auto &row : _rows)
             for (auto *cell : row)
                 if (cell) cell->back_hit_depth();
         auto lower = [&](CellVisual &visual) { visual.rect.hit_depth = get_rect().hit_depth; };
@@ -832,9 +859,9 @@ namespace auik
     void Table::restore_hit_depth()
     {
         Widget::restore_hit_depth();
-        for (auto *cell : _header_cells)
+        for (auto *cell : _header)
             if (cell) cell->restore_hit_depth();
-        for (auto &row : _cells)
+        for (auto &row : _rows)
             for (auto *cell : row)
                 if (cell) cell->restore_hit_depth();
         auto restore = [](CellVisual &visual) { visual.rect.hit_depth = visual.rect.depth; };
@@ -907,21 +934,22 @@ namespace auik
             }
         }
 
-        for (auto *cell : _header_cells)
+        const amal::vec4 content_clip = get_content_clip_rect();
+        for (auto *cell : _header)
         {
             if (!cell) continue;
             DrawCtx cell_ctx = ctx;
             cell_ctx.is_hit_allowed = false;
-            cell->draw_local(cell_ctx);
+            detail::draw_child_in_clip(cell, cell_ctx, content_clip);
         }
-        for (auto &row : _cells)
+        for (auto &row : _rows)
         {
             for (auto *cell : row)
             {
                 if (!cell) continue;
                 DrawCtx cell_ctx = ctx;
                 cell_ctx.is_hit_allowed = false;
-                cell->draw_local(cell_ctx);
+                detail::draw_child_in_clip(cell, cell_ctx, content_clip);
             }
         }
     }
@@ -1043,62 +1071,40 @@ namespace auik
 
     void Table::on_attach()
     {
-        detail::get_context().id_map.emplace(id(), this);
+        Widget::on_attach();
         sync_cell_parents();
     }
 
-    void Table::on_detach() { detail::get_context().id_map.erase(id()); }
+    void Table::on_detach() { Widget::on_detach(); }
 
     void Table::rebuild_cells()
     {
-        clear_cells();
         _column_count = resolve_column_count();
-
-        _header_cells.reserve(_header.size());
-        for (const auto &value : _header) _header_cells.push_back(make_cell_text(value, _header_cell_style.tag_id));
-
-        _cells.reserve(_rows.size());
-        for (const auto &row : _rows)
-        {
-            _cells.emplace_back();
-            auto &cells = _cells.back();
-            cells.reserve(row.size());
-            for (const auto &value : row) cells.push_back(make_cell_text(value, _cell_style.tag_id));
-        }
         sync_cell_parents();
         update_depth(depth_range());
     }
 
     void Table::clear_cells(bool invalidate_draw)
     {
-        for (auto *cell : _header_cells)
+        for (auto *cell : _header)
             if (cell)
             {
-                if (invalidate_draw) cell->invalidate_draw_records();
+                if (invalidate_draw) cell->reset_draw_records();
                 acul::release(cell);
             }
-        _header_cells.clear();
+        _header.clear();
 
-        for (auto &row : _cells)
+        for (auto &row : _rows)
             for (auto *cell : row)
                 if (cell)
                 {
-                    if (invalidate_draw) cell->invalidate_draw_records();
+                    if (invalidate_draw) cell->reset_draw_records();
                     acul::release(cell);
                 }
-        _cells.clear();
+        _rows.clear();
         _header_visuals.clear();
         _cell_visuals.clear();
         _alt_row_visuals.clear();
-    }
-
-    Text *Table::make_cell_text(const acul::string &value, u32 style_tag_id)
-    {
-        auto *text = acul::alloc<Text>(AUIK_TAG_TEXT, value, amal::vec2{0.0f, 0.0f},
-                                       WidgetFlagBits::visible | WidgetFlagBits::fixed_layout, this, style_tag_id,
-                                       detail::TextOverflowMode::ellipsis, detail::TextVerticalAlign::center);
-        if (detail::g_context) text->update_style();
-        return text;
     }
 
     size_t Table::resolve_column_count() const
@@ -1113,15 +1119,15 @@ namespace auik
         return static_cast<u32>(row * _column_count + column);
     }
 
-    Text *Table::header_text(size_t column) const
+    Widget *Table::header_widget(size_t column) const
     {
-        return column < _header_cells.size() ? _header_cells[column] : nullptr;
+        return column < _header.size() ? _header[column] : nullptr;
     }
 
-    Text *Table::cell_text(size_t row, size_t column) const
+    Widget *Table::cell_widget(size_t row, size_t column) const
     {
-        if (row >= _cells.size()) return nullptr;
-        return column < _cells[row].size() ? _cells[row][column] : nullptr;
+        if (row >= _rows.size()) return nullptr;
+        return column < _rows[row].size() ? _rows[row][column] : nullptr;
     }
 
     const TableColumnSettings &Table::settings_for_column(size_t column) const
@@ -1162,13 +1168,13 @@ namespace auik
 
     void Table::update_cell_clip_rects()
     {
-        for (auto *cell : _header_cells)
+        for (auto *cell : _header)
         {
             if (!cell) continue;
             cell->set_clip_id(content_clip_id());
             cell->rebuild_clip_rects();
         }
-        for (auto &row : _cells)
+        for (auto &row : _rows)
         {
             for (auto *cell : row)
             {
@@ -1266,11 +1272,211 @@ namespace auik
 
     void Table::sync_cell_parents()
     {
-        for (auto *cell : _header_cells)
+        for (auto *cell : _header)
             if (cell) cell->set_parent(this);
-        for (auto &row : _cells)
+        for (auto &row : _rows)
             for (auto *cell : row)
                 if (cell) cell->set_parent(this);
     }
+
+    namespace
+    {
+        constexpr u32 g_persistent_table_flags = AUIK_TABLE_FLAG_ALTERNATING_ROWS | AUIK_TABLE_FLAG_COLUMN_RESIZABLE |
+                                                AUIK_TABLE_FLAG_ROW_RESIZABLE |
+                                                AUIK_TABLE_FLAG_COLUMN_SIZE_OVERRIDES |
+                                                AUIK_TABLE_FLAG_ROW_SIZE_OVERRIDES;
+
+        void write_column_settings(acul::bin_stream &stream, const TableColumnSettings &settings)
+        {
+            stream.write(static_cast<u8>(settings.sizing))
+                .write(settings.value)
+                .write(settings.min_width)
+                .write(static_cast<u8>(settings.halign))
+                .write(static_cast<u8>(settings.valign));
+        }
+
+        TableColumnSettings read_column_settings(acul::bin_stream &stream)
+        {
+            TableColumnSettings settings{};
+            u8 sizing = static_cast<u8>(TableColumnSizing::stretch);
+            u8 halign = static_cast<u8>(HAlign::left);
+            u8 valign = static_cast<u8>(VAlign::none);
+            stream.read(sizing).read(settings.value).read(settings.min_width).read(halign).read(valign);
+            settings.sizing = static_cast<TableColumnSizing>(sizing);
+            settings.halign = static_cast<HAlign>(halign);
+            settings.valign = static_cast<VAlign>(valign);
+            return settings;
+        }
+
+        void write_widget_row(acul::bin_stream &stream, const Table::Row &row)
+        {
+            acul::vector<u32> columns;
+            acul::vector<umbf::Block *> blocks;
+            for (size_t column = 0u; column < row.size(); ++column)
+            {
+                auto *cell = row[column];
+                if (!cell || !(cell->widget_flags & WidgetFlagBits::configurable)) continue;
+                columns.push_back(static_cast<u32>(column));
+                blocks.push_back(cell);
+            }
+
+            stream.write(static_cast<u32>(columns.size()));
+            if (!columns.empty()) stream.write(columns.data(), columns.size());
+            stream.write(blocks);
+        }
+
+        Table::Row read_widget_row(acul::bin_stream &stream)
+        {
+            u32 cell_count = 0u;
+            stream.read(cell_count);
+
+            acul::vector<u32> columns;
+            columns.resize(cell_count);
+            if (!columns.empty()) stream.read(columns.data(), columns.size());
+
+            acul::vector<umbf::Block *> blocks;
+            stream.read(blocks);
+
+            size_t column_count = 0u;
+            for (u32 column : columns) column_count = amal::max(column_count, static_cast<size_t>(column + 1u));
+
+            Table::Row row;
+            row.resize(column_count);
+            for (u32 cell_i = 0u; cell_i < cell_count; ++cell_i)
+                row[columns[cell_i]] = static_cast<Widget *>(blocks[cell_i]);
+            return row;
+        }
+
+        void write_table(acul::bin_stream &stream, umbf::Block *block)
+        {
+            auto *table = static_cast<Table *>(block);
+            detail::write_widget_common_data(stream, *table);
+            stream.write(table->style_tag())
+                .write(table->header_cell_style_tag())
+                .write(table->cell_style_tag())
+                .write(table->alternating_row_style_tag())
+                .write(table->resize_border_style_tag())
+                .write(table->table_flags() & g_persistent_table_flags);
+
+            write_column_settings(stream, table->default_column_settings());
+
+            const auto &column_settings = table->column_settings();
+            stream.write(static_cast<u32>(column_settings.size()));
+            for (const auto &settings : column_settings) write_column_settings(stream, settings);
+
+            const auto &size_overrides = table->size_overrides();
+            stream.write(static_cast<u32>(size_overrides.size()));
+            for (const auto &value : size_overrides) stream.write(value);
+
+            write_widget_row(stream, table->header());
+
+            u32 row_count = 0u;
+            for (const auto &row : table->rows())
+            {
+                bool has_configurable = false;
+                for (auto *cell : row)
+                {
+                    if (cell && (cell->widget_flags & WidgetFlagBits::configurable))
+                    {
+                        has_configurable = true;
+                        break;
+                    }
+                }
+                if (has_configurable) ++row_count;
+            }
+
+            stream.write(row_count);
+            for (size_t row_i = 0u; row_i < table->rows().size(); ++row_i)
+            {
+                const auto &row = table->rows()[row_i];
+                bool has_configurable = false;
+                for (auto *cell : row)
+                {
+                    if (cell && (cell->widget_flags & WidgetFlagBits::configurable))
+                    {
+                        has_configurable = true;
+                        break;
+                    }
+                }
+                if (!has_configurable) continue;
+                stream.write(static_cast<u32>(row_i));
+                write_widget_row(stream, row);
+            }
+        }
+
+        umbf::Block *read_table(acul::bin_stream &stream)
+        {
+            const auto common = detail::read_widget_common_data(stream);
+            u32 style_tag = AUIK_STYLE_TAG_TABLE;
+            u32 header_cell_style_tag = AUIK_STYLE_TAG_TABLE_HEADER_CELL;
+            u32 cell_style_tag = AUIK_STYLE_TAG_TABLE_CELL;
+            u32 alternating_row_style_tag = AUIK_STYLE_TAG_TABLE_ROW_ALT;
+            u32 resize_border_style_tag = AUIK_STYLE_TAG_TABLE_RESIZE_BORDER;
+            u32 table_flags = 0u;
+            stream.read(style_tag)
+                .read(header_cell_style_tag)
+                .read(cell_style_tag)
+                .read(alternating_row_style_tag)
+                .read(resize_border_style_tag)
+                .read(table_flags);
+
+            auto default_settings = read_column_settings(stream);
+
+            u32 column_settings_count = 0u;
+            stream.read(column_settings_count);
+            acul::vector<TableColumnSettings> column_settings;
+            column_settings.reserve(column_settings_count);
+            for (u32 column_i = 0u; column_i < column_settings_count; ++column_i)
+                column_settings.push_back(read_column_settings(stream));
+
+            u32 override_count = 0u;
+            stream.read(override_count);
+            acul::vector<acul::point2D<f32>> size_overrides;
+            size_overrides.resize(override_count);
+            if (!size_overrides.empty()) stream.read(size_overrides.data(), size_overrides.size());
+
+            auto *table = acul::alloc<Table>(common.id, Table::Rows{}, common.requested_size,
+                                             WidgetFlags(common.widget_flags), nullptr, style_tag);
+            table->set_header_cell_style_tag(header_cell_style_tag);
+            table->set_cell_style_tag(cell_style_tag);
+            table->set_alternating_row_style_tag(alternating_row_style_tag);
+            table->set_resize_border_style_tag(resize_border_style_tag);
+            table->set_alternating_rows((table_flags & AUIK_TABLE_FLAG_ALTERNATING_ROWS) != 0u);
+            table->set_column_resizable((table_flags & AUIK_TABLE_FLAG_COLUMN_RESIZABLE) != 0u);
+            table->set_row_resizable((table_flags & AUIK_TABLE_FLAG_ROW_RESIZABLE) != 0u);
+            table->set_default_column_settings(default_settings);
+            table->set_column_settings(std::move(column_settings));
+            table->set_size_overrides(std::move(size_overrides),
+                                      (table_flags & AUIK_TABLE_FLAG_COLUMN_SIZE_OVERRIDES) != 0u,
+                                      (table_flags & AUIK_TABLE_FLAG_ROW_SIZE_OVERRIDES) != 0u);
+
+            auto header = read_widget_row(stream);
+            if (!header.empty()) table->set_header(std::move(header));
+
+            u32 row_count = 0u;
+            stream.read(row_count);
+            for (u32 row_i = 0u; row_i < row_count; ++row_i)
+            {
+                u32 row_index = 0u;
+                stream.read(row_index);
+                auto row = read_widget_row(stream);
+                for (size_t column_i = 0u; column_i < row.size(); ++column_i)
+                {
+                    if (!row[column_i]) continue;
+                    auto *cell = row[column_i];
+                    row[column_i] = nullptr;
+                    table->set_cell(row_index, column_i, cell);
+                }
+            }
+
+            detail::apply_widget_common_data(table, common);
+            return table;
+        }
+    } // namespace
+
+    namespace streams
+    {
+        AUIK_EXPORT const umbf::streams::Stream table{read_table, write_table};
+    } // namespace streams
 
 } // namespace auik

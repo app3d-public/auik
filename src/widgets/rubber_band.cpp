@@ -164,7 +164,7 @@ namespace auik
             _active = false;
             _committed = true;
             redraw_band();
-            set_invisible();
+            unset_visible();
             sync_widget_flags();
             mark_changed();
             return;
@@ -195,4 +195,26 @@ namespace auik
         redraw_external(has_draw_record(), DrawReasonBits::external | DrawReasonBits::transient);
         detail::mark_host_refresh_request();
     }
+
+    namespace
+    {
+        void write_rubber_band(acul::bin_stream &stream, umbf::Block *block)
+        {
+            auto *widget = static_cast<RubberBand *>(block);
+            stream.write(widget->id()).write(static_cast<u32>(widget->widget_flags));
+        }
+
+        umbf::Block *read_rubber_band(acul::bin_stream &stream)
+        {
+            u32 id = 0u;
+            u32 widget_flags = 0u;
+            stream.read(id).read(widget_flags);
+            return acul::alloc<RubberBand>(id, WidgetFlags(widget_flags), nullptr);
+        }
+    } // namespace
+
+    namespace streams
+    {
+        AUIK_EXPORT const umbf::streams::Stream rubber_band{read_rubber_band, write_rubber_band};
+    } // namespace streams
 } // namespace auik

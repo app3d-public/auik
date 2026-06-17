@@ -15,7 +15,8 @@ It is not a windowing framework and does not own your main loop. Instead, it pro
 - Post-processing effects
 - CSS-inspired theme system
 - Audio support for UI interactions and modal events
-- Configuration and session history support
+- Binary UI state snapshots
+- i18n integration API
 
 ## Architecture
 Auik uses an event-driven retained UI model with a multi-pipeline rendering architecture.

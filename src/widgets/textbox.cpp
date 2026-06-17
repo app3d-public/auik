@@ -1,6 +1,7 @@
 #include <auik/auik.hpp>
 #include <auik/pipelines.hpp>
 #include <auik/widgets/textbox.hpp>
+#include "../core/session_stream_utils.hpp"
 #include <cctype>
 
 #define AUIK_TEXTBOX_CARET_ON_TIME                    0.80
@@ -12,10 +13,9 @@
 
 namespace auik
 {
-    static WidgetFlags resolve_textbox_widget_flags(WidgetFlags flags, bool read_only)
+    static WidgetFlags resolve_textbox_widget_flags(WidgetFlags flags)
     {
         flags |= WidgetFlagBits::hittable;
-        if (read_only) flags |= WidgetFlagBits::read_only;
         return flags;
     }
 
@@ -134,25 +134,21 @@ namespace auik
     };
 
     TextBox::TextBox(u32 id, const acul::string &value, amal::vec2 size, WidgetFlags flags, Widget *parent,
-                     u32 style_tag_id, TextFlags text_flags, const acul::string &placeholder, bool read_only,
+                     u32 style_tag_id, TextFlags text_flags, StringView placeholder,
                      detail::TextVerticalAlign text_vertical_align, detail::TextWrapMode text_wrap)
-        : Widget(id, resolve_textbox_widget_flags(flags, read_only), resolve_textbox_event_flags(), parent,
+        : Widget(id, resolve_textbox_widget_flags(flags), resolve_textbox_event_flags(), parent,
                  {{0.0f, 0.0f}, size}, style_tag_id),
           _value(value),
           _text(AUIK_TAG_TEXT, make_textbox_presentation(value, text_flags), amal::vec2{0.0f, 0.0f},
-                WidgetFlagBits::visible |
-                    ((flags & WidgetFlagBits::fixed_layout) ? WidgetFlagBits::fixed_layout : WidgetFlagBits::none),
+                WidgetFlagBits::visible,
                 this, AUIK_STYLE_TAG_NO_PAD, detail::TextOverflowMode::clip, text_vertical_align, text_wrap,
                 text_wrap != detail::TextWrapMode::none ? detail::TextLayoutWidthMode::bounds
                                                         : detail::TextLayoutWidthMode::viewport),
-          _placeholder(placeholder.empty()
+          _placeholder((!placeholder.str || placeholder.str[0] == '\0')
                            ? nullptr
                            : acul::alloc<Text>(AUIK_TAG_TEXT, placeholder, amal::vec2{0.0f, 0.0f},
-                                               WidgetFlagBits::visible | ((flags & WidgetFlagBits::fixed_layout)
-                                                                              ? WidgetFlagBits::fixed_layout
-                                                                              : WidgetFlagBits::none),
-                                               this, AUIK_STYLE_TAG_PLACEHOLDER, detail::TextOverflowMode::clip,
-                                               text_vertical_align, text_wrap)),
+                                               WidgetFlagBits::visible, this, AUIK_STYLE_TAG_PLACEHOLDER,
+                                               detail::TextOverflowMode::clip, text_vertical_align, text_wrap)),
           _edit(acul::alloc<TextBoxEditData>())
     {
         this->text_flags = text_flags;
@@ -219,13 +215,12 @@ namespace auik
         f32 text_h = _text.required_size().y;
         if (_placeholder) text_h = amal::max(text_h, _placeholder->required_size().y);
 
-        amal::vec2 min_size = is_fixed() ? amal::vec2{is_size_concrete(requested_size().x) ? requested_size().x : 0.0f,
-                                                      is_size_concrete(requested_size().y) ? requested_size().y : 0.0f}
-                                         : amal::vec2{0.0f, 0.0f};
+        amal::vec2 min_size = {is_width_fixed() ? requested_size().x : 0.0f,
+                               is_height_fixed() ? requested_size().y : 0.0f};
         if (fill_width()) min_size.x = 160.0f;
         if (fill_height()) min_size.y = 0.0f;
         if (min_size.x <= 0.0f) min_size.x = 160.0f;
-        if (!is_fixed() && size().y > 0.0f && !should_resize_to_content()) min_size.y = size().y;
+        if (!is_height_fixed() && size().y > 0.0f && !should_resize_to_content()) min_size.y = size().y;
         if (min_size.y <= 0.0f) min_size.y = amal::max(text_h, style.text_size()) + padding.y + padding.w;
         set_required_size({min_size.x + margin.x + margin.z, min_size.y + margin.y + margin.w});
     }
@@ -240,8 +235,9 @@ namespace auik
         const amal::vec2 layout_origin = position();
 
         amal::vec2 box_size = size();
-        if (box_size.x <= 0.0f) box_size.x = required_size().x - margin.x - margin.z;
-        if (box_size.y <= 0.0f || (!fill_height() && should_resize_to_content()))
+        if (!fill_width() && !is_width_fixed()) box_size.x = required_size().x - margin.x - margin.z;
+        else if (box_size.x <= 0.0f) box_size.x = required_size().x - margin.x - margin.z;
+        if ((!fill_height() && !is_height_fixed()) || box_size.y <= 0.0f || (!fill_height() && should_resize_to_content()))
             box_size.y = required_size().y - margin.y - margin.w;
         box_size.x = amal::max(box_size.x, 1.0f);
         box_size.y = amal::max(box_size.y, style.text_size() + padding.y + padding.w);
@@ -289,7 +285,7 @@ namespace auik
             }
             else
             {
-                _scrollbar_y->set_invisible();
+                _scrollbar_y->unset_visible();
                 _scrollbar_y->sync_widget_flags();
                 remove_event_flags(EventFlagBits::scroll);
                 _scrollbar_y->set_scroll_offset(0.0f);
@@ -298,7 +294,7 @@ namespace auik
         }
         else if (_scrollbar_y)
         {
-            _scrollbar_y->set_invisible();
+            _scrollbar_y->unset_visible();
             _scrollbar_y->sync_widget_flags();
             remove_event_flags(EventFlagBits::scroll);
             _scrollbar_y->set_scroll_offset(0.0f);
@@ -1034,9 +1030,9 @@ namespace auik
         _text.set_text(make_textbox_presentation(_value, text_flags));
     }
 
-    void TextBox::set_placeholder(const acul::string &value)
+    void TextBox::set_placeholder(StringView value)
     {
-        if (value.empty())
+        if (!value.str || value.str[0] == '\0')
         {
             if (!_placeholder) return;
             acul::release(_placeholder);
@@ -1044,16 +1040,12 @@ namespace auik
         }
         else if (_placeholder)
         {
-            if (_placeholder->text() == value) return;
             _placeholder->set_text(value);
         }
         else
         {
             _placeholder = acul::alloc<Text>(AUIK_TAG_TEXT, value, amal::vec2{0.0f, 0.0f},
-                                             WidgetFlagBits::visible | ((widget_flags & WidgetFlagBits::fixed_layout)
-                                                                            ? WidgetFlagBits::fixed_layout
-                                                                            : WidgetFlagBits::none),
-                                             this, AUIK_STYLE_TAG_PLACEHOLDER);
+                                             WidgetFlagBits::visible, this, AUIK_STYLE_TAG_PLACEHOLDER);
             _placeholder->set_overflow_mode(detail::TextOverflowMode::clip);
             _placeholder->set_vertical_align(detail::TextVerticalAlign::center);
         }
@@ -1634,11 +1626,12 @@ namespace auik
 
     MultilineTextBox::MultilineTextBox(u32 id, const acul::string &value, amal::vec2 size, bool can_expand_to_content,
                                        WidgetFlags flags, Widget *parent, TextFlags text_flags,
-                                       const acul::string &placeholder, bool read_only)
-        : TextBox(id, value, size, flags, parent, AUIK_TAG_TEXTBOX, text_flags, placeholder, read_only,
+                                       StringView placeholder)
+        : TextBox(id, value, size, flags, parent, AUIK_TAG_TEXTBOX, text_flags, placeholder,
                   detail::TextVerticalAlign::top, detail::TextWrapMode::word),
           _can_expand_to_content(can_expand_to_content)
     {
+        set_rect_tag_id(AUIK_TAG_MULTILINE_TEXTBOX);
         _text.set_trim_trailing_spaces(false);
         if (_placeholder) _placeholder->set_trim_trailing_spaces(false);
         if (_edit) _edit->caret_style.tag_id = AUIK_STYLE_TAG_MULTILINE_CARET;
@@ -1650,4 +1643,103 @@ namespace auik
         if (_can_expand_to_content == value) return;
         _can_expand_to_content = value;
     }
+
+    namespace
+    {
+        struct TextBoxData
+        {
+            detail::WidgetCommonData common{};
+            acul::string value;
+            acul::string placeholder;
+            bool placeholder_translated = false;
+            u32 text_flags = 0u;
+            u32 style_tag = AUIK_STYLE_TAG_TEXTBOX;
+            detail::TextVerticalAlign text_vertical_align = detail::TextVerticalAlign::center;
+            detail::TextWrapMode text_wrap = detail::TextWrapMode::none;
+        };
+
+        void write_textbox_payload(acul::bin_stream &stream, TextBox *widget)
+        {
+            detail::write_widget_common_data(stream, *widget);
+            const bool placeholder_translated = widget->is_translated_placeholder();
+            const char *placeholder_literal = placeholder_translated ? widget->placeholder_literal() : nullptr;
+            stream.write(widget->value())
+                ;
+            detail::write_localized_string(
+                stream,
+                placeholder_translated ? acul::string(placeholder_literal ? placeholder_literal : "")
+                                       : widget->placeholder(),
+                placeholder_translated);
+            stream.write(static_cast<u32>(widget->text_flags))
+                .write(widget->style_tag())
+                .write(static_cast<u32>(widget->text_vertical_align()))
+                .write(static_cast<u32>(widget->text_wrap()));
+        }
+
+        TextBoxData read_textbox_payload(acul::bin_stream &stream)
+        {
+            TextBoxData out{};
+            out.common = detail::read_widget_common_data(stream);
+            u32 text_vertical_align = static_cast<u32>(out.text_vertical_align);
+            u32 text_wrap = static_cast<u32>(out.text_wrap);
+            stream.read(out.value);
+            auto placeholder = detail::read_localized_string(stream);
+            out.placeholder = std::move(placeholder.text);
+            out.placeholder_translated = placeholder.translated;
+            stream.read(out.text_flags)
+                .read(out.style_tag)
+                .read(text_vertical_align)
+                .read(text_wrap);
+            out.text_vertical_align = static_cast<detail::TextVerticalAlign>(text_vertical_align);
+            out.text_wrap = static_cast<detail::TextWrapMode>(text_wrap);
+            return out;
+        }
+
+        void write_textbox(acul::bin_stream &stream, umbf::Block *block)
+        {
+            auto *widget = static_cast<TextBox *>(block);
+            write_textbox_payload(stream, widget);
+        }
+
+        umbf::Block *read_textbox(acul::bin_stream &stream)
+        {
+            const auto data = read_textbox_payload(stream);
+            auto *widget = acul::alloc<TextBox>(data.common.id, data.value, data.common.requested_size,
+                                                WidgetFlags(data.common.widget_flags), nullptr, data.style_tag,
+                                                TextFlags(data.text_flags),
+                                                StringView{data.placeholder.c_str(), data.placeholder_translated},
+                                                data.text_vertical_align, data.text_wrap);
+            detail::apply_widget_common_data(widget, data.common);
+            return widget;
+        }
+
+        void write_multiline_textbox(acul::bin_stream &stream, umbf::Block *block)
+        {
+            auto *widget = static_cast<MultilineTextBox *>(block);
+            write_textbox_payload(stream, widget);
+            stream.write(widget->can_expand_to_content());
+        }
+
+        umbf::Block *read_multiline_textbox(acul::bin_stream &stream)
+        {
+            const auto data = read_textbox_payload(stream);
+            bool can_expand_to_content = false;
+            stream.read(can_expand_to_content);
+            auto *widget =
+                acul::alloc<MultilineTextBox>(data.common.id, data.value, data.common.requested_size,
+                                              can_expand_to_content, WidgetFlags(data.common.widget_flags), nullptr,
+                                              TextFlags(data.text_flags),
+                                              StringView{data.placeholder.c_str(), data.placeholder_translated});
+            widget->set_style_tag(data.style_tag);
+            detail::apply_widget_common_data(widget, data.common);
+            return widget;
+        }
+    } // namespace
+
+    namespace streams
+    {
+        AUIK_EXPORT const umbf::streams::Stream textbox{read_textbox, write_textbox};
+        AUIK_EXPORT const umbf::streams::Stream multiline_textbox{read_multiline_textbox, write_multiline_textbox};
+    } // namespace streams
+
 } // namespace auik

@@ -7,6 +7,37 @@
 
 namespace auik
 {
+    static void erase_user_data_tag(WidgetUserData *&head, u32 tag)
+    {
+        WidgetUserData *prev = nullptr;
+        for (auto *node = head; node;)
+        {
+            auto *next = node->pNext;
+            if (node->tag_id == tag)
+            {
+                if (prev) prev->pNext = next;
+                else head = next;
+                node->pNext = nullptr;
+                if (node->destroy && node->handle) node->destroy(node->handle);
+                acul::release(node);
+                node = next;
+                continue;
+            }
+            prev = node;
+            node = next;
+        }
+    }
+
+    static WidgetUserData *make_user_data_ref_node(u32 tag, void *handle)
+    {
+        auto *node = acul::alloc<WidgetUserData>();
+        node->tag_id = tag;
+        node->handle = handle;
+        node->destroy = nullptr;
+        node->pNext = nullptr;
+        return node;
+    }
+
     void Widget::clear_user_data()
     {
         while (_user_data)
@@ -26,6 +57,29 @@ namespace auik
         if (_user_data->destroy && _user_data->handle) _user_data->destroy(_user_data->handle);
         acul::release(_user_data);
         _user_data = next;
+    }
+
+    void Widget::emplace_user_data_ref_head(u32 tag, void *handle)
+    {
+        erase_user_data_tag(_user_data, tag);
+        if (!handle) return;
+        auto *node = make_user_data_ref_node(tag, handle);
+        node->pNext = _user_data;
+        _user_data = node;
+    }
+
+    void Widget::emplace_user_data_ref_after_head(u32 tag, void *handle)
+    {
+        erase_user_data_tag(_user_data, tag);
+        if (!handle) return;
+        auto *node = make_user_data_ref_node(tag, handle);
+        if (!_user_data)
+        {
+            _user_data = node;
+            return;
+        }
+        node->pNext = _user_data->pNext;
+        _user_data->pNext = node;
     }
 
     Widget::~Widget()
@@ -130,7 +184,7 @@ namespace auik
                 if (style_flags & StyleUpdateFlagBits::parent_layout)
                 {
                     Widget *target = widget->parent() ? widget->parent() : widget;
-                    while (target->parent() && !target->is_fixed_bounds()) target = target->parent();
+                    while (target->parent() && !target->is_fixed()) target = target->parent();
                     target->update_layout(false);
                     target->update_draw_commands(get_draw_reason_from_style_update(style_flags));
                     ctx.dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;

@@ -12,13 +12,13 @@ namespace auik
 {
     constexpr inline WidgetFlags get_default_switch_button_flags()
     {
-        return get_default_widget_flags() | WidgetFlagBits::hittable | WidgetFlagBits::fixed_layout;
+        return get_default_widget_flags() | WidgetFlagBits::hittable;
     }
 
     class SwitchButton final : public Widget
     {
     public:
-        AUIK_EXPORT SwitchButton(u32 id, bool *value, WidgetFlags widget_flags = get_default_switch_button_flags(),
+        AUIK_EXPORT SwitchButton(u32 id, bool value, WidgetFlags widget_flags = get_default_switch_button_flags(),
                      Widget *parent = nullptr);
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
@@ -31,12 +31,13 @@ namespace auik
         AUIK_EXPORT void restore_hit_depth() override;
         AUIK_EXPORT void draw(DrawCtx &ctx) override;
         AUIK_EXPORT void on_click(MouseKey key, KeyPressState state, u32 click_count) override;
+        u32 signature() const override { return AUIK_TAG_SWITCH_BUTTON; }
 
-        bool value() const { return _value ? *_value : false; }
+        bool value() const { return _value; }
         AUIK_EXPORT void set_value(bool value);
 
     private:
-        bool *_value = nullptr;
+        bool _value = false;
         DrawDataID _track_draw{};
         DrawDataID _grab_draw{};
         StyleSelector _track_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_SWITCH_BUTTON};
@@ -54,8 +55,13 @@ namespace auik
         bool has_draw_record() const;
     };
 
-    inline SwitchButton *make_switch_button(u32 id, bool *value, Widget *parent = nullptr)
+    inline SwitchButton *make_switch_button(u32 id, bool value, Widget *parent = nullptr)
     {
         return acul::alloc<SwitchButton>(id, value, get_default_switch_button_flags(), parent);
+    }
+
+    namespace streams
+    {
+        extern AUIK_EXPORT const umbf::streams::Stream switch_button;
     }
 } // namespace auik

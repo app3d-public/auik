@@ -176,7 +176,7 @@ namespace auik
                                                                          : AUIK_STYLE_TAG_WINDOW_CAPTION_BUTTON;
                 _caption_buttons[i] = acul::alloc<ImageButton>(
                     caption_button_widget_id(i), image, amal::vec2{0.0f, 0.0f}, amal::vec2{0.0f, 0.0f},
-                    WidgetFlagBits::visible | WidgetFlagBits::fixed_layout, nullptr, style_tag);
+                    WidgetFlagBits::visible, nullptr, style_tag);
                 _caption_buttons[i]->set_parent(this);
                 _caption_buttons[i]->set_focus_parent(this);
             }
@@ -236,7 +236,7 @@ namespace auik
                 if (!button || (_state && !_state->caption_buttons[index])) continue;
                 button_x -= caption_button_size.x;
                 button->set_position({button_x, position().y});
-                button->set_layout_size(caption_button_size);
+                button->set_size(caption_button_size);
                 button->update_style();
                 button->update_layout(true);
                 _caption_buttons_width += caption_button_size.x;

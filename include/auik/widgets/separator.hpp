@@ -38,6 +38,8 @@ namespace auik
             : Separator(amal::axis::x, widget_flags, parent, style_tag)
         {
         }
+
+        virtual u32 signature() const override { return AUIK_TAG_SEPARATOR; }
     };
 
     class VSeparator final : public Separator
@@ -48,9 +50,17 @@ namespace auik
             : Separator(amal::axis::y, widget_flags, parent, style_tag)
         {
         }
+
+        virtual u32 signature() const override { return AUIK_TAG_SEPARATOR; }
     };
 
     inline HSeparator *make_h_separator() { return acul::alloc<HSeparator>(); }
 
     inline VSeparator *make_v_separator() { return acul::alloc<VSeparator>(); }
+
+    namespace streams
+    {
+        extern AUIK_EXPORT const umbf::streams::Stream h_separator;
+        extern AUIK_EXPORT const umbf::streams::Stream v_separator;
+    }
 } // namespace auik

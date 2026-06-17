@@ -1,22 +1,17 @@
 #pragma once
 
-#include <acul/functional/unique_function.hpp>
-#include <acul/string/string.hpp>
-#include "../theme.hpp"
 #include "containers.hpp"
-#include "menubar.hpp"
+#include "menu.hpp"
 
-#define AUIK_TAG_WINDOW               0xB4382179
-#define AUIK_TAG_VIEWPORT_WINDOW      0x965E5D42u
-#define AUIK_TAG_WINDOW_HEADER        0x663566BE
-#define AUIK_TAG_WINDOW_CONTENT       0x2E80C7A1u
-#define AUIK_TAG_WINDOW_BUILDER       0x31D9C0B7u
+#define AUIK_TAG_WINDOW          0xB4382179u
+#define AUIK_TAG_VIEWPORT_WINDOW 0x965E5D42u
+#define AUIK_TAG_WINDOW_HEADER   0x663566BEu
+#define AUIK_TAG_WINDOW_CONTENT  0x2E80C7A1u
 
 namespace auik
 {
     class PopupMenu;
     class RubberBand;
-    class WindowBuilder;
 
     struct WindowFlagBits
     {
@@ -72,27 +67,30 @@ namespace auik
         acul::vector<Widget *> &children;
         WindowFlags window_flags;
 
-        AUIK_EXPORT Window(u32 id, acul::string title = "", const amal::rect &bounds = {},
-                          WindowFlags window_flags = get_default_window_flags(),
-                          WidgetFlags widget_flags = get_default_widget_flags() | WidgetFlagBits::hittable,
-                          Widget *parent = nullptr);
+        AUIK_EXPORT Window(u32 id, StringView title = "", const amal::rect &bounds = {},
+                           WindowFlags window_flags = get_default_window_flags(),
+                           WidgetFlags widget_flags = get_default_widget_flags() | WidgetFlagBits::hittable,
+                           Widget *parent = nullptr);
         AUIK_EXPORT ~Window() override;
 
         AUIK_EXPORT void clear_children();
         AUIK_EXPORT void add_child(Widget *child, ChildLayoutFlags layout = default_child_layout_flags());
         AUIK_EXPORT void add_children(const acul::vector<Widget *> &new_children);
-        AUIK_EXPORT void set_menu(MenuBar *menu);
+        AUIK_EXPORT void
+        set_menu(MenuProxy &&menu,
+                 PFN_window_menu_suffix_create window_menu_suffix_create = detail::get_default_menu_suffix_create_cb());
+        AUIK_EXPORT void
+        set_menu(detail::MenuBase *menu,
+                 PFN_window_menu_suffix_create window_menu_suffix_create = detail::get_default_menu_suffix_create_cb());
         AUIK_EXPORT Widget *take_menu_widget();
         AUIK_EXPORT void set_menu_widget(Widget *menu);
-        AUIK_EXPORT void set_window_builder(WindowBuilder *builder);
-        WindowBuilder *window_builder() const { return _window_builder; }
         AUIK_EXPORT void override_content_clip_rect(const amal::vec4 &rect);
         void set_min_size(const amal::vec2 &value) { _min_size = value; }
         const amal::vec2 &min_size() const { return _min_size; }
         void set_auto_size(bool width = true, bool height = true)
         {
             _auto_size = {width, height};
-            sync_fixed_bounds_flag();
+            set_size({width ? AUIK_SIZE_X_FIT : size().x, height ? AUIK_SIZE_Y_FIT : size().y});
         }
         void set_auto_position(bool x = true, bool y = true)
         {
@@ -111,6 +109,11 @@ namespace auik
         RubberBand *rubber_band() const { return _rubber_band; }
         RubberBand *get_rubber_band() const { return _rubber_band; }
         const acul::string &title() const { return _title; }
+        AUIK_EXPORT void set_title(StringView title);
+        AUIK_EXPORT const Text *title_text() const;
+        DrawBlock *content_block() { return _content_block; }
+        const DrawBlock *content_block() const { return _content_block; }
+        const acul::vector<ChildLayoutFlags> &child_layouts() const { return _content_block->child_layouts(); }
         using value_type = Widget *;
         using iterator = acul::vector<value_type>::iterator;
         using const_iterator = acul::vector<value_type>::const_iterator;
@@ -135,6 +138,7 @@ namespace auik
             _window_style = {Theme::STYLE_ID_INVALID, tag_id};
             set_rect_tag_id(tag_id);
         }
+        u32 window_style_tag() const { return _window_style_tag; }
 
         AUIK_EXPORT virtual StyleUpdateFlags update_style() override;
         AUIK_EXPORT void reset_clip_rect_records() override;
@@ -146,8 +150,9 @@ namespace auik
         AUIK_EXPORT virtual void back_hit_depth() override;
         AUIK_EXPORT virtual void restore_hit_depth() override;
         AUIK_EXPORT virtual void update_layout_min_size() override;
-        AUIK_EXPORT virtual void update_layout(bool min_size_known) override;
+        AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT virtual void draw(DrawCtx &ctx) override;
+        u32 signature() const override { return AUIK_TAG_WINDOW; }
 
     private:
         acul::string _title;
@@ -157,8 +162,8 @@ namespace auik
         bool _auto_position_resolved = false;
         class WindowHeader *_header = nullptr;
         MenuProxy _menu{};
-        WindowBuilder *_window_builder = nullptr;
         PopupMenu *_default_header_menu = nullptr;
+        PFN_window_menu_suffix_create _window_menu_suffix_create = nullptr;
         bool _header_menu_suffix_installed = false;
         RubberBand *_rubber_band = nullptr;
         amal::ivec2 _resize_dir{0, 0};
@@ -187,7 +192,6 @@ namespace auik
         virtual void on_hover(HoverState state) override;
         virtual void on_click(MouseKey key, KeyPressState state, u32 click_count) override;
         void add_child_with_flags(Widget *child, ChildLayoutFlags layout);
-        void sync_fixed_bounds_flag();
         u32 effective_window_style_tag() const;
         const Style &resolved_window_style() const;
         PopupMenu *ensure_header_popup_menu();
@@ -197,40 +201,7 @@ namespace auik
         void sync_header_popup_menu();
     };
 
-    class WindowBuilder : public Widget
-    {
-    public:
-        using PFN_menu_suffix_create = acul::unique_function<void(WindowBuilder *, Window *, MenuBar *)>;
-
-        AUIK_EXPORT explicit WindowBuilder(u32 id, Widget *parent = nullptr);
-        AUIK_EXPORT ~WindowBuilder() override;
-
-        AUIK_EXPORT Window *add_window(Window *window);
-        void set_menu_type(WindowMenuType type) { _menu_type = type; }
-        WindowMenuType menu_type() const { return _menu_type; }
-        bool is_menu_popup() const { return _menu_type == WindowMenuType::popup; }
-        bool is_menu_bar() const { return _menu_type == WindowMenuType::menu_bar; }
-        AUIK_EXPORT void set_on_menu_suffix_create_cb(PFN_menu_suffix_create callback);
-        bool has_menu_suffix() const { return static_cast<bool>(_on_menu_suffix_create); }
-        AUIK_EXPORT void build_menu_suffix(Window *window, MenuBar *menu);
-
-        StyleUpdateFlags update_style() override { return StyleUpdateFlagBits::none; }
-        void update_layout_min_size() override { set_required_size({0.0f, 0.0f}); }
-        AUIK_EXPORT void update_layout(bool min_size_known = true) override;
-        u32 get_depth_requirement() const override { return 1u; }
-        void draw(DrawCtx &) override {}
-
-    private:
-        PFN_menu_suffix_create _on_menu_suffix_create = nullptr;
-        WindowMenuType _menu_type = WindowMenuType::menu_bar;
-    };
-
-    inline WindowBuilder *make_window_builder(u32 id, Widget *parent = nullptr)
-    {
-        return acul::alloc<WindowBuilder>(id, parent);
-    }
-
-    inline Window *make_decorated_window(u32 id, const acul::string &title = "", const amal::rect &bounds = {},
+    inline Window *make_decorated_window(u32 id, StringView title = "", const amal::rect &bounds = {},
                                          WidgetFlags widget_flags = get_default_widget_flags() |
                                                                     WidgetFlagBits::hittable,
                                          Widget *parent = nullptr)
@@ -245,7 +216,7 @@ namespace auik
         return acul::alloc<Window>(id, "", bounds, get_popup_window_flags(), widget_flags, parent);
     }
 
-    inline Window *make_viewport_window(u32 id, const acul::string &title = "",
+    inline Window *make_viewport_window(u32 id, StringView title = "",
                                         WidgetFlags widget_flags = get_default_widget_flags() |
                                                                    WidgetFlagBits::hittable,
                                         Widget *parent = nullptr)
@@ -254,5 +225,10 @@ namespace auik
                                            get_decorated_window_flags(), widget_flags, parent);
         window->set_rect_tag_id(AUIK_TAG_VIEWPORT_WINDOW);
         return window;
+    }
+
+    namespace streams
+    {
+        extern AUIK_EXPORT const umbf::streams::Stream window;
     }
 } // namespace auik

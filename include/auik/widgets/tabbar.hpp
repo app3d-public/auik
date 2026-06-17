@@ -42,17 +42,19 @@ namespace auik
         return get_default_widget_flags() | WidgetFlagBits::hittable;
     }
 
-    constexpr inline WidgetFlags get_default_fixed_tab_bar_flags()
-    {
-        return get_default_tab_bar_flags() | WidgetFlagBits::fixed_layout;
-    }
-
     class TabBar : public Widget
     {
     public:
         AUIK_EXPORT TabBar(u32 id, acul::vector<acul::string> items = {}, TabBarFlags tab_flags = TabBarFlagBits::none,
                amal::vec2 size = {0.0f, 0.0f}, WidgetFlags widget_flags = get_default_tab_bar_flags(),
                Widget *parent = nullptr, f32 tab_width = 0.0f, u32 tab_width_key = 0u,
+               u32 item_style_tag = AUIK_STYLE_TAG_TAB_BAR_ITEM,
+               u32 selected_item_style_tag = AUIK_STYLE_TAG_TAB_BAR_ITEM_SELECTED,
+               u32 popup_item_style_tag = AUIK_STYLE_TAG_COMBO_BOX_ITEM);
+        AUIK_EXPORT TabBar(u32 id, const acul::vector<StringView> &items,
+               TabBarFlags tab_flags = TabBarFlagBits::none, amal::vec2 size = {0.0f, 0.0f},
+               WidgetFlags widget_flags = get_default_tab_bar_flags(), Widget *parent = nullptr,
+               f32 tab_width = 0.0f, u32 tab_width_key = 0u,
                u32 item_style_tag = AUIK_STYLE_TAG_TAB_BAR_ITEM,
                u32 selected_item_style_tag = AUIK_STYLE_TAG_TAB_BAR_ITEM_SELECTED,
                u32 popup_item_style_tag = AUIK_STYLE_TAG_COMBO_BOX_ITEM);
@@ -83,7 +85,16 @@ namespace auik
 
         const acul::vector<u32> &element_ids() const { return _element_ids; }
         AUIK_EXPORT void set_items(acul::vector<acul::string> items);
+        AUIK_EXPORT void set_items(const acul::vector<StringView> &items);
         AUIK_EXPORT void set_style_tag(u32 tag_id);
+        u32 style_tag() const { return _style.tag_id; }
+        acul::vector<acul::string> item_texts() const
+        {
+            acul::vector<acul::string> out;
+            out.reserve(_tabs.size());
+            for (auto *tab : _tabs) out.push_back(tab ? tab->text() : acul::string{});
+            return out;
+        }
 
         iterator begin() { return _tabs.begin(); }
         iterator end() { return _tabs.end(); }
@@ -122,10 +133,15 @@ namespace auik
         AUIK_EXPORT void begin_external_drag(u32 element_id);
         AUIK_EXPORT void cancel_drag();
         u32 item_style_tag() const { return _item_style_tag; }
+        u32 selected_item_style_tag() const { return _selected_item_style_tag; }
+        u32 popup_item_style_tag() const { return _popup_item_style_tag; }
         f32 tab_width() const { return _tab_width; }
         u32 tab_width_key() const { return _tab_width_key; }
         AUIK_EXPORT void set_tab_width(f32 value);
         AUIK_EXPORT void set_tab_width_key(u32 key);
+        f32 scroll_offset() const { return _scroll_offset; }
+        void set_scroll_offset(f32 value) { _scroll_offset = amal::max(value, 0.0f); }
+        virtual u32 signature() const override { return AUIK_TAG_TAB_BAR; }
 
     protected:
         AUIK_EXPORT bool draw_transition_targets(DrawCtx &ctx);
@@ -199,18 +215,26 @@ namespace auik
     };
 
     inline TabBar *make_tab_bar(u32 id, acul::vector<acul::string> items = {},
-                                TabBarFlags tab_flags = TabBarFlagBits::none, f32 tab_width = 0.0f,
+                                TabBarFlags tab_flags = TabBarFlagBits::none,
+                                amal::vec2 size = AUIK_SIZE_FIT, f32 tab_width = 0.0f,
                                 u32 tab_width_key = 0u)
     {
-        return acul::alloc<TabBar>(id, std::move(items), tab_flags, amal::vec2{0.0f, 0.0f}, get_default_tab_bar_flags(),
+        return acul::alloc<TabBar>(id, std::move(items), tab_flags, size, get_default_tab_bar_flags(),
                                    nullptr, tab_width, tab_width_key);
     }
 
-    inline TabBar *make_fixed_tab_bar(u32 id, acul::vector<acul::string> items = {}, amal::vec2 size = {0.0f, 0.0f},
-                                      TabBarFlags tab_flags = TabBarFlagBits::none, f32 tab_width = 0.0f,
-                                      u32 tab_width_key = 0u)
+    inline TabBar *make_tab_bar(u32 id, const acul::vector<StringView> &items,
+                                TabBarFlags tab_flags = TabBarFlagBits::none,
+                                amal::vec2 size = AUIK_SIZE_FIT, f32 tab_width = 0.0f,
+                                u32 tab_width_key = 0u)
     {
-        return acul::alloc<TabBar>(id, std::move(items), tab_flags, size, get_default_fixed_tab_bar_flags(), nullptr,
-                                   tab_width, tab_width_key);
+        return acul::alloc<TabBar>(id, items, tab_flags, size, get_default_tab_bar_flags(), nullptr, tab_width,
+                                   tab_width_key);
+    }
+
+    namespace streams
+    {
+        extern AUIK_EXPORT const umbf::streams::Stream tab_bar;
+        extern AUIK_EXPORT const umbf::streams::Stream popup_menu;
     }
 } // namespace auik

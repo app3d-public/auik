@@ -5,6 +5,7 @@
 #include <auik/widgets/detail/selectable.hpp>
 #include <auik/widgets/tabbar.hpp>
 #include <auik/widgets/window.hpp>
+#include "../core/session_stream_utils.hpp"
 
 #define AUIK_TAB_BAR_POPUP_ITEM_FALLBACK_HEIGHT 24.0f
 #define AUIK_TAB_BAR_SCROLL_STEP                32.0f
@@ -94,7 +95,7 @@ namespace auik
     {
         auto &ctx = detail::get_context();
         Widget *target = tabbar.parent() ? tabbar.parent() : &tabbar;
-        while (target->parent() && !target->is_fixed_bounds()) target = target->parent();
+        while (target->parent() && !target->is_fixed()) target = target->parent();
         target->update_layout(false);
         target->update_draw_commands(DrawReasonBits::layout);
         ctx.dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
@@ -102,6 +103,19 @@ namespace auik
     }
 
     TabBar::TabBar(u32 id, acul::vector<acul::string> items, TabBarFlags tab_flags, amal::vec2 size,
+                   WidgetFlags widget_flags, Widget *parent, f32 tab_width, u32 tab_width_key, u32 item_style_tag,
+                   u32 selected_item_style_tag, u32 popup_item_style_tag)
+        : TabBar(id, [&items]() {
+              acul::vector<StringView> views;
+              views.reserve(items.size());
+              for (const auto &item : items) views.push_back(StringView{item});
+              return views;
+          }(), tab_flags, size, widget_flags, parent, tab_width, tab_width_key, item_style_tag,
+                 selected_item_style_tag, popup_item_style_tag)
+    {
+    }
+
+    TabBar::TabBar(u32 id, const acul::vector<StringView> &items, TabBarFlags tab_flags, amal::vec2 size,
                    WidgetFlags widget_flags, Widget *parent, f32 tab_width, u32 tab_width_key, u32 item_style_tag,
                    u32 selected_item_style_tag, u32 popup_item_style_tag)
         : Widget(id, widget_flags, make_tab_bar_event_flags(tab_flags), parent, {{0.0f, 0.0f}, size}, AUIK_TAG_TAB_BAR),
@@ -123,16 +137,16 @@ namespace auik
 
             _popup = acul::alloc<Window>(
                 AUIK_TAG_TAB_BAR_POPUP, "", amal::rect{{0.0f, 0.0f}, {0.0f, 0.0f}}, get_popup_window_flags(),
-                WidgetFlagBits::visible | WidgetFlagBits::hittable | WidgetFlagBits::fixed_layout);
+                WidgetFlagBits::visible | WidgetFlagBits::hittable);
             _popup->get_rect().id.widget_id = id;
             _popup->set_window_style_tag(AUIK_STYLE_TAG_TAB_BAR_POPUP);
             _popup->set_focus_parent(this);
             _popup->update_style();
-            _popup->set_invisible();
+            _popup->unset_visible();
             _popup->sync_widget_flags();
         }
 
-        set_items(std::move(items));
+        set_items(items);
     }
 
     TabBar::~TabBar()
@@ -153,8 +167,7 @@ namespace auik
         {
             auto *button = acul::alloc<ImageButton>(AUIK_TAG_CLOSE_BUTTON, get_cached_image(AUIK_ICON_CLOSE),
                                                     amal::vec2{0.0f, 0.0f}, amal::vec2{0.0f, 0.0f},
-                                                    WidgetFlagBits::visible | WidgetFlagBits::hittable |
-                                                        WidgetFlagBits::fixed_layout,
+                                                    WidgetFlagBits::visible | WidgetFlagBits::hittable,
                                                     this, AUIK_TAG_CLOSE_BUTTON);
             button->get_rect().id.widget_id = id();
             button->set_focus_parent(this);
@@ -203,8 +216,8 @@ namespace auik
             if (_popup)
             {
                 auto *popup_item = acul::alloc<detail::Selectable>(
-                    _popup_item_style_tag, _popup_item_style_tag, element_id, tab->text(), amal::vec2{0.0f, 0.0f},
-                    _popup, _popup_item_style_tag, detail::get_selectable_item_flags());
+                    _popup_item_style_tag, _popup_item_style_tag, element_id, tab->source_text(),
+                    amal::vec2{0.0f, 0.0f}, _popup, _popup_item_style_tag, detail::get_selectable_item_flags());
                 popup_item->get_rect().id.widget_id = id();
                 popup_item->set_focus_parent(_popup);
                 _popup->add_child(popup_item);
@@ -214,6 +227,14 @@ namespace auik
     }
 
     void TabBar::set_items(acul::vector<acul::string> items)
+    {
+        acul::vector<StringView> views;
+        views.reserve(items.size());
+        for (const auto &item : items) views.push_back(StringView{item});
+        set_items(views);
+    }
+
+    void TabBar::set_items(const acul::vector<StringView> &items)
     {
         if (_popup) _popup->clear_children();
         for (auto *tab : _tabs) acul::release(tab);
@@ -578,7 +599,7 @@ namespace auik
             tabs_size.y = amal::max(tabs_size.y, overflow_size.y);
         }
 
-        amal::vec2 min_size = is_fixed() ? size() : amal::vec2{0.0f, 0.0f};
+        amal::vec2 min_size = {is_width_fixed() ? size().x : 0.0f, is_height_fixed() ? size().y : 0.0f};
         if (min_size.x <= 0.0f)
         {
             const f32 visual_min_width =
@@ -602,7 +623,7 @@ namespace auik
         amal::vec2 widget_size = size();
         const amal::vec2 min_inner = {amal::max(min_required.x - margin.x - margin.z, 0.0f),
                                       amal::max(min_required.y - margin.y - margin.w, 0.0f)};
-        if (!is_fixed()) widget_size.x = amal::max(widget_size.x - margin.x - margin.z, min_inner.x);
+        if (!is_width_fixed()) widget_size.x = amal::max(widget_size.x - margin.x - margin.z, min_inner.x);
         else widget_size.x = amal::max(widget_size.x, min_inner.x);
         widget_size.y = amal::max(widget_size.y, min_inner.y);
 
@@ -661,12 +682,12 @@ namespace auik
             if (!visible && _overflow_start == _tabs.size()) _overflow_start = i;
             if (visible) ++_visible_count;
             if (!popup() || visible) tab->set_visible();
-            else tab->set_invisible();
+            else tab->unset_visible();
             tab->sync_widget_flags();
             if (close_button)
             {
                 if (closable() && visible) close_button->set_visible();
-                else close_button->set_invisible();
+                else close_button->unset_visible();
                 close_button->sync_widget_flags();
             }
             tab->set_layout_size({required.x, tab->size().y});
@@ -726,7 +747,7 @@ namespace auik
         if (_open) update_popup_layout();
         else if (_popup)
         {
-            _popup->set_invisible();
+            _popup->unset_visible();
             _popup->sync_widget_flags();
         }
     }
@@ -931,7 +952,9 @@ namespace auik
     void TabBar::draw(DrawCtx &ctx)
     {
         if (!(widget_flags & WidgetFlagBits::visible)) return;
-        if ((!(ctx.reason & DrawReasonBits::record) && !(ctx.reason & DrawReasonBits::invalidate)) && ctx.reason == DrawReasonBits::none && draw_transition_targets(ctx)) return;
+        if ((!(ctx.reason & DrawReasonBits::record) && !(ctx.reason & DrawReasonBits::invalidate)) &&
+            ctx.reason == DrawReasonBits::none && draw_transition_targets(ctx))
+            return;
 
         const auto invalidate_hidden_widget = [&](Widget *widget) {
             if (!widget) return;
@@ -1344,7 +1367,7 @@ namespace auik
         const auto &style = get_theme()->get_style(_style.id);
         const amal::vec4 margin = style.margin();
         set_position({position().x - margin.x, position().y - margin.y});
-        if (!is_fixed()) set_layout_size({size().x + margin.x + margin.z, size().y});
+        if (!is_width_fixed()) set_layout_size({size().x + margin.x + margin.z, size().y});
         update_layout(min_size_known);
     }
 
@@ -1498,7 +1521,7 @@ namespace auik
             if (!child) continue;
             const bool visible = i >= _overflow_start;
             if (visible) child->set_visible();
-            else child->set_invisible();
+            else child->unset_visible();
             child->sync_widget_flags();
             if (!visible) continue;
             ++visible_items;
@@ -1568,8 +1591,105 @@ namespace auik
         }
         if (_popup)
         {
-            _popup->set_invisible();
+            _popup->unset_visible();
             _popup->sync_widget_flags();
         }
     }
+
+    namespace
+    {
+        struct TabBarData
+        {
+            detail::WidgetCommonData common{};
+            acul::vector<acul::string> items;
+            acul::vector<bool> translated_items;
+            acul::vector<u32> selected_ids;
+            u32 tab_flags = 0u;
+            u32 style_tag = AUIK_TAG_TAB_BAR;
+            u32 item_style_tag = AUIK_STYLE_TAG_TAB_BAR_ITEM;
+            u32 selected_item_style_tag = AUIK_STYLE_TAG_TAB_BAR_ITEM_SELECTED;
+            u32 popup_item_style_tag = AUIK_STYLE_TAG_COMBO_BOX_ITEM;
+            f32 tab_width = 0.0f;
+            u32 tab_width_key = 0u;
+            f32 scroll_offset = 0.0f;
+        };
+
+        void write_tab_bar(acul::bin_stream &stream, umbf::Block *block)
+        {
+            auto *widget = static_cast<TabBar *>(block);
+            detail::write_widget_common_data(stream, *widget);
+            stream.write(static_cast<u32>(widget->child_size()));
+            for (auto *tab : *widget)
+            {
+                const StringView text = tab ? tab->source_text() : StringView{};
+                detail::write_localized_string(stream, text.str ? text.str : "", text.is_translated);
+            }
+            const auto &selected_ids = widget->selected_ids();
+            stream.write(static_cast<u32>(selected_ids.size()));
+            if (!selected_ids.empty()) stream.write(selected_ids.data(), selected_ids.size());
+            stream.write(static_cast<u32>(widget->tab_flags()))
+                .write(widget->style_tag())
+                .write(widget->item_style_tag())
+                .write(widget->selected_item_style_tag())
+                .write(widget->popup_item_style_tag())
+                .write(widget->tab_width())
+                .write(widget->tab_width_key())
+                .write(widget->scroll_offset());
+        }
+
+        TabBarData read_tab_bar_data(acul::bin_stream &stream)
+        {
+            TabBarData out{};
+            out.common = detail::read_widget_common_data(stream);
+            u32 item_count = 0u;
+            stream.read(item_count);
+            out.items.reserve(item_count);
+            out.translated_items.reserve(item_count);
+            for (u32 i = 0u; i < item_count; ++i)
+            {
+                auto item = detail::read_localized_string(stream);
+                out.translated_items.push_back(item.translated);
+                out.items.push_back(std::move(item.text));
+            }
+            u32 selected_ids_count = 0u;
+            stream.read(selected_ids_count);
+            out.selected_ids.resize(selected_ids_count);
+            if (!out.selected_ids.empty()) stream.read(out.selected_ids.data(), out.selected_ids.size());
+            stream.read(out.tab_flags)
+                .read(out.style_tag)
+                .read(out.item_style_tag)
+                .read(out.selected_item_style_tag)
+                .read(out.popup_item_style_tag)
+                .read(out.tab_width)
+                .read(out.tab_width_key)
+                .read(out.scroll_offset);
+            return out;
+        }
+
+        umbf::Block *read_tab_bar(acul::bin_stream &stream)
+        {
+            const auto data = read_tab_bar_data(stream);
+            acul::vector<StringView> items;
+            items.reserve(data.items.size());
+            for (u32 i = 0u; i < data.items.size(); ++i)
+            {
+                const bool translated = i < data.translated_items.size() && data.translated_items[i];
+                items.push_back(StringView{data.items[i].c_str(), translated});
+            }
+            auto *widget =
+                acul::alloc<TabBar>(data.common.id, items, TabBarFlags(data.tab_flags), data.common.requested_size,
+                                    WidgetFlags(data.common.widget_flags), nullptr, data.tab_width, data.tab_width_key,
+                                    data.item_style_tag, data.selected_item_style_tag, data.popup_item_style_tag);
+            widget->set_style_tag(data.style_tag);
+            widget->set_selected(data.selected_ids);
+            widget->set_scroll_offset(data.scroll_offset);
+            detail::apply_widget_common_data(widget, data.common);
+            return widget;
+        }
+    } // namespace
+
+    namespace streams
+    {
+        AUIK_EXPORT const umbf::streams::Stream tab_bar{read_tab_bar, write_tab_bar};
+    } // namespace streams
 } // namespace auik

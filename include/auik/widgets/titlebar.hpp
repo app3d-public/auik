@@ -2,7 +2,7 @@
 
 #include <auik/detail/fwd.hpp>
 #include <auik/detail/gpu_context.hpp>
-#include <auik/widgets/menubar.hpp>
+#include <auik/widgets/menu.hpp>
 #include "widget.hpp"
 
 #define AUIK_TAG_TITLEBAR                    0xDBECC2C6u
@@ -32,7 +32,7 @@ namespace auik
     {
     public:
         AUIK_EXPORT explicit Titlebar(u32 id = AUIK_TAG_TITLEBAR,
-                                     WidgetFlags widget_flags = get_default_widget_flags() | WidgetFlagBits::fixed_layout);
+                                      WidgetFlags widget_flags = get_default_widget_flags());
         AUIK_EXPORT ~Titlebar() override;
 
         AUIK_EXPORT void set_show_icon(bool value);
@@ -56,6 +56,7 @@ namespace auik
         AUIK_EXPORT void on_detach() override;
         void set_titlebar_state(struct TitlebarState *state) { _state = state; }
         struct TitlebarState *titlebar_state() const { return _state; }
+        virtual u32 signature() const override { return AUIK_TAG_TITLEBAR; }
 
     private:
         void ensure_icon_widget();
@@ -99,20 +100,24 @@ namespace auik
     using TitlebarCreateFlags = acul::flags<TitlebarCreateFlagBits>;
 
     AUIK_EXPORT bool adjust_window_by_titlebar_settings(Titlebar *titlebar, TitlebarCreateFlags flags,
-                                                       const FontRegistry &fonts);
+                                                        const FontRegistry &fonts);
 
     inline Titlebar *make_titlebar(u32 id = AUIK_TAG_TITLEBAR)
     {
-        return acul::alloc<Titlebar>(id, get_default_widget_flags() | WidgetFlagBits::fixed_layout);
+        return acul::alloc<Titlebar>(id, get_default_widget_flags());
     }
 
     inline MenuBar *make_titlebar_menu_bar(u32 id, acul::vector<acul::string> items = {})
     {
         auto *menu_bar = acul::alloc<MenuBar>(id, std::move(items));
-        menu_bar->widget_flags &= ~WidgetFlagBits::fixed_layout;
         menu_bar->set_menu_style_tag(AUIK_STYLE_TAG_TITLEBAR_MENU_BAR);
         menu_bar->set_menu_item_style_tag(AUIK_STYLE_TAG_TITLEBAR_MENU_ITEM);
         menu_bar->set_popup_depth_mode(MenuBar::PopupDepthMode::root_overlay);
         return menu_bar;
+    }
+
+    namespace streams
+    {
+        extern AUIK_EXPORT const umbf::streams::Stream titlebar;
     }
 } // namespace auik

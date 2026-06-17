@@ -12,27 +12,60 @@
 #include "../theme.hpp"
 #include "../viewport.hpp"
 
-#define AUIK_F32_AUTO              0x0
-#define AUIK_F32_FILL              0xFFFF00p0f
-#define AUIK_F32_FIT               0xFFFF01p0f
-#define AUIK_F32_AUTO_EDGE         AUIK_F32_FILL
-#define AUIK_POS_IGNORE            {AUIK_F32_FIT, AUIK_F32_FIT}
-#define AUIK_SIZE_FIT              {AUIK_F32_FIT, AUIK_F32_FIT}
-#define AUIK_SIZE_FILL             {AUIK_F32_FILL, AUIK_F32_FILL}
-#define AUIK_CUSTOM_USER_DATA      0xFFFFu
-#define AUIK_ROOT_WIDGET_USER_DATA 0xFFFEu
+#define AUIK_SIZE_X_MIN_FIT         0x0
+#define AUIK_SIZE_Y_MIN_FIT         AUIK_SIZE_X_MIN_FIT
+#define AUIK_SIZE_MIN_FIT           {AUIK_SIZE_X_MIN_FIT, AUIK_SIZE_Y_MIN_FIT}
+#define AUIK_SIZE_X_MIN_FIT_REQUIRE 0xFFFF01p0f
+#define AUIK_SIZE_Y_MIN_FIT_REQUIRE AUIK_SIZE_X_MIN_FIT_REQUIRE
+#define AUIK_SIZE_MIN_FIT_REQUIRE   {AUIK_SIZE_X_MIN_FIT_REQUIRE, AUIK_SIZE_Y_MIN_FIT_REQUIRE}
+#define AUIK_SIZE_X_FILL            0xFFFF00p0f
+#define AUIK_SIZE_Y_FILL            AUIK_SIZE_X_FILL
+#define AUIK_SIZE_FILL              {AUIK_SIZE_X_FILL, AUIK_SIZE_Y_FILL}
+#define AUIK_SIZE_X_FIT             AUIK_SIZE_X_MIN_FIT_REQUIRE
+#define AUIK_SIZE_Y_FIT             AUIK_SIZE_Y_MIN_FIT_REQUIRE
+#define AUIK_SIZE_FIT               AUIK_SIZE_MIN_FIT_REQUIRE
+#define AUIK_POS_IGNORE             {AUIK_SIZE_X_FIT, AUIK_SIZE_Y_FIT}
+#define AUIK_UD_CUSTOM_DATA         0xFFFFu
+#define AUIK_UD_ROOT_DATA           0xFFFEu
+#define AUIK_UD_LOCALE_LITERAL      0xFFFCu
+#define AUIK_WIDGET_SIGN_IGNORE     0xA087D252u
 
 namespace auik
 {
-    constexpr inline bool is_size_auto(f32 value) { return value == AUIK_F32_AUTO; }
+    struct StringView
+    {
+        const char *str = "";
+        bool is_translated = false;
 
-    constexpr inline bool is_size_fit(f32 value) { return value == AUIK_F32_FIT; }
+        StringView() = default;
+        StringView(const char *value) : str(value ? value : ""), is_translated(false) {}
+        StringView(const char *value, bool translated) : str(value ? value : ""), is_translated(translated) {}
+        StringView(const acul::string &value) : str(value.c_str()), is_translated(false) {}
+    };
 
-    constexpr inline bool is_size_fill(f32 value) { return value == AUIK_F32_FILL; }
+    constexpr inline StringView tr(const char *literal) { return {literal, true}; }
+    inline acul::string translate_string(const StringView &value)
+    {
+        const auto locale_cb = detail::get_default_string_locale_cb();
+        if (!value.is_translated || !locale_cb) return acul::string(value.str ? value.str : "");
+        const char *translated = locale_cb(value.str ? value.str : "");
+        return acul::string(translated ? translated : "");
+    }
 
-    constexpr inline bool is_size_concrete(f32 value) { return value < AUIK_F32_AUTO_EDGE; }
-
+    constexpr inline bool is_size_min_fit(f32 value) { return value == AUIK_SIZE_X_MIN_FIT; }
+    constexpr inline bool is_size_min_fit_require(f32 value) { return value == AUIK_SIZE_X_MIN_FIT_REQUIRE; }
+    constexpr inline bool is_size_fill(f32 value) { return value == AUIK_SIZE_X_FILL; }
+    constexpr inline bool is_size_auto(f32 value) { return is_size_min_fit(value); }
+    constexpr inline bool is_size_fit(f32 value) { return is_size_min_fit_require(value); }
+    constexpr inline bool is_size_concrete(f32 value) { return value < AUIK_SIZE_X_FILL; }
     constexpr inline bool is_size_static_layout(f32 value) { return is_size_concrete(value) && value > 0.0f; }
+
+    constexpr inline bool is_size_dynamic(f32 value) { return is_size_min_fit(value) || value >= AUIK_SIZE_X_FILL; }
+
+    constexpr inline bool is_size_dynamic(const amal::vec2 &size)
+    {
+        return is_size_dynamic(size.x) || is_size_dynamic(size.y);
+    }
 
     struct WidgetFlagBits
     {
@@ -42,11 +75,9 @@ namespace auik
             visible = 0x1,
             configurable = 0x2,
             attachable = 0x4,
-            fixed_layout = 0x20,
-            hittable = 0x40,
-            fixed_bounds = 0x80,
-            read_only = 0x400,
-            disabled = 0x800
+            hittable = 0x8,
+            read_only = 0x10,
+            disabled = 0x20
         };
         using flag_bitmask = std::true_type;
     };
@@ -104,7 +135,7 @@ namespace auik
 
     struct WidgetUserData
     {
-        u32 tag_id = AUIK_CUSTOM_USER_DATA;
+        u32 tag_id = AUIK_UD_CUSTOM_DATA;
         void *handle = nullptr;
         void (*destroy)(void *) = nullptr;
         WidgetUserData *pNext = nullptr;
@@ -134,7 +165,7 @@ namespace auik
         return WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::configurable;
     }
 
-    class Widget
+    class Widget : public umbf::Block
     {
     public:
         struct UserBind
@@ -238,11 +269,13 @@ namespace auik
         }
 
         AUIK_EXPORT virtual ~Widget();
-        
+
+        u32 signature() const override { return AUIK_WIDGET_SIGN_IGNORE; }
+
         template <class T, class... Args>
         T *emplace_user_data(Args &&...args)
         {
-            return emplace_user_data_tagged<T>(AUIK_CUSTOM_USER_DATA, std::forward<Args>(args)...);
+            return emplace_user_data_tagged<T>(AUIK_UD_CUSTOM_DATA, std::forward<Args>(args)...);
         }
 
         template <class T, class... Args>
@@ -257,7 +290,7 @@ namespace auik
             return value;
         }
 
-        void *get_user_data(u32 tag = AUIK_CUSTOM_USER_DATA) const
+        void *get_user_data(u32 tag = AUIK_UD_CUSTOM_DATA) const
         {
             for (auto *node = _user_data; node; node = node->pNext)
                 if (node->tag_id == tag) return node->handle;
@@ -265,12 +298,14 @@ namespace auik
         }
 
         template <class T>
-        T *get_user_data(u32 tag = AUIK_CUSTOM_USER_DATA) const
+        T *get_user_data(u32 tag = AUIK_UD_CUSTOM_DATA) const
         {
             return static_cast<T *>(get_user_data(tag));
         }
 
         const WidgetUserData *user_data_head() const { return _user_data; }
+        AUIK_EXPORT void emplace_user_data_ref_head(u32 tag, void *handle);
+        AUIK_EXPORT void emplace_user_data_ref_after_head(u32 tag, void *handle);
 
         template <class T, class... Args>
         T *emplace_user_data_head(u32 tag, Args &&...args)
@@ -303,7 +338,7 @@ namespace auik
         inline void set_rect_tag_id(u32 tag_id) { _rect.id.tag_id = tag_id; }
         inline bool is_visible() const { return (widget_flags & WidgetFlagBits::visible); }
         inline void set_visible() { set_widget_flag(WidgetFlagBits::visible); }
-        inline void set_invisible() { unset_widget_flag(WidgetFlagBits::visible); }
+        inline void unset_visible() { unset_widget_flag(WidgetFlagBits::visible); }
         inline StyleState style_state() const { return _style_state; }
         inline bool set_style_state(StyleState value)
         {
@@ -333,9 +368,6 @@ namespace auik
         {
             _requested_size = size;
             _rect.bounds.size = {is_size_concrete(size.x) ? size.x : 0.0f, is_size_concrete(size.y) ? size.y : 0.0f};
-            if (is_size_static_layout(size.x) && is_size_static_layout(size.y))
-                widget_flags |= WidgetFlagBits::fixed_layout;
-            else widget_flags &= ~WidgetFlagBits::fixed_layout;
         }
         inline void set_layout_size(const amal::vec2 &size)
         {
@@ -343,9 +375,16 @@ namespace auik
         }
         inline const amal::vec2 &required_size() const { return _required_size; }
         inline void set_required_size(const amal::vec2 &size) { _required_size = size; }
-        inline bool is_fixed_layout() const { return widget_flags & WidgetFlagBits::fixed_layout; }
-        inline bool is_fixed_bounds() const { return widget_flags & WidgetFlagBits::fixed_bounds; }
-        inline bool is_fixed() const { return is_fixed_layout(); }
+        inline amal::vec2 resolve_layout_size_from_required() const
+        {
+            amal::vec2 out = _rect.bounds.size;
+            if ((!is_width_fixed() && !fill_width()) || out.x <= 0.0f) out.x = _required_size.x;
+            if ((!is_height_fixed() && !fill_height()) || out.y <= 0.0f) out.y = _required_size.y;
+            return out;
+        }
+        inline bool is_width_fixed() const { return is_size_static_layout(_requested_size.x); }
+        inline bool is_height_fixed() const { return is_size_static_layout(_requested_size.y); }
+        inline bool is_fixed() const { return is_width_fixed() && is_height_fixed(); }
         inline bool is_hittable() const { return widget_flags & WidgetFlagBits::hittable; }
         inline bool can_emit_hit(const DrawCtx &ctx) const { return is_hittable() && ctx.is_hit_allowed; }
         inline bool is_read_only() const { return widget_flags & WidgetFlagBits::read_only; }
@@ -355,7 +394,7 @@ namespace auik
         inline const void *post_data() const { return _post_fx_chain ? _post_fx_chain->post_data : nullptr; }
         inline u32 post_id() const { return _post_fx_chain ? _post_fx_chain->id : AUIK_INVALID_POST_EFFECT_DATA_ID; }
         AUIK_EXPORT PostFxChain *add_post_effect(PostEffect *effect, const void *instance_data = nullptr,
-                                     const void *post_data = nullptr);
+                                                 const void *post_data = nullptr);
         AUIK_EXPORT bool remove_post_effect(PostFxChain *chain);
         AUIK_EXPORT void clear_post_effects();
         inline void set_post_effect(PostEffect *effect, const void *data = nullptr)
@@ -378,17 +417,9 @@ namespace auik
         inline void set_read_only() { set_widget_flag(WidgetFlagBits::read_only); }
         inline void set_mutable() { unset_widget_flag(WidgetFlagBits::read_only); }
         inline void set_disabled() { set_widget_flag(WidgetFlagBits::disabled); }
-        inline void set_enabled() { unset_widget_flag(WidgetFlagBits::disabled); }
+        inline void unset_disbled() { unset_widget_flag(WidgetFlagBits::disabled); }
         inline void set_configurable() { set_widget_flag(WidgetFlagBits::configurable); }
-        inline void set_unconfigurable() { unset_widget_flag(WidgetFlagBits::configurable); }
-        inline void set_attachable() { set_widget_flag(WidgetFlagBits::attachable); }
-        inline void set_unattachable() { unset_widget_flag(WidgetFlagBits::attachable); }
-        inline void set_hittable() { set_widget_flag(WidgetFlagBits::hittable); }
-        inline void set_unhittable() { unset_widget_flag(WidgetFlagBits::hittable); }
-        inline void set_fixed_layout() { set_widget_flag(WidgetFlagBits::fixed_layout); }
-        inline void set_dynamic_layout() { unset_widget_flag(WidgetFlagBits::fixed_layout); }
-        inline void set_fixed_bounds() { set_widget_flag(WidgetFlagBits::fixed_bounds); }
-        inline void set_dynamic_bounds() { unset_widget_flag(WidgetFlagBits::fixed_bounds); }
+        inline void unset_configurable() { unset_widget_flag(WidgetFlagBits::configurable); }
         inline Viewport *viewport() const { return _viewport; }
         inline void set_viewport(Viewport *viewport) { _viewport = viewport; }
         inline void attach_to_viewport(Viewport *viewport) { set_viewport(viewport); }
@@ -425,8 +456,7 @@ namespace auik
 
         void update_draw_commands(DrawReasonFlags reason = DrawReasonBits::none)
         {
-            const bool external_only = (reason & DrawReasonBits::external) && !(reason & ~DrawReasonBits::external);
-            if (!external_only)
+            if (reason & (DrawReasonBits::full_redraw | DrawReasonBits::record))
             {
                 _external_draw_culled = false;
                 _external_draw_invalidated = false;
@@ -515,6 +545,7 @@ namespace auik
         {
             auto &ctx = detail::get_context();
             ctx.id_map.emplace(id(), this);
+            if (const auto attach_cb = detail::get_default_widget_attach_cb()) attach_cb(this);
         }
         virtual void on_detach() { detail::get_context().id_map.erase(id()); }
         virtual void on_scroll(const amal::vec2 &delta) {}
@@ -773,14 +804,14 @@ namespace auik
         inline RootWidgetUserData *root_widget_user_data(Widget *widget)
         {
             auto *head = widget ? widget->user_data_head() : nullptr;
-            if (!head || head->tag_id != AUIK_ROOT_WIDGET_USER_DATA) return nullptr;
+            if (!head || head->tag_id != AUIK_UD_ROOT_DATA) return nullptr;
             return static_cast<RootWidgetUserData *>(head->handle);
         }
 
         inline const RootWidgetUserData *root_widget_user_data(const Widget *widget)
         {
             auto *head = widget ? widget->user_data_head() : nullptr;
-            if (!head || head->tag_id != AUIK_ROOT_WIDGET_USER_DATA) return nullptr;
+            if (!head || head->tag_id != AUIK_UD_ROOT_DATA) return nullptr;
             return static_cast<const RootWidgetUserData *>(head->handle);
         }
 

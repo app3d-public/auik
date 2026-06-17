@@ -61,6 +61,7 @@ namespace auik
         u32 frames_in_flight = 0;
         u32 max_textures_size = 32;
         SyncOptions sync_options{};
+        WidgetCreateOptions widget_create_options{};
 
         CreateInfo &set_event_dispatcher(acul::events::dispatcher *ed)
         {
@@ -110,6 +111,12 @@ namespace auik
             sync_options = value;
             return *this;
         }
+
+        CreateInfo &set_widget_create_options(const WidgetCreateOptions &value)
+        {
+            widget_create_options = value;
+            return *this;
+        }
     };
 
     AUIK_EXPORT bool init_library(const CreateInfo &create_info);
@@ -118,6 +125,7 @@ namespace auik
     AUIK_EXPORT void redraw_all_commands();
     AUIK_EXPORT void rebuild_root_widget_depths();
     AUIK_EXPORT void add_widget_to_root(Widget *widget, DepthZone zone = DepthZone::work);
+    AUIK_EXPORT void mark_locale_changed();
     AUIK_EXPORT bool remove_widget_from_root_unsync(Widget *widget);
     AUIK_EXPORT bool remove_widget_from_root_unsync(u32 id);
     AUIK_EXPORT bool remove_widget(Widget *widget);
@@ -200,8 +208,7 @@ namespace auik
             ctx.gpu_ctx->clear_clip_rects_reallocated(ctx.gpu_ctx, ctx.frame_id);
         detail::new_window_frame(ctx.window_ctx);
         ctx.frame_id = (ctx.frame_id + 1) % ctx.frames_in_flight;
-        ctx.dirty_flags &= ~(DirtyFlagBits::redraw | DirtyFlagBits::host_update | DirtyFlagBits::hit_rect_update |
-                             DirtyFlagBits::textures);
+        detail::clear_dirty_flags(detail::one_frame_dirty_mask);
     }
 
     inline void sync_gpu_cache()

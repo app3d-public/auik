@@ -11,14 +11,14 @@ namespace auik
 {
     constexpr inline WidgetFlags get_default_checkbox_flags()
     {
-        return get_default_widget_flags() | WidgetFlagBits::hittable | WidgetFlagBits::fixed_layout;
+        return get_default_widget_flags() | WidgetFlagBits::hittable;
     }
 
     class Checkbox final : public Widget
     {
     public:
-        AUIK_EXPORT Checkbox(u32 id, bool *value, WidgetFlags widget_flags = get_default_checkbox_flags(),
-                 Widget *parent = nullptr);
+        AUIK_EXPORT Checkbox(u32 id, bool value, WidgetFlags widget_flags = get_default_checkbox_flags(),
+                             Widget *parent = nullptr);
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
         AUIK_EXPORT void update_layout_min_size() override;
@@ -30,12 +30,13 @@ namespace auik
         AUIK_EXPORT void restore_hit_depth() override;
         AUIK_EXPORT void draw(DrawCtx &ctx) override;
         AUIK_EXPORT void on_click(MouseKey key, KeyPressState state, u32 click_count) override;
+        u32 signature() const override { return AUIK_TAG_CHECKBOX; }
 
-        bool value() const { return _value ? *_value : false; }
+        bool value() const { return _value; }
         AUIK_EXPORT void set_value(bool value);
 
     private:
-        bool *_value = nullptr;
+        bool _value = false;
         DrawDataID _box_bg{};
         DrawDataID _checkmark_draw{};
         StyleSelector _style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_CHECKBOX};
@@ -53,9 +54,13 @@ namespace auik
         bool has_draw_record() const;
     };
 
-    inline Checkbox *make_checkbox(u32 id, bool *value, Widget *parent = nullptr)
+    inline Checkbox *make_checkbox(u32 id, bool value, Widget *parent = nullptr)
     {
         return acul::alloc<Checkbox>(id, value, get_default_checkbox_flags(), parent);
     }
 
+    namespace streams
+    {
+        extern AUIK_EXPORT const umbf::streams::Stream checkbox;
+    }
 } // namespace auik

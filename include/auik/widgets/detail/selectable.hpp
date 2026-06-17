@@ -39,10 +39,10 @@ namespace auik::detail
         return WidgetFlagBits::visible | WidgetFlagBits::hittable;
     }
 
-    class Selectable final : public Text
+    class Selectable : public Text
     {
     public:
-        Selectable(u32 id, u32 tag_id, u32 element_id, const acul::string &text, amal::vec2 size, Widget *parent,
+        Selectable(u32 id, u32 tag_id, u32 element_id, StringView text, amal::vec2 size, Widget *parent,
                    u32 style_tag_id, WidgetFlags flags,
                    u32 selected_style_tag_id = AUIK_STYLE_TAG_COMBO_BOX_ITEM_SELECTED,
                    StyleState selected_style_state = StyleState::normal)

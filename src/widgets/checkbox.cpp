@@ -2,11 +2,12 @@
 #include <auik/pipelines.hpp>
 #include <auik/widgets/checkbox.hpp>
 #include <auik/widgets/image.hpp>
+#include "../core/session_stream_utils.hpp"
 
 namespace auik
 {
-    Checkbox::Checkbox(u32 id, bool *value, WidgetFlags widget_flags, Widget *parent)
-        : Widget(id, widget_flags, EventFlagBits::click, parent, {{0.0f, 0.0f}, {0.0f, 0.0f}}, AUIK_STYLE_TAG_CHECKBOX),
+    Checkbox::Checkbox(u32 id, bool value, WidgetFlags widget_flags, Widget *parent)
+        : Widget(id, widget_flags, EventFlagBits::click, parent, {{0.0f, 0.0f}, {0.0f, 0.0f}}, AUIK_TAG_CHECKBOX),
           _value(value),
           _checkmark_rect(detail::make_rect_data(AUIK_TAG_CHECKBOX_CHECKMARK, AUIK_TAG_CHECKBOX_CHECKMARK))
     {
@@ -176,8 +177,8 @@ namespace auik
 
     void Checkbox::set_value(bool new_value)
     {
-        if (!_value || *_value == new_value) return;
-        *_value = new_value;
+        if (_value == new_value) return;
+        _value = new_value;
         if (!mark_changed()) redraw_external(has_draw_record());
     }
 
@@ -185,10 +186,35 @@ namespace auik
     {
         (void)click_count;
         if (key != MouseKey::left || state != KeyPressState::press) return;
-        if (!_value) return;
-        *_value = !*_value;
+        _value = !_value;
         const bool prevented = mark_changed();
         if (!prevented)
             add_render_command<detail::ClickEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
     }
+
+    namespace
+    {
+        void write_checkbox(acul::bin_stream &stream, umbf::Block *block)
+        {
+            auto *widget = static_cast<Checkbox *>(block);
+            detail::write_widget_common_data(stream, *widget);
+            stream.write(widget->value());
+        }
+
+        umbf::Block *read_checkbox(acul::bin_stream &stream)
+        {
+            const auto common = detail::read_widget_common_data(stream);
+            bool value = false;
+            stream.read(value);
+            auto *checkbox = acul::alloc<Checkbox>(common.id, value, common.widget_flags, nullptr);
+            detail::apply_widget_common_data(checkbox, common);
+            return checkbox;
+        }
+    } // namespace
+
+    namespace streams
+    {
+        AUIK_EXPORT const umbf::streams::Stream checkbox{read_checkbox, write_checkbox};
+    } // namespace streams
+
 } // namespace auik

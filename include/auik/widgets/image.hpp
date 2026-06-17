@@ -2,13 +2,14 @@
 
 #include "widget.hpp"
 
-#define AUIK_TAG_IMAGE 0x8F9A3C21
+#define AUIK_TAG_IMAGE         0x8F9A3C21u
+#define AUIK_TAG_CHECKER_IMAGE 0x3F7C2B91u
 
 namespace auik
 {
     constexpr inline WidgetFlags get_default_image_flags()
     {
-        return get_default_widget_flags() | WidgetFlagBits::fixed_layout;
+        return get_default_widget_flags();
     }
 
     class Image : public Widget
@@ -41,11 +42,45 @@ namespace auik
         bool coverage_mode() const { return _coverage_mode; }
         void set_coverage_mode(bool value) { _coverage_mode = value; }
 
+        virtual u32 signature() const override { return AUIK_TAG_IMAGE; }
+
     private:
+        friend class CheckerImage;
+
         DrawDataID _image{};
         TextureID _texture_id;
         amal::rect _uv_rect;
         bool _coverage_mode = false;
+    };
+
+    class CheckerImage : public Widget
+    {
+    public:
+        CheckerImage(u32 id, amal::vec2 size, u32 style_tag = AUIK_STYLE_TAG_GRADIENT_SLIDER, Widget *parent = nullptr,
+                     WidgetFlags flags = WidgetFlagBits::visible)
+            : Widget(id, flags, EventFlagBits::none, parent, {{0.0f}, size}, AUIK_TAG_CHECKER_IMAGE),
+              _style({Theme::STYLE_ID_INVALID, style_tag})
+        {
+        }
+
+        AUIK_EXPORT StyleUpdateFlags update_style() override;
+        AUIK_EXPORT void update_layout_min_size() override;
+        AUIK_EXPORT void update_layout(bool min_size_known) override;
+        AUIK_EXPORT void rebuild_clip_rects() override;
+        AUIK_EXPORT void draw(DrawCtx &ctx) override;
+
+        u32 style_tag() const { return _style.tag_id; }
+        void set_style_tag(u32 tag_id)
+        {
+            _style = {Theme::STYLE_ID_INVALID, tag_id};
+            set_rect_tag_id(tag_id);
+        }
+
+        virtual u32 signature() const override { return AUIK_TAG_CHECKER_IMAGE; }
+
+    private:
+        DrawDataID _checker{};
+        StyleSelector _style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_GRADIENT_SLIDER};
     };
 
     inline Image *make_image(u32 id, TextureID texture_id, amal::vec2 size,
@@ -85,4 +120,10 @@ namespace auik
     }
 
     inline void clear_image_cache() { detail::get_context().image_cache.clear(); }
+
+    namespace streams
+    {
+        extern AUIK_EXPORT const umbf::streams::Stream image;
+        extern AUIK_EXPORT const umbf::streams::Stream checker_image;
+    }
 } // namespace auik

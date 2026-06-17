@@ -3,6 +3,8 @@
 #include <acul/vector.hpp>
 #include "widget.hpp"
 
+#define AUIK_TAG_COLUMN 0x6D89BE20u
+
 namespace auik
 {
     constexpr inline WidgetFlags get_default_column_flags() { return get_default_widget_flags(); }
@@ -21,12 +23,14 @@ namespace auik
         AUIK_EXPORT void clear_columns();
         AUIK_EXPORT void set_columns(ColumnItems columns);
         void add_column(ColumnChildren children = {});
-        AUIK_EXPORT void add_child(size_t column_index, Widget *child, ChildLayoutFlags layout = default_child_layout_flags());
+        AUIK_EXPORT void add_child(size_t column_index, Widget *child,
+                                   ChildLayoutFlags layout = default_child_layout_flags());
         AUIK_EXPORT void set_child_layout(size_t column_index, size_t row_index, ChildLayoutFlags layout);
 
         size_t column_count() const { return _columns.size(); }
         AUIK_EXPORT const ColumnChildren &column_children(size_t index) const;
         AUIK_EXPORT ColumnChildren &column_children(size_t index);
+        AUIK_EXPORT const acul::vector<ChildLayoutFlags> &column_layouts(size_t index) const;
 
         AUIK_EXPORT void set_style_tag(u32 tag_id);
         u32 style_tag() const { return _style.tag_id; }
@@ -46,6 +50,7 @@ namespace auik
         AUIK_EXPORT amal::vec4 get_content_clip_rect() const override;
         AUIK_EXPORT void on_attach() override;
         AUIK_EXPORT void on_detach() override;
+        u32 signature() const override { return AUIK_TAG_COLUMN; }
 
     private:
         class Slot;
@@ -59,16 +64,15 @@ namespace auik
         StyleSelector _style;
     };
 
-    inline Column *make_column(u32 id, Column::ColumnItems columns = {}, Widget *parent = nullptr)
+    inline Column *make_column(u32 id, Column::ColumnItems columns = {}, amal::vec2 size = AUIK_SIZE_FIT,
+                               Widget *parent = nullptr)
     {
-        return acul::alloc<Column>(id, std::move(columns), amal::vec2{0.0f, 0.0f}, get_default_column_flags(), parent,
+        return acul::alloc<Column>(id, std::move(columns), size, get_default_column_flags(), parent,
                                    AUIK_STYLE_TAG_COLUMN);
     }
 
-    inline Column *make_fixed_column(u32 id, Column::ColumnItems columns = {}, amal::vec2 size = {0.0f, 0.0f},
-                                     Widget *parent = nullptr)
+    namespace streams
     {
-        return acul::alloc<Column>(id, std::move(columns), size, get_default_column_flags() | WidgetFlagBits::fixed_layout,
-                                   parent, AUIK_STYLE_TAG_COLUMN);
+        extern AUIK_EXPORT const umbf::streams::Stream column;
     }
 } // namespace auik

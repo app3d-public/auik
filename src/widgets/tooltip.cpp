@@ -32,14 +32,14 @@ namespace auik
     } // namespace
 
     Tooltip::Tooltip(u32 id, Widget *parent)
-        : Widget(id, get_default_widget_flags() | WidgetFlagBits::fixed_layout, EventFlagBits::none, parent, {},
+        : Widget(id, get_default_widget_flags(), EventFlagBits::none, parent, {},
                  AUIK_TAG_TOOLTIP)
     {
         _layout_config.wrap = detail::TextWrapMode::word;
         _layout_config.overflow = detail::TextOverflowMode::clip;
         _render_config.horizontal_align = detail::TextHorizontalAlign::left;
         _render_config.vertical_align = detail::TextVerticalAlign::top;
-        set_invisible();
+        unset_visible();
         sync_widget_flags();
     }
 
@@ -74,7 +74,7 @@ namespace auik
 
     void Tooltip::hide()
     {
-        set_invisible();
+        unset_visible();
         sync_widget_flags();
         if (_text_source) _dismissed_for_current_source = true;
         _rect.clip_id = 0xFFFFu;

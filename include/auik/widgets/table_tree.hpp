@@ -3,7 +3,6 @@
 #include "../post_effects.hpp"
 #include "detail/table_base.hpp"
 #include "table.hpp"
-#include "text.hpp"
 #include "widget.hpp"
 
 #define AUIK_TAG_TABLE_TREE       0x933619CCu
@@ -24,12 +23,12 @@ namespace auik
     class TableTree final : public Widget
     {
     public:
-        using Row = acul::vector<acul::string>;
+        using Row = acul::vector<Widget *>;
         static AUIK_EXPORT constexpr size_t invalid_node = static_cast<size_t>(-1);
 
         struct Node
         {
-            acul::string label;
+            Widget *label = nullptr;
             Row cells;
             size_t parent = invalid_node;
             bool expanded = true;
@@ -40,8 +39,8 @@ namespace auik
         AUIK_EXPORT ~TableTree() override;
 
         AUIK_EXPORT void clear();
-        size_t add_node(acul::string label, Row cells = {}, size_t parent = invalid_node);
-        AUIK_EXPORT void set_node_expanded(size_t node, bool expanded);
+        size_t add_node(Widget *label, Row cells = {}, size_t parent = invalid_node);
+        AUIK_EXPORT void set_node_expanded(size_t node, bool expanded, bool animate = true);
         AUIK_EXPORT bool node_expanded(size_t node) const;
         AUIK_EXPORT bool node_has_children(size_t node) const;
 
@@ -66,15 +65,24 @@ namespace auik
         }
         AUIK_EXPORT void set_resize_border_style_tag(u32 tag_id);
         u32 resize_border_style_tag() const { return _resize_border_style.tag_id; }
+        u32 tree_flags() const { return _tree_flags; }
+        const acul::vector<acul::point2D<f32>> &size_overrides() const { return _size_overrides; }
+        AUIK_EXPORT void set_size_overrides(acul::vector<acul::point2D<f32>> values, bool column_overrides);
 
         AUIK_EXPORT void set_style_tag(u32 tag_id);
         u32 style_tag() const { return _style.tag_id; }
         AUIK_EXPORT void set_cell_style_tag(u32 tag_id);
         u32 cell_style_tag() const { return _cell_style.tag_id; }
+        AUIK_EXPORT void set_line_style_tag(u32 tag_id);
+        u32 line_style_tag() const { return _line_style.tag_id; }
+        AUIK_EXPORT void set_collapse_icon_style_tag(u32 tag_id);
+        u32 collapse_icon_style_tag() const { return _collapse_icon_style.tag_id; }
 
         const acul::vector<Node> &nodes() const { return _nodes; }
         size_t visible_row_count() const { return _visible_nodes.size(); }
         size_t column_count() const { return _column_count; }
+        f32 indent_width() const { return _indent_width; }
+        void set_indent_width(f32 value) { _indent_width = value; }
         AUIK_EXPORT bool is_row_hovered(size_t visible_row) const;
         AUIK_EXPORT bool is_arrow_hovered(size_t node) const;
         AUIK_EXPORT bool is_resize_border_hovered(size_t element_id) const;
@@ -96,6 +104,7 @@ namespace auik
         AUIK_EXPORT amal::vec4 get_content_clip_rect() const override;
         AUIK_EXPORT void on_attach() override;
         AUIK_EXPORT void on_detach() override;
+        virtual u32 signature() const override { return AUIK_TAG_TABLE_TREE; }
 
     private:
         struct ArrowVisual
@@ -116,16 +125,16 @@ namespace auik
         void rebuild_visible_nodes();
         void rebuild_cells();
         void clear_cells(bool invalidate_draw = true);
+        void clear_nodes();
         void invalidate_visual_draw_records();
         void clear_tree_line_draw_records();
         void draw_tree_lines(DrawCtx &ctx, DrawStream *stream);
-        Text *make_cell_text(const acul::string &value);
         size_t node_depth(size_t node) const;
         bool node_is_last_sibling(size_t node) const;
         size_t node_ancestor_at_depth(size_t node, size_t depth) const;
         size_t resolve_column_count() const;
         u32 cell_element_id(size_t visible_row, size_t column) const;
-        Text *cell_text(size_t visible_row, size_t column) const;
+        Widget *cell_widget(size_t visible_row, size_t column) const;
         const TableColumnSettings &settings_for_column(size_t column) const;
         void update_column_widths(f32 inner_width);
         void resize_visuals();
@@ -147,7 +156,7 @@ namespace auik
 
         acul::vector<Node> _nodes;
         acul::vector<size_t> _visible_nodes;
-        acul::vector<acul::vector<Text *>> _cells;
+        acul::vector<acul::vector<Widget *>> _cells;
         acul::vector<acul::point2D<detail::TableTrackMetrics>> _layout_metrics;
         acul::vector<detail::TableCellVisual> _row_visuals;
         acul::vector<detail::TableCellVisual> _cell_visuals;
@@ -180,15 +189,14 @@ namespace auik
         bool _arrow_tick_scheduled = false;
     };
 
-    inline TableTree *make_table_tree(u32 id, Widget *parent = nullptr)
+    inline TableTree *make_table_tree(u32 id, amal::vec2 size = AUIK_SIZE_FIT, Widget *parent = nullptr)
     {
-        return acul::alloc<TableTree>(id, amal::vec2{0.0f, 0.0f}, get_default_table_tree_flags(), parent,
+        return acul::alloc<TableTree>(id, size, get_default_table_tree_flags(), parent,
                                       AUIK_STYLE_TAG_TABLE_TREE);
     }
 
-    inline TableTree *make_fixed_table_tree(u32 id, amal::vec2 size, Widget *parent = nullptr)
+    namespace streams
     {
-        return acul::alloc<TableTree>(id, size, get_default_table_tree_flags() | WidgetFlagBits::fixed_layout, parent,
-                                      AUIK_STYLE_TAG_TABLE_TREE);
+        extern AUIK_EXPORT const umbf::streams::Stream table_tree;
     }
 } // namespace auik

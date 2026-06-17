@@ -50,18 +50,13 @@ namespace auik::detail
         return StyleState::normal;
     }
 
-    inline void measure_table_cell(Text *cell)
+    inline void apply_table_cell_alignment(Widget *cell, HAlign halign, VAlign valign)
     {
         if (!cell) return;
-        cell->set_layout_size({0.0f, 0.0f});
-        cell->update_layout_min_size();
-    }
-
-    inline void apply_table_cell_alignment(Text *cell, HAlign halign, VAlign valign)
-    {
-        if (!cell) return;
-        cell->set_horizontal_align(halign);
-        if (valign != VAlign::none) cell->set_vertical_align(valign);
+        auto *text = dynamic_cast<Text *>(cell);
+        if (!text) return;
+        text->set_horizontal_align(halign);
+        if (valign != VAlign::none) text->set_vertical_align(valign);
     }
 
     template <class Metrics, class Overrides, class SettingsFn>
@@ -205,6 +200,20 @@ namespace auik::detail
         QuadsInstanceData data{};
         data.rect = visual.rect.bounds;
         data.z_order = visual.rect.depth;
+        if (!(ctx.reason & DrawReasonBits::invalidate) && clip_id != 0xFFFFu)
+        {
+            const auto clip = get_clip_rect(clip_id);
+            const auto &rect = visual.rect.bounds;
+            const bool culled = rect.offset.x + rect.size.x <= clip.x || rect.offset.y + rect.size.y <= clip.y ||
+                                rect.offset.x >= clip.x + clip.z || rect.offset.y >= clip.y + clip.w;
+            if (culled)
+            {
+                DrawCtx invalidate_ctx = ctx;
+                invalidate_ctx.reason |= DrawReasonBits::invalidate;
+                emit_quads_instance(invalidate_ctx, stream, visual.draw, data, visual.rect, false, is_hit_allowed);
+                return;
+            }
+        }
         const bool visible = fill_quads_instance_by_style(style, clip_id, data);
         emit_quads_instance(ctx, stream, visual.draw, data, visual.rect, visible, is_hit_allowed);
     }
@@ -219,6 +228,20 @@ namespace auik::detail
         QuadsInstanceData data{};
         data.rect = visual.rect.bounds;
         data.z_order = visual.rect.depth;
+        if (!(ctx.reason & DrawReasonBits::invalidate) && clip_id != 0xFFFFu)
+        {
+            const auto clip = get_clip_rect(clip_id);
+            const auto &rect = visual.rect.bounds;
+            const bool culled = rect.offset.x + rect.size.x <= clip.x || rect.offset.y + rect.size.y <= clip.y ||
+                                rect.offset.x >= clip.x + clip.z || rect.offset.y >= clip.y + clip.w;
+            if (culled)
+            {
+                DrawCtx invalidate_ctx = ctx;
+                invalidate_ctx.reason |= DrawReasonBits::invalidate;
+                emit_quads_instance(invalidate_ctx, stream, visual.draw, data, visual.rect, false, is_hit_allowed);
+                return;
+            }
+        }
         const bool visible = fill_quads_instance_by_style(style, clip_id, data);
         const bool vertical = visual.rect.bounds.size.x <= visual.rect.bounds.size.y;
         if (vertical)

@@ -5,23 +5,17 @@
 #include <auik/theme.hpp>
 #include "widget.hpp"
 
-#define AUIK_TAG_TEXT 0x60F46B05u
+#define AUIK_TAG_TEXT  0x60F46B05u
+#define AUIK_TAG_ETEXT 0x25CF6588u
 
 namespace auik
 {
     constexpr inline WidgetFlags get_default_text_flags() { return get_default_widget_flags(); }
 
-    constexpr inline WidgetFlags get_default_fixed_text_flags()
-    {
-        return get_default_text_flags() | WidgetFlagBits::fixed_layout;
-    }
-
     constexpr inline WidgetFlags make_etext_flags()
     {
         return get_default_text_flags() | WidgetFlagBits::hittable | WidgetFlagBits::read_only;
     }
-
-    constexpr inline WidgetFlags make_fixed_etext_flags() { return make_etext_flags() | WidgetFlagBits::fixed_layout; }
 
     class Text : public Widget
     {
@@ -34,7 +28,7 @@ namespace auik
              detail::TextVerticalAlign vertical_align = detail::TextVerticalAlign::top,
              detail::TextWrapMode wrap = detail::TextWrapMode::none,
              detail::TextLayoutWidthMode width_mode = detail::TextLayoutWidthMode::bounds)
-            : Widget(id, flags, EventFlagBits::none, parent, {{0.0f}, size}),
+            : Widget(id, flags, EventFlagBits::none, parent, {{0.0f}, size}, AUIK_TAG_TEXT),
               _text(std::move(text)),
               _style({Theme::STYLE_ID_INVALID, style_tag_id})
         {
@@ -42,6 +36,26 @@ namespace auik
             _layout_config.wrap = wrap;
             _layout_config.width_mode = width_mode;
             _render_config.vertical_align = vertical_align;
+        }
+        Text(u32 id, StringView text, amal::vec2 size, WidgetFlags flags, Widget *parent = nullptr,
+             u32 style_tag_id = AUIK_STYLE_TAG_NO_PAD,
+             detail::TextOverflowMode overflow = detail::TextOverflowMode::ellipsis,
+             detail::TextVerticalAlign vertical_align = detail::TextVerticalAlign::top,
+             detail::TextWrapMode wrap = detail::TextWrapMode::none,
+             detail::TextLayoutWidthMode width_mode = detail::TextLayoutWidthMode::bounds)
+            : Text(id, acul::string(text.str), size, flags, parent, style_tag_id, overflow, vertical_align, wrap,
+                   width_mode)
+        {
+            if (text.is_translated) set_translated_text_literal(text.str);
+        }
+        Text(u32 id, const char *text, amal::vec2 size, WidgetFlags flags, Widget *parent = nullptr,
+             u32 style_tag_id = AUIK_STYLE_TAG_NO_PAD,
+             detail::TextOverflowMode overflow = detail::TextOverflowMode::ellipsis,
+             detail::TextVerticalAlign vertical_align = detail::TextVerticalAlign::top,
+             detail::TextWrapMode wrap = detail::TextWrapMode::none,
+             detail::TextLayoutWidthMode width_mode = detail::TextLayoutWidthMode::bounds)
+            : Text(id, StringView{text}, size, flags, parent, style_tag_id, overflow, vertical_align, wrap, width_mode)
+        {
         }
         AUIK_EXPORT StyleUpdateFlags update_style() override;
         AUIK_EXPORT void update_layout_min_size() override;
@@ -52,15 +66,36 @@ namespace auik
         AUIK_EXPORT void reset_draw_records() override;
         AUIK_EXPORT void invalidate_draw_records();
         AUIK_EXPORT void draw(DrawCtx &ctx) override;
+        u32 signature() const override { return AUIK_TAG_TEXT; }
+
+        AUIK_EXPORT Text *clone(u32 id, Widget *parent = nullptr) const;
 
         const acul::string &text() const { return _text; }
+        StringView source_text() const
+        {
+            const char *literal = _translated_text ? translated_text_literal() : nullptr;
+            return _translated_text ? StringView{literal, true} : StringView{_text};
+        }
+        void set_text(const Text &source) { set_text(source.source_text()); }
         void set_text(const acul::string &text)
         {
-            if (_text == text) return;
+            if (_text == text)
+            {
+                if (_translated_text) clear_translated_text_literal();
+                return;
+            }
             _text = text;
+            clear_translated_text_literal();
         }
+        AUIK_EXPORT void set_text(StringView text);
+        AUIK_EXPORT void set_translated_text_literal(const char *literal);
+        AUIK_EXPORT void clear_translated_text_literal();
+        AUIK_EXPORT const char *translated_text_literal() const;
+        bool is_translated_text() const { return _translated_text; }
+        AUIK_EXPORT bool update_translated_text();
 
         const detail::TextLayoutResult &layout_result() const { return _layout_result; }
+        u32 style_tag() const { return _style.tag_id; }
 
         bool multiline() const { return _layout_config.wrap == detail::TextWrapMode::word; }
         void set_multiline(bool value)
@@ -125,6 +160,7 @@ namespace auik
 
     protected:
         acul::string _text;
+        acul::string _translation_literal;
         StyleSelector _style;
         detail::TextLayoutConfig _layout_config{};
         detail::TextRenderConfig _render_config{};
@@ -135,6 +171,7 @@ namespace auik
         u32 _hit_id = AUIK_INVALID_DRAW_DATA_ID;
         bool _instances_gpu_dirty = true;
         bool _tight_content_height = false;
+        bool _translated_text = false;
         u16 _applied_clip_id = 0xFFFFu;
         const PostFxChain *_applied_post_fx_chain = nullptr;
 
@@ -148,11 +185,11 @@ namespace auik
     {
     public:
         AUIK_EXPORT EText(u32 id, acul::string text, amal::vec2 size, WidgetFlags flags = make_etext_flags(),
-                         Widget *parent = nullptr, u32 style_tag_id = AUIK_STYLE_TAG_NO_PAD,
-                         detail::TextOverflowMode overflow = detail::TextOverflowMode::ellipsis,
-                         detail::TextVerticalAlign vertical_align = detail::TextVerticalAlign::top,
-                         detail::TextWrapMode wrap = detail::TextWrapMode::none,
-                         detail::TextLayoutWidthMode width_mode = detail::TextLayoutWidthMode::bounds);
+                          Widget *parent = nullptr, u32 style_tag_id = AUIK_STYLE_TAG_NO_PAD,
+                          detail::TextOverflowMode overflow = detail::TextOverflowMode::ellipsis,
+                          detail::TextVerticalAlign vertical_align = detail::TextVerticalAlign::top,
+                          detail::TextWrapMode wrap = detail::TextWrapMode::none,
+                          detail::TextLayoutWidthMode width_mode = detail::TextLayoutWidthMode::bounds);
         AUIK_EXPORT ~EText() override;
 
         AUIK_EXPORT void sync_widget_flags() override;
@@ -167,6 +204,7 @@ namespace auik
         AUIK_EXPORT void on_drag(const amal::vec2 &delta, KeyPressState state) override;
         AUIK_EXPORT void on_key(Key key, KeyPressState state, KeyMode mods) override;
         AUIK_EXPORT void on_char_input(u32 char_code, u32 count) override;
+        u32 signature() const override { return AUIK_TAG_ETEXT; }
 
     private:
         struct ETextEditData *_edit = nullptr;
@@ -205,30 +243,25 @@ namespace auik
         void on_disabled_changed(bool disabled) override;
     };
 
-    inline Text *make_text(u32 id, const acul::string &text = "")
+    inline Text *make_text(u32 id, StringView text = "", amal::vec2 size = AUIK_SIZE_FIT)
     {
-        auto *out = acul::alloc<Text>(id, text, amal::vec2{0.0f, 0.0f}, get_default_text_flags(), nullptr,
-                                      Theme::STYLE_ID_INVALID, detail::TextOverflowMode::ellipsis,
-                                      detail::TextVerticalAlign::center);
+        auto *out = acul::alloc<Text>(id, text, size, get_default_text_flags(), nullptr, Theme::STYLE_ID_INVALID,
+                                      detail::TextOverflowMode::ellipsis, detail::TextVerticalAlign::center);
         return out;
     }
 
-    inline Text *make_fixed_text(u32 id, const acul::string &text = "", amal::vec2 size = {0.0f, 0.0f})
+    inline EText *make_etext(u32 id, StringView text = "", amal::vec2 size = AUIK_SIZE_FIT)
     {
-        return acul::alloc<Text>(id, text, size, get_default_fixed_text_flags(), nullptr, Theme::STYLE_ID_INVALID,
-                                 detail::TextOverflowMode::ellipsis, detail::TextVerticalAlign::center);
+        auto *out = acul::alloc<EText>(id, acul::string(text.str ? text.str : ""), size, make_etext_flags(), nullptr,
+                                       Theme::STYLE_ID_INVALID, detail::TextOverflowMode::ellipsis,
+                                       detail::TextVerticalAlign::center);
+        if (text.is_translated) out->set_translated_text_literal(text.str);
+        return out;
     }
 
-    inline EText *make_etext(u32 id, const acul::string &text = "")
+    namespace streams
     {
-        return acul::alloc<EText>(id, text, amal::vec2{0.0f, 0.0f}, make_etext_flags(), nullptr,
-                                  Theme::STYLE_ID_INVALID, detail::TextOverflowMode::ellipsis,
-                                  detail::TextVerticalAlign::center);
-    }
-
-    inline EText *make_fixed_etext(u32 id, const acul::string &text = "", amal::vec2 size = {0.0f, 0.0f})
-    {
-        return acul::alloc<EText>(id, text, size, make_fixed_etext_flags(), nullptr, Theme::STYLE_ID_INVALID,
-                                  detail::TextOverflowMode::ellipsis, detail::TextVerticalAlign::center);
-    }
+        extern AUIK_EXPORT const umbf::streams::Stream text;
+        extern AUIK_EXPORT const umbf::streams::Stream etext;
+    } // namespace streams
 } // namespace auik

@@ -2,8 +2,10 @@
 
 #include <acul/memory/alloc.hpp>
 #include <acul/vector.hpp>
+#include <amal/geometric.hpp>
 #include "../detail/vertex_draw.hpp"
 #include "../pipelines.hpp"
+#include "image.hpp"
 #include "widget.hpp"
 
 #define AUIK_TAG_SLIDER                      0x96FAB223u
@@ -11,6 +13,7 @@
 #define AUIK_TAG_GRADIENT_SLIDER             0x9C0AE52Du
 #define AUIK_TAG_GRADIENT_SLIDER_GRAB        0x4B49A40Eu
 #define AUIK_TAG_GRADIENT_SLIDER_GRAB_BORDER 0xA91B53C2u
+#define AUIK_TAG_TRANSPARENCY_SLIDER         0x45BB3829u
 #define AUIK_TAG_RANGE_SLIDER                0x8A233C5Fu
 
 namespace auik
@@ -83,13 +86,12 @@ namespace auik
             }
         };
 
-        void build_quad_slider_track_visual(SliderTrackVisual &visual, const Style &style,
-                                            const amal::rect &track_rect, const amal::vec2 &depth_range,
-                                            u16 clip_id);
+        void build_quad_slider_track_visual(SliderTrackVisual &visual, const Style &style, const amal::rect &track_rect,
+                                            const amal::vec2 &depth_range, u16 clip_id);
         void build_gradient_slider_track_visual(SliderTrackVisual &visual, GradientTrackVisual &gradient_visual,
-                                                const Style &style,
-                                                const amal::rect &track_rect, const amal::vec2 &depth_range,
-                                                u16 clip_id, const amal::vec4 *colors, u32 color_count);
+                                                const Style &style, const amal::rect &track_rect,
+                                                const amal::vec2 &depth_range, u16 clip_id, const amal::vec4 *colors,
+                                                u32 color_count);
     } // namespace detail
 
     constexpr inline WidgetFlags get_default_slider_flags()
@@ -97,16 +99,11 @@ namespace auik
         return get_default_widget_flags() | WidgetFlagBits::hittable;
     }
 
-    constexpr inline WidgetFlags get_default_fixed_slider_flags()
-    {
-        return get_default_slider_flags() | WidgetFlagBits::fixed_layout;
-    }
-
     class Slider final : public Widget
     {
     public:
-        AUIK_EXPORT Slider(u32 id, f32 *value, f32 min_value, f32 max_value, f32 width, f32 *range_start_value = nullptr,
-               WidgetFlags widget_flags = get_default_slider_flags(), Widget *parent = nullptr);
+        AUIK_EXPORT Slider(u32 id, f32 value, f32 min_value, f32 max_value, f32 range_start_value, amal::axis axis,
+                           f32 size, WidgetFlags widget_flags = get_default_slider_flags(), Widget *parent = nullptr);
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
         AUIK_EXPORT void update_layout_min_size() override;
@@ -120,18 +117,29 @@ namespace auik
         AUIK_EXPORT void on_click(MouseKey key, KeyPressState state, u32 click_count) override;
         AUIK_EXPORT void on_drag(const amal::vec2 &delta, KeyPressState state) override;
 
-        f32 value() const { return _value ? *_value : _min_value; }
+        f32 value() const { return _value; }
+        f32 min_value() const { return _min_value; }
+        f32 max_value() const { return _max_value; }
+        f32 range_start_value() const { return _range_start_value; }
+        amal::axis axis() const { return _axis; }
+        u32 track_style_tag() const { return _track_style.tag_id; }
+        u32 fill_style_tag() const { return _fill_style.tag_id; }
+        u32 grab_style_tag() const { return _grab_style.tag_id; }
         AUIK_EXPORT void set_value(f32 value);
-        AUIK_EXPORT void set_range_start_value_ptr(f32 *value_ptr);
+        AUIK_EXPORT void set_range_start_value(f32 value);
         AUIK_EXPORT void set_step(f32 step);
+        AUIK_EXPORT void set_axis(amal::axis axis);
+        AUIK_EXPORT void set_style_tags(u32 track_tag_id, u32 fill_tag_id, u32 grab_tag_id);
         f32 step() const { return _step; }
         AUIK_EXPORT bool has_draw_record() const;
+        virtual u32 signature() const override { return AUIK_TAG_SLIDER; }
 
     private:
-        f32 *_value = nullptr;
-        f32 *_range_start_value = nullptr;
+        f32 _value = 0.0f;
+        f32 _range_start_value = 0.0f;
         f32 _min_value = 0.0f;
         f32 _max_value = 1.0f;
+        amal::axis _axis = amal::axis::x;
         StyleSelector _track_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_SLIDER};
         StyleSelector _fill_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_SLIDER};
         StyleSelector _grab_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_SLIDER_GRAB};
@@ -144,7 +152,7 @@ namespace auik
         amal::vec2 _track_depth_range{0.0f, 1.0f};
         amal::vec2 _grab_depth_range{0.0f, 1.0f};
         f32 _step = 0.0f;
-        f32 _drag_grab_offset_x = 0.0f;
+        f32 _drag_grab_offset = 0.0f;
 
         void rebuild_track_visuals();
         void rebuild_grab_visual();
@@ -159,9 +167,9 @@ namespace auik
     {
     public:
         AUIK_EXPORT ~GradientSlider() override;
-        AUIK_EXPORT GradientSlider(u32 id, f32 *value, f32 min_value, f32 max_value, f32 width, const amal::vec4 *colors,
-                       u32 color_count, WidgetFlags widget_flags = get_default_slider_flags(),
-                       Widget *parent = nullptr);
+        AUIK_EXPORT GradientSlider(u32 id, f32 value, f32 min_value, f32 max_value,
+                                   const acul::vector<amal::vec4> &colors, amal::axis axis, f32 size,
+                                   WidgetFlags widget_flags = get_default_slider_flags(), Widget *parent = nullptr);
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
         AUIK_EXPORT void update_layout_min_size() override;
@@ -175,16 +183,26 @@ namespace auik
         AUIK_EXPORT void on_click(MouseKey key, KeyPressState state, u32 click_count) override;
         AUIK_EXPORT void on_drag(const amal::vec2 &delta, KeyPressState state) override;
 
-        f32 value() const { return _value ? *_value : _min_value; }
+        f32 value() const { return _value; }
+        f32 min_value() const { return _min_value; }
+        f32 max_value() const { return _max_value; }
+        const acul::vector<amal::vec4> &colors() const { return _colors; }
+        amal::axis axis() const { return _axis; }
+        u32 track_style_tag() const { return _track_style.tag_id; }
+        u32 grab_style_tag() const { return _grab_style.tag_id; }
         AUIK_EXPORT void set_value(f32 value);
         AUIK_EXPORT void set_step(f32 step);
+        AUIK_EXPORT void set_axis(amal::axis axis);
+        AUIK_EXPORT void set_style_tags(u32 track_tag_id, u32 grab_tag_id);
         f32 step() const { return _step; }
         AUIK_EXPORT bool has_draw_record() const;
+        virtual u32 signature() const override { return AUIK_TAG_GRADIENT_SLIDER; }
 
     private:
-        f32 *_value = nullptr;
+        f32 _value = 0.0f;
         f32 _min_value = 0.0f;
         f32 _max_value = 1.0f;
+        amal::axis _axis = amal::axis::x;
         StyleSelector _track_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_GRADIENT_SLIDER};
         StyleSelector _grab_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_GRADIENT_SLIDER_GRAB};
         acul::vector<amal::vec4> _colors;
@@ -200,7 +218,7 @@ namespace auik
         amal::vec2 _track_depth_range{0.0f, 1.0f};
         amal::vec2 _grab_depth_range{0.0f, 1.0f};
         f32 _step = 0.0f;
-        f32 _drag_grab_offset_x = 0.0f;
+        f32 _drag_grab_offset = 0.0f;
 
         void rebuild_track_visuals();
         void rebuild_grab_visual();
@@ -213,8 +231,10 @@ namespace auik
     class TransparencySlider final : public Widget
     {
     public:
-        AUIK_EXPORT TransparencySlider(u32 id, f32 *value, f32 min_value, f32 max_value, f32 width, const amal::vec4 &color,
-                           WidgetFlags widget_flags = get_default_slider_flags(), Widget *parent = nullptr);
+        AUIK_EXPORT TransparencySlider(u32 id, f32 value, f32 min_value, f32 max_value, f32 size,
+                                       const amal::vec4 &colors, amal::axis axis,
+                                       WidgetFlags widget_flags = get_default_slider_flags(), Widget *parent = nullptr);
+        AUIK_EXPORT ~TransparencySlider() override;
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
         AUIK_EXPORT void update_layout_min_size() override;
@@ -228,18 +248,28 @@ namespace auik
         AUIK_EXPORT void on_click(MouseKey key, KeyPressState state, u32 click_count) override;
         AUIK_EXPORT void on_drag(const amal::vec2 &delta, KeyPressState state) override;
 
-        f32 value() const { return _value ? *_value : _min_value; }
+        f32 value() const { return _value; }
+        f32 min_value() const { return _min_value; }
+        f32 max_value() const { return _max_value; }
+        u32 track_style_tag() const { return _track_style.tag_id; }
+        u32 grab_style_tag() const { return _grab_style.tag_id; }
         AUIK_EXPORT void set_value(f32 value);
         AUIK_EXPORT void set_step(f32 step);
+        AUIK_EXPORT void set_style_tags(u32 track_tag_id, u32 grab_tag_id);
         f32 step() const { return _step; }
         AUIK_EXPORT void set_color(const amal::vec4 &color);
         const amal::vec4 &color() const { return _color; }
+        amal::axis axis() const { return _axis; }
+        AUIK_EXPORT void set_axis(amal::axis axis);
         AUIK_EXPORT bool has_draw_record() const;
+        virtual u32 signature() const override { return AUIK_TAG_TRANSPARENCY_SLIDER; }
 
     private:
-        f32 *_value = nullptr;
+        f32 _value = 0.0f;
         f32 _min_value = 0.0f;
         f32 _max_value = 1.0f;
+        amal::axis _axis = amal::axis::x;
+        CheckerImage *_checker = nullptr;
         amal::vec4 _color{1.0f, 1.0f, 1.0f, 1.0f};
         acul::vector<amal::vec4> _colors;
         StyleSelector _track_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_GRADIENT_SLIDER};
@@ -256,12 +286,14 @@ namespace auik
         amal::vec2 _track_depth_range{0.0f, 1.0f};
         amal::vec2 _grab_depth_range{0.0f, 1.0f};
         f32 _step = 0.0f;
-        f32 _drag_grab_offset_x = 0.0f;
+        f32 _drag_grab_offset = 0.0f;
 
         void rebuild_track_visuals();
         void rebuild_grab_visual();
         void rebuild_cached_visuals();
         void update_value_from_mouse();
+        amal::rect resolve_track_rect(const amal::rect &bounds, const Style &track_style) const;
+        amal::rect resolve_grab_rect(const Style &grab_style, f32 factor, const amal::vec2 &visual_size) const;
         amal::vec2 resolve_grab_size(const Style &grab_style) const;
         amal::vec4 resolve_active_color(f32 factor) const;
         void rebuild_gradient_colors();
@@ -270,8 +302,9 @@ namespace auik
     class RangeSlider final : public Widget
     {
     public:
-        AUIK_EXPORT RangeSlider(u32 id, f32 *from_value, f32 *to_value, f32 min_value, f32 max_value, f32 width,
-                    WidgetFlags widget_flags = get_default_slider_flags(), Widget *parent = nullptr);
+        AUIK_EXPORT RangeSlider(u32 id, f32 from_value, f32 to_value, f32 min_value, f32 max_value, amal::axis axis,
+                                f32 size, WidgetFlags widget_flags = get_default_slider_flags(),
+                                Widget *parent = nullptr);
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
         AUIK_EXPORT void update_layout_min_size() override;
@@ -287,7 +320,20 @@ namespace auik
 
         AUIK_EXPORT void set_step(f32 step);
         AUIK_EXPORT void set_values(f32 from_value, f32 to_value);
+        f32 from_value() const { return _from_value; }
+        f32 to_value() const { return _to_value; }
+        f32 min_value() const { return _min_value; }
+        f32 max_value() const { return _max_value; }
+        f32 step() const { return _step; }
+        amal::axis axis() const { return _axis; }
+        u32 track_style_tag() const { return _track_style.tag_id; }
+        u32 fill_style_tag() const { return _fill_style.tag_id; }
+        u32 from_grab_style_tag() const { return _from_grab_style.tag_id; }
+        u32 to_grab_style_tag() const { return _to_grab_style.tag_id; }
+        AUIK_EXPORT void set_style_tags(u32 track_tag_id, u32 fill_tag_id, u32 from_grab_tag_id, u32 to_grab_tag_id);
+        AUIK_EXPORT void set_axis(amal::axis axis);
         AUIK_EXPORT bool has_draw_record() const;
+        virtual u32 signature() const override { return AUIK_TAG_RANGE_SLIDER; }
 
     private:
         enum class ActiveGrab : u8
@@ -297,11 +343,12 @@ namespace auik
             to = 2
         };
 
-        f32 *_from_value = nullptr;
-        f32 *_to_value = nullptr;
+        f32 _from_value = 0.0f;
+        f32 _to_value = 0.0f;
         f32 _min_value = 0.0f;
         f32 _max_value = 1.0f;
         f32 _step = 0.0f;
+        amal::axis _axis = amal::axis::x;
         StyleSelector _track_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_SLIDER};
         StyleSelector _fill_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_SLIDER};
         StyleSelector _from_grab_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_SLIDER_GRAB};
@@ -319,7 +366,7 @@ namespace auik
         amal::vec2 _track_depth_range{0.0f, 1.0f};
         amal::vec2 _grab_depth_range{0.0f, 1.0f};
         ActiveGrab _active_grab = ActiveGrab::none;
-        f32 _drag_grab_offset_x = 0.0f;
+        f32 _drag_grab_offset = 0.0f;
 
         void rebuild_track_visuals();
         void rebuild_grab_visuals();
@@ -327,98 +374,65 @@ namespace auik
         void update_active_grab_from_mouse();
         void update_active_value_from_mouse();
         amal::vec2 resolve_grab_size(const Style &grab_style) const;
-        f32 resolve_grab_center_x(f32 value, f32 outer_half_grab_w) const;
+        f32 resolve_grab_center(f32 value, f32 outer_half_grab) const;
         f32 clamped_value(f32 value) const;
     };
 
-    inline Slider *make_slider(u32 id, f32 *value, f32 min_value = 0.0f, f32 max_value = 1.0f, Widget *parent = nullptr)
+    inline Slider *make_slider(u32 id, f32 value, f32 min_value = 0.0f, f32 max_value = 1.0f, f32 size = 0.0f,
+                               amal::axis axis = amal::axis::x, Widget *parent = nullptr)
     {
-        return acul::alloc<Slider>(id, value, min_value, max_value, 0.0f, nullptr, get_default_slider_flags(), parent);
-    }
-
-    inline GradientSlider *make_gradient_slider(u32 id, f32 *value, f32 min_value, f32 max_value,
-                                                const amal::vec4 *colors, u32 color_count, Widget *parent = nullptr)
-    {
-        return acul::alloc<GradientSlider>(id, value, min_value, max_value, 0.0f, colors, color_count,
-                                           get_default_slider_flags(), parent);
-    }
-
-    inline Slider *make_fixed_slider(u32 id, f32 *value, f32 width, f32 min_value = 0.0f, f32 max_value = 1.0f,
-                                     Widget *parent = nullptr)
-    {
-        return acul::alloc<Slider>(id, value, min_value, max_value, width, nullptr, get_default_fixed_slider_flags(),
+        return acul::alloc<Slider>(id, value, min_value, max_value, min_value, axis, size, get_default_slider_flags(),
                                    parent);
     }
 
-    inline GradientSlider *make_fixed_gradient_slider(u32 id, f32 *value, f32 width, f32 min_value, f32 max_value,
-                                                      const amal::vec4 *colors, u32 color_count,
-                                                      Widget *parent = nullptr)
+    inline GradientSlider *make_gradient_slider(u32 id, f32 value, f32 min_value, f32 max_value,
+                                                const acul::vector<amal::vec4> &colors, f32 size = 0.0f,
+                                                amal::axis axis = amal::axis::x, Widget *parent = nullptr)
     {
-        return acul::alloc<GradientSlider>(id, value, min_value, max_value, width, colors, color_count,
-                                           get_default_fixed_slider_flags(), parent);
+        return acul::alloc<GradientSlider>(id, value, min_value, max_value, colors, axis, size,
+                                           get_default_slider_flags(), parent);
     }
 
-    inline Slider *make_slider_with_range(u32 id, f32 *value, f32 *range_start_value, f32 min_value = 0.0f,
-                                          f32 max_value = 1.0f, Widget *parent = nullptr)
+    inline Slider *make_slider_with_range(u32 id, f32 value, f32 range_start_value, f32 min_value = 0.0f,
+                                          f32 max_value = 1.0f, f32 size = 0.0f,
+                                          amal::axis axis = amal::axis::x, Widget *parent = nullptr)
     {
-        return acul::alloc<Slider>(id, value, min_value, max_value, 0.0f, range_start_value,
+        return acul::alloc<Slider>(id, value, min_value, max_value, range_start_value, axis, size,
                                    get_default_slider_flags(), parent);
     }
 
-    inline Slider *make_fixed_slider_with_range(u32 id, f32 *value, f32 *range_start_value, f32 width,
-                                                f32 min_value = 0.0f, f32 max_value = 1.0f, Widget *parent = nullptr)
+    inline GradientSlider *make_hsl_slider(u32 id, f32 value, amal::axis axis = amal::axis::x,
+                                           Widget *parent = nullptr)
     {
-        return acul::alloc<Slider>(id, value, min_value, max_value, width, range_start_value,
-                                   get_default_fixed_slider_flags(), parent);
-    }
-
-    inline GradientSlider *make_hsl_slider(u32 id, f32 *value, Widget *parent = nullptr)
-    {
-        static constexpr amal::vec4 hsl_colors[] = {
+        acul::vector<amal::vec4> hsl_colors{
             {1.0f, 0.0f, 0.0f, 1.0f}, {1.0f, 1.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 1.0f, 1.0f},
             {0.0f, 0.0f, 1.0f, 1.0f}, {1.0f, 0.0f, 1.0f, 1.0f}, {1.0f, 0.0f, 0.0f, 1.0f},
         };
-        return acul::alloc<GradientSlider>(id, value, 0.0f, 360.0f, 0.0f, hsl_colors, 7u, get_default_slider_flags(),
-                                           parent);
+        return acul::alloc<GradientSlider>(id, value, 0.0f, 360.0f, hsl_colors, axis, 0.0f,
+                                           get_default_slider_flags(), parent);
     }
 
-    inline GradientSlider *make_fixed_hsl_slider(u32 id, f32 *value, f32 width, Widget *parent = nullptr)
+    inline TransparencySlider *make_transparency_slider(u32 id, f32 value, const amal::vec4 &color,
+                                                        f32 min_value = 0.0f, f32 max_value = 1.0f, f32 size = 0.0f,
+                                                        amal::axis axis = amal::axis::x, Widget *parent = nullptr)
     {
-        static constexpr amal::vec4 hsl_colors[] = {
-            {1.0f, 0.0f, 0.0f, 1.0f}, {1.0f, 1.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 1.0f, 1.0f},
-            {0.0f, 0.0f, 1.0f, 1.0f}, {1.0f, 0.0f, 1.0f, 1.0f}, {1.0f, 0.0f, 0.0f, 1.0f},
-        };
-        return acul::alloc<GradientSlider>(id, value, 0.0f, 360.0f, width, hsl_colors, 7u,
-                                           get_default_fixed_slider_flags(), parent);
+        return acul::alloc<TransparencySlider>(id, value, min_value, max_value, size, color, axis,
+                                               get_default_slider_flags(), parent);
     }
 
-    inline TransparencySlider *make_transparency_slider(u32 id, f32 *value, const amal::vec4 &color,
-                                                        f32 min_value = 0.0f, f32 max_value = 1.0f,
-                                                        Widget *parent = nullptr)
+    inline RangeSlider *make_range_slider(u32 id, f32 from_value, f32 to_value, f32 min_value = 0.0f,
+                                          f32 max_value = 1.0f, f32 size = 0.0f,
+                                          amal::axis axis = amal::axis::x, Widget *parent = nullptr)
     {
-        return acul::alloc<TransparencySlider>(id, value, min_value, max_value, 0.0f, color, get_default_slider_flags(),
-                                               parent);
-    }
-
-    inline TransparencySlider *make_fixed_transparency_slider(u32 id, f32 *value, f32 width, const amal::vec4 &color,
-                                                              f32 min_value = 0.0f, f32 max_value = 1.0f,
-                                                              Widget *parent = nullptr)
-    {
-        return acul::alloc<TransparencySlider>(id, value, min_value, max_value, width, color,
-                                               get_default_fixed_slider_flags(), parent);
-    }
-
-    inline RangeSlider *make_range_slider(u32 id, f32 *from_value, f32 *to_value, f32 min_value = 0.0f,
-                                          f32 max_value = 1.0f, Widget *parent = nullptr)
-    {
-        return acul::alloc<RangeSlider>(id, from_value, to_value, min_value, max_value, 0.0f,
+        return acul::alloc<RangeSlider>(id, from_value, to_value, min_value, max_value, axis, size,
                                         get_default_slider_flags(), parent);
     }
 
-    inline RangeSlider *make_fixed_range_slider(u32 id, f32 *from_value, f32 *to_value, f32 width, f32 min_value = 0.0f,
-                                                f32 max_value = 1.0f, Widget *parent = nullptr)
+    namespace streams
     {
-        return acul::alloc<RangeSlider>(id, from_value, to_value, min_value, max_value, width,
-                                        get_default_fixed_slider_flags(), parent);
-    }
+        extern AUIK_EXPORT const umbf::streams::Stream slider;
+        extern AUIK_EXPORT const umbf::streams::Stream gradient_slider;
+        extern AUIK_EXPORT const umbf::streams::Stream transparency_slider;
+        extern AUIK_EXPORT const umbf::streams::Stream range_slider;
+    } // namespace streams
 } // namespace auik

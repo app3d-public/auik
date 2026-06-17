@@ -1,6 +1,7 @@
 #include <auik/auik.hpp>
 #include <auik/detail/depth.hpp>
 #include <auik/widgets/slider.hpp>
+#include "../core/session_stream_utils.hpp"
 
 #define SLIDER_TRACK_HIT_PAD 4.0f
 
@@ -23,17 +24,29 @@ namespace auik
             data.mask = static_cast<u32>(clip_id) | ((style.corner_mask() & 0xFu) << 16u) | (flags << 20u);
         }
 
-        static inline amal::rect resolve_slider_track_rect(const amal::rect &bounds, const Style &track_style)
+        static inline amal::rect resolve_slider_track_rect(const amal::rect &bounds, const Style &track_style,
+                                                           amal::axis axis)
         {
             const amal::vec4 track_padding = track_style.padding();
-            const f32 min_track_h =
+            const f32 min_track_size =
                 amal::max(6.0f, track_style.border_radius() > 0.0f ? track_style.border_radius() * 2.0f : 0.0f);
-            const f32 padded_h = track_padding.y + track_padding.w;
-            const f32 desired_track_h = padded_h > 0.0f ? padded_h : min_track_h;
-            const f32 track_h = amal::min(bounds.size.y, desired_track_h);
             amal::rect out = bounds;
-            out.offset.y += (bounds.size.y - track_h) * 0.5f;
-            out.size.y = track_h;
+            if (axis == amal::axis::y)
+            {
+                const f32 padded_w = track_padding.x + track_padding.z;
+                const f32 desired_track_w = padded_w > 0.0f ? padded_w : min_track_size;
+                const f32 track_w = amal::min(bounds.size.x, desired_track_w);
+                out.offset.x += (bounds.size.x - track_w) * 0.5f;
+                out.size.x = track_w;
+            }
+            else
+            {
+                const f32 padded_h = track_padding.y + track_padding.w;
+                const f32 desired_track_h = padded_h > 0.0f ? padded_h : min_track_size;
+                const f32 track_h = amal::min(bounds.size.y, desired_track_h);
+                out.offset.y += (bounds.size.y - track_h) * 0.5f;
+                out.size.y = track_h;
+            }
             return out;
         }
 
@@ -89,9 +102,11 @@ namespace auik
             return id.widget_id == widget_id && id.tag_id == tag_id;
         }
 
-        static inline f32 resolve_drag_mouse_offset_x(const amal::rect &grab_rect)
+        static inline f32 resolve_drag_mouse_offset(const amal::rect &grab_rect, amal::axis axis)
         {
-            return get_mouse_pos().x - (grab_rect.offset.x + grab_rect.size.x * 0.5f);
+            const auto mouse_pos = get_mouse_pos();
+            if (axis == amal::axis::y) return mouse_pos.y - (grab_rect.offset.y + grab_rect.size.y * 0.5f);
+            return mouse_pos.x - (grab_rect.offset.x + grab_rect.size.x * 0.5f);
         }
 
         static inline amal::rect resolve_slider_grab_rect(const Style &style, f32 center_x, f32 center_y,
@@ -107,6 +122,55 @@ namespace auik
         {
             const amal::vec4 margin = style.margin();
             return (visual_width + margin.x + margin.z) * 0.5f;
+        }
+
+        static inline f32 resolve_slider_grab_outer_half_height(const Style &style, f32 visual_height)
+        {
+            const amal::vec4 margin = style.margin();
+            return (visual_height + margin.y + margin.w) * 0.5f;
+        }
+
+        static inline f32 resolve_slider_factor_from_mouse(const amal::rect &track_rect, f32 drag_grab_offset,
+                                                           amal::axis axis)
+        {
+            const auto mouse_pos = get_mouse_pos();
+            if (axis == amal::axis::y)
+            {
+                const f32 height = amal::max(track_rect.size.y, 1e-5f);
+                const f32 mouse_y = mouse_pos.y - drag_grab_offset;
+                return 1.0f - amal::clamp((mouse_y - track_rect.offset.y) / height, 0.0f, 1.0f);
+            }
+
+            const f32 width = amal::max(track_rect.size.x, 1e-5f);
+            const f32 mouse_x = mouse_pos.x - drag_grab_offset;
+            return amal::clamp((mouse_x - track_rect.offset.x) / width, 0.0f, 1.0f);
+        }
+
+        static inline amal::rect resolve_slider_grab_rect(const amal::rect &track_rect, const Style &grab_style,
+                                                          f32 factor, const amal::vec2 &visual_size, amal::axis axis)
+        {
+            if (axis == amal::axis::y)
+            {
+                const f32 outer_half_h = resolve_slider_grab_outer_half_height(grab_style, visual_size.y);
+                const f32 min_center_y = track_rect.offset.y + outer_half_h;
+                const f32 max_center_y = track_rect.offset.y + track_rect.size.y - outer_half_h;
+                f32 center_y = track_rect.offset.y + track_rect.size.y * (1.0f - factor);
+                if (max_center_y > min_center_y)
+                    center_y = min_center_y + (max_center_y - min_center_y) * (1.0f - factor);
+                else center_y = track_rect.offset.y + track_rect.size.y * 0.5f;
+                const f32 center_x = track_rect.offset.x + track_rect.size.x * 0.5f;
+                return resolve_slider_grab_rect(grab_style, center_x, center_y, visual_size);
+            }
+
+            const f32 outer_half_w = resolve_slider_grab_outer_half_width(grab_style, visual_size.x);
+            const f32 min_center_x = track_rect.offset.x + outer_half_w;
+            const f32 max_center_x = track_rect.offset.x + track_rect.size.x - outer_half_w;
+            f32 center_x = track_rect.offset.x + track_rect.size.x * factor;
+            if (max_center_x > min_center_x) center_x = min_center_x + (max_center_x - min_center_x) * factor;
+            else center_x = track_rect.offset.x + track_rect.size.x * 0.5f;
+            center_x = apply_edge_grab_bias(center_x, factor);
+            const f32 center_y = track_rect.offset.y + track_rect.size.y * 0.5f;
+            return resolve_slider_grab_rect(grab_style, center_x, center_y, visual_size);
         }
 
         static inline f32 resolve_slider_track_hit_depth(const amal::vec2 &widget_depth_range)
@@ -126,12 +190,62 @@ namespace auik
                    has_render_record(visual.border_draw_id);
         }
 
+        static inline amal::vec2 make_slider_requested_size(f32 length, amal::axis axis)
+        {
+            return axis == amal::axis::y ? amal::vec2{0.0f, length} : amal::vec2{length, 0.0f};
+        }
+
+        static inline amal::vec2 resolve_slider_min_body_size(const Widget &widget, const Style &track_style,
+                                                              amal::axis axis)
+        {
+            const amal::vec4 margin = track_style.margin();
+            const amal::vec4 padding = track_style.padding();
+            amal::vec2 min_size = {is_size_concrete(widget.requested_size().x) ? widget.requested_size().x : 0.0f,
+                                   is_size_concrete(widget.requested_size().y) ? widget.requested_size().y : 0.0f};
+
+            const f32 min_track_size =
+                amal::max(6.0f, track_style.border_radius() > 0.0f ? track_style.border_radius() * 2.0f : 0.0f);
+            const f32 padded_cross =
+                axis == amal::axis::y ? padding.x + padding.z : padding.y + padding.w;
+            const f32 total_cross = padded_cross > 0.0f ? padded_cross : min_track_size;
+
+            if (axis == amal::axis::y)
+            {
+                if (widget.fill_height()) min_size.y = 24.0f;
+                else if (!widget.is_height_fixed()) min_size.y = 0.0f;
+                else if (min_size.y <= 0.0f) min_size.y = 160.0f;
+                if (widget.fill_width()) min_size.x = 0.0f;
+                if (min_size.x <= 0.0f) min_size.x = total_cross;
+                else min_size.x = amal::max(min_size.x, total_cross);
+                if (min_size.y > 0.0f) min_size.y = amal::max(min_size.y, 24.0f + margin.y + margin.w);
+            }
+            else
+            {
+                if (widget.fill_width()) min_size.x = 24.0f;
+                else if (!widget.is_width_fixed()) min_size.x = 0.0f;
+                else if (min_size.x <= 0.0f) min_size.x = 160.0f;
+                if (widget.fill_height()) min_size.y = 0.0f;
+                if (min_size.y <= 0.0f) min_size.y = total_cross;
+                else min_size.y = amal::max(min_size.y, total_cross);
+                if (min_size.x > 0.0f) min_size.x = amal::max(min_size.x, 24.0f + margin.x + margin.z);
+            }
+            return min_size;
+        }
+
         static inline RectData make_slider_track_hit_rect(u32 widget_id, u32 tag_id, const amal::rect &track_rect,
-                                                          u16 clip_id, f32 depth)
+                                                          u16 clip_id, f32 depth, amal::axis axis)
         {
             amal::rect hit_rect = track_rect;
-            hit_rect.offset.y -= SLIDER_TRACK_HIT_PAD;
-            hit_rect.size.y += SLIDER_TRACK_HIT_PAD * 2.0f;
+            if (axis == amal::axis::y)
+            {
+                hit_rect.offset.x -= SLIDER_TRACK_HIT_PAD;
+                hit_rect.size.x += SLIDER_TRACK_HIT_PAD * 2.0f;
+            }
+            else
+            {
+                hit_rect.offset.y -= SLIDER_TRACK_HIT_PAD;
+                hit_rect.size.y += SLIDER_TRACK_HIT_PAD * 2.0f;
+            }
             return make_rect_data(widget_id, tag_id, hit_rect, clip_id, depth);
         }
 
@@ -168,21 +282,22 @@ namespace auik
         }
     } // namespace detail
 
-    Slider::Slider(u32 id, f32 *value, f32 min_value, f32 max_value, f32 width, f32 *range_start_value,
+    Slider::Slider(u32 id, f32 value, f32 min_value, f32 max_value, f32 range_start_value, amal::axis axis, f32 size,
                    WidgetFlags widget_flags, Widget *parent)
-        : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::drag, parent, {{0.0f, 0.0f}, {width, 0.0f}},
-                 AUIK_STYLE_TAG_SLIDER),
+        : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::drag, parent,
+                 {{0.0f, 0.0f}, detail::make_slider_requested_size(size, axis)}, AUIK_STYLE_TAG_SLIDER),
           _value(value),
           _range_start_value(range_start_value),
           _min_value(min_value),
-          _max_value(max_value)
+          _max_value(max_value),
+          _axis(axis)
     {
         _track_style.tag_id = AUIK_STYLE_TAG_SLIDER;
         _fill_style.tag_id = AUIK_STYLE_TAG_SLIDER;
         _grab_style.tag_id = AUIK_STYLE_TAG_SLIDER_GRAB;
         _grab_hit_rect = detail::make_rect_data(id, _grab_style.tag_id);
         if (_max_value < _min_value) std::swap(_min_value, _max_value);
-        set_value(value ? *value : _min_value);
+        set_value(value);
     }
 
     StyleUpdateFlags Slider::update_style()
@@ -232,14 +347,9 @@ namespace auik
 
     bool Slider::resolve_range_values(f32 &out_start, f32 &out_end) const
     {
-        if (!_value) return false;
-        if (_range_start_value)
-        {
-            if (!amal::isfinite(*_range_start_value)) return false;
-            out_start = amal::clamp(*_range_start_value, _min_value, _max_value);
-        }
-        else out_start = _min_value;
-        out_end = amal::clamp(*_value, _min_value, _max_value);
+        if (!amal::isfinite(_range_start_value) || !amal::isfinite(_value)) return false;
+        out_start = amal::clamp(_range_start_value, _min_value, _max_value);
+        out_end = amal::clamp(_value, _min_value, _max_value);
         if (out_end < out_start) std::swap(out_start, out_end);
         return true;
     }
@@ -248,23 +358,7 @@ namespace auik
     {
         const auto &track_style = get_theme()->get_style(_track_style.id);
         const amal::vec4 margin = track_style.margin();
-        const amal::vec4 padding = track_style.padding();
-
-        amal::vec2 min_size = {is_size_concrete(requested_size().x) ? requested_size().x : 0.0f,
-                               is_size_concrete(requested_size().y) ? requested_size().y : 0.0f};
-        if (fill_width()) min_size.x = 24.0f;
-        else if (!is_fixed()) min_size.x = 0.0f;
-        else if (min_size.x <= 0.0f) min_size.x = 160.0f;
-        if (fill_height()) min_size.y = 0.0f;
-
-        const f32 min_track_h =
-            amal::max(6.0f, track_style.border_radius() > 0.0f ? track_style.border_radius() * 2.0f : 0.0f);
-        const f32 padded_h = padding.y + padding.w;
-        const f32 total_h = padded_h > 0.0f ? padded_h : min_track_h;
-
-        if (min_size.y <= 0.0f) min_size.y = total_h;
-        else min_size.y = amal::max(min_size.y, total_h);
-        if (min_size.x > 0.0f) min_size.x = amal::max(min_size.x, 24.0f + margin.x + margin.z);
+        const amal::vec2 min_size = detail::resolve_slider_min_body_size(*this, track_style, _axis);
         set_required_size({min_size.x + margin.x + margin.z, min_size.y + margin.y + margin.w});
     }
 
@@ -279,10 +373,11 @@ namespace auik
         amal::vec2 slider_size = size();
         if (fill_width())
             slider_size.x = amal::max(slider_size.x - margin.x - margin.z, min_required.x - margin.x - margin.z);
-        else if (!is_fixed())
+        else if (!is_width_fixed())
             slider_size.x = amal::max(slider_size.x - margin.x - margin.z, min_required.x - margin.x - margin.z);
         else slider_size.x = amal::max(slider_size.x, min_required.x - margin.x - margin.z);
-        slider_size.y = amal::max(slider_size.y, min_required.y - margin.y - margin.w);
+        if (!fill_height() && !is_height_fixed()) slider_size.y = min_required.y - margin.y - margin.w;
+        else slider_size.y = amal::max(slider_size.y, min_required.y - margin.y - margin.w);
 
         const amal::vec2 pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
         set_position(pos);
@@ -347,7 +442,8 @@ namespace auik
         auto *quad_stream = get_primary_quads_stream();
         bool hit_pending = can_emit_hit(ctx);
         auto track_hit_rect = detail::make_slider_track_hit_rect(
-            id(), _track_style.tag_id, _track_rect, clip_id(), detail::resolve_slider_track_hit_depth(depth_range()));
+            id(), _track_style.tag_id, _track_rect, clip_id(), detail::resolve_slider_track_hit_depth(depth_range()),
+            _axis);
         if (get_rect().hit_depth != get_rect().depth) track_hit_rect.hit_depth = get_rect().hit_depth;
 
         bool layer_hit = hit_pending;
@@ -373,7 +469,6 @@ namespace auik
 
     void Slider::set_value(f32 new_value)
     {
-        if (!_value) return;
         f32 clamped = amal::clamp(new_value, _min_value, _max_value);
         if (_step > 0.0f)
         {
@@ -381,8 +476,8 @@ namespace auik
             clamped = _min_value + amal::round(normalized) * _step;
             clamped = amal::clamp(clamped, _min_value, _max_value);
         }
-        if (*_value == clamped) return;
-        *_value = clamped;
+        if (_value == clamped) return;
+        _value = clamped;
         const bool prevented = mark_changed();
         detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
         rebuild_track_fill_visual();
@@ -390,24 +485,38 @@ namespace auik
         if (!prevented) redraw_external(has_draw_record());
     }
 
-    void Slider::set_range_start_value_ptr(f32 *value_ptr)
+    void Slider::set_range_start_value(f32 value)
     {
-        _range_start_value = value_ptr;
+        _range_start_value = amal::clamp(value, _min_value, _max_value);
         rebuild_track_fill_visual();
     }
 
     void Slider::set_step(f32 step)
     {
         _step = amal::max(step, 0.0f);
-        if (_value) set_value(*_value);
+        set_value(_value);
+    }
+
+    void Slider::set_axis(amal::axis axis)
+    {
+        if (_axis == axis) return;
+        _axis = axis;
+        rebuild_cached_visuals();
+        redraw_external(has_draw_record());
+    }
+
+    void Slider::set_style_tags(u32 track_tag_id, u32 fill_tag_id, u32 grab_tag_id)
+    {
+        _track_style = {Theme::STYLE_ID_INVALID, track_tag_id};
+        _fill_style = {Theme::STYLE_ID_INVALID, fill_tag_id};
+        _grab_style = {Theme::STYLE_ID_INVALID, grab_tag_id};
+        _grab_hit_rect.id.tag_id = grab_tag_id;
+        rebuild_cached_visuals();
     }
 
     void Slider::update_value_from_mouse()
     {
-        if (!_value) return;
-        const f32 width = amal::max(_track_rect.size.x, 1e-5f);
-        const f32 mouse_x = get_mouse_pos().x - _drag_grab_offset_x;
-        const f32 t = amal::clamp((mouse_x - _track_rect.offset.x) / width, 0.0f, 1.0f);
+        const f32 t = detail::resolve_slider_factor_from_mouse(_track_rect, _drag_grab_offset, _axis);
         set_value(_min_value + (_max_value - _min_value) * t);
     }
 
@@ -439,15 +548,15 @@ namespace auik
         {
             const auto drag_id = detail::get_context().io.drag_id;
             if (detail::is_slider_grab_hit(drag_id, id(), _grab_style.tag_id))
-                _drag_grab_offset_x = detail::resolve_drag_mouse_offset_x(_grab_rect);
+                _drag_grab_offset = detail::resolve_drag_mouse_offset(_grab_rect, _axis);
             else
             {
-                _drag_grab_offset_x = 0.0f;
+                _drag_grab_offset = 0.0f;
                 update_value_from_mouse();
             }
         }
         else if (state == KeyPressState::repeat) update_value_from_mouse();
-        else if (state == KeyPressState::release) _drag_grab_offset_x = 0.0f;
+        else if (state == KeyPressState::release) _drag_grab_offset = 0.0f;
         else return;
 
         add_render_command<detail::DragEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
@@ -473,14 +582,23 @@ namespace auik
         const f32 end_t = amal::clamp((range_end - _min_value) / full, 0.0f, 1.0f);
         const f32 left_t = amal::min(start_t, end_t);
         const f32 right_t = amal::max(start_t, end_t);
-        const f32 left_x = _track_rect.offset.x + _track_rect.size.x * left_t;
-        const f32 right_x = _track_rect.offset.x + _track_rect.size.x * right_t;
-        const f32 fill_w = amal::max(right_x - left_x, 0.0f);
 
         const auto &fill_style = get_theme()->get_style(_fill_style.id);
         _track_visual.fill.rect = _track_rect;
-        _track_visual.fill.rect.offset.x = left_x;
-        _track_visual.fill.rect.size.x = fill_w;
+        if (_axis == amal::axis::y)
+        {
+            const f32 top_y = _track_rect.offset.y + _track_rect.size.y * (1.0f - right_t);
+            const f32 bottom_y = _track_rect.offset.y + _track_rect.size.y * (1.0f - left_t);
+            _track_visual.fill.rect.offset.y = top_y;
+            _track_visual.fill.rect.size.y = amal::max(bottom_y - top_y, 0.0f);
+        }
+        else
+        {
+            const f32 left_x = _track_rect.offset.x + _track_rect.size.x * left_t;
+            const f32 right_x = _track_rect.offset.x + _track_rect.size.x * right_t;
+            _track_visual.fill.rect.offset.x = left_x;
+            _track_visual.fill.rect.size.x = amal::max(right_x - left_x, 0.0f);
+        }
         _track_visual.fill.z_order = next_depth(_track_depth_range);
         const bool fill_drawable =
             fill_quads_instance_by_style(fill_style, clip_id(), _track_visual.fill) && !amal::is_rect_empty(_track_rect);
@@ -506,7 +624,7 @@ namespace auik
     {
         if (_track_style.id == Theme::STYLE_ID_INVALID || _grab_style.id == Theme::STYLE_ID_INVALID) return;
         const auto &track_style = get_theme()->get_style(_track_style.id);
-        _track_rect = detail::resolve_slider_track_rect(bounds(), track_style);
+        _track_rect = detail::resolve_slider_track_rect(bounds(), track_style, _axis);
         detail::build_quad_slider_track_visual(_track_visual, track_style, _track_rect, _track_depth_range, clip_id());
         rebuild_track_fill_visual();
     }
@@ -521,14 +639,7 @@ namespace auik
         const f32 grab_h = amal::max(amal::round(grab_size.y), 3.0f);
         const f32 range = amal::max(_max_value - _min_value, 1e-5f);
         const f32 factor = amal::clamp((value() - _min_value) / range, 0.0f, 1.0f);
-        const f32 outer_half_w = detail::resolve_slider_grab_outer_half_width(grab_style, grab_w);
-        const f32 min_center_x = _track_rect.offset.x + outer_half_w;
-        const f32 max_center_x = _track_rect.offset.x + _track_rect.size.x - outer_half_w;
-        f32 center_x = _track_rect.offset.x + _track_rect.size.x * factor;
-        if (max_center_x > min_center_x) center_x = min_center_x + (max_center_x - min_center_x) * factor;
-        else center_x = _track_rect.offset.x + _track_rect.size.x * 0.5f;
-        const f32 center_y = _track_rect.offset.y + _track_rect.size.y * 0.5f;
-        _grab_rect = detail::resolve_slider_grab_rect(grab_style, center_x, center_y, {grab_w, grab_h});
+        _grab_rect = detail::resolve_slider_grab_rect(_track_rect, grab_style, factor, {grab_w, grab_h}, _axis);
         _grab_hit_rect.bounds = _grab_rect;
         _grab_hit_rect.depth = next_depth(_grab_depth_range);
         _grab_hit_rect.hit_depth = _grab_hit_rect.depth;
@@ -551,21 +662,22 @@ namespace auik
         rebuild_grab_visual();
     }
 
-    GradientSlider::GradientSlider(u32 id, f32 *value, f32 min_value, f32 max_value, f32 width,
-                                   const amal::vec4 *colors, u32 color_count, WidgetFlags widget_flags, Widget *parent)
-        : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::drag, parent, {{0.0f, 0.0f}, {width, 0.0f}},
-                 AUIK_TAG_GRADIENT_SLIDER),
+    GradientSlider::GradientSlider(u32 id, f32 value, f32 min_value, f32 max_value,
+                                   const acul::vector<amal::vec4> &colors, amal::axis axis, f32 size,
+                                   WidgetFlags widget_flags, Widget *parent)
+        : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::drag, parent,
+                 {{0.0f, 0.0f}, detail::make_slider_requested_size(size, axis)}, AUIK_STYLE_TAG_GRADIENT_SLIDER),
           _value(value),
           _min_value(min_value),
-          _max_value(max_value)
+          _max_value(max_value),
+          _axis(axis),
+          _colors(colors)
     {
         _track_style.tag_id = AUIK_STYLE_TAG_GRADIENT_SLIDER;
         _grab_style.tag_id = AUIK_STYLE_TAG_GRADIENT_SLIDER_GRAB;
         _grab_hit_rect = detail::make_rect_data(id, _grab_style.tag_id);
-        _colors.reserve(color_count);
-        for (u32 i = 0; i < color_count; ++i) _colors.push_back(colors[i]);
         if (_max_value < _min_value) std::swap(_min_value, _max_value);
-        set_value(value ? *value : _min_value);
+        set_value(value);
     }
 
     GradientSlider::~GradientSlider() {}
@@ -625,23 +737,7 @@ namespace auik
     {
         const auto &track_style = get_theme()->get_style(_track_style.id);
         const amal::vec4 margin = track_style.margin();
-        const amal::vec4 padding = track_style.padding();
-
-        amal::vec2 min_size = {is_size_concrete(requested_size().x) ? requested_size().x : 0.0f,
-                               is_size_concrete(requested_size().y) ? requested_size().y : 0.0f};
-        if (fill_width()) min_size.x = 24.0f;
-        else if (!is_fixed()) min_size.x = 0.0f;
-        else if (min_size.x <= 0.0f) min_size.x = 160.0f;
-        if (fill_height()) min_size.y = 0.0f;
-
-        const f32 min_track_h =
-            amal::max(6.0f, track_style.border_radius() > 0.0f ? track_style.border_radius() * 2.0f : 0.0f);
-        const f32 padded_h = padding.y + padding.w;
-        const f32 total_h = padded_h > 0.0f ? padded_h : min_track_h;
-
-        if (min_size.y <= 0.0f) min_size.y = total_h;
-        else min_size.y = amal::max(min_size.y, total_h);
-        if (min_size.x > 0.0f) min_size.x = amal::max(min_size.x, 24.0f + margin.x + margin.z);
+        const amal::vec2 min_size = detail::resolve_slider_min_body_size(*this, track_style, _axis);
         set_required_size({min_size.x + margin.x + margin.z, min_size.y + margin.y + margin.w});
     }
 
@@ -656,10 +752,11 @@ namespace auik
         amal::vec2 slider_size = size();
         if (fill_width())
             slider_size.x = amal::max(slider_size.x - margin.x - margin.z, min_required.x - margin.x - margin.z);
-        else if (!is_fixed())
+        else if (!is_width_fixed())
             slider_size.x = amal::max(slider_size.x - margin.x - margin.z, min_required.x - margin.x - margin.z);
         else slider_size.x = amal::max(slider_size.x, min_required.x - margin.x - margin.z);
-        slider_size.y = amal::max(slider_size.y, min_required.y - margin.y - margin.w);
+        if (!fill_height() && !is_height_fixed()) slider_size.y = min_required.y - margin.y - margin.w;
+        else slider_size.y = amal::max(slider_size.y, min_required.y - margin.y - margin.w);
 
         const amal::vec2 pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
         set_position(pos);
@@ -728,7 +825,8 @@ namespace auik
         auto *vertex_stream = get_primary_vertex_stream();
         bool hit_pending = can_emit_hit(ctx);
         auto track_hit_rect = detail::make_slider_track_hit_rect(
-            id(), _track_style.tag_id, _track_rect, clip_id(), detail::resolve_slider_track_hit_depth(depth_range()));
+            id(), _track_style.tag_id, _track_rect, clip_id(), detail::resolve_slider_track_hit_depth(depth_range()),
+            _axis);
         if (get_rect().hit_depth != get_rect().depth) track_hit_rect.hit_depth = get_rect().hit_depth;
 
         bool layer_hit = hit_pending;
@@ -761,7 +859,6 @@ namespace auik
 
     void GradientSlider::set_value(f32 new_value)
     {
-        if (!_value) return;
         f32 clamped = amal::clamp(new_value, _min_value, _max_value);
         if (_step > 0.0f)
         {
@@ -769,8 +866,8 @@ namespace auik
             clamped = _min_value + amal::round(normalized) * _step;
             clamped = amal::clamp(clamped, _min_value, _max_value);
         }
-        if (*_value == clamped) return;
-        *_value = clamped;
+        if (_value == clamped) return;
+        _value = clamped;
         const bool prevented = mark_changed();
         detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
         rebuild_grab_visual();
@@ -780,15 +877,28 @@ namespace auik
     void GradientSlider::set_step(f32 step)
     {
         _step = amal::max(step, 0.0f);
-        if (_value) set_value(*_value);
+        set_value(_value);
+    }
+
+    void GradientSlider::set_axis(amal::axis axis)
+    {
+        if (_axis == axis) return;
+        _axis = axis;
+        rebuild_cached_visuals();
+        redraw_external(has_draw_record());
+    }
+
+    void GradientSlider::set_style_tags(u32 track_tag_id, u32 grab_tag_id)
+    {
+        _track_style = {Theme::STYLE_ID_INVALID, track_tag_id};
+        _grab_style = {Theme::STYLE_ID_INVALID, grab_tag_id};
+        _grab_hit_rect.id.tag_id = grab_tag_id;
+        rebuild_cached_visuals();
     }
 
     void GradientSlider::update_value_from_mouse()
     {
-        if (!_value) return;
-        const f32 width = amal::max(_track_rect.size.x, 1e-5f);
-        const f32 mouse_x = get_mouse_pos().x - _drag_grab_offset_x;
-        const f32 t = amal::clamp((mouse_x - _track_rect.offset.x) / width, 0.0f, 1.0f);
+        const f32 t = detail::resolve_slider_factor_from_mouse(_track_rect, _drag_grab_offset, _axis);
         set_value(_min_value + (_max_value - _min_value) * t);
     }
 
@@ -820,15 +930,15 @@ namespace auik
         {
             const auto drag_id = detail::get_context().io.drag_id;
             if (detail::is_slider_grab_hit(drag_id, id(), _grab_style.tag_id))
-                _drag_grab_offset_x = detail::resolve_drag_mouse_offset_x(_grab_rect);
+                _drag_grab_offset = detail::resolve_drag_mouse_offset(_grab_rect, _axis);
             else
             {
-                _drag_grab_offset_x = 0.0f;
+                _drag_grab_offset = 0.0f;
                 update_value_from_mouse();
             }
         }
         else if (state == KeyPressState::repeat) update_value_from_mouse();
-        else if (state == KeyPressState::release) _drag_grab_offset_x = 0.0f;
+        else if (state == KeyPressState::release) _drag_grab_offset = 0.0f;
         else return;
 
         add_render_command<detail::DragEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
@@ -838,7 +948,7 @@ namespace auik
     {
         if (_track_style.id == Theme::STYLE_ID_INVALID || _grab_style.id == Theme::STYLE_ID_INVALID) return;
         const auto &track_style = get_theme()->get_style(_track_style.id);
-        _track_rect = detail::resolve_slider_track_rect(bounds(), track_style);
+        _track_rect = detail::resolve_slider_track_rect(bounds(), track_style, _axis);
         detail::build_gradient_slider_track_visual(_track_visual, _gradient_visual, track_style, _track_rect,
                                                    _track_depth_range, clip_id(), _colors.data(),
                                                    static_cast<u32>(_colors.size()));
@@ -854,15 +964,7 @@ namespace auik
         const f32 grab_h = amal::max(amal::round(grab_size.y), 3.0f);
         const f32 range = amal::max(_max_value - _min_value, 1e-5f);
         const f32 factor = amal::clamp((value() - _min_value) / range, 0.0f, 1.0f);
-        const f32 outer_half_w = detail::resolve_slider_grab_outer_half_width(grab_style, grab_w);
-        const f32 min_center_x = _track_rect.offset.x + outer_half_w;
-        const f32 max_center_x = _track_rect.offset.x + _track_rect.size.x - outer_half_w;
-        f32 center_x = _track_rect.offset.x + _track_rect.size.x * factor;
-        if (max_center_x > min_center_x) center_x = min_center_x + (max_center_x - min_center_x) * factor;
-        else center_x = _track_rect.offset.x + _track_rect.size.x * 0.5f;
-        center_x = detail::apply_edge_grab_bias(center_x, factor);
-        const f32 center_y = _track_rect.offset.y + _track_rect.size.y * 0.5f;
-        _grab_rect = detail::resolve_slider_grab_rect(grab_style, center_x, center_y, {grab_w, grab_h});
+        _grab_rect = detail::resolve_slider_grab_rect(_track_rect, grab_style, factor, {grab_w, grab_h}, _axis);
         _grab_hit_rect.bounds = _grab_rect;
         _grab_hit_rect.depth = next_depth(_grab_depth_range);
         _grab_hit_rect.hit_depth = _grab_hit_rect.depth;
@@ -878,6 +980,8 @@ namespace auik
             const amal::vec2 border_size = resolve_grab_size(*border_style);
             const f32 border_w = amal::max(amal::round(border_size.x), _grab_rect.size.x);
             const f32 border_h = amal::max(amal::round(border_size.y), _grab_rect.size.y);
+            const f32 center_x = _grab_rect.offset.x + _grab_rect.size.x * 0.5f;
+            const f32 center_y = _grab_rect.offset.y + _grab_rect.size.y * 0.5f;
             const amal::rect border_rect =
                 detail::resolve_slider_grab_rect(*border_style, center_x, center_y, {border_w, border_h});
             detail::fill_gradient_grab_instance(*border_style, border_rect, grab_z, grab_clip_id,
@@ -896,13 +1000,18 @@ namespace auik
         rebuild_grab_visual();
     }
 
-    TransparencySlider::TransparencySlider(u32 id, f32 *value, f32 min_value, f32 max_value, f32 width,
-                                           const amal::vec4 &color, WidgetFlags widget_flags, Widget *parent)
-        : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::drag, parent, {{0.0f, 0.0f}, {width, 0.0f}},
-                 AUIK_TAG_GRADIENT_SLIDER),
+    TransparencySlider::TransparencySlider(u32 id, f32 value, f32 min_value, f32 max_value, f32 size,
+                                           const amal::vec4 &color, amal::axis axis, WidgetFlags widget_flags,
+                                           Widget *parent)
+        : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::drag, parent,
+                 {{0.0f, 0.0f}, detail::make_slider_requested_size(size, axis)}, AUIK_STYLE_TAG_GRADIENT_SLIDER),
           _value(value),
           _min_value(min_value),
           _max_value(max_value),
+          _axis(axis),
+          _checker(acul::alloc<CheckerImage>(id, detail::make_slider_requested_size(size, axis),
+                                             AUIK_STYLE_TAG_GRADIENT_SLIDER, this,
+                                             WidgetFlagBits::visible)),
           _color(color)
     {
         _track_style.tag_id = AUIK_STYLE_TAG_GRADIENT_SLIDER;
@@ -911,8 +1020,10 @@ namespace auik
         _colors.resize(2u);
         rebuild_gradient_colors();
         if (_max_value < _min_value) std::swap(_min_value, _max_value);
-        set_value(value ? *value : _min_value);
+        set_value(value);
     }
+
+    TransparencySlider::~TransparencySlider() { acul::release(_checker); }
 
     StyleUpdateFlags TransparencySlider::update_style()
     {
@@ -960,6 +1071,53 @@ namespace auik
         return {amal::max(grab_padding.x + grab_padding.z, 1.0f), amal::max(grab_padding.y + grab_padding.w, 1.0f)};
     }
 
+    amal::rect TransparencySlider::resolve_track_rect(const amal::rect &bounds, const Style &track_style) const
+    {
+        if (_axis != amal::axis::y) return detail::resolve_slider_track_rect(bounds, track_style, _axis);
+
+        const amal::vec4 track_padding = track_style.padding();
+        const f32 min_track_w =
+            amal::max(6.0f, track_style.border_radius() > 0.0f ? track_style.border_radius() * 2.0f : 0.0f);
+        const f32 padded_w = track_padding.x + track_padding.z;
+        const f32 desired_track_w = padded_w > 0.0f ? padded_w : min_track_w;
+        const f32 track_w = amal::min(bounds.size.x, desired_track_w);
+        amal::rect out = bounds;
+        out.offset.x += (bounds.size.x - track_w) * 0.5f;
+        out.size.x = track_w;
+        return out;
+    }
+
+    amal::rect TransparencySlider::resolve_grab_rect(const Style &grab_style, f32 factor,
+                                                     const amal::vec2 &visual_size) const
+    {
+        if (_axis == amal::axis::y)
+        {
+            const f32 grab_w = amal::max(amal::round(visual_size.x), 3.0f);
+            const f32 grab_h = amal::max(amal::round(visual_size.y), 3.0f);
+            const amal::vec4 margin = grab_style.margin();
+            const f32 outer_half_h = (grab_h + margin.y + margin.w) * 0.5f;
+            const f32 min_center_y = _track_rect.offset.y + outer_half_h;
+            const f32 max_center_y = _track_rect.offset.y + _track_rect.size.y - outer_half_h;
+            f32 center_y = _track_rect.offset.y + _track_rect.size.y * (1.0f - factor);
+            if (max_center_y > min_center_y) center_y = min_center_y + (max_center_y - min_center_y) * (1.0f - factor);
+            else center_y = _track_rect.offset.y + _track_rect.size.y * 0.5f;
+            const f32 center_x = _track_rect.offset.x + _track_rect.size.x * 0.5f;
+            return detail::resolve_slider_grab_rect(grab_style, center_x, center_y, {grab_w, grab_h});
+        }
+
+        const f32 grab_w = amal::max(amal::round(visual_size.x), 3.0f);
+        const f32 grab_h = amal::max(amal::round(visual_size.y), 3.0f);
+        const f32 outer_half_w = detail::resolve_slider_grab_outer_half_width(grab_style, grab_w);
+        const f32 min_center_x = _track_rect.offset.x + outer_half_w;
+        const f32 max_center_x = _track_rect.offset.x + _track_rect.size.x - outer_half_w;
+        f32 center_x = _track_rect.offset.x + _track_rect.size.x * factor;
+        if (max_center_x > min_center_x) center_x = min_center_x + (max_center_x - min_center_x) * factor;
+        else center_x = _track_rect.offset.x + _track_rect.size.x * 0.5f;
+        center_x = detail::apply_edge_grab_bias(center_x, factor);
+        const f32 center_y = _track_rect.offset.y + _track_rect.size.y * 0.5f;
+        return detail::resolve_slider_grab_rect(grab_style, center_x, center_y, {grab_w, grab_h});
+    }
+
     amal::vec4 TransparencySlider::resolve_active_color(f32 factor) const
     {
         return {_color.r, _color.g, _color.b, factor};
@@ -980,19 +1138,31 @@ namespace auik
 
         amal::vec2 min_size = {is_size_concrete(requested_size().x) ? requested_size().x : 0.0f,
                                is_size_concrete(requested_size().y) ? requested_size().y : 0.0f};
-        if (fill_width()) min_size.x = 24.0f;
-        else if (!is_fixed()) min_size.x = 0.0f;
-        else if (min_size.x <= 0.0f) min_size.x = 160.0f;
-        if (fill_height()) min_size.y = 0.0f;
-
         const f32 min_track_h =
             amal::max(6.0f, track_style.border_radius() > 0.0f ? track_style.border_radius() * 2.0f : 0.0f);
         const f32 padded_h = padding.y + padding.w;
         const f32 total_h = padded_h > 0.0f ? padded_h : min_track_h;
 
-        if (min_size.y <= 0.0f) min_size.y = total_h;
-        else min_size.y = amal::max(min_size.y, total_h);
-        if (min_size.x > 0.0f) min_size.x = amal::max(min_size.x, 24.0f + margin.x + margin.z);
+        if (_axis == amal::axis::y)
+        {
+            if (fill_height()) min_size.y = 24.0f;
+            else if (!is_height_fixed()) min_size.y = 0.0f;
+            else if (min_size.y <= 0.0f) min_size.y = 160.0f;
+            if (fill_width()) min_size.x = 0.0f;
+            if (min_size.x <= 0.0f) min_size.x = total_h;
+            else min_size.x = amal::max(min_size.x, total_h);
+            if (min_size.y > 0.0f) min_size.y = amal::max(min_size.y, 24.0f + margin.y + margin.w);
+        }
+        else
+        {
+            if (fill_width()) min_size.x = 24.0f;
+            else if (!is_width_fixed()) min_size.x = 0.0f;
+            else if (min_size.x <= 0.0f) min_size.x = 160.0f;
+            if (fill_height()) min_size.y = 0.0f;
+            if (min_size.y <= 0.0f) min_size.y = total_h;
+            else min_size.y = amal::max(min_size.y, total_h);
+            if (min_size.x > 0.0f) min_size.x = amal::max(min_size.x, 24.0f + margin.x + margin.z);
+        }
         set_required_size({min_size.x + margin.x + margin.z, min_size.y + margin.y + margin.w});
     }
 
@@ -1007,10 +1177,11 @@ namespace auik
         amal::vec2 slider_size = size();
         if (fill_width())
             slider_size.x = amal::max(slider_size.x - margin.x - margin.z, min_required.x - margin.x - margin.z);
-        else if (!is_fixed())
+        else if (!is_width_fixed())
             slider_size.x = amal::max(slider_size.x - margin.x - margin.z, min_required.x - margin.x - margin.z);
         else slider_size.x = amal::max(slider_size.x, min_required.x - margin.x - margin.z);
-        slider_size.y = amal::max(slider_size.y, min_required.y - margin.y - margin.w);
+        if (!fill_height() && !is_height_fixed()) slider_size.y = min_required.y - margin.y - margin.w;
+        else slider_size.y = amal::max(slider_size.y, min_required.y - margin.y - margin.w);
 
         const amal::vec2 pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
         set_position(pos);
@@ -1032,6 +1203,7 @@ namespace auik
         _track_rect.offset += delta;
         _grab_rect.offset += delta;
         _grab_hit_rect.bounds.offset += delta;
+        if (_checker) _checker->translate(delta);
         rebuild_track_visuals();
         rebuild_grab_visual();
     }
@@ -1047,6 +1219,7 @@ namespace auik
         _grab_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
         _grab_back_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
         _grab_hit_rect.clip_id = clip_id();
+        if (_checker) _checker->rebuild_clip_rects();
         rebuild_track_visuals();
         rebuild_grab_visual();
     }
@@ -1056,6 +1229,7 @@ namespace auik
         Widget::update_depth(depth_range);
         assign_next_depth(this->depth_range(), _track_depth_range);
         assign_next_depth(_track_depth_range, _grab_depth_range);
+        if (_checker) _checker->update_depth(_track_depth_range);
         rebuild_track_visuals();
         rebuild_grab_visual();
     }
@@ -1079,14 +1253,13 @@ namespace auik
         auto *vertex_stream = get_primary_vertex_stream();
         bool hit_pending = can_emit_hit(ctx);
         auto track_hit_rect = detail::make_slider_track_hit_rect(
-            id(), _track_style.tag_id, _track_rect, clip_id(), detail::resolve_slider_track_hit_depth(depth_range()));
+            id(), _track_style.tag_id, _track_rect, clip_id(), detail::resolve_slider_track_hit_depth(depth_range()),
+            _axis);
         if (get_rect().hit_depth != get_rect().depth) track_hit_rect.hit_depth = get_rect().hit_depth;
 
-        bool layer_hit = hit_pending;
-        emit_quads_instance(ctx, quad_stream, _track_visual.background_draw_id, _track_visual.background,
-                            track_hit_rect, _track_visual.has_layer(detail::SliderTrackVisual::LayerBits::background),
-                            layer_hit);
-        if (layer_hit) hit_pending = false;
+        if (_checker) _checker->draw_local(ctx);
+        emit_quads_hit_rect_only(ctx, _track_visual.background_draw_id, track_hit_rect, hit_pending);
+        hit_pending = false;
         if (_gradient_visual.valid || ((ctx.reason & DrawReasonBits::invalidate) &&
                                        _gradient_visual.draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID))
         {
@@ -1094,7 +1267,7 @@ namespace auik
                      hit_pending);
             hit_pending = false;
         }
-        layer_hit = hit_pending;
+        bool layer_hit = hit_pending;
         emit_quads_instance(ctx, quad_stream, _track_visual.border_draw_id, _track_visual.border, track_hit_rect,
                             _track_visual.has_layer(detail::SliderTrackVisual::LayerBits::border), layer_hit);
         if (layer_hit) hit_pending = false;
@@ -1112,7 +1285,6 @@ namespace auik
 
     void TransparencySlider::set_value(f32 new_value)
     {
-        if (!_value) return;
         f32 clamped = amal::clamp(new_value, _min_value, _max_value);
         if (_step > 0.0f)
         {
@@ -1120,8 +1292,8 @@ namespace auik
             clamped = _min_value + amal::round(normalized) * _step;
             clamped = amal::clamp(clamped, _min_value, _max_value);
         }
-        if (*_value == clamped) return;
-        *_value = clamped;
+        if (_value == clamped) return;
+        _value = clamped;
         const bool prevented = mark_changed();
         detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
         rebuild_grab_visual();
@@ -1131,7 +1303,7 @@ namespace auik
     void TransparencySlider::set_step(f32 step)
     {
         _step = amal::max(step, 0.0f);
-        if (_value) set_value(*_value);
+        set_value(_value);
     }
 
     void TransparencySlider::set_color(const amal::vec4 &color)
@@ -1143,12 +1315,39 @@ namespace auik
         rebuild_grab_visual();
     }
 
+    void TransparencySlider::set_axis(amal::axis axis)
+    {
+        if (_axis == axis) return;
+        _axis = axis;
+        rebuild_track_visuals();
+        rebuild_grab_visual();
+        redraw_external(has_draw_record());
+    }
+
+    void TransparencySlider::set_style_tags(u32 track_tag_id, u32 grab_tag_id)
+    {
+        _track_style = {Theme::STYLE_ID_INVALID, track_tag_id};
+        _grab_style = {Theme::STYLE_ID_INVALID, grab_tag_id};
+        _grab_hit_rect.id.tag_id = grab_tag_id;
+        rebuild_cached_visuals();
+    }
+
     void TransparencySlider::update_value_from_mouse()
     {
-        if (!_value) return;
-        const f32 width = amal::max(_track_rect.size.x, 1e-5f);
-        const f32 mouse_x = get_mouse_pos().x - _drag_grab_offset_x;
-        const f32 t = amal::clamp((mouse_x - _track_rect.offset.x) / width, 0.0f, 1.0f);
+        const auto mouse_pos = get_mouse_pos();
+        f32 t = 0.0f;
+        if (_axis == amal::axis::y)
+        {
+            const f32 height = amal::max(_track_rect.size.y, 1e-5f);
+            const f32 mouse_y = mouse_pos.y - _drag_grab_offset;
+            t = 1.0f - amal::clamp((mouse_y - _track_rect.offset.y) / height, 0.0f, 1.0f);
+        }
+        else
+        {
+            const f32 width = amal::max(_track_rect.size.x, 1e-5f);
+            const f32 mouse_x = mouse_pos.x - _drag_grab_offset;
+            t = amal::clamp((mouse_x - _track_rect.offset.x) / width, 0.0f, 1.0f);
+        }
         set_value(_min_value + (_max_value - _min_value) * t);
     }
 
@@ -1180,15 +1379,20 @@ namespace auik
         {
             const auto drag_id = detail::get_context().io.drag_id;
             if (detail::is_slider_grab_hit(drag_id, id(), _grab_style.tag_id))
-                _drag_grab_offset_x = detail::resolve_drag_mouse_offset_x(_grab_rect);
+            {
+                const auto mouse_pos = get_mouse_pos();
+                _drag_grab_offset =
+                    _axis == amal::axis::y ? mouse_pos.y - (_grab_rect.offset.y + _grab_rect.size.y * 0.5f)
+                                           : mouse_pos.x - (_grab_rect.offset.x + _grab_rect.size.x * 0.5f);
+            }
             else
             {
-                _drag_grab_offset_x = 0.0f;
+                _drag_grab_offset = 0.0f;
                 update_value_from_mouse();
             }
         }
         else if (state == KeyPressState::repeat) update_value_from_mouse();
-        else if (state == KeyPressState::release) _drag_grab_offset_x = 0.0f;
+        else if (state == KeyPressState::release) _drag_grab_offset = 0.0f;
         else return;
 
         add_render_command<detail::DragEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
@@ -1198,10 +1402,17 @@ namespace auik
     {
         if (_track_style.id == Theme::STYLE_ID_INVALID || _grab_style.id == Theme::STYLE_ID_INVALID) return;
         const auto &track_style = get_theme()->get_style(_track_style.id);
-        _track_rect = detail::resolve_slider_track_rect(bounds(), track_style);
-        detail::build_quad_slider_track_visual(_track_visual, track_style, _track_rect, _track_depth_range, clip_id());
-        _track_visual.background.mask |= (static_cast<u32>(AUIK_HAS_CHECKER_BIT) << 20u);
-        _track_visual.background.background_color = 0;
+        _track_rect = resolve_track_rect(bounds(), track_style);
+        _track_visual.clear_payload();
+        if (_checker)
+        {
+            _checker->set_position(_track_rect.offset);
+            _checker->set_size(_track_rect.size);
+            _checker->set_layout_size(_track_rect.size);
+            _checker->set_clip_id(clip_id());
+            _checker->update_style();
+            _checker->update_depth(_track_depth_range);
+        }
 
         _gradient_visual.clear_payload();
         if (!amal::is_rect_empty(_track_rect) && _colors.size() >= 2u)
@@ -1232,15 +1443,7 @@ namespace auik
         const f32 grab_h = amal::max(amal::round(grab_size.y), 3.0f);
         const f32 range = amal::max(_max_value - _min_value, 1e-5f);
         const f32 factor = amal::clamp((value() - _min_value) / range, 0.0f, 1.0f);
-        const f32 outer_half_w = detail::resolve_slider_grab_outer_half_width(grab_style, grab_w);
-        const f32 min_center_x = _track_rect.offset.x + outer_half_w;
-        const f32 max_center_x = _track_rect.offset.x + _track_rect.size.x - outer_half_w;
-        f32 center_x = _track_rect.offset.x + _track_rect.size.x * factor;
-        if (max_center_x > min_center_x) center_x = min_center_x + (max_center_x - min_center_x) * factor;
-        else center_x = _track_rect.offset.x + _track_rect.size.x * 0.5f;
-        center_x = detail::apply_edge_grab_bias(center_x, factor);
-        const f32 center_y = _track_rect.offset.y + _track_rect.size.y * 0.5f;
-        _grab_rect = detail::resolve_slider_grab_rect(grab_style, center_x, center_y, {grab_w, grab_h});
+        _grab_rect = resolve_grab_rect(grab_style, factor, {grab_w, grab_h});
         _grab_hit_rect.bounds = _grab_rect;
         _grab_hit_rect.depth = next_depth(_grab_depth_range);
         _grab_hit_rect.hit_depth = _grab_hit_rect.depth;
@@ -1256,6 +1459,8 @@ namespace auik
             const amal::vec2 border_size = resolve_grab_size(*border_style);
             const f32 border_w = amal::max(amal::round(border_size.x), _grab_rect.size.x);
             const f32 border_h = amal::max(amal::round(border_size.y), _grab_rect.size.y);
+            const f32 center_x = _grab_rect.offset.x + _grab_rect.size.x * 0.5f;
+            const f32 center_y = _grab_rect.offset.y + _grab_rect.size.y * 0.5f;
             const amal::rect border_rect =
                 detail::resolve_slider_grab_rect(*border_style, center_x, center_y, {border_w, border_h});
             detail::fill_gradient_grab_instance(*border_style, border_rect, grab_z, grab_clip_id,
@@ -1274,14 +1479,15 @@ namespace auik
         rebuild_grab_visual();
     }
 
-    RangeSlider::RangeSlider(u32 id, f32 *from_value, f32 *to_value, f32 min_value, f32 max_value, f32 width,
-                             WidgetFlags widget_flags, Widget *parent)
-        : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::drag, parent, {{0.0f, 0.0f}, {width, 0.0f}},
-                 AUIK_TAG_RANGE_SLIDER),
+    RangeSlider::RangeSlider(u32 id, f32 from_value, f32 to_value, f32 min_value, f32 max_value, amal::axis axis,
+                             f32 size, WidgetFlags widget_flags, Widget *parent)
+        : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::drag, parent,
+                 {{0.0f, 0.0f}, detail::make_slider_requested_size(size, axis)}, AUIK_STYLE_TAG_SLIDER),
           _from_value(from_value),
           _to_value(to_value),
           _min_value(min_value),
-          _max_value(max_value)
+          _max_value(max_value),
+          _axis(axis)
     {
         _track_style.tag_id = AUIK_STYLE_TAG_SLIDER;
         _fill_style.tag_id = AUIK_STYLE_TAG_SLIDER;
@@ -1292,7 +1498,7 @@ namespace auik
         _to_hit_rect =
             detail::make_rect_data(id, _to_grab_style.tag_id, {}, 0xFFFFu, 0.0f, 0u, static_cast<u32>(ActiveGrab::to));
         if (_max_value < _min_value) std::swap(_min_value, _max_value);
-        set_values(from_value ? *from_value : _min_value, to_value ? *to_value : _max_value);
+        set_values(from_value, to_value);
     }
 
     StyleUpdateFlags RangeSlider::update_style()
@@ -1366,23 +1572,7 @@ namespace auik
     {
         const auto &track_style = get_theme()->get_style(_track_style.id);
         const amal::vec4 margin = track_style.margin();
-        const amal::vec4 padding = track_style.padding();
-
-        amal::vec2 min_size = {is_size_concrete(requested_size().x) ? requested_size().x : 0.0f,
-                               is_size_concrete(requested_size().y) ? requested_size().y : 0.0f};
-        if (fill_width()) min_size.x = 24.0f;
-        else if (!is_fixed()) min_size.x = 0.0f;
-        else if (min_size.x <= 0.0f) min_size.x = 160.0f;
-        if (fill_height()) min_size.y = 0.0f;
-
-        const f32 min_track_h =
-            amal::max(6.0f, track_style.border_radius() > 0.0f ? track_style.border_radius() * 2.0f : 0.0f);
-        const f32 padded_h = padding.y + padding.w;
-        const f32 total_h = padded_h > 0.0f ? padded_h : min_track_h;
-
-        if (min_size.y <= 0.0f) min_size.y = total_h;
-        else min_size.y = amal::max(min_size.y, total_h);
-        if (min_size.x > 0.0f) min_size.x = amal::max(min_size.x, 24.0f + margin.x + margin.z);
+        const amal::vec2 min_size = detail::resolve_slider_min_body_size(*this, track_style, _axis);
         set_required_size({min_size.x + margin.x + margin.z, min_size.y + margin.y + margin.w});
     }
     void RangeSlider::update_layout(bool min_size_known)
@@ -1396,10 +1586,11 @@ namespace auik
         amal::vec2 slider_size = size();
         if (fill_width())
             slider_size.x = amal::max(slider_size.x - margin.x - margin.z, min_required.x - margin.x - margin.z);
-        else if (!is_fixed())
+        else if (!is_width_fixed())
             slider_size.x = amal::max(slider_size.x - margin.x - margin.z, min_required.x - margin.x - margin.z);
         else slider_size.x = amal::max(slider_size.x, min_required.x - margin.x - margin.z);
-        slider_size.y = amal::max(slider_size.y, min_required.y - margin.y - margin.w);
+        if (!fill_height() && !is_height_fixed()) slider_size.y = min_required.y - margin.y - margin.w;
+        else slider_size.y = amal::max(slider_size.y, min_required.y - margin.y - margin.w);
 
         const amal::vec2 pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
         set_position(pos);
@@ -1470,7 +1661,8 @@ namespace auik
         auto *quad_stream = get_primary_quads_stream();
         bool hit_pending = can_emit_hit(ctx);
         auto track_hit_rect = detail::make_slider_track_hit_rect(
-            id(), _track_style.tag_id, _track_rect, clip_id(), detail::resolve_slider_track_hit_depth(depth_range()));
+            id(), _track_style.tag_id, _track_rect, clip_id(), detail::resolve_slider_track_hit_depth(depth_range()),
+            _axis);
         if (get_rect().hit_depth != get_rect().depth) track_hit_rect.hit_depth = get_rect().hit_depth;
 
         bool layer_hit = hit_pending;
@@ -1507,13 +1699,12 @@ namespace auik
 
     void RangeSlider::set_values(f32 from_value, f32 to_value)
     {
-        if (!_from_value || !_to_value) return;
         f32 from_clamped = clamped_value(from_value);
         f32 to_clamped = clamped_value(to_value);
         if (from_clamped > to_clamped) std::swap(from_clamped, to_clamped);
-        const bool changed = (*_from_value != from_clamped) || (*_to_value != to_clamped);
-        *_from_value = from_clamped;
-        *_to_value = to_clamped;
+        const bool changed = (_from_value != from_clamped) || (_to_value != to_clamped);
+        _from_value = from_clamped;
+        _to_value = to_clamped;
         if (!changed) return;
         const bool prevented = mark_changed();
         detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
@@ -1525,7 +1716,27 @@ namespace auik
     void RangeSlider::set_step(f32 step)
     {
         _step = amal::max(step, 0.0f);
-        if (_from_value && _to_value) set_values(*_from_value, *_to_value);
+        set_values(_from_value, _to_value);
+    }
+
+    void RangeSlider::set_axis(amal::axis axis)
+    {
+        if (_axis == axis) return;
+        _axis = axis;
+        rebuild_cached_visuals();
+        redraw_external(has_draw_record());
+    }
+
+    void RangeSlider::set_style_tags(u32 track_tag_id, u32 fill_tag_id, u32 from_grab_tag_id, u32 to_grab_tag_id)
+    {
+        _track_style = {Theme::STYLE_ID_INVALID, track_tag_id};
+        _fill_style = {Theme::STYLE_ID_INVALID, fill_tag_id};
+        _from_grab_style = {Theme::STYLE_ID_INVALID, from_grab_tag_id};
+        _to_grab_style = {Theme::STYLE_ID_INVALID, to_grab_tag_id};
+        _from_hit_rect.id.tag_id = from_grab_tag_id;
+        _to_hit_rect.id.tag_id = to_grab_tag_id;
+        rebuild_track_visuals();
+        rebuild_grab_visuals();
     }
 
     amal::vec2 RangeSlider::resolve_grab_size(const Style &grab_style) const
@@ -1534,12 +1745,20 @@ namespace auik
         return {amal::max(grab_padding.x + grab_padding.z, 1.0f), amal::max(grab_padding.y + grab_padding.w, 1.0f)};
     }
 
-    f32 RangeSlider::resolve_grab_center_x(f32 value, f32 outer_half_grab_w) const
+    f32 RangeSlider::resolve_grab_center(f32 value, f32 outer_half_grab) const
     {
         const f32 range = amal::max(_max_value - _min_value, 1e-5f);
         const f32 factor = amal::clamp((value - _min_value) / range, 0.0f, 1.0f);
-        const f32 min_center_x = _track_rect.offset.x + outer_half_grab_w;
-        const f32 max_center_x = _track_rect.offset.x + _track_rect.size.x - outer_half_grab_w;
+        if (_axis == amal::axis::y)
+        {
+            const f32 min_center_y = _track_rect.offset.y + outer_half_grab;
+            const f32 max_center_y = _track_rect.offset.y + _track_rect.size.y - outer_half_grab;
+            if (max_center_y > min_center_y) return min_center_y + (max_center_y - min_center_y) * (1.0f - factor);
+            return _track_rect.offset.y + _track_rect.size.y * 0.5f;
+        }
+
+        const f32 min_center_x = _track_rect.offset.x + outer_half_grab;
+        const f32 max_center_x = _track_rect.offset.x + _track_rect.size.x - outer_half_grab;
         if (max_center_x > min_center_x) return min_center_x + (max_center_x - min_center_x) * factor;
         return _track_rect.offset.x + _track_rect.size.x * 0.5f;
     }
@@ -1549,7 +1768,7 @@ namespace auik
         if (_track_style.id == Theme::STYLE_ID_INVALID || _fill_style.id == Theme::STYLE_ID_INVALID) return;
 
         const auto &track_style = get_theme()->get_style(_track_style.id);
-        _track_rect = detail::resolve_slider_track_rect(bounds(), track_style);
+        _track_rect = detail::resolve_slider_track_rect(bounds(), track_style, _axis);
 
         _track_visual.clear_payload();
         _track_visual.background.rect = _track_rect;
@@ -1557,24 +1776,32 @@ namespace auik
         if (fill_quads_instance_by_style(track_style, clip_id(), _track_visual.background))
             _track_visual.set_layer(detail::SliderTrackVisual::LayerBits::background);
 
-        if (_from_value && _to_value)
         {
-            const f32 from_clamped = amal::clamp(*_from_value, _min_value, _max_value);
-            const f32 to_clamped = amal::clamp(*_to_value, _min_value, _max_value);
+            const f32 from_clamped = amal::clamp(_from_value, _min_value, _max_value);
+            const f32 to_clamped = amal::clamp(_to_value, _min_value, _max_value);
             const f32 left_value = amal::min(from_clamped, to_clamped);
             const f32 right_value = amal::max(from_clamped, to_clamped);
             const f32 full = amal::max(_max_value - _min_value, 1e-5f);
             const f32 left_t = amal::clamp((left_value - _min_value) / full, 0.0f, 1.0f);
             const f32 right_t = amal::clamp((right_value - _min_value) / full, 0.0f, 1.0f);
-            const f32 left_x = _track_rect.offset.x + _track_rect.size.x * left_t;
-            const f32 right_x = _track_rect.offset.x + _track_rect.size.x * right_t;
-            const f32 fill_w = amal::max(right_x - left_x, 0.0f);
-            if (fill_w > 0.0f)
+            if (right_t > left_t)
             {
                 const auto &fill_style = get_theme()->get_style(_fill_style.id);
                 _track_visual.fill.rect = _track_rect;
-                _track_visual.fill.rect.offset.x = left_x;
-                _track_visual.fill.rect.size.x = fill_w;
+                if (_axis == amal::axis::y)
+                {
+                    const f32 top_y = _track_rect.offset.y + _track_rect.size.y * (1.0f - right_t);
+                    const f32 bottom_y = _track_rect.offset.y + _track_rect.size.y * (1.0f - left_t);
+                    _track_visual.fill.rect.offset.y = top_y;
+                    _track_visual.fill.rect.size.y = amal::max(bottom_y - top_y, 0.0f);
+                }
+                else
+                {
+                    const f32 left_x = _track_rect.offset.x + _track_rect.size.x * left_t;
+                    const f32 right_x = _track_rect.offset.x + _track_rect.size.x * right_t;
+                    _track_visual.fill.rect.offset.x = left_x;
+                    _track_visual.fill.rect.size.x = amal::max(right_x - left_x, 0.0f);
+                }
                 _track_visual.fill.z_order = next_depth(_track_depth_range);
                 if (fill_quads_instance_by_style(fill_style, clip_id(), _track_visual.fill))
                     _track_visual.set_layer(detail::SliderTrackVisual::LayerBits::fill);
@@ -1589,7 +1816,6 @@ namespace auik
 
     void RangeSlider::rebuild_grab_visuals()
     {
-        if (!_from_value || !_to_value) return;
         if (_from_grab_style.id == Theme::STYLE_ID_INVALID || _to_grab_style.id == Theme::STYLE_ID_INVALID)
         {
             const u32 parent_id = parent() ? parent()->id() : 0u;
@@ -1608,15 +1834,22 @@ namespace auik
         const f32 from_h = amal::max(amal::round(from_size.y), 3.0f);
         const f32 to_w = amal::max(amal::round(to_size.x), 3.0f);
         const f32 to_h = amal::max(amal::round(to_size.y), 3.0f);
-        const f32 from_outer_half_w = detail::resolve_slider_grab_outer_half_width(from_style, from_w);
-        const f32 to_outer_half_w = detail::resolve_slider_grab_outer_half_width(to_style, to_w);
-        const f32 center_y = _track_rect.offset.y + _track_rect.size.y * 0.5f;
+        const f32 from_outer_half = _axis == amal::axis::y
+                                        ? detail::resolve_slider_grab_outer_half_height(from_style, from_h)
+                                        : detail::resolve_slider_grab_outer_half_width(from_style, from_w);
+        const f32 to_outer_half = _axis == amal::axis::y
+                                      ? detail::resolve_slider_grab_outer_half_height(to_style, to_h)
+                                      : detail::resolve_slider_grab_outer_half_width(to_style, to_w);
         const u16 grab_clip_id = clip_id();
 
-        const f32 from_center_x = resolve_grab_center_x(*_from_value, from_outer_half_w);
-        const f32 to_center_x = resolve_grab_center_x(*_to_value, to_outer_half_w);
+        const f32 from_center = resolve_grab_center(_from_value, from_outer_half);
+        const f32 to_center = resolve_grab_center(_to_value, to_outer_half);
+        const f32 center_x = _track_rect.offset.x + _track_rect.size.x * 0.5f;
+        const f32 center_y = _track_rect.offset.y + _track_rect.size.y * 0.5f;
 
-        _from_rect = detail::resolve_slider_grab_rect(from_style, from_center_x, center_y, {from_w, from_h});
+        _from_rect = _axis == amal::axis::y
+                         ? detail::resolve_slider_grab_rect(from_style, center_x, from_center, {from_w, from_h})
+                         : detail::resolve_slider_grab_rect(from_style, from_center, center_y, {from_w, from_h});
         _from_hit_rect.bounds = _from_rect;
         _from_hit_rect.depth = next_depth(_grab_depth_range);
         _from_hit_rect.hit_depth = _from_hit_rect.depth;
@@ -1624,7 +1857,9 @@ namespace auik
         _from_visual.z_order = next_depth(_grab_depth_range);
         fill_quads_instance_by_style(from_style, grab_clip_id, _from_visual);
 
-        _to_rect = detail::resolve_slider_grab_rect(to_style, to_center_x, center_y, {to_w, to_h});
+        _to_rect = _axis == amal::axis::y
+                       ? detail::resolve_slider_grab_rect(to_style, center_x, to_center, {to_w, to_h})
+                       : detail::resolve_slider_grab_rect(to_style, to_center, center_y, {to_w, to_h});
         _to_hit_rect.bounds = _to_rect;
         _to_hit_rect.depth = next_depth(_grab_depth_range);
         _to_hit_rect.hit_depth = _to_hit_rect.depth;
@@ -1666,22 +1901,27 @@ namespace auik
             return;
         }
 
-        const f32 mouse_x = get_mouse_pos().x;
-        const f32 track_mid_x = _track_rect.offset.x + _track_rect.size.x * 0.5f;
-        _active_grab = mouse_x > track_mid_x ? ActiveGrab::to : ActiveGrab::from;
+        const auto mouse_pos = get_mouse_pos();
+        if (_axis == amal::axis::y)
+        {
+            const f32 track_mid_y = _track_rect.offset.y + _track_rect.size.y * 0.5f;
+            _active_grab = mouse_pos.y < track_mid_y ? ActiveGrab::to : ActiveGrab::from;
+        }
+        else
+        {
+            const f32 track_mid_x = _track_rect.offset.x + _track_rect.size.x * 0.5f;
+            _active_grab = mouse_pos.x > track_mid_x ? ActiveGrab::to : ActiveGrab::from;
+        }
     }
 
     void RangeSlider::update_active_value_from_mouse()
     {
-        if (!_from_value || !_to_value) return;
         if (_active_grab == ActiveGrab::none) return;
-        const f32 width = amal::max(_track_rect.size.x, 1e-5f);
-        const f32 mouse_x = get_mouse_pos().x - _drag_grab_offset_x;
-        const f32 t = amal::clamp((mouse_x - _track_rect.offset.x) / width, 0.0f, 1.0f);
+        const f32 t = detail::resolve_slider_factor_from_mouse(_track_rect, _drag_grab_offset, _axis);
         const f32 target = _min_value + (_max_value - _min_value) * t;
 
-        if (_active_grab == ActiveGrab::from) set_values(amal::min(target, *_to_value), *_to_value);
-        else set_values(*_from_value, amal::max(target, *_from_value));
+        if (_active_grab == ActiveGrab::from) set_values(amal::min(target, _to_value), _to_value);
+        else set_values(_from_value, amal::max(target, _from_value));
     }
 
     void RangeSlider::on_click(MouseKey key, KeyPressState state, u32 click_count)
@@ -1719,11 +1959,11 @@ namespace auik
                                    drag_id.element_id == static_cast<u32>(ActiveGrab::from);
             const bool drag_to = drag_id.widget_id == id() && drag_id.tag_id == _to_grab_style.tag_id &&
                                  drag_id.element_id == static_cast<u32>(ActiveGrab::to);
-            if (drag_from) _drag_grab_offset_x = detail::resolve_drag_mouse_offset_x(_from_rect);
-            else if (drag_to) _drag_grab_offset_x = detail::resolve_drag_mouse_offset_x(_to_rect);
+            if (drag_from) _drag_grab_offset = detail::resolve_drag_mouse_offset(_from_rect, _axis);
+            else if (drag_to) _drag_grab_offset = detail::resolve_drag_mouse_offset(_to_rect, _axis);
             else
             {
-                _drag_grab_offset_x = 0.0f;
+                _drag_grab_offset = 0.0f;
                 update_active_value_from_mouse();
             }
         }
@@ -1735,10 +1975,209 @@ namespace auik
         else if (state == KeyPressState::release)
         {
             _active_grab = ActiveGrab::none;
-            _drag_grab_offset_x = 0.0f;
+            _drag_grab_offset = 0.0f;
         }
         else return;
 
         add_render_command<detail::DragEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
     }
+
+    namespace
+    {
+        void write_slider(acul::bin_stream &stream, umbf::Block *block)
+        {
+            auto *widget = static_cast<Slider *>(block);
+            detail::write_widget_common_data(stream, *widget);
+            stream.write(widget->value())
+                .write(widget->range_start_value())
+                .write(widget->min_value())
+                .write(widget->max_value())
+                .write(widget->step())
+                .write(static_cast<u8>(widget->axis()))
+                .write(widget->track_style_tag())
+                .write(widget->fill_style_tag())
+                .write(widget->grab_style_tag());
+        }
+
+        umbf::Block *read_slider(acul::bin_stream &stream)
+        {
+            const auto common = detail::read_widget_common_data(stream);
+            f32 value = 0.0f;
+            f32 range_start = 0.0f;
+            f32 min_value = 0.0f;
+            f32 max_value = 1.0f;
+            f32 step = 0.0f;
+            u8 axis = static_cast<u8>(amal::axis::x);
+            u32 track_style_tag = AUIK_STYLE_TAG_SLIDER;
+            u32 fill_style_tag = AUIK_STYLE_TAG_SLIDER;
+            u32 grab_style_tag = AUIK_STYLE_TAG_SLIDER_GRAB;
+            stream.read(value)
+                .read(range_start)
+                .read(min_value)
+                .read(max_value)
+                .read(step)
+                .read(axis)
+                .read(track_style_tag)
+                .read(fill_style_tag)
+                .read(grab_style_tag);
+
+            const f32 size = amal::axis(axis) == amal::axis::y ? common.requested_size.y : common.requested_size.x;
+            auto *widget = acul::alloc<Slider>(common.id, value, min_value, max_value, range_start, amal::axis(axis),
+                                               size, WidgetFlags(common.widget_flags), nullptr);
+            widget->set_style_tags(track_style_tag, fill_style_tag, grab_style_tag);
+            widget->set_step(step);
+            detail::apply_widget_common_data(widget, common);
+            return widget;
+        }
+
+        void write_gradient_slider(acul::bin_stream &stream, umbf::Block *block)
+        {
+            auto *widget = static_cast<GradientSlider *>(block);
+            detail::write_widget_common_data(stream, *widget);
+            stream.write(widget->value())
+                .write(widget->min_value())
+                .write(widget->max_value())
+                .write(widget->step())
+                .write(static_cast<u8>(widget->axis()))
+                .write(widget->track_style_tag())
+                .write(widget->grab_style_tag());
+            stream.write(static_cast<u32>(widget->colors().size()));
+            if (!widget->colors().empty())
+                stream.write(widget->colors().data(), static_cast<u32>(widget->colors().size()));
+        }
+
+        umbf::Block *read_gradient_slider(acul::bin_stream &stream)
+        {
+            const auto common = detail::read_widget_common_data(stream);
+            f32 value = 0.0f;
+            f32 min_value = 0.0f;
+            f32 max_value = 1.0f;
+            f32 step = 0.0f;
+            u8 axis = static_cast<u8>(amal::axis::x);
+            u32 track_style_tag = AUIK_STYLE_TAG_GRADIENT_SLIDER;
+            u32 grab_style_tag = AUIK_STYLE_TAG_GRADIENT_SLIDER_GRAB;
+            stream.read(value)
+                .read(min_value)
+                .read(max_value)
+                .read(step)
+                .read(axis)
+                .read(track_style_tag)
+                .read(grab_style_tag);
+
+            u32 color_count = 0u;
+            stream.read(color_count);
+            acul::vector<amal::vec4> colors;
+            colors.resize(color_count);
+            if (color_count != 0u) stream.read(colors.data(), color_count);
+
+            const f32 size = amal::axis(axis) == amal::axis::y ? common.requested_size.y : common.requested_size.x;
+            auto *widget = acul::alloc<GradientSlider>(common.id, value, min_value, max_value, colors,
+                                                       amal::axis(axis), size, WidgetFlags(common.widget_flags),
+                                                       nullptr);
+            widget->set_style_tags(track_style_tag, grab_style_tag);
+            widget->set_step(step);
+            detail::apply_widget_common_data(widget, common);
+            return widget;
+        }
+
+        void write_transparency_slider(acul::bin_stream &stream, umbf::Block *block)
+        {
+            auto *widget = static_cast<TransparencySlider *>(block);
+            detail::write_widget_common_data(stream, *widget);
+            stream.write(widget->value())
+                .write(widget->min_value())
+                .write(widget->max_value())
+                .write(widget->step())
+                .write(widget->color())
+                .write(static_cast<u8>(widget->axis()))
+                .write(widget->track_style_tag())
+                .write(widget->grab_style_tag());
+        }
+
+        umbf::Block *read_transparency_slider(acul::bin_stream &stream)
+        {
+            const auto common = detail::read_widget_common_data(stream);
+            f32 value = 0.0f;
+            f32 min_value = 0.0f;
+            f32 max_value = 1.0f;
+            f32 step = 0.0f;
+            amal::vec4 color{1.0f, 1.0f, 1.0f, 1.0f};
+            u8 axis = static_cast<u8>(amal::axis::x);
+            u32 track_style_tag = AUIK_STYLE_TAG_GRADIENT_SLIDER;
+            u32 grab_style_tag = AUIK_STYLE_TAG_GRADIENT_SLIDER_GRAB;
+            stream.read(value)
+                .read(min_value)
+                .read(max_value)
+                .read(step)
+                .read(color)
+                .read(axis)
+                .read(track_style_tag)
+                .read(grab_style_tag);
+
+            const f32 size = amal::axis(axis) == amal::axis::y ? common.requested_size.y : common.requested_size.x;
+            auto *widget = acul::alloc<TransparencySlider>(common.id, value, min_value, max_value, size, color,
+                                                           amal::axis(axis), WidgetFlags(common.widget_flags), nullptr);
+            widget->set_style_tags(track_style_tag, grab_style_tag);
+            widget->set_step(step);
+            detail::apply_widget_common_data(widget, common);
+            return widget;
+        }
+
+        void write_range_slider(acul::bin_stream &stream, umbf::Block *block)
+        {
+            auto *widget = static_cast<RangeSlider *>(block);
+            detail::write_widget_common_data(stream, *widget);
+            stream.write(widget->from_value())
+                .write(widget->to_value())
+                .write(widget->min_value())
+                .write(widget->max_value())
+                .write(widget->step())
+                .write(static_cast<u8>(widget->axis()))
+                .write(widget->track_style_tag())
+                .write(widget->fill_style_tag())
+                .write(widget->from_grab_style_tag())
+                .write(widget->to_grab_style_tag());
+        }
+
+        umbf::Block *read_range_slider(acul::bin_stream &stream)
+        {
+            const auto common = detail::read_widget_common_data(stream);
+            f32 from_value = 0.0f;
+            f32 to_value = 1.0f;
+            f32 min_value = 0.0f;
+            f32 max_value = 1.0f;
+            f32 step = 0.0f;
+            u8 axis = static_cast<u8>(amal::axis::x);
+            u32 track_style_tag = AUIK_STYLE_TAG_SLIDER;
+            u32 fill_style_tag = AUIK_STYLE_TAG_SLIDER;
+            u32 from_grab_style_tag = AUIK_STYLE_TAG_SLIDER_GRAB;
+            u32 to_grab_style_tag = AUIK_STYLE_TAG_SLIDER_GRAB;
+            stream.read(from_value)
+                .read(to_value)
+                .read(min_value)
+                .read(max_value)
+                .read(step)
+                .read(axis)
+                .read(track_style_tag)
+                .read(fill_style_tag)
+                .read(from_grab_style_tag)
+                .read(to_grab_style_tag);
+
+            const f32 size = amal::axis(axis) == amal::axis::y ? common.requested_size.y : common.requested_size.x;
+            auto *widget = acul::alloc<RangeSlider>(common.id, from_value, to_value, min_value, max_value,
+                                                    amal::axis(axis), size, WidgetFlags(common.widget_flags), nullptr);
+            widget->set_style_tags(track_style_tag, fill_style_tag, from_grab_style_tag, to_grab_style_tag);
+            widget->set_step(step);
+            detail::apply_widget_common_data(widget, common);
+            return widget;
+        }
+    } // namespace
+
+    namespace streams
+    {
+        AUIK_EXPORT const umbf::streams::Stream slider{read_slider, write_slider};
+        AUIK_EXPORT const umbf::streams::Stream gradient_slider{read_gradient_slider, write_gradient_slider};
+        AUIK_EXPORT const umbf::streams::Stream transparency_slider{read_transparency_slider, write_transparency_slider};
+        AUIK_EXPORT const umbf::streams::Stream range_slider{read_range_slider, write_range_slider};
+    } // namespace streams
 } // namespace auik

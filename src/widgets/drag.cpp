@@ -1,6 +1,7 @@
 #include <acul/string/utils.hpp>
 #include <auik/auik.hpp>
 #include <auik/widgets/drag.hpp>
+#include "../core/session_stream_utils.hpp"
 
 namespace auik
 {
@@ -453,4 +454,110 @@ namespace auik
         : Draggable(id, value, min_value, max_value, speed, size, flags, parent, unit_resolver, default_unit)
     {
     }
+
+    namespace
+    {
+        void write_drag_int(acul::bin_stream &stream, umbf::Block *block)
+        {
+            auto *widget = static_cast<DragInt *>(block);
+            detail::write_widget_common_data(stream, *widget);
+            stream.write(widget->value())
+                .write(widget->min_value())
+                .write(widget->max_value())
+                .write(widget->speed())
+                .write(static_cast<u32>(widget->text_flags))
+                .write(widget->style_tag());
+        }
+
+        umbf::Block *read_drag_int(acul::bin_stream &stream)
+        {
+            const auto common = detail::read_widget_common_data(stream);
+            int value = 0;
+            int min_value = std::numeric_limits<int>::lowest();
+            int max_value = std::numeric_limits<int>::max();
+            f32 speed = 1.0f;
+            u32 text_flags = 0u;
+            u32 style_tag = AUIK_STYLE_TAG_TEXTBOX;
+            stream.read(value).read(min_value).read(max_value).read(speed).read(text_flags).read(style_tag);
+
+            auto *widget = acul::alloc<DragInt>(common.id, nullptr, min_value, max_value, speed,
+                                                common.requested_size, WidgetFlags(common.widget_flags), nullptr);
+            widget->set_style_tag(style_tag);
+            widget->text_flags = TextFlags(text_flags);
+            widget->set_value(value);
+            detail::apply_widget_common_data(widget, common);
+            return widget;
+        }
+
+        void write_drag_float(acul::bin_stream &stream, umbf::Block *block)
+        {
+            auto *widget = static_cast<DragFloat *>(block);
+            detail::write_widget_common_data(stream, *widget);
+            stream.write(widget->value())
+                .write(widget->min_value())
+                .write(widget->max_value())
+                .write(widget->speed())
+                .write(static_cast<u32>(widget->text_flags))
+                .write(widget->style_tag());
+        }
+
+        umbf::Block *read_drag_float(acul::bin_stream &stream)
+        {
+            const auto common = detail::read_widget_common_data(stream);
+            f32 value = 0.0f;
+            f32 min_value = std::numeric_limits<f32>::lowest();
+            f32 max_value = std::numeric_limits<f32>::max();
+            f32 speed = 1.0f;
+            u32 text_flags = 0u;
+            u32 style_tag = AUIK_STYLE_TAG_TEXTBOX;
+            stream.read(value).read(min_value).read(max_value).read(speed).read(text_flags).read(style_tag);
+
+            auto *widget = acul::alloc<DragFloat>(common.id, nullptr, min_value, max_value, speed,
+                                                  common.requested_size, WidgetFlags(common.widget_flags), nullptr);
+            widget->set_style_tag(style_tag);
+            widget->text_flags = TextFlags(text_flags);
+            widget->set_value(value);
+            detail::apply_widget_common_data(widget, common);
+            return widget;
+        }
+
+        void write_drag_double(acul::bin_stream &stream, umbf::Block *block)
+        {
+            auto *widget = static_cast<DragDouble *>(block);
+            detail::write_widget_common_data(stream, *widget);
+            stream.write(widget->value())
+                .write(widget->min_value())
+                .write(widget->max_value())
+                .write(widget->speed())
+                .write(static_cast<u32>(widget->text_flags))
+                .write(widget->style_tag());
+        }
+
+        umbf::Block *read_drag_double(acul::bin_stream &stream)
+        {
+            const auto common = detail::read_widget_common_data(stream);
+            f64 value = 0.0;
+            f64 min_value = std::numeric_limits<f64>::lowest();
+            f64 max_value = std::numeric_limits<f64>::max();
+            f32 speed = 1.0f;
+            u32 text_flags = 0u;
+            u32 style_tag = AUIK_STYLE_TAG_TEXTBOX;
+            stream.read(value).read(min_value).read(max_value).read(speed).read(text_flags).read(style_tag);
+
+            auto *widget = acul::alloc<DragDouble>(common.id, nullptr, min_value, max_value, speed,
+                                                   common.requested_size, WidgetFlags(common.widget_flags), nullptr);
+            widget->set_style_tag(style_tag);
+            widget->text_flags = TextFlags(text_flags);
+            widget->set_value(value);
+            detail::apply_widget_common_data(widget, common);
+            return widget;
+        }
+    } // namespace
+
+    namespace streams
+    {
+        AUIK_EXPORT const umbf::streams::Stream drag_int{read_drag_int, write_drag_int};
+        AUIK_EXPORT const umbf::streams::Stream drag_float{read_drag_float, write_drag_float};
+        AUIK_EXPORT const umbf::streams::Stream drag_double{read_drag_double, write_drag_double};
+    } // namespace streams
 } // namespace auik
