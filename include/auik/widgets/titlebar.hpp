@@ -30,6 +30,8 @@ namespace auik
 
     class Titlebar final : public Widget
     {
+        friend struct TitlebarStreamAccess;
+
     public:
         AUIK_EXPORT explicit Titlebar(u32 id = AUIK_TAG_TITLEBAR,
                                       WidgetFlags widget_flags = get_default_widget_flags());

@@ -3,6 +3,7 @@
 #include <auik/pipelines.hpp>
 #include <auik/widgets/image.hpp>
 #include <auik/widgets/titlebar.hpp>
+#include "../core/session_stream_utils.hpp"
 #ifdef _WIN32
     #include <windowsx.h>
     #define AUIK_TITLEBAR_STATE    L"AUIK_TITLEBAR_STATE"
@@ -164,6 +165,7 @@ namespace auik
     }
     void Titlebar::ensure_caption_buttons()
     {
+        if (!_state) return;
         const bool maximized = detail::get_context().window_ctx->host_state == HostWindowState::maximized;
         for (u32 i = 0; i < AUIK_WINDOW_CAPTION_BTN_COUNT; ++i)
         {
@@ -831,5 +833,51 @@ namespace auik
             acul::release(child);
         }
         _children.clear();
+    }
+
+    struct TitlebarStreamAccess
+    {
+        static const acul::vector<Widget *> &children(const Titlebar &titlebar) { return titlebar._children; }
+    };
+
+    namespace
+    {
+        void write_titlebar(acul::bin_stream &stream, umbf::Block *block)
+        {
+            auto *titlebar = static_cast<Titlebar *>(block);
+            detail::write_widget_common_data(stream, *titlebar);
+            stream.write(titlebar->show_icon()).write(titlebar->leading_count());
+
+            acul::vector<umbf::Block *> children;
+            const auto &source_children = TitlebarStreamAccess::children(*titlebar);
+            children.reserve(source_children.size());
+            for (auto *child : source_children)
+                if (child && (child->widget_flags & WidgetFlagBits::configurable)) children.push_back(child);
+            stream.write(children);
+        }
+
+        umbf::Block *read_titlebar(acul::bin_stream &stream)
+        {
+            const auto common = detail::read_widget_common_data(stream);
+            bool show_icon = false;
+            u32 leading_count = 0u;
+            stream.read(show_icon).read(leading_count);
+
+            acul::vector<umbf::Block *> children;
+            stream.read(children);
+
+            auto *titlebar = acul::alloc<Titlebar>(common.id, WidgetFlags(common.widget_flags));
+            detail::apply_widget_common_data(titlebar, common);
+            titlebar->set_show_icon(show_icon);
+            titlebar->set_leading_count(leading_count);
+            for (auto *child : children)
+                if (child) titlebar->add_child(static_cast<Widget *>(child));
+            return titlebar;
+        }
+    } // namespace
+
+    namespace streams
+    {
+        AUIK_EXPORT const umbf::streams::Stream titlebar{read_titlebar, write_titlebar};
     }
 } // namespace auik

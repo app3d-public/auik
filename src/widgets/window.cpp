@@ -8,8 +8,9 @@
 #include <auik/widgets/rubber_band.hpp>
 #include <auik/widgets/text.hpp>
 #include <auik/widgets/window.hpp>
-#include "../core/session_stream_utils.hpp"
 #include <utility>
+#include "../core/session_stream_utils.hpp"
+
 
 namespace auik
 {
@@ -99,14 +100,6 @@ namespace auik
     static inline bool should_use_docked_window_style(const Window &window, u32 base_style_tag)
     {
         return is_docked_window(window) && base_style_tag == AUIK_STYLE_TAG_WINDOW;
-    }
-
-    static inline bool is_widget_attached(const Widget *widget)
-    {
-        if (!widget || !detail::g_context) return false;
-        const auto &map = detail::get_context().id_map;
-        auto it = map.find(widget->id());
-        return it != map.end() && it->second == widget;
     }
 
     static inline void get_window_resize_direction(const detail::RectData &rect, const amal::vec2 &mouse_pos,
@@ -602,31 +595,17 @@ namespace auik
     {
         if (_menu.get_widget() == menu)
         {
-            sync_header_menu_suffix();
+            _header_menu_suffix_processed = false;
             return;
         }
-        remove_header_menu_suffix();
-        if (auto *widget = window_menu_widget(*this);
-            widget && is_widget_attached(widget) && (widget->widget_flags & WidgetFlagBits::attachable))
-            widget->on_detach();
+        _header_menu_suffix_processed = false;
         _menu.reset(menu);
-
-        sync_header_menu_suffix();
 
         auto *widget = window_menu_widget(*this);
         if (!widget) return;
         widget->set_parent(this);
         widget->set_focus_parent(this);
         widget->attach_to_viewport(viewport());
-        if (is_widget_attached(this))
-        {
-            if ((widget_flags & WidgetFlagBits::attachable) && owns_window_menu_tree(*this)) widget->on_attach();
-            else
-            {
-                widget->invalidate_draw_commands(DrawReasonBits::layout);
-                widget->reset_draw_records();
-            }
-        }
     }
 
     Widget *Window::take_menu_widget()
@@ -634,8 +613,7 @@ namespace auik
         auto *widget = _menu.get_widget();
         if (!widget) return nullptr;
         remove_header_menu_suffix();
-        if (widget && is_widget_attached(widget) && (widget->widget_flags & WidgetFlagBits::attachable))
-            widget->on_detach();
+        _header_menu_suffix_processed = false;
         _menu.release();
         sync_header_popup_menu();
         return widget;
@@ -664,15 +642,15 @@ namespace auik
 
     void Window::remove_header_menu_suffix()
     {
-        if (!_header_menu_suffix_installed) return;
-        if (auto *menu = header_popup_menu()) { menu->pop_suffix_group(); }
-        _header_menu_suffix_installed = false;
+        if (_header_menu_suffix_group == 0u) return;
+        if (auto *menu = header_popup_menu()) { menu->erase_suffix_group(_header_menu_suffix_group - 1u); }
+        _header_menu_suffix_group = 0u;
     }
 
     void Window::install_header_menu_suffix()
     {
         remove_header_menu_suffix();
-        if (parent()) return;
+        if (window_flags & WindowFlagBits::docked) return;
         const auto suffix_create =
             _window_menu_suffix_create ? _window_menu_suffix_create : detail::get_default_menu_suffix_create_cb();
         if (!suffix_create) return;
@@ -684,13 +662,14 @@ namespace auik
         suffix_create(this, menu->menu_model());
         const u32 suffix_count = menu->suffix_item_count(group);
         if (suffix_count == suffix_count_before) menu->erase_suffix_group(group);
-        else _header_menu_suffix_installed = true;
+        else _header_menu_suffix_group = group + 1u;
     }
 
     void Window::sync_header_menu_suffix()
     {
-        if (parent()) remove_header_menu_suffix();
+        if (window_flags & WindowFlagBits::docked) remove_header_menu_suffix();
         else install_header_menu_suffix();
+        _header_menu_suffix_processed = true;
         sync_header_popup_menu();
     }
 
@@ -702,7 +681,7 @@ namespace auik
             _header->set_title(_title);
             const bool has_window_header_menu = is_popup_menu();
             const bool show_menu = (window_flags & WindowFlagBits::decorated) && !is_docked_window(*this) && menu &&
-                                   (_header_menu_suffix_installed || has_window_header_menu);
+                                   (_header_menu_suffix_group != 0u || has_window_header_menu);
             _header->set_menu(show_menu ? menu : nullptr);
         }
     }
@@ -724,7 +703,7 @@ namespace auik
     void Window::on_attach()
     {
         if (!parent()) detail::setup_root_window(this);
-        sync_header_menu_suffix();
+        _header_menu_suffix_processed = false;
         Widget::on_attach();
         if (_content_block)
         {
@@ -732,8 +711,7 @@ namespace auik
             map.emplace(_content_block->id(), _content_block);
             _content_block->on_attach();
         }
-        if (auto *menu = window_menu_widget(*this);
-            menu && owns_window_menu_tree(*this) && (menu->widget_flags & WidgetFlagBits::attachable))
+        if (auto *menu = window_menu_widget(*this); menu && (menu->widget_flags & WidgetFlagBits::attachable))
             menu->on_attach();
         if (header_popup_menu() == _default_header_menu && owns_popup_menu_tree(*this) && _default_header_menu &&
             (_default_header_menu->widget_flags & WidgetFlagBits::attachable))
@@ -745,12 +723,12 @@ namespace auik
     {
         if (!parent()) detail::teardown_root_window(this);
         remove_header_menu_suffix();
+        _header_menu_suffix_processed = false;
         sync_header_popup_menu();
         auto &map = detail::get_context().id_map;
-        if (auto *menu = window_menu_widget(*this);
-            menu && is_widget_attached(menu) && (menu->widget_flags & WidgetFlagBits::attachable))
+        if (auto *menu = window_menu_widget(*this); menu && (menu->widget_flags & WidgetFlagBits::attachable))
             menu->on_detach();
-        if (_default_header_menu && is_widget_attached(_default_header_menu) &&
+        if (_default_header_menu && owns_popup_menu_tree(*this) &&
             (_default_header_menu->widget_flags & WidgetFlagBits::attachable))
             _default_header_menu->on_detach();
         if (_content_block)
@@ -1103,8 +1081,9 @@ namespace auik
         const f32 menu_top_y = header_bottom_y;
         auto *classic_menu = window_menu_bar(*this);
         if (window_flags & WindowFlagBits::decorated) ensure_header_popup_menu();
-        if (!(window_flags & WindowFlagBits::decorated) && (is_popup_menu() || _header_menu_suffix_installed))
+        if (!(window_flags & WindowFlagBits::decorated) && (is_popup_menu() || _header_menu_suffix_group != 0u))
             assert(false && "PopupMenu requires window decoration");
+        if (!_header_menu_suffix_processed) sync_header_menu_suffix();
         sync_header_popup_menu();
         const bool layout_menu_bar = classic_menu && owns_classic_menu_bar_tree(*this) && classic_menu->is_visible();
         const f32 menu_bottom_y = layout_menu_bar ? snap_layout_start(menu_top_y + menu_height) : menu_top_y;

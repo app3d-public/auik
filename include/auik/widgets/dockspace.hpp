@@ -55,7 +55,8 @@ namespace auik
     using DockNodeID = u32;
     constexpr inline WidgetFlags get_default_dockspace_flags()
     {
-        return WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::hittable;
+        return WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::hittable |
+               WidgetFlagBits::configurable;
     }
 
     struct DockNodeSettings
@@ -82,8 +83,7 @@ namespace auik
     };
 
     inline DockNodeSettings make_dockspace_settings(
-        const amal::vec2 &requested_size = {AUIK_SIZE_X_FIT, AUIK_SIZE_Y_FILL},
-        const amal::vec2 &size = {0.0f, 0.0f},
+        const amal::vec2 &requested_size = {AUIK_SIZE_X_FIT, AUIK_SIZE_Y_FILL}, const amal::vec2 &size = {0.0f, 0.0f},
         const amal::vec2 &min_size = {80.0f, 80.0f},
         DockspaceFlags flags = DockspaceFlagBits::resize_helper | DockspaceFlagBits::visible_resize_helper |
                                DockspaceFlagBits::addable | DockspaceFlagBits::tabpanel,

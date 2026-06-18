@@ -186,7 +186,7 @@ namespace auik
             const amal::vec2 min_inner = {required_size().x - margin.x - margin.z,
                                           required_size().y - margin.y - margin.w};
             const amal::vec2 widget_size = {amal::max(size().x - margin.x - margin.z, min_inner.x),
-                                            amal::max(size().y, min_inner.y)};
+                                            amal::max(size().y - margin.y - margin.w, min_inner.y)};
             set_position({layout_origin.x + margin.x, layout_origin.y + margin.y});
             set_layout_size(widget_size);
             Widget::update_layout(true);
@@ -789,7 +789,7 @@ namespace auik
     {
         auto *group = group_index < _runtime_suffix_groups.size() ? &_runtime_suffix_groups[group_index] : nullptr;
         if (!group) return;
-        close_all();
+        discard_popups();
         if (group->empty())
         {
             if (group_index + 1u == _runtime_suffix_groups.size()) { _runtime_suffix_groups.pop_back(); }

@@ -23,6 +23,7 @@
 #include <auik/widgets/text.hpp>
 #include <auik/widgets/text_button.hpp>
 #include <auik/widgets/textbox.hpp>
+#include <auik/widgets/titlebar.hpp>
 #include <auik/widgets/widget.hpp>
 #include <auik/widgets/window.hpp>
 
@@ -47,21 +48,6 @@ namespace auik
 
     namespace
     {
-        struct ScopedSnapshotResolver
-        {
-            umbf::streams::Resolver *prev = nullptr;
-            umbf::streams::HashResolver resolver{};
-
-            ScopedSnapshotResolver()
-            {
-                prev = umbf::streams::resolver;
-                insert_umbf_streams(resolver);
-                umbf::streams::resolver = &resolver;
-            }
-
-            ~ScopedSnapshotResolver() { umbf::streams::resolver = prev; }
-        };
-
         SnapshotTree *snapshot_tree_from_file(const acul::shared_ptr<umbf::File> &snapshot)
         {
             if (!snapshot) return nullptr;
@@ -134,14 +120,14 @@ namespace auik
 
         for (auto *root : ctx.widget_tree) attach_snapshot_root(root);
         rebuild_root_widget_depths();
-        if (ctx.main_viewport) update_root_widgets_layout(ctx.main_viewport);
+        if (ctx.main_viewport && ctx.main_viewport->rect.size.x > 0.0f && ctx.main_viewport->rect.size.y > 0.0f)
+            update_root_widgets_layout(ctx.main_viewport);
         detail::mark_host_refresh_request();
         return true;
     }
 
     acul::shared_ptr<umbf::File> load_snapshot(const acul::path &path)
     {
-        ScopedSnapshotResolver resolver_scope;
         acul::shared_ptr<umbf::File> file;
         if (!umbf::File::read_from_disk(path.str(), file).success()) return nullptr;
         if (!file || file->header.vendor_sign != AUIK_VENDOR_ID || file->header.type_sign != AUIK_SIGN_TYPE_SNAPSHOT)
@@ -156,7 +142,8 @@ namespace auik
             auto *tree = static_cast<SnapshotTree *>(block);
             acul::vector<umbf::Block *> blocks;
             blocks.reserve(tree->roots.size());
-            for (auto *root : tree->roots) blocks.push_back(root);
+            for (auto *root : tree->roots)
+                if (root && (root->widget_flags & WidgetFlagBits::configurable)) blocks.push_back(root);
             stream.write(blocks);
         }
 
@@ -219,5 +206,6 @@ namespace auik
         resolver.streams[AUIK_TAG_MODAL_QUEUE] = &streams::modal_queue;
         resolver.streams[AUIK_TAG_WLINE] = &streams::w_line;
         resolver.streams[AUIK_TAG_WRECT] = &streams::w_rect;
+        resolver.streams[AUIK_TAG_TITLEBAR] = &streams::titlebar;
     }
 } // namespace auik

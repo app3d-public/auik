@@ -136,7 +136,6 @@ namespace auik
         {
             _window_style_tag = tag_id;
             _window_style = {Theme::STYLE_ID_INVALID, tag_id};
-            set_rect_tag_id(tag_id);
         }
         u32 window_style_tag() const { return _window_style_tag; }
 
@@ -164,7 +163,8 @@ namespace auik
         MenuProxy _menu{};
         PopupMenu *_default_header_menu = nullptr;
         PFN_window_menu_suffix_create _window_menu_suffix_create = nullptr;
-        bool _header_menu_suffix_installed = false;
+        u32 _header_menu_suffix_group = 0u;
+        bool _header_menu_suffix_processed = false;
         RubberBand *_rubber_band = nullptr;
         amal::ivec2 _resize_dir{0, 0};
         bool _move_drag_active = false;
@@ -179,7 +179,10 @@ namespace auik
         virtual u16 content_clip_id() const override { return clip_id(); }
         virtual amal::vec4 get_content_clip_rect() const override
         {
-            return _content_block ? _content_block->get_content_clip_rect() : get_clip_rect(clip_id());
+            if (_content_block && _content_block->content_clip_id() != 0xFFFFu)
+                return get_clip_rect(_content_block->content_clip_id());
+            if (clip_id() != 0xFFFFu) return get_clip_rect(clip_id());
+            return get_main_viewport_rect();
         }
         virtual void on_attach() override;
         virtual void on_detach() override;
