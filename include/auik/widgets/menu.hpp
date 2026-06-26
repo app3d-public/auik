@@ -37,9 +37,7 @@ namespace auik
         using MenuGroup = detail::MenuGroup;
         using MenuGroupLayer = detail::MenuGroupLayer;
 
-        AUIK_EXPORT MenuBar(u32 id, acul::vector<acul::string> items = {}, amal::vec2 size = AUIK_SIZE_FIT,
-                            WidgetFlags widget_flags = get_default_menu_bar_flags(), Widget *parent = nullptr);
-        AUIK_EXPORT MenuBar(u32 id, const acul::vector<StringView> &items, amal::vec2 size = AUIK_SIZE_FIT,
+        AUIK_EXPORT MenuBar(u32 id, const acul::vector<StringView> &items = {}, amal::vec2 size = AUIK_SIZE_FIT,
                             WidgetFlags widget_flags = get_default_menu_bar_flags(), Widget *parent = nullptr);
         AUIK_EXPORT ~MenuBar() override;
 
@@ -94,7 +92,6 @@ namespace auik
         AUIK_EXPORT void close_all();
         AUIK_EXPORT void discard_popups();
         AUIK_EXPORT void add_items(u32 count);
-        AUIK_EXPORT void add_items(const acul::vector<acul::string> &items);
         AUIK_EXPORT void add_items(const acul::vector<StringView> &items);
         AUIK_EXPORT void add_items(std::initializer_list<const char *> items);
         AUIK_EXPORT MenuItem *item(u32 element_id);
@@ -189,34 +186,20 @@ namespace auik
         bool _selected_enabled = false;
     };
 
-    inline MenuBar *make_menu_bar(u32 id, const acul::vector<acul::string> &items = {})
-    {
-        return acul::alloc<MenuBar>(id, std::move(items));
-    }
-
-    inline MenuBar *make_menu_bar(u32 id, const acul::vector<StringView> &items)
+    inline MenuBar *make_menu_bar(u32 id, const acul::vector<StringView> &items = {})
     {
         return acul::alloc<MenuBar>(id, items);
     }
 
     inline MenuBar *make_menu_bar(u32 id, std::initializer_list<const char *> items)
     {
-        acul::vector<acul::string> values;
+        acul::vector<StringView> values;
         values.reserve(items.size());
-        for (const char *item : items) values.push_back(item ? item : "");
-        return acul::alloc<MenuBar>(id, std::move(values));
+        for (const char *item : items) values.push_back(StringView{item});
+        return acul::alloc<MenuBar>(id, values);
     }
 
-    inline MenuBar *make_main_menu_bar(u32 id, const acul::vector<acul::string> &items = {})
-    {
-        auto *menu_bar = acul::alloc<MenuBar>(id, std::move(items));
-        menu_bar->set_menu_style_tag(AUIK_STYLE_TAG_MAIN_MENU_BAR);
-        menu_bar->set_menu_item_style_tag(AUIK_STYLE_TAG_MAIN_MENU_ITEM);
-        menu_bar->set_popup_depth_mode(MenuBar::PopupDepthMode::root_overlay);
-        return menu_bar;
-    }
-
-    inline MenuBar *make_main_menu_bar(u32 id, const acul::vector<StringView> &items)
+    inline MenuBar *make_main_menu_bar(u32 id, const acul::vector<StringView> &items = {})
     {
         auto *menu_bar = acul::alloc<MenuBar>(id, items);
         menu_bar->set_menu_style_tag(AUIK_STYLE_TAG_MAIN_MENU_BAR);
@@ -227,9 +210,9 @@ namespace auik
 
     inline MenuBar *make_main_menu_bar(u32 id, std::initializer_list<const char *> items)
     {
-        acul::vector<acul::string> values;
+        acul::vector<StringView> values;
         values.reserve(items.size());
-        for (const char *item : items) values.push_back(item ? item : "");
+        for (const char *item : items) values.push_back(StringView{item});
         return make_main_menu_bar(id, values);
     }
 
@@ -238,10 +221,7 @@ namespace auik
     public:
         using MenuGroup = MenuBar::MenuGroup;
 
-        AUIK_EXPORT PopupMenu(u32 id, acul::vector<acul::string> items = {},
-                              WidgetFlags widget_flags = get_default_tab_bar_flags(), Widget *parent = nullptr,
-                              bool selected_enabled = false);
-        AUIK_EXPORT PopupMenu(u32 id, const acul::vector<StringView> &items,
+        AUIK_EXPORT PopupMenu(u32 id, const acul::vector<StringView> &items = {},
                               WidgetFlags widget_flags = get_default_tab_bar_flags(), Widget *parent = nullptr,
                               bool selected_enabled = false);
         AUIK_EXPORT explicit PopupMenu(MenuBar *menu, WidgetFlags widget_flags = get_default_tab_bar_flags(),
@@ -380,12 +360,7 @@ namespace auik
         bool _open = false;
     };
 
-    inline PopupMenu *make_popup_menu(u32 id, acul::vector<acul::string> items = {}, bool selected_enabled = false)
-    {
-        return acul::alloc<PopupMenu>(id, std::move(items), get_default_tab_bar_flags(), nullptr, selected_enabled);
-    }
-
-    inline PopupMenu *make_popup_menu(u32 id, const acul::vector<StringView> &items, bool selected_enabled = false)
+    inline PopupMenu *make_popup_menu(u32 id, const acul::vector<StringView> &items = {}, bool selected_enabled = false)
     {
         return acul::alloc<PopupMenu>(id, items, get_default_tab_bar_flags(), nullptr, selected_enabled);
     }
@@ -534,7 +509,7 @@ namespace auik
             auto *model = menu_model();
             return model ? (*model)[index] : nullptr;
         }
-        MenuBar::MenuGroup *add_group(u32 element_id, acul::vector<acul::string> items) const
+        MenuBar::MenuGroup *add_group(u32 element_id, const acul::vector<StringView> &items) const
         {
             auto *model = menu_model();
             auto *item = model ? model->item(element_id) : nullptr;

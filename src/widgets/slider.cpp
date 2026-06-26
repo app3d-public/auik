@@ -190,6 +190,13 @@ namespace auik
                    has_render_record(visual.border_draw_id);
         }
 
+        static inline void reset_track_draw_records(SliderTrackVisual &visual)
+        {
+            visual.background_draw_id = {};
+            visual.fill_draw_id = {};
+            visual.border_draw_id = {};
+        }
+
         static inline amal::vec2 make_slider_requested_size(f32 length, amal::axis axis)
         {
             return axis == amal::axis::y ? amal::vec2{0.0f, length} : amal::vec2{length, 0.0f};
@@ -407,13 +414,18 @@ namespace auik
     {
         assert(parent() && "Slider must have parent");
         set_clip_id(parent()->content_clip_id());
-        _track_visual.background_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
-        _track_visual.fill_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
-        _track_visual.border_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
-        _grab_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+        DrawDataID *hit_ids[] = {&_track_visual.background_draw_id, &_track_visual.fill_draw_id,
+                                 &_track_visual.border_draw_id, &_grab_draw_id};
+        invalidate_hit_rect_batch(hit_ids, 4);
         _grab_hit_rect.clip_id = clip_id();
         rebuild_track_visuals();
         rebuild_grab_visual();
+    }
+
+    void Slider::reset_draw_records()
+    {
+        detail::reset_track_draw_records(_track_visual);
+        _grab_draw_id = {};
     }
 
     void Slider::update_depth(const amal::vec2 &depth_range)
@@ -786,15 +798,21 @@ namespace auik
     {
         assert(parent() && "GradientSlider must have parent");
         set_clip_id(parent()->content_clip_id());
-        _track_visual.background_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
-        _track_visual.fill_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
-        _track_visual.border_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
-        _gradient_visual.draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
-        _grab_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
-        _grab_back_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+        DrawDataID *hit_ids[] = {&_track_visual.background_draw_id, &_track_visual.fill_draw_id,
+                                 &_track_visual.border_draw_id, &_gradient_visual.draw_id, &_grab_draw_id,
+                                 &_grab_back_draw_id};
+        invalidate_hit_rect_batch(hit_ids, 6);
         _grab_hit_rect.clip_id = clip_id();
         rebuild_track_visuals();
         rebuild_grab_visual();
+    }
+
+    void GradientSlider::reset_draw_records()
+    {
+        detail::reset_track_draw_records(_track_visual);
+        _gradient_visual.draw_id = {};
+        _grab_draw_id = {};
+        _grab_back_draw_id = {};
     }
 
     void GradientSlider::update_depth(const amal::vec2 &depth_range)
@@ -1010,13 +1028,13 @@ namespace auik
           _max_value(max_value),
           _axis(axis),
           _checker(acul::alloc<CheckerImage>(id, detail::make_slider_requested_size(size, axis),
-                                             AUIK_STYLE_TAG_GRADIENT_SLIDER, this,
-                                             WidgetFlagBits::visible)),
+                                             AUIK_STYLE_TAG_GRADIENT_SLIDER, WidgetFlagBits::visible)),
           _color(color)
     {
         _track_style.tag_id = AUIK_STYLE_TAG_GRADIENT_SLIDER;
         _grab_style.tag_id = AUIK_STYLE_TAG_GRADIENT_SLIDER_GRAB;
         _grab_hit_rect = detail::make_rect_data(id, _grab_style.tag_id);
+        _checker->set_parent(this);
         _colors.resize(2u);
         rebuild_gradient_colors();
         if (_max_value < _min_value) std::swap(_min_value, _max_value);
@@ -1212,16 +1230,23 @@ namespace auik
     {
         assert(parent() && "TransparencySlider must have parent");
         set_clip_id(parent()->content_clip_id());
-        _track_visual.background_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
-        _track_visual.fill_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
-        _track_visual.border_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
-        _gradient_visual.draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
-        _grab_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
-        _grab_back_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+        DrawDataID *hit_ids[] = {&_track_visual.background_draw_id, &_track_visual.fill_draw_id,
+                                 &_track_visual.border_draw_id, &_gradient_visual.draw_id, &_grab_draw_id,
+                                 &_grab_back_draw_id};
+        invalidate_hit_rect_batch(hit_ids, 6);
         _grab_hit_rect.clip_id = clip_id();
         if (_checker) _checker->rebuild_clip_rects();
         rebuild_track_visuals();
         rebuild_grab_visual();
+    }
+
+    void TransparencySlider::reset_draw_records()
+    {
+        detail::reset_track_draw_records(_track_visual);
+        _gradient_visual.draw_id = {};
+        _grab_draw_id = {};
+        _grab_back_draw_id = {};
+        if (_checker) _checker->reset_draw_records();
     }
 
     void TransparencySlider::update_depth(const amal::vec2 &depth_range)
@@ -1623,14 +1648,20 @@ namespace auik
     {
         assert(parent() && "RangeSlider must have parent");
         set_clip_id(parent()->content_clip_id());
-        _track_visual.background_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
-        _track_visual.fill_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
-        _from_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
-        _to_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+        DrawDataID *hit_ids[] = {&_track_visual.background_draw_id, &_track_visual.fill_draw_id, &_from_draw_id,
+                                 &_to_draw_id};
+        invalidate_hit_rect_batch(hit_ids, 4);
         _from_hit_rect.clip_id = clip_id();
         _to_hit_rect.clip_id = clip_id();
         rebuild_track_visuals();
         rebuild_grab_visuals();
+    }
+
+    void RangeSlider::reset_draw_records()
+    {
+        detail::reset_track_draw_records(_track_visual);
+        _from_draw_id = {};
+        _to_draw_id = {};
     }
 
     void RangeSlider::update_depth(const amal::vec2 &depth_range)

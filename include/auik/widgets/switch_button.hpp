@@ -18,8 +18,7 @@ namespace auik
     class SwitchButton final : public Widget
     {
     public:
-        AUIK_EXPORT SwitchButton(u32 id, bool value, WidgetFlags widget_flags = get_default_switch_button_flags(),
-                     Widget *parent = nullptr);
+        AUIK_EXPORT SwitchButton(u32 id, bool value, WidgetFlags widget_flags = get_default_switch_button_flags());
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
         AUIK_EXPORT void update_layout_min_size() override;
@@ -55,9 +54,9 @@ namespace auik
         bool has_draw_record() const;
     };
 
-    inline SwitchButton *make_switch_button(u32 id, bool value, Widget *parent = nullptr)
+    inline SwitchButton *make_switch_button(u32 id, bool value)
     {
-        return acul::alloc<SwitchButton>(id, value, get_default_switch_button_flags(), parent);
+        return acul::alloc<SwitchButton>(id, value);
     }
 
     namespace streams

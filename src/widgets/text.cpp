@@ -75,9 +75,9 @@ namespace auik
         return flags;
     }
 
-    Text *Text::clone(u32 id, Widget *parent) const
+    Text *Text::clone(u32 id) const
     {
-        auto *out = acul::alloc<Text>(id, source_text(), requested_size(), widget_flags, parent, _style.tag_id,
+        auto *out = acul::alloc<Text>(id, source_text(), requested_size(), widget_flags, _style.tag_id,
                                       _layout_config.overflow, _render_config.vertical_align, _layout_config.wrap,
                                       _layout_config.width_mode);
         out->text_flags = text_flags;
@@ -210,7 +210,20 @@ namespace auik
         const amal::vec2 inner_size = {amal::max(outer_size.x - padding.x - padding.z, 0.0f),
                                        amal::max(outer_size.y - padding.y - padding.w, 0.0f)};
         set_position(outer_pos + amal::vec2{padding.x, padding.y});
-        rebuild_text_buffers(inner_size);
+        const bool can_reuse_layout = detail::is_fast_layout_update() && !multiline() && !_layout_result.lines.empty();
+        if (can_reuse_layout)
+        {
+            auto *font = get_theme()->get_style(_style.id).font();
+            auto render_config = _render_config;
+            render_config.bounds = {position(), inner_size};
+            render_config.z_order = get_z_order();
+            render_config.clip_id = clip_id();
+            if (font && detail::build_text_instances_from_layout(*font, _layout_config.size_px, _layout_result,
+                                                                 render_config, _instances))
+                _instances_gpu_dirty = true;
+            else rebuild_text_buffers(inner_size);
+        }
+        else rebuild_text_buffers(inner_size);
         update_content_bounds();
         set_position(outer_pos);
 
@@ -546,10 +559,10 @@ namespace auik
         u8 flags = 0;
     };
 
-    EText::EText(u32 id, acul::string text, amal::vec2 size, WidgetFlags flags, Widget *parent, u32 style_tag_id,
+    EText::EText(u32 id, acul::string text, amal::vec2 size, WidgetFlags flags, u32 style_tag_id,
                  detail::TextOverflowMode overflow, detail::TextVerticalAlign vertical_align, detail::TextWrapMode wrap,
                  detail::TextLayoutWidthMode width_mode)
-        : Text(id, std::move(text), size, flags, parent, style_tag_id, overflow, vertical_align, wrap, width_mode),
+        : Text(id, std::move(text), size, flags, style_tag_id, overflow, vertical_align, wrap, width_mode),
           _edit((flags & WidgetFlagBits::hittable) ? acul::alloc<ETextEditData>() : nullptr)
     {
         set_rect_tag_id(AUIK_TAG_ETEXT);
@@ -1240,7 +1253,7 @@ namespace auik
             const auto payload = read_text_payload(stream);
             auto *widget =
                 acul::alloc<Text>(common.id, payload.text, common.requested_size, WidgetFlags(common.widget_flags),
-                                  nullptr, payload.style_tag, static_cast<detail::TextOverflowMode>(payload.overflow),
+                                  payload.style_tag, static_cast<detail::TextOverflowMode>(payload.overflow),
                                   static_cast<detail::TextVerticalAlign>(payload.vertical_align),
                                   static_cast<detail::TextWrapMode>(payload.wrap),
                                   static_cast<detail::TextLayoutWidthMode>(payload.width_mode));
@@ -1256,7 +1269,7 @@ namespace auik
             const auto payload = read_text_payload(stream);
             auto *widget =
                 acul::alloc<EText>(common.id, payload.text, common.requested_size, WidgetFlags(common.widget_flags),
-                                   nullptr, payload.style_tag, static_cast<detail::TextOverflowMode>(payload.overflow),
+                                   payload.style_tag, static_cast<detail::TextOverflowMode>(payload.overflow),
                                    static_cast<detail::TextVerticalAlign>(payload.vertical_align),
                                    static_cast<detail::TextWrapMode>(payload.wrap),
                                    static_cast<detail::TextLayoutWidthMode>(payload.width_mode));

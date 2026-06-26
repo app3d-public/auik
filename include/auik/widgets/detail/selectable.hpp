@@ -46,13 +46,14 @@ namespace auik::detail
                    u32 style_tag_id, WidgetFlags flags,
                    u32 selected_style_tag_id = AUIK_STYLE_TAG_COMBO_BOX_ITEM_SELECTED,
                    StyleState selected_style_state = StyleState::normal)
-            : Text(AUIK_TAG_TEXT, text, size, flags & ~WidgetFlagBits::attachable, parent, style_tag_id),
+            : Text(AUIK_TAG_TEXT, text, size, flags & ~WidgetFlagBits::attachable, style_tag_id),
               _selected_style({Theme::STYLE_ID_INVALID, selected_style_tag_id}),
               _selected_style_options_storage(make_selectable_highlight_options(selected_style_tag_id)),
               _selected_style_options(&_selected_style_options_storage),
               _base_style_tag_id(style_tag_id),
               _selected_style_state(selected_style_state)
         {
+            set_parent(parent);
             _rect.id.tag_id = tag_id;
             _rect.id.element_id = element_id;
             set_vertical_align(TextVerticalAlign::center);

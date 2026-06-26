@@ -6,8 +6,8 @@
 
 namespace auik
 {
-    Checkbox::Checkbox(u32 id, bool value, WidgetFlags widget_flags, Widget *parent)
-        : Widget(id, widget_flags, EventFlagBits::click, parent, {{0.0f, 0.0f}, {0.0f, 0.0f}}, AUIK_TAG_CHECKBOX),
+    Checkbox::Checkbox(u32 id, bool value, WidgetFlags widget_flags)
+        : Widget(id, widget_flags, EventFlagBits::click, nullptr, {{0.0f, 0.0f}, {0.0f, 0.0f}}, AUIK_TAG_CHECKBOX),
           _value(value),
           _checkmark_rect(detail::make_rect_data(AUIK_TAG_CHECKBOX_CHECKMARK, AUIK_TAG_CHECKBOX_CHECKMARK))
     {
@@ -107,8 +107,8 @@ namespace auik
     {
         assert(parent() && "Checkbox must have parent");
         set_clip_id(parent()->content_clip_id());
-        _box_bg.hit_id = AUIK_INVALID_DRAW_DATA_ID;
-        _checkmark_draw.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+        DrawDataID *hit_ids[] = {&_box_bg, &_checkmark_draw};
+        invalidate_hit_rect_batch(hit_ids, 2);
         _checkmark_rect.clip_id = clip_id();
     }
 
@@ -206,7 +206,7 @@ namespace auik
             const auto common = detail::read_widget_common_data(stream);
             bool value = false;
             stream.read(value);
-            auto *checkbox = acul::alloc<Checkbox>(common.id, value, common.widget_flags, nullptr);
+            auto *checkbox = acul::alloc<Checkbox>(common.id, value, WidgetFlags(common.widget_flags));
             detail::apply_widget_common_data(checkbox, common);
             return checkbox;
         }

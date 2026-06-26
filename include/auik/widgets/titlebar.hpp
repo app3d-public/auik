@@ -109,9 +109,9 @@ namespace auik
         return acul::alloc<Titlebar>(id, get_default_widget_flags());
     }
 
-    inline MenuBar *make_titlebar_menu_bar(u32 id, acul::vector<acul::string> items = {})
+    inline MenuBar *make_titlebar_menu_bar(u32 id, const acul::vector<StringView> &items = {})
     {
-        auto *menu_bar = acul::alloc<MenuBar>(id, std::move(items));
+        auto *menu_bar = acul::alloc<MenuBar>(id, items);
         menu_bar->set_menu_style_tag(AUIK_STYLE_TAG_TITLEBAR_MENU_BAR);
         menu_bar->set_menu_item_style_tag(AUIK_STYLE_TAG_TITLEBAR_MENU_ITEM);
         menu_bar->set_popup_depth_mode(MenuBar::PopupDepthMode::root_overlay);

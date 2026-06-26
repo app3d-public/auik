@@ -263,7 +263,7 @@ namespace auik::detail
                                             bool is_hit_allowed)
     {
         if (!is_hit_allowed || (ctx.reason & DrawReasonBits::invalidate)) return;
-        if ((ctx.reason & DrawReasonBits::record)) draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+        if ((ctx.reason & DrawReasonBits::record)) auik::invalidate_hit_rect(draw_id);
         auto &global_ctx = get_context();
         const bool force_update = (ctx.reason & DrawReasonBits::record) || (global_ctx.dirty_flags & DirtyFlagBits::hit_rect_update);
         auik::update_hit_rect(draw_id.hit_id, rect, force_update);

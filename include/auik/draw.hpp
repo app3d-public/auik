@@ -193,6 +193,59 @@ namespace auik
         }
     }
 
+    inline bool invalidate_hit_rect_no_mark(u32 &hit_id)
+    {
+        if (hit_id == AUIK_INVALID_DRAW_DATA_ID) return false;
+        auto &ctx = detail::get_context();
+        auto *gpu = ctx.gpu_ctx;
+        assert(gpu && gpu->push_hit_rect && "GPU hover rect dispatch is not initialized");
+        detail::RectData hidden_rect{};
+        const bool force_draw_recreate = ctx.dirty_flags & DirtyFlagBits::hit_rect_draw;
+        if (force_draw_recreate) hit_id = detail::push_hit_rect(gpu, hidden_rect);
+        else detail::update_hit_rect(gpu, hit_id, hidden_rect);
+        return true;
+    }
+
+    inline void invalidate_hit_rect(u32 &hit_id)
+    {
+        if (!invalidate_hit_rect_no_mark(hit_id)) return;
+        detail::mark_hit_rects_mutation();
+        detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
+    }
+
+    inline void invalidate_hit_rect(DrawDataID &draw_id)
+    {
+        invalidate_hit_rect(draw_id.hit_id);
+    }
+
+    inline void invalidate_hit_rect_batch(u32 **hit_ids, u32 count)
+    {
+        bool changed = false;
+        for (u32 i = 0; i < count; ++i)
+        {
+            u32 *hit_id = hit_ids[i];
+            if (!hit_id) continue;
+            changed |= invalidate_hit_rect_no_mark(*hit_id);
+        }
+        if (!changed) return;
+        detail::mark_hit_rects_mutation();
+        detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
+    }
+
+    inline void invalidate_hit_rect_batch(DrawDataID **draw_ids, u32 count)
+    {
+        bool changed = false;
+        for (u32 i = 0; i < count; ++i)
+        {
+            DrawDataID *draw_id = draw_ids[i];
+            if (!draw_id) continue;
+            changed |= invalidate_hit_rect_no_mark(draw_id->hit_id);
+        }
+        if (!changed) return;
+        detail::mark_hit_rects_mutation();
+        detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
+    }
+
     AUIK_EXPORT bool is_post_effect_supported(const DrawStream *stream, const PostEffect *effect);
     AUIK_EXPORT void destroy_post_effect(PostEffect *effect);
 } // namespace auik

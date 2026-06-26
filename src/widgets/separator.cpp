@@ -27,8 +27,8 @@ namespace auik
         return {{origin.x + r.offset.x, origin.y + r.offset.y}, r.size};
     }
 
-    Separator::Separator(amal::axis axis, WidgetFlags widget_flags, Widget *parent, u32 style_tag)
-        : Widget(AUIK_TAG_SEPARATOR, widget_flags, EventFlagBits::none, parent, {}, style_tag),
+    Separator::Separator(amal::axis axis, WidgetFlags widget_flags, u32 style_tag)
+        : Widget(AUIK_TAG_SEPARATOR, widget_flags, EventFlagBits::none, nullptr, {}, style_tag),
           _axis(axis),
           _style({Theme::STYLE_ID_INVALID, style_tag})
     {
@@ -78,7 +78,7 @@ namespace auik
     void Separator::rebuild_clip_rects()
     {
         set_clip_id(parent() ? parent()->content_clip_id() : clip_id());
-        _line.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+        invalidate_hit_rect(_line);
     }
 
     void Separator::translate(const amal::vec2 &delta)

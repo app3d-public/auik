@@ -451,7 +451,7 @@ namespace auik
 
         virtual void reset_clip_rect_records() { _rect.clip_id = 0xFFFFu; }
         virtual void rebuild_clip_rects() {}
-        virtual void reset_draw_records() {}
+        virtual void reset_draw_records() { reset_external_draw_cull_state(); }
         virtual void sync_widget_flags() { sync_widget_flags(resolve_event_flags(requested_event_flags)); }
 
         void update_draw_commands(DrawReasonFlags reason = DrawReasonBits::none)
@@ -494,7 +494,6 @@ namespace auik
             (void)min_size_known;
             detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
         }
-
         virtual u32 get_depth_requirement() const { return 1u; }
         AUIK_EXPORT virtual void update_depth(const amal::vec2 &depth_range);
         AUIK_EXPORT virtual void back_hit_depth();
@@ -660,7 +659,12 @@ namespace auik
             on_char_input(char_code, count);
         }
 
-        inline bool mark_changed() { return dispatch_change(); }
+        inline bool mark_changed()
+        {
+            bool prevented = false;
+            for (Widget *widget = this; widget; widget = widget->parent()) prevented = widget->dispatch_change() || prevented;
+            return prevented;
+        }
 
     protected:
         inline bool dispatch_change()

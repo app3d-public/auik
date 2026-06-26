@@ -92,7 +92,8 @@ namespace auik
             textures = 0x100,
             delayed_tasks = 0x200,
             destroying = 0x400,
-            locale = 0x800
+            locale = 0x800,
+            fast_update = 0x1000
         };
         using flag_bitmask = std::true_type;
     };
@@ -105,8 +106,10 @@ namespace auik
         inline constexpr DirtyMask one_frame_dirty_mask =
             static_cast<DirtyMask>(DirtyFlagBits::redraw | DirtyFlagBits::host_update | DirtyFlagBits::hit_rect_update |
                                    DirtyFlagBits::textures);
+        inline constexpr DirtyMask layout_update_dirty_mask =
+            static_cast<DirtyMask>(DirtyFlagBits::layout | DirtyFlagBits::fast_update);
         inline constexpr DirtyMask layout_dirty_mask =
-            static_cast<DirtyMask>(DirtyFlagBits::layout | DirtyFlagBits::locale);
+            static_cast<DirtyMask>(DirtyFlagBits::layout | DirtyFlagBits::locale | DirtyFlagBits::fast_update);
 
         struct SharedBufferSyncState
         {
@@ -180,7 +183,6 @@ namespace auik
 
         extern AUIK_EXPORT struct Context
         {
-            acul::events::dispatcher *ed = nullptr;
             acul::disposal_queue disposal_queue;
             acul::vector<Widget *> widget_tree;
             acul::vector<Widget *> transient_cache;
@@ -309,6 +311,8 @@ namespace auik
         }
 
         inline void mark_layout_dirty() { get_context().dirty_flags |= DirtyFlagBits::layout; }
+        inline void mark_fast_update_dirty() { get_context().dirty_flags |= DirtyFlagBits::fast_update; }
+        inline bool is_fast_layout_update() { return get_context().dirty_flags & DirtyFlagBits::fast_update; }
         inline void unmark_layout_dirty() { clear_dirty_flags(layout_dirty_mask); }
 
         inline PFN_translate_string get_default_string_locale_cb()

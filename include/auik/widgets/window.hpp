@@ -163,8 +163,7 @@ namespace auik
         MenuProxy _menu{};
         PopupMenu *_default_header_menu = nullptr;
         PFN_window_menu_suffix_create _window_menu_suffix_create = nullptr;
-        u32 _header_menu_suffix_group = 0u;
-        bool _header_menu_suffix_processed = false;
+        u32 _header_menu_suffix_group = 0xFFFFu;
         RubberBand *_rubber_band = nullptr;
         amal::ivec2 _resize_dir{0, 0};
         bool _move_drag_active = false;
@@ -200,7 +199,6 @@ namespace auik
         PopupMenu *ensure_header_popup_menu();
         void install_header_menu_suffix();
         void remove_header_menu_suffix();
-        void sync_header_menu_suffix();
         void sync_header_popup_menu();
     };
 

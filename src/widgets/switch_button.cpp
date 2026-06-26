@@ -5,8 +5,8 @@
 
 namespace auik
 {
-    SwitchButton::SwitchButton(u32 id, bool value, WidgetFlags widget_flags, Widget *parent)
-        : Widget(id, widget_flags, EventFlagBits::click, parent, {{0.0f, 0.0f}, {0.0f, 0.0f}}, AUIK_TAG_SWITCH_BUTTON),
+    SwitchButton::SwitchButton(u32 id, bool value, WidgetFlags widget_flags)
+        : Widget(id, widget_flags, EventFlagBits::click, nullptr, {{0.0f, 0.0f}, {0.0f, 0.0f}}, AUIK_TAG_SWITCH_BUTTON),
           _value(value),
           _grab_rect(detail::make_rect_data(AUIK_TAG_SWITCH_BUTTON_GRAB, AUIK_TAG_SWITCH_BUTTON_GRAB))
     {
@@ -128,8 +128,8 @@ namespace auik
     {
         assert(parent() && "SwitchButton must have parent");
         set_clip_id(parent()->content_clip_id());
-        _track_draw.hit_id = AUIK_INVALID_DRAW_DATA_ID;
-        _grab_draw.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+        DrawDataID *hit_ids[] = {&_track_draw, &_grab_draw};
+        invalidate_hit_rect_batch(hit_ids, 2);
         _grab_rect.clip_id = clip_id();
     }
 
@@ -221,7 +221,7 @@ namespace auik
             const auto common = detail::read_widget_common_data(stream);
             bool value = false;
             stream.read(value);
-            auto *switch_button = acul::alloc<SwitchButton>(common.id, value, common.widget_flags, nullptr);
+            auto *switch_button = acul::alloc<SwitchButton>(common.id, value, WidgetFlags(common.widget_flags));
             detail::apply_widget_common_data(switch_button, common);
             return switch_button;
         }

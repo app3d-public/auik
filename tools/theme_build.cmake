@@ -3,6 +3,7 @@ include_guard(GLOBAL)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 set(AUIK_THEME_COMPILER "${CMAKE_CURRENT_LIST_DIR}/theme_compile.py")
+set(AUIK_UMBF_SIGN_REQUEST_PY "${CMAKE_CURRENT_LIST_DIR}/../../umbf/scripts/sign_request.py")
 
 function(_auik_collect_css_files OUT_VAR INPUT_BASE INPUT_FOLDER)
     set(css_files "${INPUT_BASE}")
@@ -31,6 +32,7 @@ function(compile_auik_default_style_ids INPUT_BASE)
             --input-base "${INPUT_BASE}"
             --ids-only
             --ids-header "${output_header}"
+            --sign-request "${AUIK_UMBF_SIGN_REQUEST_PY}"
         DEPENDS "${AUIK_THEME_COMPILER}" ${css_deps}
         MAIN_DEPENDENCY "${INPUT_BASE}"
         COMMENT "Generate auik default style ids"
@@ -71,6 +73,7 @@ function(compile_auik_css_theme INPUT_BASE)
             --input-base "${INPUT_BASE}"
             --input-folder "${input_folder}"
             --output-folder "${output_dir}"
+            --sign-request "${AUIK_UMBF_SIGN_REQUEST_PY}"
         DEPENDS "${AUIK_THEME_COMPILER}" ${css_deps} ${AUIK_STYLE_IDS_CSV}
         MAIN_DEPENDENCY "${INPUT_BASE}"
         COMMENT "Generate auik CSS theme"

@@ -4,8 +4,8 @@
 
 namespace auik
 {
-    RubberBand::RubberBand(u32 id, WidgetFlags widget_flags, Widget *parent)
-        : Widget(id, widget_flags, EventFlagBits::drag, parent, {{0.0f, 0.0f}, {0.0f, 0.0f}}, AUIK_TAG_RUBBER_BAND)
+    RubberBand::RubberBand(u32 id, WidgetFlags widget_flags)
+        : Widget(id, widget_flags, EventFlagBits::drag, nullptr, {{0.0f, 0.0f}, {0.0f, 0.0f}}, AUIK_TAG_RUBBER_BAND)
     {
     }
 
@@ -97,7 +97,7 @@ namespace auik
     void RubberBand::rebuild_clip_rects()
     {
         if (parent()) set_clip_id(parent()->content_clip_id());
-        _draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+        invalidate_hit_rect(_draw_id);
     }
 
     void RubberBand::update_depth(const amal::vec2 &depth_range)
@@ -209,7 +209,7 @@ namespace auik
             u32 id = 0u;
             u32 widget_flags = 0u;
             stream.read(id).read(widget_flags);
-            return acul::alloc<RubberBand>(id, WidgetFlags(widget_flags), nullptr);
+            return acul::alloc<RubberBand>(id, WidgetFlags(widget_flags));
         }
     } // namespace
 

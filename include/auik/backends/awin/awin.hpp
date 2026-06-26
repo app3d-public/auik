@@ -1,6 +1,7 @@
 #pragma once
 
 #include <acul/pair.hpp>
+#include <acul/event.hpp>
 #include <acul/scalars.hpp>
 #include <awin/awin.hpp>
 #include "../../detail/events.hpp"
@@ -23,19 +24,22 @@ namespace auik
         struct AwinBackend final : WindowContext
         {
             awin::Window &window;
+            acul::events::dispatcher &event_dispatcher;
             awin::Cursor cursors[detail::CursorID::max];
             CustomTitlebarPadding custom_titlebar_padding{};
             acul::point2D<i32> initial_display_size{};
 
-            AwinBackend(awin::Window &window, acul::point2D<i32> initial_display_size = {})
-                : window(window), initial_display_size(initial_display_size)
+            AwinBackend(awin::Window &window, acul::events::dispatcher &event_dispatcher,
+                        acul::point2D<i32> initial_display_size = {})
+                : window(window), event_dispatcher(event_dispatcher), initial_display_size(initial_display_size)
             {
             }
         };
     } // namespace detail
 
     AUIK_EXPORT detail::WindowContext *create_awin_backend(awin::Window &window,
-                                                          acul::point2D<i32> initial_display_size = {});
+                                                           acul::events::dispatcher &event_dispatcher,
+                                                           acul::point2D<i32> initial_display_size = {});
     AUIK_EXPORT bool is_custom_titlebar_supported(const awin::Window &window);
     AUIK_EXPORT CustomTitlebarPadding get_custom_titlebar_padding();
     AUIK_EXPORT CustomTitlebarPadding get_custom_titlebar_padding(const awin::Window &window);

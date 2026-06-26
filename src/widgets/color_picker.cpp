@@ -333,11 +333,17 @@ namespace auik
     {
         assert(parent() && "CircleColorPicker must have parent");
         set_clip_id(parent()->content_clip_id());
-        _wheel_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
-        _grab_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
-        _grab_back_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+        DrawDataID *hit_ids[] = {&_wheel_draw_id, &_grab_draw_id, &_grab_back_draw_id};
+        invalidate_hit_rect_batch(hit_ids, 3);
         _grab_hit_rect.clip_id = clip_id();
         rebuild_cached_visuals();
+    }
+
+    void CircleColorPicker::reset_draw_records()
+    {
+        _wheel_draw_id = {};
+        _grab_draw_id = {};
+        _grab_back_draw_id = {};
     }
 
     void CircleColorPicker::update_depth(const amal::vec2 &depth_range)
@@ -691,11 +697,17 @@ namespace auik
     {
         assert(parent() && "GradientColorPicker must have parent");
         set_clip_id(parent()->content_clip_id());
-        _gradient_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
-        _grab_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
-        _grab_back_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+        DrawDataID *hit_ids[] = {&_gradient_draw_id, &_grab_draw_id, &_grab_back_draw_id};
+        invalidate_hit_rect_batch(hit_ids, 3);
         _grab_hit_rect.clip_id = clip_id();
         rebuild_cached_visuals();
+    }
+
+    void GradientColorPicker::reset_draw_records()
+    {
+        _gradient_draw_id = {};
+        _grab_draw_id = {};
+        _grab_back_draw_id = {};
     }
 
     void GradientColorPicker::update_depth(const amal::vec2 &depth_range)
@@ -1042,12 +1054,19 @@ namespace auik
     {
         assert(parent() && "SquareColorPicker must have parent");
         set_clip_id(parent()->content_clip_id());
-        _ring_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
-        _ring_grab_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
-        _ring_grab_back_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+        DrawDataID *hit_ids[] = {&_ring_draw_id, &_ring_grab_draw_id, &_ring_grab_back_draw_id};
+        invalidate_hit_rect_batch(hit_ids, 3);
         _ring_grab_hit_rect.clip_id = clip_id();
         if (_gradient) _gradient->rebuild_clip_rects();
         rebuild_cached_visuals();
+    }
+
+    void SquareColorPicker::reset_draw_records()
+    {
+        _ring_draw_id = {};
+        _ring_grab_draw_id = {};
+        _ring_grab_back_draw_id = {};
+        if (_gradient) _gradient->reset_draw_records();
     }
 
     void SquareColorPicker::update_depth(const amal::vec2 &depth_range)

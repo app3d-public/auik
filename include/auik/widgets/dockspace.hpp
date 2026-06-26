@@ -67,7 +67,7 @@ namespace auik
         DockspaceFlags flags = DockspaceFlagBits::resize_helper | DockspaceFlagBits::visible_resize_helper |
                                DockspaceFlagBits::addable | DockspaceFlagBits::tabpanel;
         TabBarFlags tabbar_flags = TabBarFlagBits::none;
-        amal::vec2 tabbar_size{0.0f, 0.0f};
+        amal::vec2 tabbar_size = AUIK_SIZE_FIT;
 
         DockNodeSettings &enable_tabpanel()
         {
@@ -87,7 +87,7 @@ namespace auik
         const amal::vec2 &min_size = {80.0f, 80.0f},
         DockspaceFlags flags = DockspaceFlagBits::resize_helper | DockspaceFlagBits::visible_resize_helper |
                                DockspaceFlagBits::addable | DockspaceFlagBits::tabpanel,
-        TabBarFlags tabbar_flags = TabBarFlagBits::none, const amal::vec2 &tabbar_size = {0.0f, 0.0f})
+        TabBarFlags tabbar_flags = TabBarFlagBits::none, const amal::vec2 &tabbar_size = AUIK_SIZE_FIT)
     {
         DockNodeSettings settings{};
         settings.requested_size = requested_size;
@@ -210,16 +210,17 @@ namespace auik
         void queue_menu_action(DockNodeID node, u32 action);
         void execute_menu_action(DockNodeID node, u32 action);
         bool has_node_menu(const Node &node) const;
-        void sync_node_menu(DockNodeID node_id, Node &node, const amal::rect &panel_bounds,
-                            const amal::vec4 &panel_padding);
+        void sync_node_menu(DockNodeID node_id, Node &node);
         void draw_node_menu(DrawCtx &ctx, DockNodeID node_id, Node &node);
         bool needs_node_tab_panel(const Node &node) const;
         amal::vec2 measure_node(DockNodeID node);
         void layout_node(DockNodeID node, const amal::rect &bounds);
         void layout_leaf_window(Node &node, Window *window);
+        void layout_leaf_window_fast(Node &node, Window *window);
         bool prepare_active_window(Node &node, bool force_record, bool record_pass);
         bool sync_active_windows(DockNodeID node, bool record_pass);
         void sync_node_tabbar(DockNodeID node_id, Node &node);
+        bool fit_node_to_required_width(DockNodeID node, bool allow_shrink);
         void handle_tabbar_changed(DockNodeID node_id);
         bool handle_tabbar_drag_escape(DockNodeID node_id, u32 element_id);
         size_t selected_window_index(const Node &node) const;
@@ -266,6 +267,16 @@ namespace auik
     inline Dockspace *make_dockspace(u32 id, Widget *parent = nullptr)
     {
         return acul::alloc<Dockspace>(id, get_default_dockspace_flags(), parent);
+    }
+
+    inline Window *make_dock_window(u32 id, Dockspace *dockspace, StringView title = "",
+                                    const amal::rect &bounds = {},
+                                    WidgetFlags widget_flags = get_default_widget_flags() | WidgetFlagBits::hittable,
+                                    Widget *parent = nullptr)
+    {
+        auto *window = make_decorated_window(id, title, bounds, widget_flags, parent ? parent : dockspace);
+        window->window_flags |= WindowFlagBits::docked;
+        return window;
     }
 
     namespace streams

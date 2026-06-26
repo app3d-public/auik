@@ -16,8 +16,8 @@ namespace auik
     {
     public:
         Image(u32 id, TextureID texture_id, amal::vec2 size, amal::rect uv_rect = {{0.0f, 0.0f}, {1.0f, 1.0f}},
-              Widget *parent = nullptr, WidgetFlags flags = get_default_image_flags())
-            : Widget(id, flags, EventFlagBits::none, parent, {{0.0f}, size}, AUIK_TAG_IMAGE),
+              WidgetFlags flags = get_default_image_flags())
+            : Widget(id, flags, EventFlagBits::none, nullptr, {{0.0f}, size}, AUIK_TAG_IMAGE),
               _texture_id(texture_id),
               _uv_rect(uv_rect)
         {
@@ -27,6 +27,7 @@ namespace auik
         AUIK_EXPORT void update_layout_min_size() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void rebuild_clip_rects() override;
+        AUIK_EXPORT void reset_draw_records() override;
         AUIK_EXPORT void draw(DrawCtx &ctx) override;
         AUIK_EXPORT void on_detach() override;
 
@@ -56,9 +57,9 @@ namespace auik
     class CheckerImage : public Widget
     {
     public:
-        CheckerImage(u32 id, amal::vec2 size, u32 style_tag = AUIK_STYLE_TAG_GRADIENT_SLIDER, Widget *parent = nullptr,
-                     WidgetFlags flags = WidgetFlagBits::visible)
-            : Widget(id, flags, EventFlagBits::none, parent, {{0.0f}, size}, AUIK_TAG_CHECKER_IMAGE),
+        CheckerImage(u32 id, amal::vec2 size, u32 style_tag = AUIK_STYLE_TAG_GRADIENT_SLIDER,
+                     WidgetFlags flags = get_default_widget_flags())
+            : Widget(id, flags, EventFlagBits::none, nullptr, {{0.0f}, size}, AUIK_TAG_CHECKER_IMAGE),
               _style({Theme::STYLE_ID_INVALID, style_tag})
         {
         }
@@ -67,6 +68,7 @@ namespace auik
         AUIK_EXPORT void update_layout_min_size() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void rebuild_clip_rects() override;
+        AUIK_EXPORT void reset_draw_records() override;
         AUIK_EXPORT void draw(DrawCtx &ctx) override;
 
         u32 style_tag() const { return _style.tag_id; }
@@ -86,7 +88,7 @@ namespace auik
     inline Image *make_image(u32 id, TextureID texture_id, amal::vec2 size,
                              amal::rect uv_rect = {{0.0f, 0.0f}, {1.0f, 1.0f}})
     {
-        return acul::alloc<Image>(id, texture_id, size, uv_rect, nullptr);
+        return acul::alloc<Image>(id, texture_id, size, uv_rect);
     }
 
     inline void cache_image(u32 id, Image *image)

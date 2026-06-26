@@ -25,10 +25,7 @@ namespace auik
     class ComboBox final : public Widget
     {
     public:
-        AUIK_EXPORT ComboBox(u32 id, acul::vector<acul::string> items = {}, u32 selected_index = 0u,
-                             amal::vec2 size = {0.0f, 0.0f}, WidgetFlags widget_flags = get_default_combo_box_flags(),
-                             Widget *parent = nullptr);
-        AUIK_EXPORT ComboBox(u32 id, const acul::vector<StringView> &items, u32 selected_index = 0u,
+        AUIK_EXPORT ComboBox(u32 id, const acul::vector<StringView> &items = {}, u32 selected_index = 0u,
                              amal::vec2 size = {0.0f, 0.0f}, WidgetFlags widget_flags = get_default_combo_box_flags(),
                              Widget *parent = nullptr);
         AUIK_EXPORT ~ComboBox() override;
@@ -47,8 +44,9 @@ namespace auik
 
         acul::vector<acul::string> items() const;
         AUIK_EXPORT acul::vector<StringView> item_text_views() const;
-        AUIK_EXPORT void set_items(const acul::vector<acul::string> &items);
         AUIK_EXPORT void set_items(const acul::vector<StringView> &items);
+        AUIK_EXPORT void add_item(StringView item);
+        AUIK_EXPORT void add_items(const acul::vector<StringView> &items);
 
         u32 selected_index() const { return _selected_index; }
         AUIK_EXPORT const acul::string &selected_text() const;
@@ -89,7 +87,7 @@ namespace auik
     class MultipleComboBox final : public Widget
     {
     public:
-        AUIK_EXPORT MultipleComboBox(u32 id, acul::vector<acul::string> items = {}, acul::string placeholder = {},
+        AUIK_EXPORT MultipleComboBox(u32 id, const acul::vector<StringView> &items = {}, StringView placeholder = {},
                                      amal::vec2 size = {0.0f, 0.0f},
                                      WidgetFlags widget_flags = get_default_combo_box_flags(),
                                      Widget *parent = nullptr);
@@ -109,7 +107,6 @@ namespace auik
 
         acul::vector<acul::string> items() const;
         AUIK_EXPORT acul::vector<StringView> item_text_views() const;
-        AUIK_EXPORT void set_items(const acul::vector<acul::string> &items);
         AUIK_EXPORT void set_items(const acul::vector<StringView> &items);
         const acul::string &placeholder() const { return _placeholder; }
         bool is_translated_placeholder() const { return _translated_placeholder; }
@@ -154,18 +151,17 @@ namespace auik
         amal::vec2 _content_depth_range{0.0f, 1.0f};
     };
 
-    inline ComboBox *make_combo_box(u32 id, acul::vector<acul::string> items = {}, u32 selected_index = 0u,
+    inline ComboBox *make_combo_box(u32 id, const acul::vector<StringView> &items = {}, u32 selected_index = 0u,
                                     amal::vec2 size = AUIK_SIZE_FIT)
     {
-        return acul::alloc<ComboBox>(id, std::move(items), selected_index, size, get_default_combo_box_flags());
+        return acul::alloc<ComboBox>(id, items, selected_index, size, get_default_combo_box_flags());
     }
 
-    inline MultipleComboBox *make_multiple_combo_box(u32 id, acul::vector<acul::string> items = {},
-                                                     acul::string placeholder = {},
+    inline MultipleComboBox *make_multiple_combo_box(u32 id, const acul::vector<StringView> &items = {},
+                                                     StringView placeholder = {},
                                                      amal::vec2 size = AUIK_SIZE_FIT)
     {
-        return acul::alloc<MultipleComboBox>(id, std::move(items), std::move(placeholder), size,
-                                             get_default_combo_box_flags());
+        return acul::alloc<MultipleComboBox>(id, items, placeholder, size, get_default_combo_box_flags());
     }
 
     namespace streams

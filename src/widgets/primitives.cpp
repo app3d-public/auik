@@ -5,10 +5,9 @@
 
 namespace auik
 {
-    WLine::WLine(u32 id, amal::axis axis, WidgetFlags flags, Widget *parent, u32 style_tag)
-        : Widget(id, flags, EventFlagBits::none, parent, {}, AUIK_TAG_WLINE),
-          _axis(axis),
-          _style({Theme::STYLE_ID_INVALID, style_tag})
+    WLine::WLine(u32 id, amal::axis axis, WidgetFlags flags)
+        : Widget(id, flags, EventFlagBits::none, nullptr, {}, AUIK_TAG_WLINE),
+          _axis(axis)
     {
         set_size(_axis == amal::axis::x ? amal::vec2{AUIK_SIZE_X_FILL, AUIK_SIZE_Y_FIT}
                                         : amal::vec2{AUIK_SIZE_X_FIT, AUIK_SIZE_Y_FILL});
@@ -53,7 +52,7 @@ namespace auik
     {
         if (parent()) set_clip_id(parent()->content_clip_id());
         else ensure_own_clip_rect({position().x, position().y, size().x, size().y});
-        _draw.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+        invalidate_hit_rect(_draw);
     }
 
     void WLine::reset_draw_records() { _draw = {}; }
@@ -68,9 +67,8 @@ namespace auik
         emit_quads_instance(ctx, quads_stream, _draw, data, get_rect(), visible, false);
     }
 
-    WRect::WRect(u32 id, const amal::rect &bounds, WidgetFlags flags, Widget *parent, u32 style_tag)
-        : Widget(id, flags, EventFlagBits::none, parent, bounds, AUIK_TAG_WRECT),
-          _style({Theme::STYLE_ID_INVALID, style_tag})
+    WRect::WRect(u32 id, const amal::rect &bounds, WidgetFlags flags)
+        : Widget(id, flags, EventFlagBits::none, nullptr, bounds, AUIK_TAG_WRECT)
     {
     }
 
@@ -114,7 +112,7 @@ namespace auik
     {
         if (parent()) set_clip_id(parent()->content_clip_id());
         else ensure_own_clip_rect({position().x, position().y, size().x, size().y});
-        _draw.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+        invalidate_hit_rect(_draw);
     }
 
     void WRect::reset_draw_records() { _draw = {}; }
@@ -145,9 +143,9 @@ namespace auik
             u32 style_tag = AUIK_STYLE_TAG_SEPARATOR;
             stream.read(axis).read(style_tag);
 
-            auto *widget =
-                acul::alloc<WLine>(common.id, static_cast<amal::axis>(axis), WidgetFlags(common.widget_flags), nullptr,
-                                   style_tag);
+            auto *widget = acul::alloc<WLine>(common.id, static_cast<amal::axis>(axis),
+                                              WidgetFlags(common.widget_flags));
+            widget->set_style_tag(style_tag);
             detail::apply_widget_common_data(widget, common);
             return widget;
         }
@@ -165,8 +163,8 @@ namespace auik
             u32 style_tag = AUIK_STYLE_TAG_SEPARATOR;
             stream.read(style_tag);
 
-            auto *widget = acul::alloc<WRect>(common.id, common.bounds, WidgetFlags(common.widget_flags), nullptr,
-                                              style_tag);
+            auto *widget = acul::alloc<WRect>(common.id, common.bounds, WidgetFlags(common.widget_flags));
+            widget->set_style_tag(style_tag);
             detail::apply_widget_common_data(widget, common);
             return widget;
         }

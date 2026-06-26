@@ -131,8 +131,8 @@ namespace auik
     {
         assert(parent() && "ImageButton must have parent");
         set_clip_id(parent()->content_clip_id());
-        _bg.hit_id = AUIK_INVALID_DRAW_DATA_ID;
-        _image_draw.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+        DrawDataID *hit_ids[] = {&_bg, &_image_draw};
+        invalidate_hit_rect_batch(hit_ids, 2);
         _image_rect.clip_id = clip_id();
     }
 

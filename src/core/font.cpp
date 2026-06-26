@@ -5,6 +5,7 @@
 #include <auik/detail/text.hpp>
 #include <auik/widgets/image.hpp>
 #include <fontconfig/fontconfig.h>
+#include <auik/detail/platform.hpp>
 #include <freetype/freetype.h>
 
 #ifdef _WIN32
@@ -642,7 +643,7 @@ namespace auik
     bool load_win32_icons(const FontRegistry &fonts, f32 dpi, const FontIconGlyphLoader *next)
     {
         FontInfo *font_info = nullptr;
-        if (is_win_11_or_greater()) font_info = get_font_info_by_family(fonts, "Segoe Fluent Icons");
+        if (detail::is_win_11_or_greater()) font_info = get_font_info_by_family(fonts, "Segoe Fluent Icons");
         if (!font_info) font_info = get_font_info_by_family(fonts, "Segoe MDL2 Assets");
         if (!font_info) return false;
 

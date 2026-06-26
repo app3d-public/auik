@@ -5,8 +5,8 @@
 
 namespace auik
 {
-    RadioButton::RadioButton(u32 id, bool value, WidgetFlags widget_flags, Widget *parent)
-        : Widget(id, widget_flags, EventFlagBits::click, parent, {{0.0f, 0.0f}, {0.0f, 0.0f}}, AUIK_TAG_RADIO_BUTTON),
+    RadioButton::RadioButton(u32 id, bool value, WidgetFlags widget_flags)
+        : Widget(id, widget_flags, EventFlagBits::click, nullptr, {{0.0f, 0.0f}, {0.0f, 0.0f}}, AUIK_TAG_RADIO_BUTTON),
           _value(value),
           _indicator_rect(detail::make_rect_data(AUIK_TAG_RADIO_BUTTON_INDICATOR, AUIK_TAG_RADIO_BUTTON_INDICATOR))
     {
@@ -107,8 +107,8 @@ namespace auik
     {
         assert(parent() && "RadioButton must have parent");
         set_clip_id(parent()->content_clip_id());
-        _background_draw.hit_id = AUIK_INVALID_DRAW_DATA_ID;
-        _indicator_draw.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+        DrawDataID *hit_ids[] = {&_background_draw, &_indicator_draw};
+        invalidate_hit_rect_batch(hit_ids, 2);
         _indicator_rect.clip_id = clip_id();
     }
 
@@ -196,7 +196,7 @@ namespace auik
             const auto common = detail::read_widget_common_data(stream);
             bool value = false;
             stream.read(value);
-            auto *widget = acul::alloc<RadioButton>(common.id, value, WidgetFlags(common.widget_flags), nullptr);
+            auto *widget = acul::alloc<RadioButton>(common.id, value, WidgetFlags(common.widget_flags));
             detail::apply_widget_common_data(widget, common);
             return widget;
         }

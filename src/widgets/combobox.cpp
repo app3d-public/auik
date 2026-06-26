@@ -62,20 +62,6 @@ namespace auik
 
     } // namespace
 
-    ComboBox::ComboBox(u32 id, acul::vector<acul::string> items, u32 selected_index, amal::vec2 size,
-                       WidgetFlags widget_flags, Widget *parent)
-        : ComboBox(
-              id,
-              [&items]() {
-                  acul::vector<StringView> views;
-                  views.reserve(items.size());
-                  for (const auto &item : items) views.push_back(StringView{item});
-                  return views;
-              }(),
-              selected_index, size, widget_flags, parent)
-    {
-    }
-
     ComboBox::ComboBox(u32 id, const acul::vector<StringView> &items, u32 selected_index, amal::vec2 size,
                        WidgetFlags widget_flags, Widget *parent)
         : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::focus, parent, {{0.0f, 0.0f}, size},
@@ -88,7 +74,8 @@ namespace auik
         _trigger->set_hit_id(make_element_id(id, AUIK_TAG_COMBO_BOX, 0u));
         _trigger->update_style(id, parent ? parent->id() : 0u, StyleState::normal);
         _label = acul::alloc<Text>(AUIK_TAG_TEXT, "", amal::vec2{0.0f, 0.0f},
-                                   get_default_text_flags() & ~WidgetFlagBits::attachable, this, AUIK_STYLE_TAG_NO_PAD);
+                                   get_default_text_flags() & ~WidgetFlagBits::attachable, AUIK_STYLE_TAG_NO_PAD);
+        _label->set_parent(this);
         _label->set_horizontal_align(detail::TextHorizontalAlign::left);
         _label->set_vertical_align(detail::TextVerticalAlign::center);
         _label->update_style();
@@ -159,14 +146,6 @@ namespace auik
         return out;
     }
 
-    void ComboBox::set_items(const acul::vector<acul::string> &items)
-    {
-        acul::vector<StringView> views;
-        views.reserve(items.size());
-        for (const auto &item : items) views.push_back(StringView{item});
-        set_items(views);
-    }
-
     void ComboBox::set_items(const acul::vector<StringView> &items)
     {
         const u32 prev_selected = _selected_index;
@@ -207,6 +186,37 @@ namespace auik
             update_popup_layout();
             redraw_all_commands();
         }
+    }
+
+    void ComboBox::add_item(StringView text)
+    {
+        if (!_popup) return;
+        const u32 index = static_cast<u32>(_popup->children.size());
+        auto *item = acul::alloc<detail::Selectable>(AUIK_TAG_COMBO_BOX_ITEM, AUIK_TAG_COMBO_BOX_ITEM, index, text,
+                                                     amal::vec2{0.0f, 0.0f}, _popup, AUIK_STYLE_TAG_COMBO_BOX_ITEM,
+                                                     detail::get_selectable_item_flags());
+        item->get_rect().id.widget_id = id();
+        item->set_focus_parent(_popup);
+        item->set_style_state(StyleState::normal);
+        item->set_selected(index == _selected_index);
+        item->update_style();
+        _popup->add_child(item);
+        if (index == 0u) _selected_index = 0u;
+        sync_label_text();
+
+        auto &ctx = detail::get_context();
+        ctx.dirty_flags |= DirtyFlagBits::redraw;
+        detail::mark_host_refresh_request();
+        if (_open)
+        {
+            update_popup_layout();
+            redraw_all_commands();
+        }
+    }
+
+    void ComboBox::add_items(const acul::vector<StringView> &items)
+    {
+        for (StringView item : items) add_item(item);
     }
 
     void ComboBox::set_selected_index(u32 index)
@@ -627,11 +637,10 @@ namespace auik
 
     bool ComboBox::has_draw_record() const { return _trigger && _trigger->has_draw_record(); }
 
-    MultipleComboBox::MultipleComboBox(u32 id, acul::vector<acul::string> items, acul::string placeholder,
+    MultipleComboBox::MultipleComboBox(u32 id, const acul::vector<StringView> &items, StringView placeholder,
                                        amal::vec2 size, WidgetFlags widget_flags, Widget *parent)
         : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::focus, parent, {{0.0f, 0.0f}, size},
-                 AUIK_TAG_COMBO_BOX),
-          _placeholder(std::move(placeholder))
+                 AUIK_TAG_COMBO_BOX)
     {
         _trigger = acul::alloc<detail::PopupTrigger>(AUIK_STYLE_TAG_COMBO_BOX, AUIK_TAG_COMBO_BOX,
                                                      AUIK_ICON_CHEVRON_DOWN, AUIK_ICON_CHEVRON_UP, true);
@@ -639,7 +648,8 @@ namespace auik
         _trigger->set_hit_id(make_element_id(id, AUIK_TAG_COMBO_BOX, 0u));
         _trigger->update_style(id, parent ? parent->id() : 0u, StyleState::normal);
         _label = acul::alloc<Text>(AUIK_TAG_TEXT, "", amal::vec2{0.0f, 0.0f},
-                                   get_default_text_flags() & ~WidgetFlagBits::attachable, this, AUIK_STYLE_TAG_NO_PAD);
+                                   get_default_text_flags() & ~WidgetFlagBits::attachable, AUIK_STYLE_TAG_NO_PAD);
+        _label->set_parent(this);
         _label->set_horizontal_align(detail::TextHorizontalAlign::left);
         _label->set_vertical_align(detail::TextVerticalAlign::center);
         _label->update_style();
@@ -653,6 +663,7 @@ namespace auik
         _popup->unset_visible();
         _popup->sync_widget_flags();
         set_items(items);
+        set_placeholder(placeholder);
     }
 
     MultipleComboBox::~MultipleComboBox()
@@ -695,14 +706,6 @@ namespace auik
             else out.push_back(item->source_text());
         }
         return out;
-    }
-
-    void MultipleComboBox::set_items(const acul::vector<acul::string> &items)
-    {
-        acul::vector<StringView> views;
-        views.reserve(items.size());
-        for (const auto &item : items) views.push_back(StringView{item});
-        set_items(views);
     }
 
     void MultipleComboBox::set_items(const acul::vector<StringView> &items)
@@ -1242,11 +1245,9 @@ namespace auik
             items.reserve(item_storage.size());
             for (u32 i = 0u; i < item_storage.size(); ++i)
                 items.push_back({item_storage[i].c_str(), item_translated[i]});
-            auto *widget =
-                acul::alloc<MultipleComboBox>(common.id, acul::vector<acul::string>{}, placeholder.text,
-                                              common.requested_size, WidgetFlags(common.widget_flags), nullptr);
-            widget->set_items(items);
-            widget->set_placeholder(StringView{placeholder.text.c_str(), placeholder.translated});
+            auto *widget = acul::alloc<MultipleComboBox>(
+                common.id, items, StringView{placeholder.text.c_str(), placeholder.translated}, common.requested_size,
+                WidgetFlags(common.widget_flags), nullptr);
             widget->set_style_tag(style_tag);
             widget->set_selected_indices(selected_indices);
             detail::apply_widget_common_data(widget, common);

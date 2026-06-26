@@ -23,7 +23,7 @@ namespace auik
     class RubberBand final : public Widget
     {
     public:
-        AUIK_EXPORT explicit RubberBand(u32 id, WidgetFlags widget_flags = WidgetFlagBits::none, Widget *parent = nullptr);
+        AUIK_EXPORT explicit RubberBand(u32 id, WidgetFlags widget_flags = WidgetFlagBits::none);
 
         bool active() const { return _active; }
         bool committed() const { return _committed; }

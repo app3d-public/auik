@@ -140,17 +140,18 @@ namespace auik
                  {{0.0f, 0.0f}, size}, style_tag_id),
           _value(value),
           _text(AUIK_TAG_TEXT, make_textbox_presentation(value, text_flags), amal::vec2{0.0f, 0.0f},
-                WidgetFlagBits::visible,
-                this, AUIK_STYLE_TAG_NO_PAD, detail::TextOverflowMode::clip, text_vertical_align, text_wrap,
+                WidgetFlagBits::visible, AUIK_STYLE_TAG_NO_PAD, detail::TextOverflowMode::clip, text_vertical_align, text_wrap,
                 text_wrap != detail::TextWrapMode::none ? detail::TextLayoutWidthMode::bounds
                                                         : detail::TextLayoutWidthMode::viewport),
           _placeholder((!placeholder.str || placeholder.str[0] == '\0')
                            ? nullptr
                            : acul::alloc<Text>(AUIK_TAG_TEXT, placeholder, amal::vec2{0.0f, 0.0f},
-                                               WidgetFlagBits::visible, this, AUIK_STYLE_TAG_PLACEHOLDER,
+                                               WidgetFlagBits::visible, AUIK_STYLE_TAG_PLACEHOLDER,
                                                detail::TextOverflowMode::clip, text_vertical_align, text_wrap)),
           _edit(acul::alloc<TextBoxEditData>())
     {
+        _text.set_parent(this);
+        if (_placeholder) _placeholder->set_parent(this);
         this->text_flags = text_flags;
         sync_widget_flags();
         detail::text_edit_initialize_state(&_edit_state, true);
@@ -330,7 +331,7 @@ namespace auik
         set_clip_id(parent()->content_clip_id());
         _content_clip_id = 0xFFFFu;
         update_text_content_clip_rect();
-        _bg.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+        invalidate_hit_rect(_bg);
         _text.rebuild_clip_rects();
         _text.set_clip_id(text_content_clip_id());
         if (_scrollbar_y)
@@ -600,7 +601,7 @@ namespace auik
             if (focused) schedule_caret_blink();
 
             auto &ctx = detail::get_context();
-            if (ctx.dirty_flags & DirtyFlagBits::layout) return;
+            if (ctx.dirty_flags & detail::layout_update_dirty_mask) return;
             rebuild_selection_rect_cache();
             redraw_all_commands();
         });
@@ -1045,7 +1046,8 @@ namespace auik
         else
         {
             _placeholder = acul::alloc<Text>(AUIK_TAG_TEXT, value, amal::vec2{0.0f, 0.0f},
-                                             WidgetFlagBits::visible, this, AUIK_STYLE_TAG_PLACEHOLDER);
+                                             WidgetFlagBits::visible, AUIK_STYLE_TAG_PLACEHOLDER);
+            _placeholder->set_parent(this);
             _placeholder->set_overflow_mode(detail::TextOverflowMode::clip);
             _placeholder->set_vertical_align(detail::TextVerticalAlign::center);
         }

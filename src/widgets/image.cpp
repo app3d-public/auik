@@ -27,6 +27,10 @@ namespace auik
     {
         assert(parent() && "Image must have parent");
         set_clip_id(parent()->content_clip_id());
+    }
+
+    void Image::reset_draw_records()
+    {
         _image = {};
     }
 
@@ -88,6 +92,10 @@ namespace auik
     {
         assert(parent() && "CheckerImage must have parent");
         set_clip_id(parent()->content_clip_id());
+    }
+
+    void CheckerImage::reset_draw_records()
+    {
         _checker = {};
     }
 
@@ -124,7 +132,7 @@ namespace auik
             stream.read(coverage_mode);
 
             auto *widget = acul::alloc<Image>(common.id, AUIK_INVALID_TEXTURE_ID, common.requested_size,
-                                              amal::rect{{0.0f, 0.0f}, {1.0f, 1.0f}}, nullptr,
+                                              amal::rect{{0.0f, 0.0f}, {1.0f, 1.0f}},
                                               WidgetFlags(common.widget_flags));
             widget->set_coverage_mode(coverage_mode);
             detail::apply_widget_common_data(widget, common);
@@ -144,7 +152,7 @@ namespace auik
             u32 style_tag = AUIK_STYLE_TAG_GRADIENT_SLIDER;
             stream.read(style_tag);
 
-            auto *widget = acul::alloc<CheckerImage>(common.id, common.requested_size, style_tag, nullptr,
+            auto *widget = acul::alloc<CheckerImage>(common.id, common.requested_size, style_tag,
                                                      WidgetFlags(common.widget_flags));
             detail::apply_widget_common_data(widget, common);
             return widget;

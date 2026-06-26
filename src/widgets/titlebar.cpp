@@ -1,5 +1,6 @@
 #include <auik/auik.hpp>
 #include <auik/detail/depth.hpp>
+#include <auik/detail/platform.hpp>
 #include <auik/pipelines.hpp>
 #include <auik/widgets/image.hpp>
 #include <auik/widgets/titlebar.hpp>
@@ -335,9 +336,8 @@ namespace auik
     void Titlebar::rebuild_clip_rects()
     {
         ensure_own_clip_rect({position().x, position().y, size().x, size().y});
-        _bg.hit_id = AUIK_INVALID_DRAW_DATA_ID;
-        _icon_bg.hit_id = AUIK_INVALID_DRAW_DATA_ID;
-        _leading_region_bg.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+        DrawDataID *hit_ids[] = {&_bg, &_icon_bg, &_leading_region_bg};
+        invalidate_hit_rect_batch(hit_ids, 3);
         for (auto *button : _caption_buttons)
         {
             if (!button) continue;
@@ -508,6 +508,39 @@ namespace auik
         if (is_maximized) area->top -= border_y;
     }
 
+    static LRESULT hit_test_resize_border(HWND hwnd, const TitlebarState &state, LPARAM lParam)
+    {
+        if (!(state.flags & TitlebarCreateFlagBits::resizable)) return HTCLIENT;
+        if ((state.flags & TitlebarCreateFlagBits::decorated) || IsZoomed(hwnd)) return HTCLIENT;
+        if (detail::get_context().window_ctx->host_state == HostWindowState::fullscreen) return HTCLIENT;
+
+        RECT rect{};
+        if (!GetWindowRect(hwnd, &rect)) return HTCLIENT;
+
+        const UINT dpi = GetDpiForWindow(hwnd);
+        const i32 frame_x = state.frame.x > 0 ? state.frame.x : GetSystemMetricsForDpi(SM_CXFRAME, dpi);
+        const i32 frame_y = state.frame.y > 0 ? state.frame.y : GetSystemMetricsForDpi(SM_CYFRAME, dpi);
+        const i32 padding = state.padding > 0 ? state.padding : GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi);
+        const i32 border_x = frame_x + padding;
+        const i32 border_y = frame_y + padding;
+
+        const POINT point{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+        const bool left = point.x >= rect.left && point.x < rect.left + border_x;
+        const bool right = point.x < rect.right && point.x >= rect.right - border_x;
+        const bool top = point.y >= rect.top && point.y < rect.top + border_y;
+        const bool bottom = point.y < rect.bottom && point.y >= rect.bottom - border_y;
+
+        if (top && left) return HTTOPLEFT;
+        if (top && right) return HTTOPRIGHT;
+        if (bottom && left) return HTBOTTOMLEFT;
+        if (bottom && right) return HTBOTTOMRIGHT;
+        if (left) return HTLEFT;
+        if (right) return HTRIGHT;
+        if (top) return HTTOP;
+        if (bottom) return HTBOTTOM;
+        return HTCLIENT;
+    }
+
     static i32 hit_test_caption_button_index(const TitlebarState &state, const amal::ivec2 &pos, i32 client_width)
     {
         if (state.caption_button_size.x <= 0.0f || state.caption_button_size.y <= 0.0f) return -1;
@@ -585,12 +618,15 @@ namespace auik
                 if ((state->flags & TitlebarCreateFlagBits::decorated) || host_state == HostWindowState::fullscreen)
                     break;
                 NCCALCSIZE_PARAMS *params = (NCCALCSIZE_PARAMS *)lParam;
-                add_frame_to_client_area(params->rgrc, IsZoomed(hwnd), -1, state);
+                if (IsZoomed(hwnd)) add_frame_to_client_area(params->rgrc, true, -1, state);
                 return 0;
             }
             case WM_NCHITTEST:
             {
                 if (!state) break;
+                const LRESULT resize_hit = hit_test_resize_border(hwnd, *state, lParam);
+                if (resize_hit != HTCLIENT) return resize_hit;
+
                 amal::ivec2 pos{};
                 i32 client_width = 0;
                 if (!get_client_hit_pos(hwnd, lParam, pos, client_width)) break;
@@ -737,7 +773,7 @@ namespace auik
     static bool add_window_caption_button_icons(const FontRegistry &fonts, f32 dpi)
     {
         FontInfo *font_info = nullptr;
-        if (is_win_11_or_greater()) font_info = get_font_info_by_family(fonts, "Segoe Fluent Icons");
+        if (detail::is_win_11_or_greater()) font_info = get_font_info_by_family(fonts, "Segoe Fluent Icons");
         if (!font_info) font_info = get_font_info_by_family(fonts, "Segoe MDL2 Assets");
         if (!font_info) return false;
 

@@ -46,7 +46,7 @@ namespace auik
 
         inline void reset() { mask = PendingMaskBits::none; }
 
-        inline void set_frame_rate(f64 frame_rate) { _min_interval = 1.0 / frame_rate; }
+        inline void set_frame_rate(f64 frame_rate) { _min_interval = frame_rate > 0.0 ? 1.0 / frame_rate : 0.0; }
 
         inline f64 get_frame_rate() const { return _min_interval; }
 
@@ -61,6 +61,6 @@ namespace auik
 
     private:
         f64 _last_sync_time = -1.0;
-        f64 _min_interval = 60.0;
+        f64 _min_interval = 1.0 / 60.0;
     };
 } // namespace auik

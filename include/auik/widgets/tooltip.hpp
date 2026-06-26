@@ -14,7 +14,7 @@ namespace auik
     class Tooltip final : public Widget
     {
     public:
-        AUIK_EXPORT explicit Tooltip(u32 id = AUIK_ID_TOOLTIP, Widget *parent = nullptr);
+        AUIK_EXPORT explicit Tooltip(u32 id = AUIK_ID_TOOLTIP);
         AUIK_EXPORT void show_at(f32 x, const acul::string *text_source);
         AUIK_EXPORT void hide();
         AUIK_EXPORT void clear_if_source(const acul::string *text_source);
@@ -47,5 +47,5 @@ namespace auik
         u16 _applied_clip_id = 0xFFFFu;
     };
 
-    inline Tooltip *make_tooltip(u32 id = AUIK_ID_TOOLTIP) { return acul::alloc<Tooltip>(id, nullptr); }
+    inline Tooltip *make_tooltip(u32 id = AUIK_ID_TOOLTIP) { return acul::alloc<Tooltip>(id); }
 } // namespace auik

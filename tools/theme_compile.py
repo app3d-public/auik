@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import csv
-import os
 import re
-import shutil
 import subprocess
 import sys
 from collections import OrderedDict
@@ -149,81 +147,50 @@ def touch(path: Path) -> None:
     path.touch()
 
 
-def find_sign_request_in_shell() -> str:
-    for probe in ("where sign_request.py", "command -v sign_request.py"):
-        result = subprocess.run(probe, check=False, capture_output=True, text=True, shell=True)
-        if result.returncode != 0:
-            continue
-        for line in result.stdout.splitlines():
-            candidate = line.strip()
-            if candidate:
-                return candidate
-    return ""
+def local_umbf_sign_request_path() -> str:
+    candidate = Path(__file__).resolve().parents[2] / "umbf" / "scripts" / "sign_request.py"
+    return str(candidate)
 
 
-def sign_request_commands() -> list[tuple[list[str], str]]:
-    env_path = os.environ.get("SIGN_REQUEST_PY_PATH", "").strip()
-    commands: list[tuple[list[str], str]] = []
-    if env_path:
-        path = Path(env_path)
-        if path.suffix.lower() == ".py":
-            commands.append(([sys.executable, env_path, "u32"], f"{sys.executable} {env_path} u32"))
-        else:
-            commands.append(([env_path, "u32"], f"{env_path} u32"))
-
-    found = shutil.which("sign_request.py")
-    if found and Path(found).suffix.lower() == ".py":
-        commands.append(([sys.executable, found, "u32"], f"{sys.executable} {found} u32"))
-
-    shell_found = find_sign_request_in_shell()
-    if shell_found:
-        commands.append(([sys.executable, shell_found, "u32"], f"{sys.executable} {shell_found} u32"))
-
-    return commands
+def sign_request_command(script_path: str) -> tuple[list[str], str]:
+    return [sys.executable, script_path, "u32"], f"{sys.executable} {script_path} u32"
 
 
-def generate_id_with_sign_request() -> str:
-    errors: list[str] = []
-    for command, command_text in sign_request_commands():
-        try:
-            result = subprocess.run(command, check=False, capture_output=True, text=True)
-        except OSError as exc:
-            errors.append(f"{command_text}: {exc}")
-            continue
+def generate_id_with_sign_request(preferred_path: str = "") -> str:
+    script_path = preferred_path or local_umbf_sign_request_path()
+    command, command_text = sign_request_command(script_path)
+    try:
+        result = subprocess.run(command, check=False, capture_output=True, text=True)
+    except OSError as exc:
+        raise RuntimeError(f"Failed to generate id via {command_text}: {exc}") from exc
 
-        if result.returncode != 0:
-            output = (result.stderr or result.stdout).strip()
-            errors.append(f"{command_text} exited with code {result.returncode}: {output}")
-            continue
+    if result.returncode != 0:
+        output = (result.stderr or result.stdout).strip()
+        raise RuntimeError(f"Failed to generate id via {command_text}: exited with code {result.returncode}: {output}")
 
-        match = SIGN_RE.search(result.stdout)
-        if not match:
-            errors.append(f"{command_text} did not print a u32 signature: {result.stdout.strip()}")
-            continue
+    match = SIGN_RE.search(result.stdout)
+    if not match:
+        raise RuntimeError(f"Failed to generate id via {command_text}: did not print a u32 signature: {result.stdout.strip()}")
 
-        return match.group(0).upper().replace("X", "x")
-
-    if not errors:
-        errors.append("sign_request.py was not found. Set SIGN_REQUEST_PY_PATH or add it to PATH.")
-    raise RuntimeError("Failed to generate id via sign_request.py u32:\n" + "\n".join(errors))
+    return match.group(0).upper().replace("X", "x")
 
 
-def generate_unique_id(used_ids: set[str]) -> str:
+def generate_unique_id(used_ids: set[str], sign_request_path: str = "") -> str:
     for _ in range(128):
-        value = generate_id_with_sign_request()
+        value = generate_id_with_sign_request(sign_request_path)
         if value != "0x00000000" and value not in used_ids:
             return value
     raise RuntimeError("Failed to generate a unique id via sign_request.py after 128 attempts")
 
 
-def update_ids(csv_path: Path, names: set[str], used_ids: set[str] | None = None) -> dict[str, str]:
+def update_ids(csv_path: Path, names: set[str], used_ids: set[str] | None = None, sign_request_path: str = "") -> dict[str, str]:
     old_ids = read_ids(csv_path)
     ids = {name: old_ids[name] for name in sorted(names) if name in old_ids}
     used = set(used_ids or set()) | set(ids.values())
     for name in sorted(names):
         if name in ids:
             continue
-        ids[name] = generate_unique_id(used)
+        ids[name] = generate_unique_id(used, sign_request_path)
         used.add(ids[name])
     write_ids(csv_path, ids)
     return ids
@@ -669,12 +636,14 @@ def main() -> int:
     parser.add_argument("--output-folder", type=Path, help="Folder for generated hpp/cpp")
     parser.add_argument("--ids-header", type=Path, help="Generate default widget/style tag defines from the base CSS id cache")
     parser.add_argument("--ids-only", action="store_true", help="Only update id caches and generate --ids-header")
+    parser.add_argument("--sign-request", type=Path, help="Path to umbf scripts/sign_request.py")
     parser.add_argument("--stamp", type=Path, help="Touch a stamp file after successful generation")
     args = parser.parse_args()
 
     input_base = args.input_base.resolve()
     input_folder = args.input_folder.resolve() if args.input_folder else input_base.parent
     output_folder = args.output_folder.resolve() if args.output_folder else None
+    sign_request_path = str(args.sign_request.resolve()) if args.sign_request else ""
     if not args.ids_only and output_folder is None:
         parser.error("--output-folder is required unless --ids-only is used")
     if args.ids_only and not args.ids_header:
@@ -698,14 +667,14 @@ def main() -> int:
     tree = collect_tree(css_files)
 
     base_csv_path = input_base.parent / DEFAULT_IDS_CSV_NAME
-    base_ids = update_ids(base_csv_path, base_tree.tags | base_tree.variables)
+    base_ids = update_ids(base_csv_path, base_tree.tags | base_tree.variables, sign_request_path=sign_request_path)
 
     app_csv_path = None
     app_ids = {}
     app_names = (app_tree.tags | app_tree.variables) - set(base_ids)
     if app_names:
         app_csv_path = input_folder / APP_IDS_CSV_NAME
-        app_ids = update_ids(app_csv_path, app_names, set(base_ids.values()))
+        app_ids = update_ids(app_csv_path, app_names, set(base_ids.values()), sign_request_path)
 
     ids = merge_ids(base_ids, app_ids)
 

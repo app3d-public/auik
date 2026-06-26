@@ -121,6 +121,9 @@ namespace auik::detail
                             TextLayoutResult &out);
     bool layout_multiline(Font &font, const acul::string &utf8_text, const TextLayoutConfig &config,
                           TextLayoutResult &out);
+    bool build_text_instances_from_layout(Font &font, u32 size_px, const TextLayoutResult &layout,
+                                          const TextRenderConfig &render_config,
+                                          acul::vector<TexturesInstanceData> &out);
     bool build_single_line_instances(Font &font, const acul::string &utf8_text, const TextLayoutConfig &layout_config,
                                      const TextRenderConfig &render_config, acul::vector<TexturesInstanceData> &out,
                                      TextLayoutResult *layout_result = nullptr);

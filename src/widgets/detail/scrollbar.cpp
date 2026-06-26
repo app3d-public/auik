@@ -284,8 +284,8 @@ namespace auik::detail
     void Scrollbar::rebuild_clip_rects()
     {
         _thumb_rect.clip_id = clip_id();
-        _track_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
-        _thumb_draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+        DrawDataID *hit_ids[] = {&_track_draw_id, &_thumb_draw_id};
+        invalidate_hit_rect_batch(hit_ids, 2);
     }
 
     void Scrollbar::back_hit_depth()

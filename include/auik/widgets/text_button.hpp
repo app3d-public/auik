@@ -16,13 +16,14 @@ namespace auik
     class TextButton : public Widget
     {
     public:
-        TextButton(u32 id, StringView text, amal::vec2 size, WidgetFlags widget_flags, EventFlags event_flags,
-                   Widget *parent, u32 style_tag_id = AUIK_STYLE_TAG_TEXT_BUTTON)
-            : Widget(id, widget_flags, event_flags, parent, {{0.0f, 0.0f}, size}, style_tag_id),
+        TextButton(u32 id, StringView text, amal::vec2 size, WidgetFlags widget_flags = get_default_text_button_flags(),
+                   EventFlags event_flags = EventFlagBits::none, u32 style_tag_id = AUIK_STYLE_TAG_TEXT_BUTTON)
+            : Widget(id, widget_flags, event_flags, nullptr, {{0.0f, 0.0f}, size}, style_tag_id),
               _style({Theme::STYLE_ID_INVALID, style_tag_id}),
               _text(acul::alloc<Text>(AUIK_TAG_TEXT, text, amal::vec2{0.0f, 0.0f},
-                                      WidgetFlagBits::visible, this))
+                                      get_default_text_flags()))
         {
+            _text->set_parent(this);
             _text->set_horizontal_align(detail::TextHorizontalAlign::center);
             _text->set_vertical_align(detail::TextVerticalAlign::center);
         }
@@ -60,7 +61,7 @@ namespace auik
                                         amal::vec2 size = AUIK_SIZE_FIT)
     {
         return acul::alloc<TextButton>(id, text, size, get_default_text_button_flags(), EventFlagBits::none,
-                                       nullptr, style_tag_id);
+                                       style_tag_id);
     }
 
     namespace streams

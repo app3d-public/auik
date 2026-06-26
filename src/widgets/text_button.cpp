@@ -92,7 +92,7 @@ namespace auik
     {
         assert(parent() && "TextButton must have parent");
         set_clip_id(parent()->content_clip_id());
-        _bg.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+        invalidate_hit_rect(_bg);
         _text->set_clip_id(clip_id());
         _text->rebuild_clip_rects();
         _text_draw_dirty = true;
@@ -154,7 +154,7 @@ namespace auik
             stream.read(style_tag);
             TextButton *text_button = acul::alloc<TextButton>(common.id, StringView{text.text.c_str(), text.translated},
                                                               common.requested_size,
-                                                              common.widget_flags, EventFlagBits::none, nullptr,
+                                                              WidgetFlags(common.widget_flags), EventFlagBits::none,
                                                               style_tag);
             detail::apply_widget_common_data(text_button, common);
             return text_button;

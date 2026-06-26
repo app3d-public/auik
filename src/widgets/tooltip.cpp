@@ -31,8 +31,8 @@ namespace auik
         }
     } // namespace
 
-    Tooltip::Tooltip(u32 id, Widget *parent)
-        : Widget(id, get_default_widget_flags(), EventFlagBits::none, parent, {},
+    Tooltip::Tooltip(u32 id)
+        : Widget(id, get_default_widget_flags(), EventFlagBits::none, nullptr, {},
                  AUIK_TAG_TOOLTIP)
     {
         _layout_config.wrap = detail::TextWrapMode::word;

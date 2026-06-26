@@ -17,8 +17,7 @@ namespace auik
     class RadioButton final : public Widget
     {
     public:
-        AUIK_EXPORT RadioButton(u32 id, bool value, WidgetFlags widget_flags = get_default_radio_button_flags(),
-                    Widget *parent = nullptr);
+        AUIK_EXPORT RadioButton(u32 id, bool value, WidgetFlags widget_flags = get_default_radio_button_flags());
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
         AUIK_EXPORT void update_layout_min_size() override;
@@ -52,9 +51,9 @@ namespace auik
         bool has_draw_record() const;
     };
 
-    inline RadioButton *make_radio_button(u32 id, bool value, Widget *parent = nullptr)
+    inline RadioButton *make_radio_button(u32 id, bool value)
     {
-        return acul::alloc<RadioButton>(id, value, get_default_radio_button_flags(), parent);
+        return acul::alloc<RadioButton>(id, value);
     }
 
     namespace streams

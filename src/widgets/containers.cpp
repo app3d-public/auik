@@ -237,6 +237,101 @@ namespace auik
 
             flush_inline_row(children.size(), cursor, inline_row_active, inline_row_start);
         }
+
+        static void update_child_layout_bounds(Widget *child, const amal::rect &bounds)
+        {
+            if (!child) return;
+            child->set_position(bounds.offset);
+            child->set_layout_size(bounds.size);
+            child->update_layout(true);
+        }
+
+        static void fast_update_inline_row(const acul::vector<Widget *> &children,
+                                           const acul::vector<ChildLayoutFlags> &layouts, size_t row_start,
+                                           size_t row_end, const amal::rect &content_rect,
+                                           const amal::vec2 &row_pos, f32 inline_spacing_x, f32 &row_height)
+        {
+            const f32 available_width = content_rect.size.x;
+            f32 left_x = row_pos.x;
+            f32 right_x = row_pos.x + available_width;
+            row_height = 0.0f;
+
+            for (size_t i = row_end; i > row_start; --i)
+            {
+                const size_t index = i - 1u;
+                auto *child = children[index];
+                if (!child || !child->is_visible()) continue;
+                const ChildLayoutFlags layout = index < layouts.size() ? layouts[index] : ChildLayoutFlagBits::none;
+                if (!is_inline_layout(layout) || !is_right_layout(layout)) continue;
+                const amal::vec2 req = child->required_size();
+                const f32 width = resolve_child_layout_width(child, req.x, right_x - left_x);
+                right_x -= width;
+                update_child_layout_bounds(child, {{right_x, row_pos.y}, {width, req.y}});
+                row_height = amal::max(row_height, req.y);
+                right_x -= inline_spacing_x;
+            }
+
+            for (size_t i = row_start; i < row_end; ++i)
+            {
+                auto *child = children[i];
+                if (!child || !child->is_visible()) continue;
+                const ChildLayoutFlags layout = i < layouts.size() ? layouts[i] : ChildLayoutFlagBits::none;
+                if (!is_inline_layout(layout) || is_right_layout(layout)) continue;
+                const amal::vec2 req = child->required_size();
+                const f32 width = resolve_child_layout_width(child, req.x, right_x - left_x);
+                update_child_layout_bounds(child, {{left_x, row_pos.y}, {width, req.y}});
+                row_height = amal::max(row_height, req.y);
+                left_x += width + inline_spacing_x;
+            }
+
+            align_inline_row_vertical(children, layouts, row_start, row_end, row_height);
+        }
+
+        static void layout_child_widgets_fast_update(const acul::vector<Widget *> &children,
+                                                     const acul::vector<ChildLayoutFlags> &layouts,
+                                                     const amal::rect &content_rect, f32 inline_spacing_x)
+        {
+            const amal::vec2 content_pos = content_rect.offset;
+            const f32 available_width = content_rect.size.x;
+            amal::vec2 cursor = content_rect.offset;
+            size_t inline_row_start = 0;
+            bool inline_row_active = false;
+
+            const auto flush_inline_row = [&](size_t row_end, amal::vec2 &cursor_ref, bool &active, size_t &start) {
+                if (!active) return;
+                f32 row_height = 0.0f;
+                fast_update_inline_row(children, layouts, start, row_end, content_rect, cursor_ref, inline_spacing_x,
+                                       row_height);
+                cursor_ref = {content_pos.x, cursor_ref.y + row_height};
+                active = false;
+                start = row_end;
+            };
+
+            for (size_t i = 0; i < children.size(); ++i)
+            {
+                auto *child = children[i];
+                if (!child) continue;
+                if (!child->is_visible()) continue;
+                const ChildLayoutFlags layout = i < layouts.size() ? layouts[i] : ChildLayoutFlagBits::none;
+                if (is_inline_layout(layout))
+                {
+                    if (!inline_row_active)
+                    {
+                        inline_row_start = i;
+                        inline_row_active = true;
+                    }
+                    continue;
+                }
+
+                flush_inline_row(i, cursor, inline_row_active, inline_row_start);
+                const amal::vec2 req = child->required_size();
+                const f32 width = resolve_child_layout_width(child, req.x, available_width);
+                update_child_layout_bounds(child, {cursor, {width, req.y}});
+                cursor = {content_pos.x, cursor.y + req.y};
+            }
+
+            flush_inline_row(children.size(), cursor, inline_row_active, inline_row_start);
+        }
     } // namespace detail
 
     static inline amal::vec4 sum_padding(const amal::vec4 &left, const amal::vec4 &right)
@@ -412,6 +507,15 @@ namespace auik
     {
         if (!min_size_known) update_layout_min_size_with(margin, padding);
 
+        if (detail::is_fast_layout_update() && !is_fixed())
+        {
+            Widget::update_layout(true);
+            set_clip_id(content_clip_id());
+            detail::layout_child_widgets_fast_update(children, _child_layouts, {position(), size()},
+                                                     resolved_inline_spacing());
+            return;
+        }
+
         const amal::vec2 layout_origin = position();
         const amal::vec2 inner_required = {amal::max(required_size().x - margin.x - margin.z, 0.0f),
                                            amal::max(required_size().y - margin.y - margin.w, 0.0f)};
@@ -465,9 +569,11 @@ namespace auik
 
     void Block::reset_draw_records()
     {
+        Widget::reset_draw_records();
         for (auto *child : children)
         {
             if (!child) continue;
+            child->reset_external_draw_cull_state();
             child->reset_draw_records();
         }
     }
@@ -522,8 +628,8 @@ namespace auik
         Widget::on_detach();
     }
 
-    DrawBlock::DrawBlock(u32 id, WidgetFlags widget_flags, Widget *parent, u32 tag_id, u32 style_tag_id)
-        : Block(id, widget_flags, parent, tag_id), _bg_rect(detail::make_rect_data(id, tag_id))
+    DrawBlock::DrawBlock(u32 id, WidgetFlags widget_flags, u32 tag_id, u32 style_tag_id)
+        : Block(id, widget_flags, tag_id), _bg_rect(detail::make_rect_data(id, tag_id))
     {
         set_style_tag(style_tag_id);
     }
@@ -718,6 +824,74 @@ namespace auik
         const amal::vec4 margin = draw_margin();
         const amal::vec4 padding = sum_padding(draw_padding(), _content_padding);
         const amal::vec2 layout_origin = position();
+        if (detail::is_fast_layout_update() && !is_fixed())
+        {
+            const amal::vec2 inner_size = {
+                amal::max(size().x - margin.x - margin.z, 0.0f),
+                amal::max(size().y - margin.y - margin.w, 0.0f),
+            };
+
+            set_position({layout_origin.x + margin.x, layout_origin.y + margin.y});
+            Widget::set_layout_size(inner_size);
+            Widget::update_layout(true);
+            _bg_rect.bounds = bounds();
+            _bg_rect.clip_id = clip_id();
+
+            const amal::vec2 content_pos = position() + amal::vec2{padding.x, padding.y};
+            const amal::vec2 raw_available_size = {amal::max(size().x - padding.x - padding.z, 0.0f),
+                                                   amal::max(size().y - padding.y - padding.w, 0.0f)};
+            const amal::vec4 frame_clip = get_clip_rect(clip_id());
+            const amal::vec4 visible_scroll_rect =
+                detail::intersect_rects(frame_clip, {position().x, position().y, size().x, size().y});
+            const bool scroll_x_enabled = _draw_flags & DrawBlockFlagBits::scrollbar_x;
+            const bool scroll_y_enabled = _draw_flags & DrawBlockFlagBits::scrollbar_y;
+            const bool need_scroll_y = scroll_y_enabled && _scrollbar_y && _scrollbar_y->is_visible();
+            const bool need_scroll_x = scroll_x_enabled && _scrollbar_x && _scrollbar_x->is_visible();
+            const f32 bar_w = need_scroll_y && _scrollbar_y ? _scrollbar_y->get_min_track_thickness() : 0.0f;
+            const f32 bar_h = need_scroll_x && _scrollbar_x ? _scrollbar_x->get_min_track_thickness() : 0.0f;
+
+            _scroll_view_size = {amal::max(raw_available_size.x - bar_w, 0.0f),
+                                 amal::max(raw_available_size.y - bar_h, 0.0f)};
+            const bool clip_ignores_padding_x = _draw_flags & DrawBlockFlagBits::clip_ignores_padding_x;
+            const bool clip_ignores_padding_y = _draw_flags & DrawBlockFlagBits::clip_ignores_padding_y;
+            const amal::vec2 clip_pos{clip_ignores_padding_x ? position().x : content_pos.x,
+                                      clip_ignores_padding_y ? position().y : content_pos.y};
+            const amal::vec2 clip_view_size{
+                clip_ignores_padding_x ? amal::max(visible_scroll_rect.z - bar_w, 0.0f) : _scroll_view_size.x,
+                clip_ignores_padding_y ? amal::max(visible_scroll_rect.w - bar_h, 0.0f) : _scroll_view_size.y};
+            update_scroll_clip(clip_pos, clip_view_size);
+            set_clip_id(parent() ? parent()->content_clip_id() : clip_id());
+
+            if (_scrollbar_y && _scrollbar_y->is_visible())
+            {
+                const amal::vec4 track_margin = _scrollbar_y->get_track_margin();
+                const f32 track_w = _scrollbar_y->get_min_track_thickness();
+                const f32 track_x =
+                    visible_scroll_rect.x + amal::max(visible_scroll_rect.z - track_margin.z - track_w, 0.0f);
+                const f32 track_y = visible_scroll_rect.y + track_margin.y;
+                const f32 track_h = amal::max(visible_scroll_rect.w - track_margin.y - track_margin.w, 0.0f);
+                _scrollbar_y->configure({track_x, track_y}, {track_w, track_h}, _scroll_content_size.y,
+                                        _scroll_view_size.y);
+            }
+            if (_scrollbar_x && _scrollbar_x->is_visible())
+            {
+                const amal::vec4 track_margin = _scrollbar_x->get_track_margin();
+                const f32 track_h = _scrollbar_x->get_min_track_thickness();
+                const f32 track_x = visible_scroll_rect.x + track_margin.x;
+                const f32 track_y =
+                    visible_scroll_rect.y + amal::max(visible_scroll_rect.w - track_margin.w - track_h, 0.0f);
+                const f32 track_w =
+                    amal::max(visible_scroll_rect.z - bar_w - track_margin.x - track_margin.z, 0.0f);
+                _scrollbar_x->configure({track_x, track_y}, {track_w, track_h}, _scroll_content_size.x,
+                                        _scroll_view_size.x);
+            }
+
+            detail::layout_child_widgets_fast_update(children, _child_layouts,
+                                                     {content_pos - _content_offset, _scroll_view_size},
+                                                     resolved_inline_spacing());
+            return;
+        }
+
         const amal::vec2 inner_required = {amal::max(required_size().x - margin.x - margin.z, 0.0f),
                                            amal::max(required_size().y - margin.y - margin.w, 0.0f)};
         amal::vec2 inner_size = size();
@@ -1091,17 +1265,17 @@ namespace auik
         if (is_offset_changed) request_scroll_layout_update(DrawReasonBits::layout);
     }
 
-    CollapseHeader::CollapseHeader(u32 id, StringView label, bool expanded, WidgetFlags widget_flags, Widget *parent,
-                                   u32 style_tag_id)
-        : Block(id, widget_flags, parent, AUIK_TAG_COLLAPSE_HEADER),
+    CollapseHeader::CollapseHeader(u32 id, StringView label, bool expanded, WidgetFlags widget_flags, u32 style_tag_id)
+        : Block(id, widget_flags, AUIK_TAG_COLLAPSE_HEADER),
           _style({Theme::STYLE_ID_INVALID, style_tag_id}),
           _expanded(expanded)
     {
         add_event_flags(EventFlagBits::click);
         set_rect_tag_id(current_header_style_tag());
-        _label = acul::alloc<Text>(AUIK_TAG_TEXT, label, amal::vec2{0.0f, 0.0f}, WidgetFlagBits::visible, this,
+        _label = acul::alloc<Text>(AUIK_TAG_TEXT, label, amal::vec2{0.0f, 0.0f}, WidgetFlagBits::visible,
                                    AUIK_STYLE_TAG_NO_PAD, detail::TextOverflowMode::ellipsis,
                                    detail::TextVerticalAlign::center);
+        _label->set_parent(this);
         _trigger = acul::alloc<detail::PopupTrigger>(_trigger_style_tag, AUIK_TAG_COLLAPSE_HEADER_TRIGGER,
                                                      AUIK_ICON_CHEVRON_RIGHT, AUIK_ICON_CHEVRON_DOWN, true,
                                                      amal::half_pi<f32>());
@@ -1669,8 +1843,7 @@ namespace auik
         umbf::Block *read_block(acul::bin_stream &stream)
         {
             const auto header = read_block_header_data(stream);
-            auto *block =
-                acul::alloc<Block>(header.common.id, WidgetFlags(header.common.widget_flags), nullptr, AUIK_TAG_BLOCK);
+            auto *block = acul::alloc<Block>(header.common.id, WidgetFlags(header.common.widget_flags), AUIK_TAG_BLOCK);
             apply_block_header_data(block, header);
             read_block_children(stream, block);
             return block;
@@ -1690,7 +1863,7 @@ namespace auik
         umbf::Block *read_draw_block(acul::bin_stream &stream)
         {
             const auto header = read_block_header_data(stream);
-            auto *widget = acul::alloc<DrawBlock>(header.common.id, WidgetFlags(header.common.widget_flags), nullptr,
+            auto *widget = acul::alloc<DrawBlock>(header.common.id, WidgetFlags(header.common.widget_flags),
                                                   AUIK_TAG_DRAW_BLOCK, 0u);
             apply_block_header_data(widget, header);
             read_block_children(stream, widget);
@@ -1732,7 +1905,7 @@ namespace auik
         {
             const auto header = read_block_header_data(stream);
             auto *widget = acul::alloc<CollapseHeader>(header.common.id, acul::string{}, true,
-                                                       WidgetFlags(header.common.widget_flags), nullptr,
+                                                       WidgetFlags(header.common.widget_flags),
                                                        AUIK_STYLE_TAG_COLLAPSE_HEADER);
             apply_block_header_data(widget, header);
             read_block_children(stream, widget);
@@ -1772,7 +1945,7 @@ namespace auik
             stream.read(style_tag);
 
             auto *widget = acul::alloc<Dummy>(common.id, common.requested_size, WidgetFlags(common.widget_flags),
-                                              nullptr, style_tag);
+                                              style_tag);
             detail::apply_widget_common_data(widget, common);
             return widget;
         }

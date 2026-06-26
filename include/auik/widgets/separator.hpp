@@ -12,8 +12,8 @@ namespace auik
     class Separator : public Widget
     {
     public:
-        AUIK_EXPORT Separator(amal::axis axis, WidgetFlags widget_flags = WidgetFlagBits::visible, Widget *parent = nullptr,
-                  u32 style_tag = AUIK_STYLE_TAG_SEPARATOR);
+        AUIK_EXPORT Separator(amal::axis axis, WidgetFlags widget_flags = get_default_widget_flags(),
+                              u32 style_tag = AUIK_STYLE_TAG_SEPARATOR);
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
         AUIK_EXPORT void update_layout_min_size() override;
@@ -33,9 +33,9 @@ namespace auik
     class HSeparator final : public Separator
     {
     public:
-        AUIK_EXPORT HSeparator(WidgetFlags widget_flags = WidgetFlagBits::visible, Widget *parent = nullptr,
-                   u32 style_tag = AUIK_STYLE_TAG_SEPARATOR)
-            : Separator(amal::axis::x, widget_flags, parent, style_tag)
+        AUIK_EXPORT HSeparator(WidgetFlags widget_flags = get_default_widget_flags(),
+                               u32 style_tag = AUIK_STYLE_TAG_SEPARATOR)
+            : Separator(amal::axis::x, widget_flags, style_tag)
         {
         }
 
@@ -45,9 +45,9 @@ namespace auik
     class VSeparator final : public Separator
     {
     public:
-        AUIK_EXPORT VSeparator(WidgetFlags widget_flags = WidgetFlagBits::visible, Widget *parent = nullptr,
-                   u32 style_tag = AUIK_STYLE_TAG_SEPARATOR)
-            : Separator(amal::axis::y, widget_flags, parent, style_tag)
+        AUIK_EXPORT VSeparator(WidgetFlags widget_flags = get_default_widget_flags(),
+                               u32 style_tag = AUIK_STYLE_TAG_SEPARATOR)
+            : Separator(amal::axis::y, widget_flags, style_tag)
         {
         }
 

@@ -13,16 +13,7 @@ namespace auik
         if (flags & awin::WindowFlagBits::fullscreen) return {};
         if (flags & awin::WindowFlagBits::maximized) return {};
         if (!(flags & awin::WindowFlagBits::extended_nc_area)) return {};
-
-        HWND hwnd = awin::native_access::get_hwnd(window);
-        const UINT dpi = hwnd ? GetDpiForWindow(hwnd) : 96;
-        const i32 frame_x = GetSystemMetricsForDpi(SM_CXFRAME, dpi);
-        const i32 frame_y = GetSystemMetricsForDpi(SM_CYFRAME, dpi);
-        const i32 padded_border = GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi);
-        const i32 border_x = frame_x + padded_border;
-        const i32 border_y = frame_y + padded_border;
-        if (hwnd && IsZoomed(hwnd)) return {};
-        return {border_x, 0, border_x, border_y};
+        return {};
     }
 
     static HICON resolve_window_icon(HWND hwnd)
@@ -158,8 +149,7 @@ namespace auik
     {
         auto *backend = static_cast<detail::AwinBackend *>(window_ctx);
         for (int i = 0; i < detail::CursorID::max; i++) backend->cursors[i].reset();
-        auto *ed = detail::get_context().ed;
-        ed->unbind_listeners(backend);
+        backend->event_dispatcher.unbind_listeners(backend);
         acul::release(backend);
     }
 
@@ -169,16 +159,14 @@ namespace auik
     {
         ed.bind_event(
             backend, awin::event_id::resize,
-            [&window](const awin::PosEvent &event) {
+            [&window](const awin::ResizeEvent &event) {
                 if (event.window != &window) return;
                 auto &ctx = detail::get_context();
                 const HostWindowState next_state = resolve_host_window_state(window);
                 if (ctx.window_ctx->host_state != next_state) ctx.window_ctx->host_state = next_state;
                 if (event.position.x <= 0 || event.position.y <= 0) return;
                 ctx.io.display_size = {event.position.x, event.position.y};
-                auto *pf = ctx.pending_filter;
-                if (pf && !pf->allow()) pf->set(PendingMaskBits::resize);
-                else detail::mark_layout_dirty();
+                detail::mark_layout_dirty();
             },
             4);
         ed.bind_event(backend, awin::event_id::mouse_move, [&window](const awin::PosEvent &event) {
@@ -255,7 +243,7 @@ namespace auik
         cursors[detail::CursorID::resize_nwse] = awin::Cursor::create(awin::Cursor::Type::resize_nwse);
         cursors[detail::CursorID::resize_nesw] = awin::Cursor::create(awin::Cursor::Type::resize_nesw);
         auto &global_ctx = detail::get_context();
-        bind_window_events(awin_ctx->window, *global_ctx.ed, awin_ctx);
+        bind_window_events(awin_ctx->window, awin_ctx->event_dispatcher, awin_ctx);
         window_ctx->host_state = resolve_host_window_state(awin_ctx->window);
 #ifdef _WIN32
         awin_ctx->custom_titlebar_padding = get_custom_titlebar_padding(awin_ctx->window);
@@ -267,9 +255,10 @@ namespace auik
     }
 
     AUIK_EXPORT detail::WindowContext *create_awin_backend(awin::Window &window,
-                                                          acul::point2D<i32> initial_display_size)
+                                                           acul::events::dispatcher &event_dispatcher,
+                                                           acul::point2D<i32> initial_display_size)
     {
-        detail::AwinBackend *ctx = acul::alloc<detail::AwinBackend>(window, initial_display_size);
+        detail::AwinBackend *ctx = acul::alloc<detail::AwinBackend>(window, event_dispatcher, initial_display_size);
         ctx->get_window_handle = &get_window_handle;
         ctx->set_cursor = &set_window_cursor;
         ctx->get_clipboard_string = &get_clipboard_string;

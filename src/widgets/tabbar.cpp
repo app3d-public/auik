@@ -45,9 +45,15 @@ namespace auik
 
     static inline bool should_own_full_clip_rect(const TabBar &tabbar) { return tabbar.is_fixed() || !tabbar.parent(); }
 
+    static inline bool is_content_width_constrained(const TabBar &tabbar)
+    {
+        return tabbar.required_size().x > 0.0f && tabbar.size().x + 0.5f < tabbar.required_size().x;
+    }
+
     static inline bool should_own_content_clip_rect(const TabBar &tabbar)
     {
-        return tabbar.scroll() || tabbar.clipped() || tabbar.is_fixed() || !tabbar.parent();
+        return tabbar.scroll() || tabbar.clipped() || tabbar.is_fixed() || !tabbar.parent() ||
+               is_content_width_constrained(tabbar);
     }
 
     static inline amal::vec2 snap_drag_visual_position(const amal::vec2 &position)
@@ -236,6 +242,11 @@ namespace auik
 
     void TabBar::set_items(const acul::vector<StringView> &items)
     {
+        if (!_tabs.empty() || !_close_buttons.empty() || _overflow_button)
+        {
+            invalidate_draw_commands(DrawReasonBits::layout);
+            reset_draw_records();
+        }
         if (_popup) _popup->clear_children();
         for (auto *tab : _tabs) acul::release(tab);
         for (auto *button : _close_buttons) acul::release(button);
@@ -623,13 +634,78 @@ namespace auik
         amal::vec2 widget_size = size();
         const amal::vec2 min_inner = {amal::max(min_required.x - margin.x - margin.z, 0.0f),
                                       amal::max(min_required.y - margin.y - margin.w, 0.0f)};
-        if (!is_width_fixed()) widget_size.x = amal::max(widget_size.x - margin.x - margin.z, min_inner.x);
+        const bool width_constrained_by_layout =
+            parent() && widget_size.x > 0.0f && widget_size.x + 0.5f < min_required.x;
+        if (!is_width_fixed())
+        {
+            widget_size.x = amal::max(widget_size.x - margin.x - margin.z, 0.0f);
+            if (!width_constrained_by_layout) widget_size.x = amal::max(widget_size.x, min_inner.x);
+        }
         else widget_size.x = amal::max(widget_size.x, min_inner.x);
         widget_size.y = amal::max(widget_size.y, min_inner.y);
 
         set_position({layout_origin.x + margin.x, layout_origin.y + margin.y});
         set_layout_size(widget_size);
         Widget::update_layout(true);
+
+        if (detail::is_fast_layout_update() && !popup() && !scroll() && !movable() && !closable())
+        {
+            const f32 content_x = position().x + padding.x;
+            const f32 content_y = position().y + padding.y;
+            const f32 content_h = amal::max(size().y - padding.y - padding.w, 0.0f);
+            const bool own_full_clip = should_own_full_clip_rect(*this);
+            const amal::vec4 parent_clip = get_layout_parent_clip_rect();
+            const amal::vec4 full_clip =
+                detail::intersect_rects(parent_clip, {position().x, position().y, size().x, size().y});
+            const f32 tabs_clip_right = position().x + size().x - padding.z;
+            const amal::vec4 tabs_clip = detail::intersect_rects(
+                parent_clip, {position().x, position().y, amal::max(tabs_clip_right - position().x, 0.0f), size().y});
+
+            if (own_full_clip)
+            {
+                if (_full_clip_id == 0xFFFFu) _full_clip_id = push_clip_rect(full_clip);
+                else update_clip_rect(_full_clip_id, full_clip);
+                set_clip_id(_full_clip_id);
+            }
+            else
+            {
+                _full_clip_id = 0xFFFFu;
+                set_clip_id(get_layout_parent_clip_id());
+            }
+
+            if (should_own_content_clip_rect(*this))
+            {
+                if (_content_clip_id == 0xFFFFu) _content_clip_id = push_clip_rect(tabs_clip);
+                else update_clip_rect(_content_clip_id, tabs_clip);
+            }
+            else _content_clip_id = 0xFFFFu;
+
+            f32 cursor_x = content_x;
+            _visible_count = static_cast<u32>(_tabs.size());
+            _overflow_start = static_cast<u32>(_tabs.size());
+            for (u32 i = 0; i < _tabs.size(); ++i)
+            {
+                auto *tab = _tabs[i];
+                if (!tab) continue;
+                if (i > 0u) cursor_x += inline_spacing;
+                const amal::vec2 required = resolve_tab_required_size(i);
+                tab->set_visible();
+                tab->sync_widget_flags();
+                tab->set_layout_size({required.x, tab->size().y});
+                tab->set_position({cursor_x, content_y + amal::max((content_h - required.y) * 0.5f, 0.0f)});
+                tab->update_layout(true);
+                cursor_x += required.x;
+            }
+            for (auto *button : _close_buttons)
+            {
+                if (!button) continue;
+                button->unset_visible();
+                button->sync_widget_flags();
+            }
+            if (_overflow_button) _overflow_button->set_open(false);
+            close_popup();
+            return;
+        }
 
         const f32 content_x = position().x + padding.x;
         const f32 content_y = position().y + padding.y;
@@ -666,6 +742,7 @@ namespace auik
         f32 total_w = 0.0f;
         _visible_count = 0u;
         _overflow_start = static_cast<u32>(_tabs.size());
+        const f32 visible_tabs_right = content_x + amal::max(content_w - popup_reserved, 0.0f);
 
         const u32 drag_index = find_index_by_element_id(_drag_element_id);
         for (u32 i = 0; i < _tabs.size(); ++i)
@@ -677,7 +754,7 @@ namespace auik
             amal::vec2 close_required{0.0f, 0.0f};
             auto *close_button = i < _close_buttons.size() ? _close_buttons[i] : nullptr;
             if (close_button && closable()) { close_required = close_button->required_size(); }
-            const bool fits_popup = cursor_x + required.x <= content_x + amal::max(content_w - popup_reserved, 0.0f);
+            const bool fits_popup = cursor_x + required.x <= visible_tabs_right;
             const bool visible = !popup() || fits_popup;
             if (!visible && _overflow_start == _tabs.size()) _overflow_start = i;
             if (visible) ++_visible_count;

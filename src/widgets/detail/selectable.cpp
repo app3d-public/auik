@@ -62,9 +62,8 @@ namespace auik::detail
     void Selectable::rebuild_clip_rects()
     {
         update_content_clip_rect();
-        _bg.hit_id = AUIK_INVALID_DRAW_DATA_ID;
-        _selected_bg.hit_id = AUIK_INVALID_DRAW_DATA_ID;
-        _selected_icon_draw.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+        DrawDataID *hit_ids[] = {&_bg, &_selected_bg, &_selected_icon_draw};
+        invalidate_hit_rect_batch(hit_ids, 3);
         _selected_icon_rect.clip_id = clip_id();
     }
 

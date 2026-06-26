@@ -435,12 +435,12 @@ namespace auik
         _rect.clip_id = 0xFFFFu;
         if (!active_modal())
         {
-            _backdrop_draw.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+            invalidate_hit_rect(_backdrop_draw);
             return;
         }
         const auto bounds_r = bounds();
         ensure_own_clip_rect({bounds_r.offset.x, bounds_r.offset.y, bounds_r.size.x, bounds_r.size.y});
-        _backdrop_draw.hit_id = AUIK_INVALID_DRAW_DATA_ID;
+        invalidate_hit_rect(_backdrop_draw);
 
         if (auto *modal = active_modal()) modal->rebuild_clip_rects();
     }
@@ -638,35 +638,35 @@ namespace auik
         text_width = amal::max(text_width, 120.0f);
         Image *icon = nullptr;
         if (_icon.valid)
-            icon = acul::alloc<Image>(AUIK_MODAL_DEFAULT_ICON, _icon.texture_id, _icon.size, _icon.uv_rect, nullptr,
+            icon = acul::alloc<Image>(AUIK_MODAL_DEFAULT_ICON, _icon.texture_id, _icon.size, _icon.uv_rect,
                                       MODAL_INTERNAL_WIDGET_FLAGS);
         if (icon) icon->set_rect_tag_id(AUIK_STYLE_TAG_MODAL_ICON);
 
         auto *title = acul::alloc<Text>(AUIK_MODAL_HEADER_ID, message.header, amal::vec2{text_width, 0.0f},
-                                        MODAL_INTERNAL_WIDGET_FLAGS, nullptr, AUIK_STYLE_TAG_MODAL_TITLE,
+                                        MODAL_INTERNAL_WIDGET_FLAGS, AUIK_STYLE_TAG_MODAL_TITLE,
                                         detail::TextOverflowMode::ellipsis, detail::TextVerticalAlign::top,
                                         detail::TextWrapMode::word);
         title->set_tight_content_height(true);
 
         auto *body = acul::alloc<Text>(AUIK_MODAL_MESSAGE_ID, message.message, amal::vec2{text_width, 0.0f},
-                                       MODAL_INTERNAL_WIDGET_FLAGS, nullptr, AUIK_STYLE_TAG_NO_PAD,
+                                       MODAL_INTERNAL_WIDGET_FLAGS, AUIK_STYLE_TAG_NO_PAD,
                                        detail::TextOverflowMode::ellipsis, detail::TextVerticalAlign::top,
                                        detail::TextWrapMode::word);
         body->set_tight_content_height(true);
 
-        auto *header_block = acul::alloc<DrawBlock>(AUIK_MODAL_HEADER_ID, MODAL_INTERNAL_WIDGET_FLAGS, nullptr,
-                                                    AUIK_TAG_BLOCK, AUIK_STYLE_TAG_MODAL_HEADER);
+        auto *header_block = acul::alloc<DrawBlock>(AUIK_MODAL_HEADER_ID, MODAL_INTERNAL_WIDGET_FLAGS, AUIK_TAG_BLOCK,
+                                                    AUIK_STYLE_TAG_MODAL_HEADER);
         header_block->add_child(title);
 
         auto *message_block = acul::alloc<::auik::Block>(AUIK_MODAL_MESSAGE_ID, MODAL_INTERNAL_WIDGET_FLAGS);
         message_block->add_child(header_block);
         message_block->add_child(body);
 
-        auto *message_row = acul::alloc<DrawBlock>(AUIK_MODAL_MESSAGE_ID, MODAL_INTERNAL_WIDGET_FLAGS, nullptr,
-                                                   AUIK_TAG_BLOCK, AUIK_STYLE_TAG_MODAL_MESSAGE_AREA);
+        auto *message_row = acul::alloc<DrawBlock>(AUIK_MODAL_MESSAGE_ID, MODAL_INTERNAL_WIDGET_FLAGS, AUIK_TAG_BLOCK,
+                                                   AUIK_STYLE_TAG_MODAL_MESSAGE_AREA);
         if (icon)
         {
-            auto *icon_box = acul::alloc<DrawBlock>(AUIK_MODAL_DEFAULT_ICON, MODAL_INTERNAL_WIDGET_FLAGS, nullptr,
+            auto *icon_box = acul::alloc<DrawBlock>(AUIK_MODAL_DEFAULT_ICON, MODAL_INTERNAL_WIDGET_FLAGS,
                                                     AUIK_TAG_BLOCK, AUIK_STYLE_TAG_MODAL_ICON);
             icon_box->add_child(icon);
             message_row->add_child(icon_box, make_layout_flags(ChildLayout::inline_, HAlign::left, VAlign::center));
@@ -678,10 +678,10 @@ namespace auik
         Text *batch_label = nullptr;
         if (message.group_id != 0u && group_count(message.group_id) > 1u)
         {
-            batch_checkbox = acul::alloc<Checkbox>(AUIK_MODAL_BATCH_ID, &_batch_apply,
-                                                   MODAL_INTERNAL_HITTABLE_WIDGET_FLAGS, nullptr);
+            batch_checkbox = acul::alloc<Checkbox>(AUIK_MODAL_BATCH_ID, _batch_apply,
+                                                   MODAL_INTERNAL_HITTABLE_WIDGET_FLAGS);
             batch_label = acul::alloc<Text>(AUIK_MODAL_BATCH_ID, "Apply to all", amal::vec2{90.0f, 0.0f},
-                                            MODAL_INTERNAL_WIDGET_FLAGS, nullptr, AUIK_STYLE_TAG_MODAL_BATCH_LABEL,
+                                            MODAL_INTERNAL_WIDGET_FLAGS, AUIK_STYLE_TAG_MODAL_BATCH_LABEL,
                                             detail::TextOverflowMode::ellipsis, detail::TextVerticalAlign::center,
                                             detail::TextWrapMode::none);
         }
@@ -693,7 +693,7 @@ namespace auik
             const u32 button_style = is_last_button ? AUIK_STYLE_TAG_TEXT_BUTTON : AUIK_STYLE_TAG_TRANSPARENT_BUTTON;
             auto *button = acul::alloc<TextButton>(AUIK_MODAL_BUTTON_ID, message.buttons[i].first,
                                                    amal::vec2{0.0f, 0.0f}, MODAL_INTERNAL_HITTABLE_WIDGET_FLAGS,
-                                                   EventFlagBits::none, nullptr, button_style);
+                                                   EventFlagBits::none, button_style);
             buttons.push_back(button);
         }
         modal->add_child(acul::alloc<ModalControlsRow>(id(), batch_checkbox, batch_label, std::move(buttons)));

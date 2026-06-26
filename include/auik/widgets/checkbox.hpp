@@ -17,8 +17,7 @@ namespace auik
     class Checkbox final : public Widget
     {
     public:
-        AUIK_EXPORT Checkbox(u32 id, bool value, WidgetFlags widget_flags = get_default_checkbox_flags(),
-                             Widget *parent = nullptr);
+        AUIK_EXPORT Checkbox(u32 id, bool value, WidgetFlags widget_flags = get_default_checkbox_flags());
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
         AUIK_EXPORT void update_layout_min_size() override;
@@ -54,9 +53,9 @@ namespace auik
         bool has_draw_record() const;
     };
 
-    inline Checkbox *make_checkbox(u32 id, bool value, Widget *parent = nullptr)
+    inline Checkbox *make_checkbox(u32 id, bool value)
     {
-        return acul::alloc<Checkbox>(id, value, get_default_checkbox_flags(), parent);
+        return acul::alloc<Checkbox>(id, value);
     }
 
     namespace streams

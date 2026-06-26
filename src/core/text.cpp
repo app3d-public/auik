@@ -559,6 +559,11 @@ namespace auik
             }
         } // namespace
 
+        bool build_text_instances_from_layout(Font &font, u32 size_px, const TextLayoutResult &layout,
+                                              const TextRenderConfig &render_config,
+                                              acul::vector<TexturesInstanceData> &out)
+        { return append_instances_from_layout(font, size_px, layout, render_config, out); }
+
         bool layout_single_line(Font &font, const acul::string &utf8_text, const TextLayoutConfig &config,
                                 TextLayoutResult &out)
         {

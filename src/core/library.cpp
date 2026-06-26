@@ -4,14 +4,16 @@
 #include <auik/detail/events.hpp>
 #include <auik/detail/gpu_context.hpp>
 #include <auik/sound.hpp>
+#include <auik/widgets/containers.hpp>
 #include <auik/widgets/dockspace.hpp>
 #include <auik/widgets/image.hpp>
 #include <auik/widgets/slider.hpp>
+#include <auik/widgets/tabbar.hpp>
+#include <auik/widgets/titlebar.hpp>
 #include <auik/widgets/tooltip.hpp>
+#include <auik/widgets/window.hpp>
 #include <freetype/freetype.h>
-#include <cstdio>
 #include "pipelines/stream_data.hpp"
-
 
 namespace auik
 {
@@ -19,7 +21,8 @@ namespace auik
     {
         static inline amal::vec2 get_root_overlay_depth_range() { return detail::get_global_foreground_depth_range(); }
 
-        static void update_root_widgets_layout_impl(Viewport *viewport);
+        static void update_root_widgets_layout_pass(Viewport *viewport);
+        static void update_root_widgets_fast_layout_pass(Viewport *viewport);
 
         static void sync_plain_viewport(Viewport *viewport)
         {
@@ -33,8 +36,11 @@ namespace auik
         {
             if (!viewport) return;
             sync_viewport(viewport);
-            update_root_widgets_layout_impl(viewport);
+            update_root_widgets_layout_pass(viewport);
         }
+
+        static bool sync_viewport_fast_update(Viewport *viewport, DrawReasonFlags reason);
+        static void record_viewport_widget_draw_commands(Viewport *viewport, DrawReasonFlags reason);
 
         static void sync_group_viewport(Viewport *viewport)
         {
@@ -59,7 +65,7 @@ namespace auik
                 group->bottom->rect = {{base.offset.x, base.offset.y + base.size.y - consumed},
                                        {base.size.x, consumed}};
                 sync_plain_viewport(group->bottom);
-                update_root_widgets_layout_impl(group->bottom);
+                update_root_widgets_layout_pass(group->bottom);
                 base.size.y -= consumed;
             }
             if (group->left)
@@ -77,15 +83,110 @@ namespace auik
                 group->right->rect = {{base.offset.x + base.size.x, base.offset.y}, {0.0f, base.size.y}};
                 sync_and_layout_viewport(group->right);
                 const f32 consumed = amal::clamp(group->right->rect.size.x, 0.0f, base.size.x);
-                group->right->rect = {{base.offset.x + base.size.x - consumed, base.offset.y},
-                                      {consumed, base.size.y}};
+                group->right->rect = {{base.offset.x + base.size.x - consumed, base.offset.y}, {consumed, base.size.y}};
                 sync_plain_viewport(group->right);
-                update_root_widgets_layout_impl(group->right);
+                update_root_widgets_layout_pass(group->right);
                 base.size.x -= consumed;
             }
             group->rect = base;
             sync_plain_viewport(group);
-            update_root_widgets_layout_impl(group);
+            update_root_widgets_layout_pass(group);
+        }
+
+        static bool sync_group_viewport_fast_update(Viewport *viewport, DrawReasonFlags reason)
+        {
+            auto *group = static_cast<ViewportGroup *>(viewport);
+            if (!group) return false;
+            amal::rect base = group->rect;
+            if (group->top)
+            {
+                f32 consumed = amal::clamp(group->top->rect.size.y, 0.0f, base.size.y);
+                if (consumed <= 0.0f)
+                {
+                    group->top->rect = {{base.offset.x, base.offset.y}, {base.size.x, 0.0f}};
+                    sync_and_layout_viewport(group->top);
+                    consumed = amal::clamp(group->top->rect.size.y, 0.0f, base.size.y);
+                }
+                group->top->rect = {{base.offset.x, base.offset.y}, {base.size.x, consumed}};
+                sync_plain_viewport(group->top);
+                if (!sync_viewport_fast_update(group->top, reason))
+                {
+                    update_root_widgets_fast_layout_pass(group->top);
+                    record_viewport_widget_draw_commands(group->top, reason);
+                }
+                base.offset.y += consumed;
+                base.size.y -= consumed;
+            }
+            if (group->bottom)
+            {
+                f32 consumed = amal::clamp(group->bottom->rect.size.y, 0.0f, base.size.y);
+                if (consumed <= 0.0f)
+                {
+                    group->bottom->rect = {{base.offset.x, base.offset.y + base.size.y}, {base.size.x, 0.0f}};
+                    sync_and_layout_viewport(group->bottom);
+                    consumed = amal::clamp(group->bottom->rect.size.y, 0.0f, base.size.y);
+                }
+                group->bottom->rect = {{base.offset.x, base.offset.y + base.size.y - consumed},
+                                       {base.size.x, consumed}};
+                sync_plain_viewport(group->bottom);
+                if (!sync_viewport_fast_update(group->bottom, reason))
+                {
+                    update_root_widgets_fast_layout_pass(group->bottom);
+                    record_viewport_widget_draw_commands(group->bottom, reason);
+                }
+                base.size.y -= consumed;
+            }
+            if (group->left)
+            {
+                f32 consumed = amal::clamp(group->left->rect.size.x, 0.0f, base.size.x);
+                if (consumed <= 0.0f)
+                {
+                    group->left->rect = {{base.offset.x, base.offset.y}, {0.0f, base.size.y}};
+                    sync_and_layout_viewport(group->left);
+                    consumed = amal::clamp(group->left->rect.size.x, 0.0f, base.size.x);
+                }
+                group->left->rect = {{base.offset.x, base.offset.y}, {consumed, base.size.y}};
+                sync_plain_viewport(group->left);
+                if (!sync_viewport_fast_update(group->left, reason))
+                {
+                    update_root_widgets_fast_layout_pass(group->left);
+                    record_viewport_widget_draw_commands(group->left, reason);
+                }
+                base.offset.x += consumed;
+                base.size.x -= consumed;
+            }
+            if (group->right)
+            {
+                f32 consumed = amal::clamp(group->right->rect.size.x, 0.0f, base.size.x);
+                if (consumed <= 0.0f)
+                {
+                    group->right->rect = {{base.offset.x + base.size.x, base.offset.y}, {0.0f, base.size.y}};
+                    sync_and_layout_viewport(group->right);
+                    consumed = amal::clamp(group->right->rect.size.x, 0.0f, base.size.x);
+                }
+                group->right->rect = {{base.offset.x + base.size.x - consumed, base.offset.y}, {consumed, base.size.y}};
+                sync_plain_viewport(group->right);
+                if (!sync_viewport_fast_update(group->right, reason))
+                {
+                    update_root_widgets_fast_layout_pass(group->right);
+                    record_viewport_widget_draw_commands(group->right, reason);
+                }
+                base.size.x -= consumed;
+            }
+            group->rect = base;
+            sync_plain_viewport(group);
+            update_root_widgets_fast_layout_pass(group);
+            record_viewport_widget_draw_commands(group, reason);
+            return true;
+        }
+
+        static bool sync_viewport_fast_update(Viewport *viewport, DrawReasonFlags reason)
+        {
+            if (!viewport) return false;
+            if (viewport->sync_viewport == &sync_group_viewport)
+                return sync_group_viewport_fast_update(viewport, reason);
+            sync_plain_viewport(viewport);
+            return false;
         }
 
         static f32 resolve_root_layout_axis(f32 requested, f32 viewport_size, f32 required)
@@ -118,7 +219,7 @@ namespace auik
             const bool is_window = widget->get_rect().id.tag_id == AUIK_TAG_WINDOW;
             if (!is_window) widget->set_position({layout_rect.x, layout_rect.y});
             widget->set_layout_size(resolve_root_layout_size(widget, layout_rect));
-            widget->update_layout(false);
+            widget->update_layout(true);
             return !is_window && widget->is_visible() && detail::root_widget_depth_zone(widget) == DepthZone::work;
         }
 
@@ -130,10 +231,8 @@ namespace auik
             f32 consumed_h = 0.0f;
             for (Widget *widget : ctx.widget_tree)
             {
-                if (!widget) continue;
-                if (widget->parent()) continue;
-                const bool consumes_space = update_root_widget_layout(widget, viewport, layout_rect);
-                if (!consumes_space) continue;
+                if (!widget || widget->parent()) continue;
+                if (!update_root_widget_layout(widget, viewport, layout_rect)) continue;
                 const f32 consumed = amal::max(widget->bounds().size.y, 0.0f);
                 layout_rect.y += consumed;
                 layout_rect.w = amal::max(layout_rect.w - consumed, 0.0f);
@@ -146,16 +245,80 @@ namespace auik
             }
         }
 
-        static void record_root_widget_draw_commands(DrawReasonFlags reason)
+        static bool update_root_widget_fast_layout(Widget *widget, Viewport *viewport, const amal::vec4 &layout_rect)
         {
+            if (!widget) return false;
+            assert(widget->viewport() && "Root widget viewport is not assigned");
+            if (widget->viewport() != viewport) return false;
+            if (widget->parent()) return false;
+
+            const bool is_window = widget->get_rect().id.tag_id == AUIK_TAG_WINDOW;
+            const amal::vec2 next_pos = is_window ? widget->position() : amal::vec2{layout_rect.x, layout_rect.y};
+            const amal::vec2 next_size = resolve_root_layout_size(widget, layout_rect);
+            widget->set_position(next_pos);
+            widget->set_layout_size(next_size);
+            widget->update_layout(true);
+            return !is_window && widget->is_visible() && detail::root_widget_depth_zone(widget) == DepthZone::work;
+        }
+
+        static void update_root_widgets_fast_layout_pass(Viewport *viewport)
+        {
+            auto &ctx = detail::get_context();
+            const auto viewport_rect = get_viewport_rect(viewport);
+            amal::vec4 layout_rect = viewport_rect;
+            f32 consumed_h = 0.0f;
+            for (Widget *widget : ctx.widget_tree)
+            {
+                if (!widget) continue;
+                if (widget->parent()) continue;
+                if (!update_root_widget_fast_layout(widget, viewport, layout_rect)) continue;
+                const f32 consumed = amal::max(widget->bounds().size.y, 0.0f);
+                layout_rect.y += consumed;
+                layout_rect.w = amal::max(layout_rect.w - consumed, 0.0f);
+                consumed_h += consumed;
+            }
+            if (viewport && viewport != get_main_viewport())
+            {
+                viewport->rect = {{viewport_rect.x, viewport_rect.y}, {viewport_rect.z, consumed_h}};
+                sync_viewport(viewport);
+            }
+        }
+
+        static bool viewport_tree_contains(Viewport *root, Viewport *target)
+        {
+            if (!root || !target) return false;
+            if (root == target) return true;
+            if (root->sync_viewport != &sync_group_viewport) return false;
+
+            auto *group = static_cast<ViewportGroup *>(root);
+            return viewport_tree_contains(group->top, target) || viewport_tree_contains(group->bottom, target) ||
+                   viewport_tree_contains(group->left, target) || viewport_tree_contains(group->right, target);
+        }
+
+        static void record_viewport_widget_draw_commands(Viewport *viewport, DrawReasonFlags reason)
+        {
+            if (!viewport) return;
             for (Widget *widget : detail::get_context().widget_tree)
             {
                 if (!widget) continue;
+                if (widget->viewport() != viewport) continue;
                 widget->update_draw_commands(reason);
             }
         }
 
-        static void update_root_widgets_layout_impl(Viewport *viewport) { update_root_widgets_layout_pass(viewport); }
+        static void record_viewport_tree_draw_commands(Viewport *viewport, DrawReasonFlags reason)
+        {
+            if (!viewport) return;
+            if (viewport->sync_viewport == &sync_group_viewport)
+            {
+                auto *group = static_cast<ViewportGroup *>(viewport);
+                record_viewport_tree_draw_commands(group->top, reason);
+                record_viewport_tree_draw_commands(group->bottom, reason);
+                record_viewport_tree_draw_commands(group->left, reason);
+                record_viewport_tree_draw_commands(group->right, reason);
+            }
+            record_viewport_widget_draw_commands(viewport, reason);
+        }
 
         static void compact_delayed_tasks(detail::Context &ctx)
         {
@@ -316,7 +479,6 @@ namespace auik
         if (detail::g_context) destroy_library();
         detail::g_context = acul::alloc<detail::Context>();
         auto &ctx = detail::get_context();
-        ctx.ed = create_info.ed;
         ctx.image_cache.clear();
         ctx.tooltip = nullptr;
         ctx.transient_cache.clear();
@@ -421,41 +583,89 @@ namespace auik
     {
         auto &ctx = detail::get_context();
         ctx.dirty_flags |= DirtyFlagBits::redraw;
-        update_root_widgets_layout_impl(viewport);
+        update_root_widgets_layout_pass(viewport);
     }
 
-    static void update_all_root_widgets_layouts()
+    static void update_all_root_widgets_force(DrawReasonFlags reason)
     {
         auto &ctx = detail::get_context();
         if (!ctx.main_viewport) return;
         const amal::vec2 display = get_display_size();
         ctx.main_viewport->rect = {{0.0f, 0.0f}, display};
         sync_viewport(ctx.main_viewport);
+        record_viewport_tree_draw_commands(ctx.main_viewport, reason);
         for (auto *viewport : ctx.viewports)
         {
             if (!viewport || viewport == ctx.main_viewport) continue;
+            if (viewport_tree_contains(ctx.main_viewport, viewport)) continue;
             sync_and_layout_viewport(viewport);
+            record_viewport_tree_draw_commands(viewport, reason);
         }
     }
+
+    static bool record_fast_update_commands();
 
     void record_layout_commands()
     {
         auto &ctx = detail::get_context();
-        if (!(ctx.dirty_flags & DirtyFlagBits::layout)) return;
+        if (!(ctx.dirty_flags & detail::layout_dirty_mask)) return;
+        if ((ctx.dirty_flags & DirtyFlagBits::fast_update) && !(ctx.dirty_flags & DirtyFlagBits::locale))
+        {
+            record_fast_update_commands();
+            return;
+        }
         const bool need_hit_rect_draw = ctx.dirty_flags & DirtyFlagBits::hit_rect_draw;
-        if (!detail::is_hit_rects_frame_synced(ctx.frame_id)) sync_hit_rect_cache();
+
+        sync_hit_rect_cache();
         assert(detail::is_hit_rects_frame_synced(ctx.frame_id) &&
                "record_layout_commands() started with stale current-frame hit rect cache");
+        ctx.dirty_flags |= DirtyFlagBits::hit_rect_draw;
+        clear_hit_rects();
         reset_clip_rects();
-        update_all_root_widgets_layouts();
         clear_all_streams(ctx);
-        record_root_widget_draw_commands(DrawReasonBits::layout | DrawReasonBits::record);
+        update_all_root_widgets_force(DrawReasonBits::layout | DrawReasonBits::record);
         detail::unmark_layout_dirty();
+        if (need_hit_rect_draw || (ctx.dirty_flags & DirtyFlagBits::hit_rect_draw))
+        {
+            ctx.dirty_flags &= ~DirtyFlagBits::hit_rect_draw;
+            ctx.dirty_flags |= DirtyFlagBits::hit_rect_sync;
+        }
+    }
+
+    static bool record_fast_update_commands()
+    {
+        auto &ctx = detail::get_context();
+        if (!ctx.main_viewport) return false;
+
+        const bool need_hit_rect_draw = ctx.dirty_flags & DirtyFlagBits::hit_rect_draw;
+        sync_hit_rect_cache();
+
+        const amal::vec2 display = get_display_size();
+        ctx.main_viewport->rect = {{0.0f, 0.0f}, display};
+        if (!sync_viewport_fast_update(ctx.main_viewport, DrawReasonBits::layout))
+        {
+            update_root_widgets_fast_layout_pass(ctx.main_viewport);
+            record_viewport_widget_draw_commands(ctx.main_viewport, DrawReasonBits::layout);
+        }
+        for (auto *viewport : ctx.viewports)
+        {
+            if (!viewport || viewport == ctx.main_viewport) continue;
+            if (viewport_tree_contains(ctx.main_viewport, viewport)) continue;
+            if (!sync_viewport_fast_update(viewport, DrawReasonBits::layout))
+            {
+                update_root_widgets_fast_layout_pass(viewport);
+                record_viewport_widget_draw_commands(viewport, DrawReasonBits::layout);
+            }
+        }
+
+        detail::unmark_layout_dirty();
+        ctx.dirty_flags |= DirtyFlagBits::redraw;
         if (need_hit_rect_draw)
         {
             ctx.dirty_flags &= ~DirtyFlagBits::hit_rect_draw;
             ctx.dirty_flags |= DirtyFlagBits::hit_rect_sync;
         }
+        return true;
     }
 
     Viewport *make_viewport()
@@ -499,9 +709,7 @@ namespace auik
     bool destroy_viewport_group(ViewportGroup *viewport) { return destroy_viewport(viewport); }
 
     amal::vec4 get_widget_viewport_rect(const Widget *widget)
-    {
-        return get_viewport_rect(widget ? widget->viewport() : get_main_viewport());
-    }
+    { return get_viewport_rect(widget ? widget->viewport() : get_main_viewport()); }
 
     void set_main_viewport(Viewport *viewport)
     {
@@ -519,9 +727,9 @@ namespace auik
     void redraw_all_commands()
     {
         auto &ctx = detail::get_context();
-        if (ctx.dirty_flags & DirtyFlagBits::layout) return;
+        if (ctx.dirty_flags & detail::layout_update_dirty_mask) return;
         ctx.dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_draw;
-        if (!detail::is_hit_rects_frame_synced(ctx.frame_id)) sync_hit_rect_cache();
+        sync_hit_rect_cache();
         assert(detail::is_hit_rects_frame_synced(ctx.frame_id) &&
                "redraw_all_commands() started with stale current-frame hit rect cache");
         clear_hit_rects();

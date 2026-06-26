@@ -38,9 +38,8 @@ namespace auik
     public:
         acul::vector<Widget *> children;
 
-        explicit Block(u32 id, WidgetFlags widget_flags = get_default_block_flags(), Widget *parent = nullptr,
-                       u32 tag_id = AUIK_TAG_BLOCK)
-            : Widget(id, widget_flags, EventFlagBits::none, parent, {{0.0f, 0.0f}, {0.0f, 0.0f}}, tag_id)
+        explicit Block(u32 id, WidgetFlags widget_flags = get_default_block_flags(), u32 tag_id = AUIK_TAG_BLOCK)
+            : Widget(id, widget_flags, EventFlagBits::none, nullptr, {{0.0f, 0.0f}, {0.0f, 0.0f}}, tag_id)
         {
         }
 
@@ -121,8 +120,7 @@ namespace auik
     public:
         AUIK_EXPORT explicit DrawBlock(u32 id,
                                        WidgetFlags widget_flags = get_default_block_flags() | WidgetFlagBits::hittable,
-                                       Widget *parent = nullptr, u32 tag_id = AUIK_TAG_DRAW_BLOCK,
-                                       u32 style_tag_id = 0u);
+                                       u32 tag_id = AUIK_TAG_DRAW_BLOCK, u32 style_tag_id = 0u);
         AUIK_EXPORT ~DrawBlock() override;
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
@@ -203,7 +201,6 @@ namespace auik
         AUIK_EXPORT explicit CollapseHeader(u32 id, StringView label, bool expanded = true,
                                             WidgetFlags widget_flags = get_default_block_flags() |
                                                                        WidgetFlagBits::hittable,
-                                            Widget *parent = nullptr,
                                             u32 style_tag_id = AUIK_STYLE_TAG_COLLAPSE_HEADER);
         AUIK_EXPORT ~CollapseHeader() override;
 
@@ -264,8 +261,8 @@ namespace auik
     {
     public:
         explicit Dummy(u32 id, amal::vec2 size = {0.0f, 0.0f}, WidgetFlags widget_flags = get_default_dummy_flags(),
-                       Widget *parent = nullptr, u32 style_tag_id = 0u)
-            : Widget(id, widget_flags, EventFlagBits::none, parent, {{0.0f, 0.0f}, size}, AUIK_TAG_DUMMY),
+                       u32 style_tag_id = 0u)
+            : Widget(id, widget_flags, EventFlagBits::none, nullptr, {{0.0f, 0.0f}, size}, AUIK_TAG_DUMMY),
               _style_tag_id(style_tag_id),
               _style({Theme::STYLE_ID_INVALID, style_tag_id})
         {
@@ -283,27 +280,26 @@ namespace auik
         StyleSelector _style;
     };
 
-    inline Block *make_block(Widget *parent = nullptr)
+    inline Block *make_block()
     {
-        return acul::alloc<::auik::Block>(AUIK_TAG_BLOCK, get_default_block_flags(), parent, AUIK_TAG_BLOCK);
+        return acul::alloc<::auik::Block>(AUIK_TAG_BLOCK, get_default_block_flags(), AUIK_TAG_BLOCK);
     }
 
-    inline DrawBlock *make_draw_block(Widget *parent = nullptr, u32 style_tag_id = 0u)
+    inline DrawBlock *make_draw_block(u32 style_tag_id = 0u)
     {
-        return acul::alloc<DrawBlock>(AUIK_TAG_DRAW_BLOCK, get_default_block_flags() | WidgetFlagBits::hittable, parent,
+        return acul::alloc<DrawBlock>(AUIK_TAG_DRAW_BLOCK, get_default_block_flags() | WidgetFlagBits::hittable,
                                       AUIK_TAG_DRAW_BLOCK, style_tag_id);
     }
 
-    inline Dummy *make_dummy(amal::vec2 size = {0.0f, 0.0f}, Widget *parent = nullptr, u32 style_tag_id = 0u)
+    inline Dummy *make_dummy(amal::vec2 size = {0.0f, 0.0f}, u32 style_tag_id = 0u)
     {
-        return acul::alloc<Dummy>(AUIK_TAG_DUMMY, size, get_default_dummy_flags(), parent, style_tag_id);
+        return acul::alloc<Dummy>(AUIK_TAG_DUMMY, size, get_default_dummy_flags(), style_tag_id);
     }
 
-    inline CollapseHeader *make_collapse_header(u32 id, StringView label, bool expanded = true,
-                                                Widget *parent = nullptr)
+    inline CollapseHeader *make_collapse_header(u32 id, StringView label, bool expanded = true)
     {
         return acul::alloc<CollapseHeader>(id, label, expanded, get_default_block_flags() | WidgetFlagBits::hittable,
-                                           parent, AUIK_STYLE_TAG_COLLAPSE_HEADER);
+                                           AUIK_STYLE_TAG_COLLAPSE_HEADER);
     }
 
     namespace streams

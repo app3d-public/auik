@@ -2,7 +2,6 @@
 
 #include <acul/comparator.hpp>
 #include <acul/disposal_queue.hpp>
-#include <acul/event.hpp>
 #include <acul/functional/unique_function.hpp>
 #include "detail/context.hpp"
 #include "detail/events.hpp"
@@ -52,7 +51,6 @@ namespace auik
 
     struct CreateInfo
     {
-        acul::events::dispatcher *ed = nullptr;
         DrawStream *streams = nullptr;
         u32 streams_count = 0;
         detail::GPUContext *gpu_ctx = nullptr;
@@ -62,12 +60,6 @@ namespace auik
         u32 max_textures_size = 32;
         SyncOptions sync_options{};
         WidgetCreateOptions widget_create_options{};
-
-        CreateInfo &set_event_dispatcher(acul::events::dispatcher *ed)
-        {
-            this->ed = ed;
-            return *this;
-        }
 
         CreateInfo &set_gpu_backend(detail::GPUContext *gpu_backend)
         {
@@ -189,7 +181,7 @@ namespace auik
         if (ctx.dirty_flags & DirtyFlagBits::hit_rect_sync) auik::sync_hit_rect_cache();
         detail::flush_frame_changes();
         if (!ctx.disposal_queue.is_main_queue_empty()) ctx.disposal_queue.flush_main_queue();
-        if (!ctx.transient_cache.empty() && !(ctx.dirty_flags & DirtyFlagBits::layout))
+        if (!ctx.transient_cache.empty() && !(ctx.dirty_flags & detail::layout_update_dirty_mask))
         {
             ctx.dirty_flags |= DirtyFlagBits::redraw;
             for (Widget *widget : ctx.transient_cache)
@@ -214,17 +206,18 @@ namespace auik
     inline void sync_gpu_cache()
     {
         auto &ctx = detail::get_context();
-        if (ctx.dirty_flags & DirtyFlagBits::layout) record_layout_commands();
+        if (ctx.dirty_flags & detail::layout_dirty_mask) record_layout_commands();
         else if (ctx.dirty_flags & DirtyFlagBits::clip_rect) sync_clip_rect_cache();
         if (ctx.dirty_flags & DirtyFlagBits::streams) sync_draw_streams();
     }
 
     inline bool is_dirty_render()
     {
-        return detail::get_context().dirty_flags & (DirtyFlagBits::redraw | DirtyFlagBits::layout);
+        return detail::get_context().dirty_flags &
+               (DirtyFlagBits::redraw | DirtyFlagBits::layout | DirtyFlagBits::fast_update);
     }
 
-    inline bool is_dirty_layout() { return detail::get_context().dirty_flags & DirtyFlagBits::layout; }
+    inline bool is_dirty_layout() { return detail::get_context().dirty_flags & detail::layout_update_dirty_mask; }
 
     inline bool is_dirty_stream() { return detail::get_context().dirty_flags & DirtyFlagBits::streams; }
 
@@ -537,14 +530,6 @@ namespace auik
                                          const FontIconGlyphLoader *next = nullptr);
 
 #ifdef _WIN32
-    inline bool is_win_11_or_greater()
-    {
-        OSVERSIONINFOEX osvi{};
-        osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEX);
-        GetVersionEx((OSVERSIONINFO *)&osvi);
-        return osvi.dwBuildNumber >= 22000;
-    }
-
     AUIK_EXPORT bool load_win32_icons(const FontRegistry &fonts, f32 dpi = 1.0f,
                                       const FontIconGlyphLoader *next = nullptr);
 #endif
