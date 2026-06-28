@@ -2,6 +2,7 @@
 
 #include <auik/detail/text.hpp>
 #include <auik/detail/text_edit.hpp>
+#include <auik/model.hpp>
 #include <auik/theme.hpp>
 #include "widget.hpp"
 
@@ -56,6 +57,16 @@ namespace auik
             : Text(id, StringView{text}, size, flags, style_tag_id, overflow, vertical_align, wrap, width_mode)
         {
         }
+        Text(u32 id, ModelBinding *binding, amal::vec2 size, WidgetFlags flags = get_default_text_flags(),
+             u32 style_tag_id = AUIK_STYLE_TAG_NO_PAD,
+             detail::TextOverflowMode overflow = detail::TextOverflowMode::ellipsis,
+             detail::TextVerticalAlign vertical_align = detail::TextVerticalAlign::top,
+             detail::TextWrapMode wrap = detail::TextWrapMode::none,
+             detail::TextLayoutWidthMode width_mode = detail::TextLayoutWidthMode::bounds)
+            : Text(id, acul::string{}, size, flags, style_tag_id, overflow, vertical_align, wrap, width_mode)
+        {
+            set_model_binding(binding);
+        }
         AUIK_EXPORT StyleUpdateFlags update_style() override;
         AUIK_EXPORT void update_layout_min_size() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
@@ -63,6 +74,7 @@ namespace auik
         AUIK_EXPORT void update_depth(const amal::vec2 &depth_range) override;
         AUIK_EXPORT void rebuild_clip_rects() override;
         AUIK_EXPORT void reset_draw_records() override;
+        AUIK_EXPORT amal::vec4 layout_margin() const override;
         AUIK_EXPORT void invalidate_draw_records();
         AUIK_EXPORT void draw(DrawCtx &ctx) override;
         u32 signature() const override { return AUIK_TAG_TEXT; }
@@ -70,6 +82,7 @@ namespace auik
         AUIK_EXPORT Text *clone(u32 id) const;
 
         const acul::string &text() const { return _text; }
+        ModelBinding *model_binding() const { return _model_value_binding; }
         StringView source_text() const
         {
             const char *literal = _translated_text ? translated_text_literal() : nullptr;
@@ -87,6 +100,7 @@ namespace auik
             clear_translated_text_literal();
         }
         AUIK_EXPORT void set_text(StringView text);
+        AUIK_EXPORT void set_model_binding(ModelBinding *binding);
         AUIK_EXPORT void set_translated_text_literal(const char *literal);
         AUIK_EXPORT void clear_translated_text_literal();
         AUIK_EXPORT const char *translated_text_literal() const;
@@ -160,6 +174,7 @@ namespace auik
     protected:
         acul::string _text;
         acul::string _translation_literal;
+        ModelBinding *_model_value_binding = nullptr;
         StyleSelector _style;
         detail::TextLayoutConfig _layout_config{};
         detail::TextRenderConfig _render_config{};
@@ -177,6 +192,7 @@ namespace auik
         AUIK_EXPORT void update_content_bounds();
 
     private:
+        bool apply_model_binding_value();
         bool rebuild_text_buffers(const amal::vec2 &bounds_size);
     };
 
@@ -248,6 +264,13 @@ namespace auik
                                       detail::TextOverflowMode::ellipsis, detail::TextVerticalAlign::center);
         return out;
     }
+
+    inline Model *make_text_value_model(ModelDB *db, ModelID model_id = 0u, ModelFieldID field_id = 1u,
+                                        acul::string value = {})
+    { return make_value_model<acul::string>(db, model_id, field_id, std::move(value)); }
+
+    AUIK_EXPORT Widget *present_model_text_field(ModelBinding *binding, ModelRecord &record, ModelFieldID field_id,
+                                                 void *data);
 
     inline EText *make_etext(u32 id, StringView text = "", amal::vec2 size = AUIK_SIZE_FIT)
     {

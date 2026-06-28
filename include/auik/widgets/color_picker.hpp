@@ -1,7 +1,7 @@
 #pragma once
 
-#include <acul/memory/alloc.hpp>
 #include <acul/vector.hpp>
+#include "../model.hpp"
 #include "../pipelines.hpp"
 #include "widget.hpp"
 
@@ -38,6 +38,7 @@ namespace auik
         f32 hue_deg() const { return _hue_deg; }
         f32 radius_norm() const { return _radius_norm; }
         AUIK_EXPORT void set_color(const amal::vec4 &color);
+        AUIK_EXPORT void set_model_binding(ModelBinding *binding);
         AUIK_EXPORT void set_hue_radius(f32 hue_deg, f32 radius_t);
         AUIK_EXPORT bool has_draw_record() const;
         virtual u32 signature() const override { return AUIK_TAG_CIRCLE_COLOR_PICKER; }
@@ -45,6 +46,7 @@ namespace auik
     private:
         f32 _preferred_side = 0.0f;
         amal::vec4 _value = {1.0f, 1.0f, 1.0f, 1.0f};
+        ModelBinding *_model_binding = nullptr;
         f32 _hue_deg = 0.0f;
         f32 _radius_norm = 0.0f;
         struct LayoutCache
@@ -120,6 +122,7 @@ namespace auik
         f32 saturation() const { return _saturation; }
         f32 value_norm() const { return _value_norm; }
         AUIK_EXPORT void set_color(const amal::vec4 &color);
+        AUIK_EXPORT void set_model_binding(ModelBinding *binding);
         AUIK_EXPORT void set_hsv(f32 hue_deg, f32 saturation, f32 value_t);
         AUIK_EXPORT bool has_draw_record() const;
         virtual u32 signature() const override { return AUIK_TAG_GRADIENT_COLOR_PICKER; }
@@ -127,6 +130,7 @@ namespace auik
     private:
         amal::vec2 _preferred_size{0.0f, 0.0f};
         amal::vec4 _value = {1.0f, 0.0f, 0.0f, 1.0f};
+        ModelBinding *_model_binding = nullptr;
         f32 _hue_deg = 0.0f;
         f32 _saturation = 1.0f;
         f32 _value_norm = 1.0f;
@@ -189,6 +193,7 @@ namespace auik
         f32 saturation() const;
         f32 value_norm() const;
         AUIK_EXPORT void set_color(const amal::vec4 &color);
+        AUIK_EXPORT void set_model_binding(ModelBinding *binding);
         AUIK_EXPORT void set_hsv(f32 hue_deg, f32 saturation, f32 value_t);
         AUIK_EXPORT bool has_draw_record() const;
         virtual u32 signature() const override { return AUIK_TAG_SQUARE_COLOR_PICKER; }
@@ -203,6 +208,7 @@ namespace auik
 
         f32 _preferred_side = 0.0f;
         GradientColorPicker *_gradient = nullptr;
+        ModelBinding *_model_binding = nullptr;
         f32 _hue_deg = 0.0f;
         struct LayoutCache
         {

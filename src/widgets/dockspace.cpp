@@ -235,6 +235,12 @@ namespace auik
         return tag_id == AUIK_TAG_DOCKSPACE_RESIZE_HELPER_V || tag_id == AUIK_TAG_DOCKSPACE_RESIZE_HELPER_H;
     }
 
+    static void update_existing_resize_helper_hit(DrawDataID &draw_id, const detail::RectData &rect)
+    {
+        if (draw_id.hit_id == AUIK_INVALID_DRAW_DATA_ID) return;
+        update_hit_rect(draw_id.hit_id, rect, true);
+    }
+
     static u32 make_dockspace_tabbar_id(u32 dockspace_id, DockNodeID node_id)
     {
         return dockspace_id + AUIK_DOCKSPACE_TABBAR_ID_BASE + node_id;
@@ -1292,6 +1298,7 @@ namespace auik
                 helper.draw_in_overlay = false;
                 helper.rect.bounds.size = {0.0f, 0.0f};
                 helper.hit_rect.bounds.size = {0.0f, 0.0f};
+                update_existing_resize_helper_hit(helper.hit_draw, helper.hit_rect);
             }
         }
         if (enabled)
@@ -1592,8 +1599,9 @@ namespace auik
         return changed | prepare_active_window(*node, false, record_pass);
     }
 
-    void Dockspace::begin_resize_helpers()
+    size_t Dockspace::begin_resize_helpers()
     {
+        const size_t previous_count = _resize_helper_count;
         _resize_helper_count = 0u;
         auto *overlay_stream = get_overlay_quads_stream();
         for (auto &helper : _resize_helpers)
@@ -1610,6 +1618,7 @@ namespace auik
             helper.draw_in_overlay = false;
             helper.rect.bounds = {};
         }
+        return previous_count;
     }
 
     amal::rect Dockspace::add_resize_helper(DockNodeID parent, size_t before_child, size_t after_child, amal::axis axis,
@@ -1652,6 +1661,13 @@ namespace auik
         {
             helper.hit_rect.depth = helper.rect.depth;
             helper.hit_rect.hit_depth = helper.rect.hit_depth;
+        }
+        if (helper.interactive) update_existing_resize_helper_hit(helper.hit_draw, helper.hit_rect);
+        else
+        {
+            detail::RectData hidden_hit = helper.hit_rect;
+            hidden_hit.bounds.size = {0.0f, 0.0f};
+            update_existing_resize_helper_hit(helper.hit_draw, hidden_hit);
         }
         ++_resize_helper_count;
         return snapped_bounds;
@@ -2071,11 +2087,18 @@ namespace auik
         const amal::rect content_bounds{
             {position().x + padding.x, position().y + padding.y},
             {amal::max(size().x - padding.x - padding.z, 0.0f), amal::max(size().y - padding.y - padding.w, 0.0f)}};
-        begin_resize_helpers();
+        const size_t previous_resize_helper_count = begin_resize_helpers();
         layout_node(root_node(), content_bounds);
         _drag_zones_dirty = true;
         const auto *dock_ctx = detail::g_context ? detail::g_context->dockspace_context : nullptr;
         if (dock_ctx && dock_ctx->drag_zones_enabled && dock_ctx->drag_window) sync_drag_zone_helpers(true, true);
+        const size_t inactive_end = amal::min(previous_resize_helper_count, _resize_helpers.size());
+        for (size_t i = _resize_helper_count; i < inactive_end; ++i)
+        {
+            detail::RectData hidden_hit = _resize_helpers[i].hit_rect;
+            hidden_hit.bounds.size = {0.0f, 0.0f};
+            update_existing_resize_helper_hit(_resize_helpers[i].hit_draw, hidden_hit);
+        }
     }
 
     void Dockspace::translate(const amal::vec2 &delta)

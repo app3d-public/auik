@@ -454,7 +454,7 @@ namespace auik
     {
         Context *g_context = nullptr;
 
-        u64 schedule_delayed_task_fn(u64 owner_id, f64 due_time, acul::unique_function<void()> fn)
+        AUIK_EXPORT u64 schedule_delayed_task_fn(u64 owner_id, f64 due_time, acul::unique_function<void()> fn)
         {
             auto &ctx = detail::get_context();
             compact_delayed_tasks(ctx);

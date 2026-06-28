@@ -26,9 +26,7 @@ namespace auik
         static inline amal::vec2 get_combo_popup_depth_range() { return detail::get_global_foreground_depth_range(); }
 
         static inline bool is_combo_control_element(ElementID element_id, u32 combo_id)
-        {
-            return element_id.widget_id == combo_id && element_id.tag_id == AUIK_TAG_COMBO_BOX;
-        }
+        { return element_id.widget_id == combo_id && element_id.tag_id == AUIK_TAG_COMBO_BOX; }
 
         static inline StyleState get_combo_control_style_state(bool open, StyleState state, u32 combo_id)
         {
@@ -94,6 +92,12 @@ namespace auik
 
     ComboBox::~ComboBox()
     {
+        if (_model_binding)
+        {
+            _model_binding->on_records = nullptr;
+            _model_binding->on_field_change = nullptr;
+            detach_model_binding(*_model_binding);
+        }
         _open = false;
         if (_popup)
         {
@@ -146,6 +150,89 @@ namespace auik
         return out;
     }
 
+    void ComboBox::set_model_binding(ModelBinding *binding)
+    {
+        if (_model_binding)
+        {
+            _model_binding->on_records = nullptr;
+            _model_binding->on_field_change = nullptr;
+            detach_model_binding(*_model_binding);
+        }
+        _model_binding = binding;
+        if (!_model_binding) return;
+
+        _model_binding->on_records = [this](const ModelRecordsEvent &) { rebuild_from_model_binding(); };
+        _model_binding->on_field_change = [this](ModelRecordID, ModelFieldID) { rebuild_from_model_binding(); };
+        attach_model_binding(*_model_binding);
+        rebuild_model_binding_records(*_model_binding);
+        rebuild_from_model_binding();
+    }
+
+    void ComboBox::rebuild_from_model_binding()
+    {
+        if (!_model_binding || !is_model_binding_valid(*_model_binding))
+        {
+            set_items(acul::vector<StringView>{});
+            return;
+        }
+
+        auto *model = find_model(_model_binding->db, _model_binding->model_id);
+        acul::vector<acul::string> items;
+        if (model) items.reserve(_model_binding->records.size());
+        bool has_selected = false;
+        u32 selected_index = 0u;
+        if (model)
+        {
+            for (u32 item_index = 0; item_index < _model_binding->records.size(); ++item_index)
+            {
+                const ModelRecordID record_id = _model_binding->records[item_index];
+                acul::string text{};
+                bool selected = false;
+                read_model_binding_value(*_model_binding, record_id, AUIK_COMBO_BOX_TEXT_FIELD, text);
+                items.push_back(std::move(text));
+
+                if (!has_selected &&
+                    read_model_binding_value(*_model_binding, record_id, AUIK_COMBO_BOX_SELECTED_FIELD, selected) &&
+                    selected)
+                {
+                    has_selected = true;
+                    selected_index = item_index;
+                }
+            }
+        }
+
+        acul::vector<StringView> views;
+        views.reserve(items.size());
+        for (const auto &item : items) views.push_back(StringView{item});
+        set_items(views);
+        if (has_selected) set_selected_index(selected_index);
+    }
+
+    void ComboBox::request_model_selected_index(u32 index)
+    {
+        if (!_model_binding || !is_model_binding_valid(*_model_binding)) return;
+        acul::vector<ModelField *> changed_fields;
+        for (u32 item_index = 0; item_index < _model_binding->records.size(); ++item_index)
+        {
+            const ModelRecordID record_id = _model_binding->records[item_index];
+            bool selected = false;
+            const bool next = item_index == index;
+            if (read_model_binding_value(*_model_binding, record_id, AUIK_COMBO_BOX_SELECTED_FIELD, selected) &&
+                selected == next)
+                continue;
+
+            ModelFieldAccess access{};
+            if (!access_model_binding_field(*_model_binding, record_id, AUIK_COMBO_BOX_SELECTED_FIELD, access))
+                continue;
+            if (!write_model_field_access_value<bool>(_model_binding->db, _model_binding->model_id, access, next))
+                continue;
+            if (auto *field = resolve_model_field(_model_binding->db, _model_binding->model_id, access))
+                changed_fields.push_back(field);
+        }
+        for (auto *field : changed_fields)
+            if (field) dispatch_model_field(*field);
+    }
+
     void ComboBox::set_items(const acul::vector<StringView> &items)
     {
         const u32 prev_selected = _selected_index;
@@ -155,9 +242,10 @@ namespace auik
 
         for (u32 i = 0; i < items.size(); ++i)
         {
-            auto *item = acul::alloc<detail::Selectable>(AUIK_TAG_COMBO_BOX_ITEM, AUIK_TAG_COMBO_BOX_ITEM, i, items[i],
-                                                         amal::vec2{0.0f, 0.0f}, _popup, AUIK_STYLE_TAG_COMBO_BOX_ITEM,
-                                                         detail::get_selectable_item_flags());
+            auto *item =
+                acul::alloc<detail::Selectable>(AUIK_TAG_COMBO_BOX_ITEM, AUIK_TAG_COMBO_BOX_ITEM, i, items[i],
+                                                amal::vec2{AUIK_SIZE_X_FILL, AUIK_SIZE_Y_FIT}, _popup,
+                                                AUIK_STYLE_TAG_COMBO_BOX_ITEM, detail::get_selectable_item_flags());
             item->get_rect().id.widget_id = id();
             item->set_focus_parent(_popup);
             _popup->add_child(item);
@@ -192,9 +280,10 @@ namespace auik
     {
         if (!_popup) return;
         const u32 index = static_cast<u32>(_popup->children.size());
-        auto *item = acul::alloc<detail::Selectable>(AUIK_TAG_COMBO_BOX_ITEM, AUIK_TAG_COMBO_BOX_ITEM, index, text,
-                                                     amal::vec2{0.0f, 0.0f}, _popup, AUIK_STYLE_TAG_COMBO_BOX_ITEM,
-                                                     detail::get_selectable_item_flags());
+        auto *item =
+            acul::alloc<detail::Selectable>(AUIK_TAG_COMBO_BOX_ITEM, AUIK_TAG_COMBO_BOX_ITEM, index, text,
+                                            amal::vec2{AUIK_SIZE_X_FILL, AUIK_SIZE_Y_FIT}, _popup,
+                                            AUIK_STYLE_TAG_COMBO_BOX_ITEM, detail::get_selectable_item_flags());
         item->get_rect().id.widget_id = id();
         item->set_focus_parent(_popup);
         item->set_style_state(StyleState::normal);
@@ -249,9 +338,7 @@ namespace auik
             next->update_style();
         }
         _selected_index = index;
-        const bool prevented = mark_changed();
         sync_label_text();
-        if (prevented) return;
         auto &ctx = detail::get_context();
         ctx.dirty_flags |= DirtyFlagBits::redraw;
         detail::mark_host_refresh_request();
@@ -293,12 +380,29 @@ namespace auik
     void ComboBox::update_layout_min_size()
     {
         const auto &style = get_theme()->get_style(_style.id);
+        const StyleID popup_style_id =
+            get_theme()->get_resolved_style(AUIK_STYLE_TAG_COMBO_BOX_POPUP, _popup ? _popup->id() : 0u, 0,
+                                            StyleState::normal);
+        const amal::vec4 popup_padding = get_theme()->get_style(popup_style_id).padding();
         const amal::vec2 prev_label_size = _label->size();
         // Measure label natural size, independent of the currently assigned combo bounds.
         _label->set_layout_size({0.0f, 0.0f});
         _label->update_layout_min_size();
         const amal::vec2 label_required = _label->required_size();
         _label->set_layout_size(prev_label_size);
+        amal::vec2 max_item_required = label_required;
+        if (_popup)
+        {
+            for (auto *child : _popup->children)
+            {
+                auto *item = static_cast<detail::Selectable *>(child);
+                if (!item) continue;
+                item->update_layout_min_size();
+                const amal::vec2 item_required = item->required_size();
+                max_item_required.x = amal::max(max_item_required.x, item_required.x);
+                max_item_required.y = amal::max(max_item_required.y, item_required.y);
+            }
+        }
         if (_trigger) _trigger->update_layout_min_size({0.0f, 0.0f}, true);
 
         const f32 icon_height =
@@ -307,7 +411,9 @@ namespace auik
         const amal::vec4 padding = style.padding();
         const f32 trigger_width =
             _trigger ? _trigger->required_size().x : (style.text_size() + style.padding().x + style.padding().z);
-        const f32 compact_width = padding.x + label_required.x + 6.0f + trigger_width + padding.z;
+        const f32 control_width = padding.x + max_item_required.x + 6.0f + trigger_width + padding.z;
+        const f32 popup_width = popup_padding.x + max_item_required.x + popup_padding.z;
+        const f32 compact_width = amal::max(control_width, popup_width);
         amal::vec2 min_size = {is_width_fixed() ? requested_size().x : 0.0f,
                                is_height_fixed() ? requested_size().y : 0.0f};
         if (fill_width()) min_size.x = compact_width;
@@ -454,7 +560,10 @@ namespace auik
                 add_render_command<detail::ClickEventTraits>(this, [this, index]() {
                     if (!_popup || index >= _popup->children.size()) return;
                     close();
-                    set_selected_index(index);
+                    if (_model_binding) request_model_selected_index(index);
+                    else set_selected_index(index);
+                    const bool prevented = mark_changed();
+                    if (prevented) return;
                     redraw_all_commands();
                 });
                 detail::mark_host_refresh_request();
@@ -554,8 +663,12 @@ namespace auik
             auto *child = static_cast<detail::Selectable *>(_popup->children[i]);
             if (!child || !child->is_visible()) continue;
             ++visible_items;
-            child->set_layout_size({content_width, child->size().y});
             child->update_layout_min_size();
+            const amal::vec4 child_margin = child->layout_margin();
+            const amal::vec2 child_layout_size = {
+                amal::max(content_width - child_margin.x - child_margin.z, 0.0f),
+                amal::max(child->required_size().y - child_margin.y - child_margin.w, 0.0f)};
+            child->set_layout_size(child_layout_size);
             child->set_position(cursor);
             child->update_layout(true);
             cursor = {content_origin.x, cursor.y + child->required_size().y};
@@ -716,9 +829,10 @@ namespace auik
         _selected_indices.clear();
         for (u32 i = 0; i < items.size(); ++i)
         {
-            auto *item = acul::alloc<detail::Selectable>(AUIK_TAG_COMBO_BOX_ITEM, AUIK_TAG_COMBO_BOX_ITEM, i, items[i],
-                                                         amal::vec2{0.0f, 0.0f}, _popup, AUIK_STYLE_TAG_COMBO_BOX_ITEM,
-                                                         detail::get_selectable_item_flags());
+            auto *item =
+                acul::alloc<detail::Selectable>(AUIK_TAG_COMBO_BOX_ITEM, AUIK_TAG_COMBO_BOX_ITEM, i, items[i],
+                                                amal::vec2{AUIK_SIZE_X_FILL, AUIK_SIZE_Y_FIT}, _popup,
+                                                AUIK_STYLE_TAG_COMBO_BOX_ITEM, detail::get_selectable_item_flags());
             item->get_rect().id.widget_id = id();
             item->set_selected_icon(AUIK_ICON_CHECKMARK);
             item->set_focus_parent(_popup);
@@ -811,11 +925,28 @@ namespace auik
     void MultipleComboBox::update_layout_min_size()
     {
         const auto &style = get_theme()->get_style(_style.id);
+        const StyleID popup_style_id =
+            get_theme()->get_resolved_style(AUIK_STYLE_TAG_COMBO_BOX_POPUP, _popup ? _popup->id() : 0u, 0,
+                                            StyleState::normal);
+        const amal::vec4 popup_padding = get_theme()->get_style(popup_style_id).padding();
         const amal::vec2 prev_label_size = _label->size();
         _label->set_layout_size({0.0f, 0.0f});
         _label->update_layout_min_size();
         const amal::vec2 label_required = _label->required_size();
         _label->set_layout_size(prev_label_size);
+        amal::vec2 max_item_required = label_required;
+        if (_popup)
+        {
+            for (auto *child : _popup->children)
+            {
+                auto *item = static_cast<detail::Selectable *>(child);
+                if (!item) continue;
+                item->update_layout_min_size();
+                const amal::vec2 item_required = item->required_size();
+                max_item_required.x = amal::max(max_item_required.x, item_required.x);
+                max_item_required.y = amal::max(max_item_required.y, item_required.y);
+            }
+        }
         if (_trigger) _trigger->update_layout_min_size({0.0f, 0.0f}, true);
         const f32 icon_height =
             _trigger && _trigger->icon_size().y > 0.0f ? _trigger->icon_size().y : style.text_size();
@@ -823,7 +954,9 @@ namespace auik
         const amal::vec4 padding = style.padding();
         const f32 trigger_width =
             _trigger ? _trigger->required_size().x : (style.text_size() + style.padding().x + style.padding().z);
-        const f32 compact_width = padding.x + label_required.x + 6.0f + trigger_width + padding.z;
+        const f32 control_width = padding.x + max_item_required.x + 6.0f + trigger_width + padding.z;
+        const f32 popup_width = popup_padding.x + max_item_required.x + popup_padding.z;
+        const f32 compact_width = amal::max(control_width, popup_width);
         amal::vec2 min_size = {is_width_fixed() ? requested_size().x : 0.0f,
                                is_height_fixed() ? requested_size().y : 0.0f};
         if (fill_width()) min_size.x = compact_width;
@@ -1080,8 +1213,12 @@ namespace auik
             auto *child = static_cast<detail::Selectable *>(_popup->children[i]);
             if (!child || !child->is_visible()) continue;
             ++visible_items;
-            child->set_layout_size({content_width, child->size().y});
             child->update_layout_min_size();
+            const amal::vec4 child_margin = child->layout_margin();
+            const amal::vec2 child_layout_size = {
+                amal::max(content_width - child_margin.x - child_margin.z, 0.0f),
+                amal::max(child->required_size().y - child_margin.y - child_margin.w, 0.0f)};
+            child->set_layout_size(child_layout_size);
             child->set_position(cursor);
             child->update_layout(true);
             cursor = {content_origin.x, cursor.y + child->required_size().y};

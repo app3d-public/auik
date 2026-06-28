@@ -25,7 +25,7 @@ namespace auik
     namespace detail
     {
         struct TextFontAccess;
-        u64 schedule_delayed_task_fn(u64 owner_id, f64 due_time, acul::unique_function<void()> fn);
+        AUIK_EXPORT u64 schedule_delayed_task_fn(u64 owner_id, f64 due_time, acul::unique_function<void()> fn);
     } // namespace detail
 
     using FT_Library = ::FT_LibraryRec_ *;
@@ -156,6 +156,13 @@ namespace auik
     inline u64 schedule_delayed_host_task(u64 owner_id, f64 due_time, F &&fn);
 
     inline void set_window_size(const amal::vec2 &size) { detail::get_io().display_size = size; }
+
+    inline Widget *get_widget_by_id(u32 id)
+    {
+        auto &ctx = detail::get_context();
+        auto it = ctx.id_map.find(id);
+        return it != ctx.id_map.end() ? it->second : nullptr;
+    }
 
     inline void set_main_viewport(const amal::vec4 &viewport)
     {

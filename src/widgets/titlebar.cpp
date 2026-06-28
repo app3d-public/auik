@@ -352,6 +352,18 @@ namespace auik
         }
     }
 
+    void Titlebar::reset_draw_records()
+    {
+        Widget::reset_draw_records();
+        _bg = {};
+        _icon_bg = {};
+        _leading_region_bg = {};
+        for (auto *button : _caption_buttons)
+            if (button) button->reset_draw_records();
+        for (auto *child : _children)
+            if (child) child->reset_draw_records();
+    }
+
     void Titlebar::draw(DrawCtx &ctx)
     {
         auto *theme = get_theme();
@@ -618,7 +630,8 @@ namespace auik
                 if ((state->flags & TitlebarCreateFlagBits::decorated) || host_state == HostWindowState::fullscreen)
                     break;
                 NCCALCSIZE_PARAMS *params = (NCCALCSIZE_PARAMS *)lParam;
-                if (IsZoomed(hwnd)) add_frame_to_client_area(params->rgrc, true, -1, state);
+                const bool maximized = IsZoomed(hwnd);
+                add_frame_to_client_area(params->rgrc, maximized, -1, state);
                 return 0;
             }
             case WM_NCHITTEST:

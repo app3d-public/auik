@@ -51,6 +51,8 @@ modal-window,0x928407FE
 multiline-caret,0x6F32B234
 no-pad,0xFFDEF9D5
 placeholder,0x10D00E62
+progress-bar,0xE89A0A98
+progress-bar-active,0xC3D79885
 radio-button,0x51A88756
 radio-button-indicator,0x148E18ED
 rubber-band,0x0F83C1EC
@@ -74,12 +76,7 @@ table-cell,0xF1187926
 table-header-cell,0x559C3B12
 table-resize-border,0x0470DEAD
 table-row-alt,0xC24AB568
-table-tree,0x1FF1B3F1
-table-tree-cell,0xCB556FD5
-table-tree-collapse-icon,0x993CDD14
-table-tree-line,0x371BFC8B
 table-tree-resize-border,0x56DEA60A
-table-tree-row-alt,0x29AAFEE3
 text-button,0xB0CFEF4B
 text-drag-icon,0xF67AC9E8
 textbox,0xFD48AA2F
@@ -90,6 +87,11 @@ titlebar-menu-bar,0xBB91FD86
 titlebar-menu-item,0xF663F1C5
 tooltip,0x562B8FAF
 transparent-button,0x3A33E29B
+tree,0x1FF1B3F1
+tree-cell,0xCB556FD5
+tree-collapse-icon,0x993CDD14
+tree-line,0x371BFC8B
+tree-row-alt,0x29AAFEE3
 window,0x9AC9A862
 window-caption-button,0x060955B4
 window-caption-close-button,0x6E25085F

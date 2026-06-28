@@ -5,6 +5,7 @@
 #include <agrb/pipeline.hpp>
 #include <auik/symbol_export.h>
 #include "../../detail/fwd.hpp"
+#include "../../detail/ids.hpp"
 
 namespace auik
 {

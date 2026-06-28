@@ -2,6 +2,7 @@
 #include <auik/detail/context.hpp>
 #include <auik/pipelines.hpp>
 #include <auik/widgets/text.hpp>
+#include <acul/hash/utils.hpp>
 #include "../core/session_stream_utils.hpp"
 
 
@@ -14,6 +15,29 @@
 
 namespace auik
 {
+    static inline u32 make_presented_model_text_id(const ModelBinding &binding, const ModelRecord &record,
+                                                   ModelFieldID field_id)
+    {
+        size_t seed = AUIK_TAG_TEXT;
+        acul::hash_combine(seed, binding.model_id);
+        acul::hash_combine(seed, record.id);
+        acul::hash_combine(seed, field_id);
+        return static_cast<u32>(seed != 0u ? seed : AUIK_TAG_TEXT);
+    }
+
+    AUIK_EXPORT Widget *present_model_text_field(ModelBinding *binding, ModelRecord &record, ModelFieldID field_id,
+                                                 void *data)
+    {
+        (void)data;
+        if (!binding) return nullptr;
+        ModelFieldAccess access{};
+        if (!access_model_binding_field(*binding, record.id, field_id, access)) return nullptr;
+        const auto *value =
+            static_cast<const acul::string *>(get_model_field_access_data(binding->db, binding->model_id, access));
+        return make_text(make_presented_model_text_id(*binding, record, field_id),
+                         value ? StringView{*value} : StringView{});
+    }
+
     static bool should_record_text_shrink(size_t old_count, size_t new_count)
     {
         if (old_count <= new_count) return false;
@@ -96,6 +120,76 @@ namespace auik
             return;
         }
         set_text(acul::string(text.str ? text.str : ""));
+    }
+
+    void Text::set_model_binding(ModelBinding *binding)
+    {
+        if (_model_value_binding == binding)
+        {
+            apply_model_binding_value();
+            return;
+        }
+
+        if (_model_value_binding)
+        {
+            _model_value_binding->on_field_change = nullptr;
+            detach_model_binding(*_model_value_binding);
+        }
+        _model_value_binding = binding;
+        if (!_model_value_binding) return;
+
+        _model_value_binding->on_field_change = [this](ModelRecordID, ModelFieldID) { apply_model_binding_value(); };
+        attach_model_binding(*_model_value_binding);
+        apply_model_binding_value();
+    }
+
+    bool Text::apply_model_binding_value()
+    {
+        acul::string next_text{};
+        if (_model_value_binding)
+        {
+            if (!read_model_binding_value(*_model_value_binding, next_text)) return false;
+        }
+        else return false;
+
+        if (_text == next_text) return false;
+        set_text(next_text);
+        if (mark_changed()) return true;
+
+        auto &ctx = detail::get_context();
+        const u32 widget_id = id();
+        const auto it = ctx.id_map.find(widget_id);
+        if (it == ctx.id_map.end() || it->second != this) return true;
+
+        Widget *expected_widget = this;
+        add_render_command([widget_id, expected_widget]() {
+            auto &ctx = detail::get_context();
+            const auto it = ctx.id_map.find(widget_id);
+            if (it == ctx.id_map.end() || it->second != expected_widget) return;
+            auto *self = static_cast<Text *>(it->second);
+
+            if (self->_style.id == Theme::STYLE_ID_INVALID) self->update_style();
+
+            const amal::vec2 prev_required_size = self->required_size();
+            self->update_layout_min_size();
+            const bool needs_parent_layout = prev_required_size != self->required_size();
+            if (needs_parent_layout)
+            {
+                if (Widget *target = resolve_parent_layout_update_target(self))
+                {
+                    target->update_layout(false);
+                    target->update_draw_commands(DrawReasonBits::layout);
+                }
+            }
+            else
+            {
+                self->update_layout(true);
+                self->update_draw_commands(DrawReasonBits::layout);
+            }
+
+            ctx.dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
+        });
+        return true;
     }
 
     void Text::set_translated_text_literal(const char *literal)
@@ -238,6 +332,12 @@ namespace auik
             set_required_size({resolved_width + padding.x + padding.z + margin.x + margin.z,
                                resolved_height + padding.y + padding.w + margin.y + margin.w});
         }
+    }
+
+    amal::vec4 Text::layout_margin() const
+    {
+        if (_style.id == Theme::STYLE_ID_INVALID) return {0.0f, 0.0f, 0.0f, 0.0f};
+        return get_theme()->get_style(_style.id).margin();
     }
 
     void Text::translate(const amal::vec2 &delta)

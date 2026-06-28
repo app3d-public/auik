@@ -1,6 +1,7 @@
 #pragma once
 
 #include <acul/vector.hpp>
+#include "../model.hpp"
 #include "widget.hpp"
 
 #define AUIK_TAG_COLUMN 0x6D89BE20u
@@ -21,6 +22,7 @@ namespace auik
         AUIK_EXPORT ~Column() override;
 
         AUIK_EXPORT void clear_columns();
+        AUIK_EXPORT void set_model_binding(ModelBinding *binding, acul::vector<ModelFieldID> field_ids = {});
         AUIK_EXPORT void set_columns(ColumnItems columns);
         void add_column(ColumnChildren children = {});
         AUIK_EXPORT void add_child(size_t column_index, Widget *child,
@@ -57,14 +59,17 @@ namespace auik
 
         void add_slot(ColumnChildren children);
         void update_column_clip_rects();
+        void rebuild_from_model_binding();
 
         acul::vector<Slot *> _columns;
         acul::vector<f32> _column_widths;
         acul::vector<f32> _row_heights;
         StyleSelector _style;
+        ModelBinding *_model_binding = nullptr;
     };
 
-    inline Column *make_column(u32 id, Column::ColumnItems columns = {}, amal::vec2 size = AUIK_SIZE_FIT,
+    inline Column *make_column(u32 id, Column::ColumnItems columns = {},
+                               amal::vec2 size = {AUIK_SIZE_X_FILL, AUIK_SIZE_Y_FIT},
                                Widget *parent = nullptr)
     {
         return acul::alloc<Column>(id, std::move(columns), size, get_default_column_flags(), parent,

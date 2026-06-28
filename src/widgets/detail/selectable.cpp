@@ -103,6 +103,13 @@ namespace auik::detail
         _selected_icon_draw = {};
     }
 
+    amal::vec4 Selectable::layout_margin() const
+    {
+        const StyleID style_id = effective_layout_style_id();
+        if (style_id == Theme::STYLE_ID_INVALID) return {0.0f, 0.0f, 0.0f, 0.0f};
+        return get_theme()->get_style(style_id).margin();
+    }
+
     void Selectable::update_depth(const amal::vec2 &depth_range)
     {
         Widget::update_depth(depth_range);

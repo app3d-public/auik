@@ -65,6 +65,7 @@ namespace auik::detail
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void reset_draw_records() override;
+        AUIK_EXPORT amal::vec4 layout_margin() const override;
         u32 get_depth_requirement() const override { return 3u; }
         AUIK_EXPORT void update_depth(const amal::vec2 &depth_range) override;
         AUIK_EXPORT void draw(DrawCtx &ctx) override;

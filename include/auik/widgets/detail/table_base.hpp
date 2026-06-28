@@ -59,6 +59,13 @@ namespace auik::detail
         if (valign != VAlign::none) text->set_vertical_align(valign);
     }
 
+    inline f32 resolve_table_required_axis(f32 requested, bool fill, f32 content_required)
+    {
+        if (fill) return 0.0f;
+        if (!is_size_concrete(requested) || requested <= 0.0f) return content_required;
+        return requested;
+    }
+
     template <class Metrics, class Overrides, class SettingsFn>
     inline void update_table_column_widths(Metrics &metrics, size_t column_count, f32 inner_width,
                                            const Overrides &overrides, bool has_overrides,

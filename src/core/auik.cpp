@@ -183,10 +183,11 @@ namespace auik
                 if (style_flags == StyleUpdateFlagBits::none) return;
                 if (style_flags & StyleUpdateFlagBits::parent_layout)
                 {
-                    Widget *target = widget->parent() ? widget->parent() : widget;
-                    while (target->parent() && !target->is_fixed()) target = target->parent();
-                    target->update_layout(false);
-                    target->update_draw_commands(get_draw_reason_from_style_update(style_flags));
+                    if (Widget *target = resolve_parent_layout_update_target(widget))
+                    {
+                        target->update_layout(false);
+                        target->update_draw_commands(get_draw_reason_from_style_update(style_flags));
+                    }
                     ctx.dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
                     return;
                 }
@@ -257,6 +258,7 @@ namespace auik
                     if (prev_widget) enqueue_style_refresh<detail::HoverEventTraits>(prev_widget);
                     if (widget) enqueue_style_refresh<detail::HoverEventTraits>(widget);
                 }
+                if (drag_widget_changed || drag_selector_changed) mark_host_refresh_request();
                 return;
             }
 
@@ -282,6 +284,7 @@ namespace auik
                     if (it != ctx.id_map.end()) enqueue_style_refresh<detail::HoverEventTraits>(it->second);
                 }
                 if (!widget_changed && hover) dispatch_hover(widget_id, HoverState::active);
+                if (prev_hover != hover || selector_changed) mark_host_refresh_request();
             }
         }
 
@@ -547,14 +550,6 @@ namespace auik
             return nullptr;
         }
 
-        static inline Widget *get_widget_by_id(Context &ctx, u32 id)
-        {
-            if (!id) return nullptr;
-            auto it = ctx.id_map.find(id);
-            if (it == ctx.id_map.end()) return nullptr;
-            return it->second;
-        }
-
         static inline Widget *resolve_focus_entry(Widget *leaf)
         {
             if (!leaf) return nullptr;
@@ -575,7 +570,7 @@ namespace auik
             const u32 next_focus_id = target ? target->id() : 0u;
             if (ctx.focus_id == next_focus_id) return;
 
-            Widget *old_leaf = get_widget_by_id(ctx, ctx.focus_id);
+            Widget *old_leaf = get_widget_by_id(ctx.focus_id);
             Widget *new_leaf = target;
             Widget *old_entry = resolve_focus_entry(old_leaf);
             Widget *new_entry = resolve_focus_entry(new_leaf);

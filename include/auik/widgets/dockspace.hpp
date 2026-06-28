@@ -225,7 +225,7 @@ namespace auik
         bool handle_tabbar_drag_escape(DockNodeID node_id, u32 element_id);
         size_t selected_window_index(const Node &node) const;
         bool subtree_accepts_drop(DockNodeID node) const;
-        void begin_resize_helpers();
+        size_t begin_resize_helpers();
         amal::rect add_resize_helper(DockNodeID parent, size_t before_child, size_t after_child, amal::axis axis,
                                      const amal::rect &bounds, bool visible, bool interactive, bool drop_zone = false,
                                      const amal::rect *hit_bounds = nullptr);

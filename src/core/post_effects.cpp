@@ -21,6 +21,7 @@ namespace auik
 
         using FadeEffectRuntime = PostEffectRuntimeState<FadeInstanceData>;
         using RotateEffectRuntime = PostEffectRuntimeState<RotatePostRuntimeData>;
+        using ScaleEffectRuntime = PostEffectRuntimeState<ScalePostRuntimeData>;
 
         struct FadeHandlerData
         {
@@ -31,6 +32,11 @@ namespace auik
         struct RotateHandlerData
         {
             RotateEffectRuntime *runtime = nullptr;
+        };
+
+        struct ScaleHandlerData
+        {
+            ScaleEffectRuntime *runtime = nullptr;
         };
 
         static inline u32 scale_packed_alpha(u32 color, f32 factor)
@@ -58,6 +64,18 @@ namespace auik
             if (!vertices) return;
             for (u32 i = 0; i < batch.vertex_count; ++i)
                 vertices[i].color = scale_packed_alpha(vertices[i].color, alpha);
+        }
+
+        static void apply_scale_to_quads(QuadsInstanceData &data, const ScalePostRuntimeData &scale)
+        {
+            data.rect.size.x *= scale.scale.x;
+            data.rect.size.y *= scale.scale.y;
+        }
+
+        static void apply_scale_to_textures(TexturesInstanceData &data, const ScalePostRuntimeData &scale)
+        {
+            data.rect.size.x *= scale.scale.x;
+            data.rect.size.y *= scale.scale.y;
         }
 
         static void apply_rotate_to_vertex_batch(VertexStreamBatchData &batch, const RotatePostRuntimeData &rotate)
@@ -565,6 +583,134 @@ namespace auik
                 &destroy_typed_effect_data<RotateHandlerData>);
         }
 
+        static PostEffectNode *make_scale_quads_node(PostEffect *effect)
+        {
+            auto *data = acul::alloc<ScaleHandlerData>();
+            data->runtime = as_runtime<ScaleEffectRuntime>(effect);
+            return make_node(
+                data,
+                [](void *effect_data, DrawStream *stream, const void *draw_data, const void *post_data) -> DrawDataID {
+                    const auto *handler = static_cast<const ScaleHandlerData *>(effect_data);
+                    const auto *scale_post = static_cast<const ScalePostData *>(post_data);
+                    auto copy = *static_cast<const QuadsInstanceData *>(draw_data);
+                    if (handler && handler->runtime && scale_post && scale_post->id < handler->runtime->entries.size())
+                    {
+                        const auto &entry = handler->runtime->entries[scale_post->id];
+                        if (entry.valid && entry.ref_count > 0u) apply_scale_to_quads(copy, entry.payload);
+                    }
+                    return stream->push_data_to_stream(stream, &copy);
+                },
+                [](void *effect_data, DrawStream *stream, DrawDataID draw_id, const void *draw_data,
+                   const void *post_data) {
+                    const auto *handler = static_cast<const ScaleHandlerData *>(effect_data);
+                    const auto *scale_post = static_cast<const ScalePostData *>(post_data);
+                    auto copy = *static_cast<const QuadsInstanceData *>(draw_data);
+                    if (handler && handler->runtime && scale_post && scale_post->id < handler->runtime->entries.size())
+                    {
+                        const auto &entry = handler->runtime->entries[scale_post->id];
+                        if (entry.valid && entry.ref_count > 0u) apply_scale_to_quads(copy, entry.payload);
+                    }
+                    stream->update_data_in_stream(stream, draw_id, &copy);
+                },
+                &destroy_typed_effect_data<ScaleHandlerData>,
+                [](void *effect_data, DrawStream *stream, DrawDataID *draw_ids, const void *draw_data, u32 count,
+                   const void *post_data) {
+                    const auto *handler = static_cast<const ScaleHandlerData *>(effect_data);
+                    const auto *scale_post = static_cast<const ScalePostData *>(post_data);
+                    ScalePostRuntimeData scale{};
+                    if (handler && handler->runtime && scale_post && scale_post->id < handler->runtime->entries.size())
+                    {
+                        const auto &entry = handler->runtime->entries[scale_post->id];
+                        if (entry.valid && entry.ref_count > 0u) scale = entry.payload;
+                    }
+                    acul::vector<QuadsInstanceData> copies;
+                    copies.resize(count);
+                    std::memcpy(copies.data(), draw_data, sizeof(QuadsInstanceData) * count);
+                    for (auto &copy : copies) apply_scale_to_quads(copy, scale);
+                    stream->push_data_batch_to_stream(stream, copies.data(), count, draw_ids);
+                },
+                [](void *effect_data, DrawStream *stream, DrawDataID *draw_ids, const void *draw_data, u32 count,
+                   const void *post_data) {
+                    const auto *handler = static_cast<const ScaleHandlerData *>(effect_data);
+                    const auto *scale_post = static_cast<const ScalePostData *>(post_data);
+                    ScalePostRuntimeData scale{};
+                    if (handler && handler->runtime && scale_post && scale_post->id < handler->runtime->entries.size())
+                    {
+                        const auto &entry = handler->runtime->entries[scale_post->id];
+                        if (entry.valid && entry.ref_count > 0u) scale = entry.payload;
+                    }
+                    acul::vector<QuadsInstanceData> copies;
+                    copies.resize(count);
+                    std::memcpy(copies.data(), draw_data, sizeof(QuadsInstanceData) * count);
+                    for (auto &copy : copies) apply_scale_to_quads(copy, scale);
+                    stream->update_data_batch_in_stream(stream, draw_ids, copies.data(), count);
+                });
+        }
+
+        static PostEffectNode *make_scale_textures_node(PostEffect *effect)
+        {
+            auto *data = acul::alloc<ScaleHandlerData>();
+            data->runtime = as_runtime<ScaleEffectRuntime>(effect);
+            return make_node(
+                data,
+                [](void *effect_data, DrawStream *stream, const void *draw_data, const void *post_data) -> DrawDataID {
+                    const auto *handler = static_cast<const ScaleHandlerData *>(effect_data);
+                    const auto *scale_post = static_cast<const ScalePostData *>(post_data);
+                    auto copy = *static_cast<const TexturesInstanceData *>(draw_data);
+                    if (handler && handler->runtime && scale_post && scale_post->id < handler->runtime->entries.size())
+                    {
+                        const auto &entry = handler->runtime->entries[scale_post->id];
+                        if (entry.valid && entry.ref_count > 0u) apply_scale_to_textures(copy, entry.payload);
+                    }
+                    return stream->push_data_to_stream(stream, &copy);
+                },
+                [](void *effect_data, DrawStream *stream, DrawDataID draw_id, const void *draw_data,
+                   const void *post_data) {
+                    const auto *handler = static_cast<const ScaleHandlerData *>(effect_data);
+                    const auto *scale_post = static_cast<const ScalePostData *>(post_data);
+                    auto copy = *static_cast<const TexturesInstanceData *>(draw_data);
+                    if (handler && handler->runtime && scale_post && scale_post->id < handler->runtime->entries.size())
+                    {
+                        const auto &entry = handler->runtime->entries[scale_post->id];
+                        if (entry.valid && entry.ref_count > 0u) apply_scale_to_textures(copy, entry.payload);
+                    }
+                    stream->update_data_in_stream(stream, draw_id, &copy);
+                },
+                &destroy_typed_effect_data<ScaleHandlerData>,
+                [](void *effect_data, DrawStream *stream, DrawDataID *draw_ids, const void *draw_data, u32 count,
+                   const void *post_data) {
+                    const auto *handler = static_cast<const ScaleHandlerData *>(effect_data);
+                    const auto *scale_post = static_cast<const ScalePostData *>(post_data);
+                    ScalePostRuntimeData scale{};
+                    if (handler && handler->runtime && scale_post && scale_post->id < handler->runtime->entries.size())
+                    {
+                        const auto &entry = handler->runtime->entries[scale_post->id];
+                        if (entry.valid && entry.ref_count > 0u) scale = entry.payload;
+                    }
+                    acul::vector<TexturesInstanceData> copies;
+                    copies.resize(count);
+                    std::memcpy(copies.data(), draw_data, sizeof(TexturesInstanceData) * count);
+                    for (auto &copy : copies) apply_scale_to_textures(copy, scale);
+                    stream->push_data_batch_to_stream(stream, copies.data(), count, draw_ids);
+                },
+                [](void *effect_data, DrawStream *stream, DrawDataID *draw_ids, const void *draw_data, u32 count,
+                   const void *post_data) {
+                    const auto *handler = static_cast<const ScaleHandlerData *>(effect_data);
+                    const auto *scale_post = static_cast<const ScalePostData *>(post_data);
+                    ScalePostRuntimeData scale{};
+                    if (handler && handler->runtime && scale_post && scale_post->id < handler->runtime->entries.size())
+                    {
+                        const auto &entry = handler->runtime->entries[scale_post->id];
+                        if (entry.valid && entry.ref_count > 0u) scale = entry.payload;
+                    }
+                    acul::vector<TexturesInstanceData> copies;
+                    copies.resize(count);
+                    std::memcpy(copies.data(), draw_data, sizeof(TexturesInstanceData) * count);
+                    for (auto &copy : copies) apply_scale_to_textures(copy, scale);
+                    stream->update_data_batch_in_stream(stream, draw_ids, copies.data(), count);
+                });
+        }
+
         static PostEffectNode *make_fade_quads_node(PostEffect *effect, bool is_fade_in)
         {
             auto *data = acul::alloc<FadeHandlerData>();
@@ -823,6 +969,7 @@ namespace auik
         set_default_post_effect_by_index(AUIK_POST_EFFECT_FADE_IN, create_default_fade_in_post_effect());
         set_default_post_effect_by_index(AUIK_POST_EFFECT_FADE_OUT, create_default_fade_out_post_effect());
         set_default_post_effect_by_index(AUIK_POST_EFFECT_ROTATE, create_default_rotate_post_effect());
+        set_default_post_effect_by_index(AUIK_POST_EFFECT_SCALE, create_default_scale_post_effect());
     }
 
     PostEffect *create_default_disabled_post_effect()
@@ -903,6 +1050,74 @@ namespace auik
     bool is_rotate_post_effect_data_valid(PostEffect *effect, u32 id)
     {
         return is_instance_valid_impl<RotateEffectRuntime>(effect, id);
+    }
+
+    PostEffect *create_default_scale_post_effect()
+    {
+        auto *effect = create_post_effect_impl();
+        if (!effect) return nullptr;
+        auto *runtime = acul::alloc<ScaleEffectRuntime>();
+        effect->runtime_data = runtime;
+        effect->clear_runtime = [](void *runtime_data) {
+            auto *scale_runtime = static_cast<ScaleEffectRuntime *>(runtime_data);
+            if (!scale_runtime) return;
+            scale_runtime->entries.clear();
+            scale_runtime->active_count = 0u;
+            scale_runtime->ticking = false;
+        };
+        effect->destroy_runtime = [](void *runtime_data) {
+            auto *scale_runtime = static_cast<ScaleEffectRuntime *>(runtime_data);
+            if (!scale_runtime) return;
+            acul::release(scale_runtime);
+        };
+        effect->push_instance = &push_instance_impl<ScaleEffectRuntime, ScalePostRuntimeData>;
+        effect->update_instance = &update_instance_impl<ScaleEffectRuntime, ScalePostRuntimeData>;
+        effect->retain_instance = &retain_instance_impl<ScaleEffectRuntime>;
+        effect->release_instance = &release_instance_impl<ScaleEffectRuntime>;
+        effect->is_instance_valid = &is_instance_valid_impl<ScaleEffectRuntime>;
+        set_handler_impl(effect, get_default_stream(AUIK_PRIMARY_QUAD_STREAM), make_scale_quads_node(effect));
+        set_handler_impl(effect, get_default_stream(AUIK_PRIMARY_OVERLAY_QUADS_STREAM), make_scale_quads_node(effect));
+        set_handler_impl(effect, get_default_stream(AUIK_PRIMARY_TEXTURED_QUADS_STREAM),
+                         make_scale_textures_node(effect));
+        return effect;
+    }
+
+    u32 create_scale_post_effect_data(PostEffect *effect, Widget *owner)
+    {
+        return push_instance_impl<ScaleEffectRuntime, ScalePostRuntimeData>(effect, owner, nullptr);
+    }
+
+    ScalePostRuntimeData *get_scale_post_effect_data(PostEffect *effect, u32 id)
+    {
+        auto *runtime = as_runtime<ScaleEffectRuntime>(effect);
+        if (!runtime || id >= runtime->entries.size()) return nullptr;
+        auto &entry = runtime->entries[id];
+        if (!entry.valid || entry.ref_count == 0u) return nullptr;
+        return &entry.payload;
+    }
+
+    const ScalePostRuntimeData *get_scale_post_effect_data(const PostEffect *effect, u32 id)
+    {
+        const auto *runtime = as_runtime<ScaleEffectRuntime>(effect);
+        if (!runtime || id >= runtime->entries.size()) return nullptr;
+        const auto &entry = runtime->entries[id];
+        if (!entry.valid || entry.ref_count == 0u) return nullptr;
+        return &entry.payload;
+    }
+
+    void retain_scale_post_effect_data(PostEffect *effect, u32 id)
+    {
+        retain_instance_impl<ScaleEffectRuntime>(effect, id);
+    }
+
+    void release_scale_post_effect_data(PostEffect *effect, u32 id)
+    {
+        release_instance_impl<ScaleEffectRuntime>(effect, id);
+    }
+
+    bool is_scale_post_effect_data_valid(PostEffect *effect, u32 id)
+    {
+        return is_instance_valid_impl<ScaleEffectRuntime>(effect, id);
     }
 
     PostEffect *create_default_fade_in_post_effect()
@@ -1009,6 +1224,7 @@ namespace auik
     PostEffect *get_fade_in_post_effect() { return get_post_effect_by_index(AUIK_POST_EFFECT_FADE_IN); }
     PostEffect *get_fade_out_post_effect() { return get_post_effect_by_index(AUIK_POST_EFFECT_FADE_OUT); }
     PostEffect *get_rotate_post_effect() { return get_post_effect_by_index(AUIK_POST_EFFECT_ROTATE); }
+    PostEffect *get_scale_post_effect() { return get_post_effect_by_index(AUIK_POST_EFFECT_SCALE); }
 
     u32 create_fade_post_effect_data(PostEffect *effect, Widget *owner, f32 duration_sec)
     {

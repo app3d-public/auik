@@ -2,6 +2,7 @@
 
 #include <acul/string/string.hpp>
 #include <acul/vector.hpp>
+#include "../model.hpp"
 #include "../theme.hpp"
 #include "combobox.hpp"
 #include "detail/popup_trigger.hpp"
@@ -84,6 +85,7 @@ namespace auik
         using const_iterator = acul::vector<value_type>::const_iterator;
 
         const acul::vector<u32> &element_ids() const { return _element_ids; }
+        AUIK_EXPORT void set_model_binding(ModelBinding *binding);
         AUIK_EXPORT void set_items(acul::vector<acul::string> items);
         AUIK_EXPORT void set_items(const acul::vector<StringView> &items);
         AUIK_EXPORT void set_style_tag(u32 tag_id);
@@ -181,6 +183,7 @@ namespace auik
         AUIK_EXPORT amal::vec2 resolve_tab_required_size(u32 index);
         AUIK_EXPORT void ensure_overflow_icon_resources();
         AUIK_EXPORT amal::vec2 measure_overflow_size();
+        AUIK_EXPORT void rebuild_from_model_binding();
 
         acul::vector<u32> _element_ids;
         acul::vector<detail::Selectable *> _tabs;
@@ -211,7 +214,8 @@ namespace auik
         u32 _popup_item_style_tag = AUIK_STYLE_TAG_COMBO_BOX_ITEM;
         u16 _full_clip_id = 0xFFFFu;
         u16 _content_clip_id = 0xFFFFu;
-        StyleSelector _style{Theme::STYLE_ID_INVALID, AUIK_TAG_TAB_BAR};
+        StyleSelector _style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_GLOBAL};
+        ModelBinding *_model_binding = nullptr;
     };
 
     inline TabBar *make_tab_bar(u32 id, acul::vector<acul::string> items = {},

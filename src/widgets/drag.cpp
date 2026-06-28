@@ -100,16 +100,12 @@ namespace auik
         };
 
         static inline bool has_drag_interaction_flag(u8 flags, DragInteractionFlagBits bit)
-        {
-            return (flags & bit) != 0u;
-        }
+        { return (flags & bit) != 0u; }
 
         static inline void set_drag_interaction_flag(u8 &flags, DragInteractionFlagBits bit) { flags |= bit; }
 
         static inline void clear_drag_interaction_flag(u8 &flags, DragInteractionFlagBits bit)
-        {
-            flags &= static_cast<u8>(~bit);
-        }
+        { flags &= static_cast<u8>(~bit); }
 
         static inline void clear_drag_interaction_flags(u8 &flags, u8 bits) { flags &= static_cast<u8>(~bits); }
 
@@ -149,9 +145,26 @@ namespace auik
             if (_value) *_value = value;
             else _fallback_value = value;
             _last_value = value;
+            if (_value_model_binding) set_model_binding_value<T>(*_value_model_binding, value);
             const bool prevented = mark_changed();
             sync_text_from_value();
             if (!prevented) apply_render_update(true);
+        }
+
+        template <typename T>
+        void Draggable<T>::set_model_binding(ModelBinding *binding)
+        {
+            if (_value_model_binding) _value_model_binding->on_field_change = nullptr;
+            _value_model_binding = binding;
+            if (!_value_model_binding) return;
+
+            _value_model_binding->on_field_change = [this](ModelRecordID, ModelFieldID) {
+                T value{};
+                if (read_model_binding_value(*_value_model_binding, value)) set_value(value);
+            };
+            attach_model_binding(*_value_model_binding);
+            T value{};
+            if (read_model_binding_value(*_value_model_binding, value)) set_value(value);
         }
 
         template <typename T>
@@ -426,9 +439,7 @@ namespace auik
 
         template <typename T>
         bool Draggable<T>::should_draw_caret() const
-        {
-            return has_drag_interaction_flag(_interaction_flags, drag_interaction_text_edit_mode);
-        }
+        { return has_drag_interaction_flag(_interaction_flags, drag_interaction_text_edit_mode); }
 
         template class Draggable<int>;
         template class Draggable<f32>;
@@ -441,6 +452,11 @@ namespace auik
     {
     }
 
+    DragInt::DragInt(u32 id, ModelBinding *binding, int min_value, int max_value, f32 speed, amal::vec2 size,
+                     WidgetFlags flags, Widget *parent, const DragUnitResolver *unit_resolver, const char *default_unit)
+        : Draggable(id, nullptr, min_value, max_value, speed, size, flags, parent, unit_resolver, default_unit)
+    { set_model_binding(binding); }
+
     DragFloat::DragFloat(u32 id, f32 *value, f32 min_value, f32 max_value, f32 speed, amal::vec2 size,
                          WidgetFlags flags, Widget *parent, const DragUnitResolver *unit_resolver,
                          const char *default_unit)
@@ -448,12 +464,24 @@ namespace auik
     {
     }
 
+    DragFloat::DragFloat(u32 id, ModelBinding *binding, f32 min_value, f32 max_value, f32 speed, amal::vec2 size,
+                         WidgetFlags flags, Widget *parent, const DragUnitResolver *unit_resolver,
+                         const char *default_unit)
+        : Draggable(id, nullptr, min_value, max_value, speed, size, flags, parent, unit_resolver, default_unit)
+    { set_model_binding(binding); }
+
     DragDouble::DragDouble(u32 id, f64 *value, f64 min_value, f64 max_value, f32 speed, amal::vec2 size,
                            WidgetFlags flags, Widget *parent, const DragUnitResolver *unit_resolver,
                            const char *default_unit)
         : Draggable(id, value, min_value, max_value, speed, size, flags, parent, unit_resolver, default_unit)
     {
     }
+
+    DragDouble::DragDouble(u32 id, ModelBinding *binding, f64 min_value, f64 max_value, f32 speed, amal::vec2 size,
+                           WidgetFlags flags, Widget *parent, const DragUnitResolver *unit_resolver,
+                           const char *default_unit)
+        : Draggable(id, nullptr, min_value, max_value, speed, size, flags, parent, unit_resolver, default_unit)
+    { set_model_binding(binding); }
 
     namespace
     {
@@ -480,7 +508,7 @@ namespace auik
             u32 style_tag = AUIK_STYLE_TAG_TEXTBOX;
             stream.read(value).read(min_value).read(max_value).read(speed).read(text_flags).read(style_tag);
 
-            auto *widget = acul::alloc<DragInt>(common.id, nullptr, min_value, max_value, speed,
+            auto *widget = acul::alloc<DragInt>(common.id, static_cast<int *>(nullptr), min_value, max_value, speed,
                                                 common.requested_size, WidgetFlags(common.widget_flags), nullptr);
             widget->set_style_tag(style_tag);
             widget->text_flags = TextFlags(text_flags);
@@ -512,7 +540,7 @@ namespace auik
             u32 style_tag = AUIK_STYLE_TAG_TEXTBOX;
             stream.read(value).read(min_value).read(max_value).read(speed).read(text_flags).read(style_tag);
 
-            auto *widget = acul::alloc<DragFloat>(common.id, nullptr, min_value, max_value, speed,
+            auto *widget = acul::alloc<DragFloat>(common.id, static_cast<f32 *>(nullptr), min_value, max_value, speed,
                                                   common.requested_size, WidgetFlags(common.widget_flags), nullptr);
             widget->set_style_tag(style_tag);
             widget->text_flags = TextFlags(text_flags);
@@ -544,7 +572,7 @@ namespace auik
             u32 style_tag = AUIK_STYLE_TAG_TEXTBOX;
             stream.read(value).read(min_value).read(max_value).read(speed).read(text_flags).read(style_tag);
 
-            auto *widget = acul::alloc<DragDouble>(common.id, nullptr, min_value, max_value, speed,
+            auto *widget = acul::alloc<DragDouble>(common.id, static_cast<f64 *>(nullptr), min_value, max_value, speed,
                                                    common.requested_size, WidgetFlags(common.widget_flags), nullptr);
             widget->set_style_tag(style_tag);
             widget->text_flags = TextFlags(text_flags);

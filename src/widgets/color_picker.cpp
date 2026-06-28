@@ -240,6 +240,21 @@ namespace auik
         _hue_deg = hue;
         _radius_norm = amal::clamp(radius_t, 0.0f, 1.0f);
         _value = detail::make_circle_color(_hue_deg, _radius_norm);
+        if (_model_binding) set_model_binding_value<amal::vec4>(*_model_binding, _value);
+    }
+
+    void CircleColorPicker::set_model_binding(ModelBinding *binding)
+    {
+        if (_model_binding) _model_binding->on_field_change = nullptr;
+        _model_binding = binding;
+        if (!_model_binding) return;
+        _model_binding->on_field_change = [this](ModelRecordID, ModelFieldID) {
+            amal::vec4 value{};
+            if (read_model_binding_value(*_model_binding, value)) set_color(value);
+        };
+        attach_model_binding(*_model_binding);
+        amal::vec4 value{};
+        if (read_model_binding_value(*_model_binding, value)) set_color(value);
     }
 
     void CircleColorPicker::set_color(const amal::vec4 &color)
@@ -770,6 +785,21 @@ namespace auik
         _value_norm = amal::clamp(value_t, 0.0f, 1.0f);
         const f32 alpha = amal::clamp(_value.w, 0.0f, 1.0f);
         _value = detail::hsv_to_rgba(_hue_deg, _saturation, _value_norm, alpha);
+        if (_model_binding) set_model_binding_value<amal::vec4>(*_model_binding, _value);
+    }
+
+    void GradientColorPicker::set_model_binding(ModelBinding *binding)
+    {
+        if (_model_binding) _model_binding->on_field_change = nullptr;
+        _model_binding = binding;
+        if (!_model_binding) return;
+        _model_binding->on_field_change = [this](ModelRecordID, ModelFieldID) {
+            amal::vec4 value{};
+            if (read_model_binding_value(*_model_binding, value)) set_color(value);
+        };
+        attach_model_binding(*_model_binding);
+        amal::vec4 value{};
+        if (read_model_binding_value(*_model_binding, value)) set_color(value);
     }
 
     void GradientColorPicker::set_color(const amal::vec4 &color)
@@ -1131,6 +1161,21 @@ namespace auik
         if (hue < 0.0f) hue += 360.0f;
         _hue_deg = hue;
         if (_gradient) _gradient->set_hsv(_hue_deg, saturation, value_t);
+        if (_model_binding) set_model_binding_value<amal::vec4>(*_model_binding, color());
+    }
+
+    void SquareColorPicker::set_model_binding(ModelBinding *binding)
+    {
+        if (_model_binding) _model_binding->on_field_change = nullptr;
+        _model_binding = binding;
+        if (!_model_binding) return;
+        _model_binding->on_field_change = [this](ModelRecordID, ModelFieldID) {
+            amal::vec4 value{};
+            if (read_model_binding_value(*_model_binding, value)) set_color(value);
+        };
+        attach_model_binding(*_model_binding);
+        amal::vec4 value{};
+        if (read_model_binding_value(*_model_binding, value)) set_color(value);
     }
 
     void SquareColorPicker::set_color(const amal::vec4 &color)
@@ -1138,6 +1183,9 @@ namespace auik
         if (!_gradient) return;
         _gradient->set_color(color);
         _hue_deg = _gradient->hue_deg();
+        const bool prevented = mark_changed();
+        rebuild_cached_visuals();
+        if (!prevented) redraw_external(has_draw_record());
     }
 
     const amal::vec4 &SquareColorPicker::color() const

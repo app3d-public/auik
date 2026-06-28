@@ -44,6 +44,7 @@ namespace auik
         const acul::string &text() const { return _text->text(); }
         void set_text(const acul::string &text) { _text->set_text(text); }
         void set_text(StringView text) { _text->set_text(text); }
+        void set_model_binding(ModelBinding *binding) { _text->set_model_binding(binding); }
         bool is_translated_text() const { return _text && _text->is_translated_text(); }
         const char *translated_text_literal() const { return _text ? _text->translated_text_literal() : nullptr; }
         u32 style_tag() const { return _style.tag_id; }

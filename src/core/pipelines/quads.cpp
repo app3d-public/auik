@@ -3,7 +3,6 @@
 #include <auik/detail/pixel_snap.hpp>
 #include <auik/pipelines.hpp>
 #include <auik/widgets/widget.hpp>
-#include <cstdio>
 #include "stream_data.hpp"
 
 namespace auik::detail

@@ -165,6 +165,26 @@ namespace auik
         return true;
     }
 
+    RadioButton::RadioButton(u32 id, ModelBinding *binding, WidgetFlags widget_flags)
+        : RadioButton(id, false, widget_flags)
+    {
+        set_model_binding(binding);
+    }
+
+    void RadioButton::set_model_binding(ModelBinding *binding)
+    {
+        if (_model_binding) _model_binding->on_field_change = nullptr;
+        _model_binding = binding;
+        if (!_model_binding) return;
+        _model_binding->on_field_change = [this](ModelRecordID, ModelFieldID) {
+            bool value = false;
+            if (read_model_binding_value(*_model_binding, value)) set_value(value);
+        };
+        attach_model_binding(*_model_binding);
+        bool value = false;
+        if (read_model_binding_value(*_model_binding, value)) set_value(value);
+    }
+
     void RadioButton::set_value(bool new_value)
     {
         if (_value == new_value) return;
@@ -177,6 +197,7 @@ namespace auik
         (void)click_count;
         if (key != MouseKey::left || state != KeyPressState::press) return;
         _value = !_value;
+        if (_model_binding) set_model_binding_value<bool>(*_model_binding, _value);
         const bool prevented = mark_changed();
         if (!prevented)
             add_render_command<detail::ClickEventTraits>(this, [this]() { redraw_external(has_draw_record()); });

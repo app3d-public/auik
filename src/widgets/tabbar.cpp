@@ -46,9 +46,7 @@ namespace auik
     static inline bool should_own_full_clip_rect(const TabBar &tabbar) { return tabbar.is_fixed() || !tabbar.parent(); }
 
     static inline bool is_content_width_constrained(const TabBar &tabbar)
-    {
-        return tabbar.required_size().x > 0.0f && tabbar.size().x + 0.5f < tabbar.required_size().x;
-    }
+    { return tabbar.required_size().x > 0.0f && tabbar.size().x + 0.5f < tabbar.required_size().x; }
 
     static inline bool should_own_content_clip_rect(const TabBar &tabbar)
     {
@@ -57,14 +55,10 @@ namespace auik
     }
 
     static inline amal::vec2 snap_drag_visual_position(const amal::vec2 &position)
-    {
-        return {amal::round(position.x), amal::round(position.y)};
-    }
+    { return {amal::round(position.x), amal::round(position.y)}; }
 
     static inline f32 dominant_scroll_axis(const amal::vec2 &delta)
-    {
-        return amal::abs(delta.x) > amal::abs(delta.y) ? delta.x : delta.y;
-    }
+    { return amal::abs(delta.x) > amal::abs(delta.y) ? delta.x : delta.y; }
 
     static inline TabBarFlags normalize_tab_bar_flags(TabBarFlags flags)
     {
@@ -101,7 +95,12 @@ namespace auik
     {
         auto &ctx = detail::get_context();
         Widget *target = tabbar.parent() ? tabbar.parent() : &tabbar;
-        while (target->parent() && !target->is_fixed()) target = target->parent();
+        if (target->clip_id() == 0xFFFFu)
+        {
+            ctx.dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
+            detail::mark_host_refresh_request();
+            return;
+        }
         target->update_layout(false);
         target->update_draw_commands(DrawReasonBits::layout);
         ctx.dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
@@ -111,13 +110,16 @@ namespace auik
     TabBar::TabBar(u32 id, acul::vector<acul::string> items, TabBarFlags tab_flags, amal::vec2 size,
                    WidgetFlags widget_flags, Widget *parent, f32 tab_width, u32 tab_width_key, u32 item_style_tag,
                    u32 selected_item_style_tag, u32 popup_item_style_tag)
-        : TabBar(id, [&items]() {
-              acul::vector<StringView> views;
-              views.reserve(items.size());
-              for (const auto &item : items) views.push_back(StringView{item});
-              return views;
-          }(), tab_flags, size, widget_flags, parent, tab_width, tab_width_key, item_style_tag,
-                 selected_item_style_tag, popup_item_style_tag)
+        : TabBar(
+              id,
+              [&items]() {
+                  acul::vector<StringView> views;
+                  views.reserve(items.size());
+                  for (const auto &item : items) views.push_back(StringView{item});
+                  return views;
+              }(),
+              tab_flags, size, widget_flags, parent, tab_width, tab_width_key, item_style_tag, selected_item_style_tag,
+              popup_item_style_tag)
     {
     }
 
@@ -134,16 +136,16 @@ namespace auik
         _popup_item_style_tag = popup_item_style_tag;
         if (popup())
         {
-            _overflow_button = acul::alloc<detail::PopupTrigger>(AUIK_TAG_TABBAR_POPUP_BTN, AUIK_TAG_TABBAR_POPUP_BTN,
-                                                                 AUIK_ICON_CHEVRON_DOWN, AUIK_ICON_CHEVRON_UP, true);
+            _overflow_button =
+                acul::alloc<detail::PopupTrigger>(AUIK_STYLE_TAG_TABBAR_POPUP_BUTTON, AUIK_TAG_TABBAR_POPUP_BTN,
+                                                  AUIK_ICON_CHEVRON_DOWN, AUIK_ICON_CHEVRON_UP, true);
             _overflow_button->set_update_target(this);
             _overflow_button->set_hit_id(make_element_id(id, AUIK_TAG_TABBAR_POPUP_BTN, 0u));
             ensure_overflow_icon_resources();
             _overflow_button->update_style(AUIK_TAG_TABBAR_POPUP_BTN, id, StyleState::normal);
 
-            _popup = acul::alloc<Window>(
-                AUIK_TAG_TAB_BAR_POPUP, "", amal::rect{{0.0f, 0.0f}, {0.0f, 0.0f}}, get_popup_window_flags(),
-                WidgetFlagBits::visible | WidgetFlagBits::hittable);
+            _popup = acul::alloc<Window>(AUIK_TAG_TAB_BAR_POPUP, "", amal::rect{{0.0f, 0.0f}, {0.0f, 0.0f}},
+                                         get_popup_window_flags(), WidgetFlagBits::visible | WidgetFlagBits::hittable);
             _popup->get_rect().id.widget_id = id;
             _popup->set_window_style_tag(AUIK_STYLE_TAG_TAB_BAR_POPUP);
             _popup->set_focus_parent(this);
@@ -157,6 +159,12 @@ namespace auik
 
     TabBar::~TabBar()
     {
+        if (_model_binding)
+        {
+            _model_binding->on_records = nullptr;
+            _model_binding->on_field_change = nullptr;
+            detach_model_binding(*_model_binding);
+        }
         close_popup(false);
         if (_popup) acul::release(_popup);
         if (_overflow_button) acul::release(_overflow_button);
@@ -173,8 +181,8 @@ namespace auik
         {
             auto *button = acul::alloc<ImageButton>(AUIK_TAG_CLOSE_BUTTON, get_cached_image(AUIK_ICON_CLOSE),
                                                     amal::vec2{0.0f, 0.0f}, amal::vec2{0.0f, 0.0f},
-                                                    WidgetFlagBits::visible | WidgetFlagBits::hittable,
-                                                    this, AUIK_TAG_CLOSE_BUTTON);
+                                                    WidgetFlagBits::visible | WidgetFlagBits::hittable, this,
+                                                    AUIK_TAG_CLOSE_BUTTON);
             button->get_rect().id.widget_id = id();
             button->set_focus_parent(this);
             button->update_style();
@@ -240,6 +248,52 @@ namespace auik
         set_items(views);
     }
 
+    void TabBar::set_model_binding(ModelBinding *binding)
+    {
+        if (_model_binding)
+        {
+            _model_binding->on_records = nullptr;
+            _model_binding->on_field_change = nullptr;
+            detach_model_binding(*_model_binding);
+        }
+        _model_binding = binding;
+        if (!_model_binding) return;
+
+        auto rebuild = [this]() {
+            rebuild_from_model_binding();
+            refresh_layout_owner(*this);
+        };
+        _model_binding->on_records = [rebuild](const ModelRecordsEvent &) { rebuild(); };
+        _model_binding->on_field_change = [rebuild](ModelRecordID, ModelFieldID) { rebuild(); };
+        attach_model_binding(*_model_binding);
+        rebuild_model_binding_records(*_model_binding);
+        rebuild_from_model_binding();
+    }
+
+    void TabBar::rebuild_from_model_binding()
+    {
+        if (!_model_binding || !is_model_binding_valid(*_model_binding))
+        {
+            set_items(acul::vector<StringView>{});
+            return;
+        }
+
+        auto *model = find_model(_model_binding->db, _model_binding->model_id);
+        acul::vector<acul::string> items;
+        if (model) items.reserve(_model_binding->records.size());
+        if (model)
+        {
+            for (ModelRecordID record_id : _model_binding->records)
+            {
+                acul::string text{};
+                read_model_binding_value(*_model_binding, record_id, 1u, text);
+                items.push_back(std::move(text));
+            }
+        }
+        set_items(std::move(items));
+        update_depth(depth_range());
+    }
+
     void TabBar::set_items(const acul::vector<StringView> &items)
     {
         if (!_tabs.empty() || !_close_buttons.empty() || _overflow_button)
@@ -276,9 +330,10 @@ namespace auik
 
     void TabBar::set_style_tag(u32 tag_id)
     {
+        if (tag_id == 0u) tag_id = AUIK_STYLE_TAG_GLOBAL;
         if (_style.tag_id == tag_id) return;
         _style = {Theme::STYLE_ID_INVALID, tag_id};
-        set_rect_tag_id(tag_id);
+        if (tag_id != AUIK_STYLE_TAG_GLOBAL) set_rect_tag_id(tag_id);
     }
 
     u32 TabBar::selected_index() const
@@ -1682,7 +1737,7 @@ namespace auik
             acul::vector<bool> translated_items;
             acul::vector<u32> selected_ids;
             u32 tab_flags = 0u;
-            u32 style_tag = AUIK_TAG_TAB_BAR;
+            u32 style_tag = AUIK_STYLE_TAG_GLOBAL;
             u32 item_style_tag = AUIK_STYLE_TAG_TAB_BAR_ITEM;
             u32 selected_item_style_tag = AUIK_STYLE_TAG_TAB_BAR_ITEM_SELECTED;
             u32 popup_item_style_tag = AUIK_STYLE_TAG_COMBO_BOX_ITEM;

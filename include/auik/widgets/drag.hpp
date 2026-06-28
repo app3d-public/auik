@@ -34,6 +34,8 @@ namespace auik
 
             T value() const { return _value ? *_value : _fallback_value; }
             AUIK_EXPORT void set_value(T value);
+            AUIK_EXPORT void set_model_binding(ModelBinding *binding);
+            ModelBinding *model_binding() const { return _value_model_binding; }
             AUIK_EXPORT void set_unit_resolver(const DragUnitResolver *resolver, const char *default_unit = nullptr);
             const DragUnitResolver *unit_resolver() const { return _unit_resolver; }
             const char *default_unit() const { return _default_unit; }
@@ -60,6 +62,7 @@ namespace auik
             AUIK_EXPORT bool should_draw_caret() const override;
 
             T *_value = nullptr;
+            ModelBinding *_value_model_binding = nullptr;
             T _fallback_value{};
             T _min_value{};
             T _max_value{};
@@ -83,6 +86,11 @@ namespace auik
                             amal::vec2 size = {0.0f, 0.0f}, WidgetFlags flags = get_default_textbox_flags(),
                             Widget *parent = nullptr, const DragUnitResolver *unit_resolver = nullptr,
                             const char *default_unit = nullptr);
+        AUIK_EXPORT DragInt(u32 id, ModelBinding *binding, int min_value = std::numeric_limits<int>::lowest(),
+                            int max_value = std::numeric_limits<int>::max(), f32 speed = 1.0f,
+                            amal::vec2 size = {0.0f, 0.0f}, WidgetFlags flags = get_default_textbox_flags(),
+                            Widget *parent = nullptr, const DragUnitResolver *unit_resolver = nullptr,
+                            const char *default_unit = nullptr);
 
         virtual u32 signature() const override { return AUIK_TAG_DRAG_INT; }
     };
@@ -95,6 +103,11 @@ namespace auik
                               amal::vec2 size = {0.0f, 0.0f}, WidgetFlags flags = get_default_textbox_flags(),
                               Widget *parent = nullptr, const DragUnitResolver *unit_resolver = nullptr,
                               const char *default_unit = nullptr);
+        AUIK_EXPORT DragFloat(u32 id, ModelBinding *binding, f32 min_value = std::numeric_limits<f32>::lowest(),
+                              f32 max_value = std::numeric_limits<f32>::max(), f32 speed = 1.0f,
+                              amal::vec2 size = {0.0f, 0.0f}, WidgetFlags flags = get_default_textbox_flags(),
+                              Widget *parent = nullptr, const DragUnitResolver *unit_resolver = nullptr,
+                              const char *default_unit = nullptr);
 
         virtual u32 signature() const override { return AUIK_TAG_DRAG_FLOAT; }
     };
@@ -103,6 +116,11 @@ namespace auik
     {
     public:
         AUIK_EXPORT DragDouble(u32 id, f64 *value, f64 min_value = std::numeric_limits<f64>::lowest(),
+                               f64 max_value = std::numeric_limits<f64>::max(), f32 speed = 1.0f,
+                               amal::vec2 size = {0.0f, 0.0f}, WidgetFlags flags = get_default_textbox_flags(),
+                               Widget *parent = nullptr, const DragUnitResolver *unit_resolver = nullptr,
+                               const char *default_unit = nullptr);
+        AUIK_EXPORT DragDouble(u32 id, ModelBinding *binding, f64 min_value = std::numeric_limits<f64>::lowest(),
                                f64 max_value = std::numeric_limits<f64>::max(), f32 speed = 1.0f,
                                amal::vec2 size = {0.0f, 0.0f}, WidgetFlags flags = get_default_textbox_flags(),
                                Widget *parent = nullptr, const DragUnitResolver *unit_resolver = nullptr,
@@ -121,6 +139,17 @@ namespace auik
                                     nullptr, unit_resolver, default_unit);
     }
 
+    inline DragInt *make_drag_int(u32 id, ModelBinding *binding,
+                                  int min_value = std::numeric_limits<int>::lowest(),
+                                  int max_value = std::numeric_limits<int>::max(), f32 speed = 1.0f,
+                                  const DragUnitResolver *unit_resolver = nullptr, const char *default_unit = nullptr,
+                                  amal::vec2 size = AUIK_SIZE_FIT)
+    {
+        return acul::alloc<DragInt>(id, binding, min_value, max_value, speed, size,
+                                    WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::configurable,
+                                    nullptr, unit_resolver, default_unit);
+    }
+
     inline DragFloat *make_drag_float(u32 id, f32 *value, f32 min_value = std::numeric_limits<f32>::lowest(),
                                       f32 max_value = std::numeric_limits<f32>::max(), f32 speed = 1.0f,
                                       const DragUnitResolver *unit_resolver = nullptr,
@@ -132,12 +161,36 @@ namespace auik
                                       nullptr, unit_resolver, default_unit);
     }
 
+    inline DragFloat *make_drag_float(u32 id, ModelBinding *binding,
+                                      f32 min_value = std::numeric_limits<f32>::lowest(),
+                                      f32 max_value = std::numeric_limits<f32>::max(), f32 speed = 1.0f,
+                                      const DragUnitResolver *unit_resolver = nullptr,
+                                      const char *default_unit = nullptr, amal::vec2 size = AUIK_SIZE_FIT)
+    {
+        return acul::alloc<DragFloat>(id, binding, min_value, max_value, speed, size,
+                                      WidgetFlagBits::visible | WidgetFlagBits::attachable |
+                                          WidgetFlagBits::configurable,
+                                      nullptr, unit_resolver, default_unit);
+    }
+
     inline DragDouble *make_drag_double(u32 id, f64 *value, f64 min_value = std::numeric_limits<f64>::lowest(),
                                         f64 max_value = std::numeric_limits<f64>::max(), f32 speed = 1.0f,
                                         const DragUnitResolver *unit_resolver = nullptr,
                                         const char *default_unit = nullptr, amal::vec2 size = AUIK_SIZE_FIT)
     {
         return acul::alloc<DragDouble>(id, value, min_value, max_value, speed, size,
+                                       WidgetFlagBits::visible | WidgetFlagBits::attachable |
+                                           WidgetFlagBits::configurable,
+                                       nullptr, unit_resolver, default_unit);
+    }
+
+    inline DragDouble *make_drag_double(u32 id, ModelBinding *binding,
+                                        f64 min_value = std::numeric_limits<f64>::lowest(),
+                                        f64 max_value = std::numeric_limits<f64>::max(), f32 speed = 1.0f,
+                                        const DragUnitResolver *unit_resolver = nullptr,
+                                        const char *default_unit = nullptr, amal::vec2 size = AUIK_SIZE_FIT)
+    {
+        return acul::alloc<DragDouble>(id, binding, min_value, max_value, speed, size,
                                        WidgetFlagBits::visible | WidgetFlagBits::attachable |
                                            WidgetFlagBits::configurable,
                                        nullptr, unit_resolver, default_unit);

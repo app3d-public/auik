@@ -4,6 +4,7 @@
 #include <amal/vector.hpp>
 #include "events.hpp"
 #include "fwd.hpp"
+#include "ids.hpp"
 
 namespace auik::detail
 {

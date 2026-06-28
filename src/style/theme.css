@@ -62,7 +62,7 @@
 
 .table-header-cell {
     margin: 0px;
-    padding: 4px 4px;
+    padding: 0px 4px;
     background-color: var(--color-surface-light);
     border: 1px solid var(--color-border);
 }
@@ -74,7 +74,7 @@
 
 .table-cell {
     margin: 0px;
-    padding: 4px 4px;
+    padding: 0px 4px;
     border: 1px solid var(--color-border);
 }
 
@@ -84,7 +84,7 @@
 }
 
 .table-resize-border {
-    margin: 0px;
+    margin: 2px 2px;
     padding: 6px;
     background-color: rgba(0, 0, 0, 0);
 }
@@ -95,7 +95,7 @@
 }
 
 .table-tree-resize-border {
-    margin: 0px;
+    margin: 2px 2px;
     padding: 0px;
     background-color: rgb(100, 100, 100);
     border: 1px solid rgb(100, 100, 100);
@@ -197,29 +197,33 @@
     background-color: var(--color-hover);
 }
 
-.table-tree {
-    border: 1px solid var(--color-border);
-    border-radius: 3px;
-}
-
-.table-tree-cell {
+.tree {
     margin: 0px;
-    padding: 4px 4px;
+    padding: 0px;
+    background-color: rgba(0, 0, 0, 0);
+    border: 0px;
+    border-radius: 0px;
 }
 
-.table-tree-row-alt {
+.tree-cell {
+    margin: 0px;
+    padding: 0px 4px;
+}
+
+.tree-row-alt {
     margin: 0px;
     background-color: rgba(255, 255, 255, 0.035);
 }
 
-.table-tree-line {
+.tree-line {
     margin: 0px;
     background-color: rgb(100, 100, 100);
     border: 1px solid rgb(100, 100, 100);
 }
 
-.table-tree-collapse-icon {
-    margin: 0px 2px;
+.tree-collapse-icon {
+    margin: 4px 0px;
+    padding: 0px 10px;
     color: var(--color-text);
 }
 
@@ -452,7 +456,7 @@
 .combo-box {
     padding: 4px 8px;
     background-color: var(--color-surface-light);
-    border-radius: 4px;
+    border-radius: 3px;
 }
 
 .combo-box:hover {
@@ -472,7 +476,7 @@
 
 .combo-box-item {
     margin: 2px 4px;
-    padding: 2px 6px;
+    padding: 4px 8px;
     border-radius: 3px;
 }
 
@@ -502,7 +506,7 @@
 
 .combo-box-item-selected {
     margin: 2px 4px;
-    padding: 2px 6px;
+    padding: 4px 8px;
     background-color: var(--color-accent);
     border-radius: 3px;
 }
@@ -514,9 +518,9 @@
 
 .tab-bar-item {
     margin: 0px;
-    padding: 2px 8px;
+    padding: 4px 8px;
     background-color: var(--color-surface-light);
-    border-radius: 4px;
+    border-radius: 3px;
 }
 
 .tab-bar-item:hover {
@@ -524,6 +528,8 @@
 }
 
 .tab-bar-item-selected {
+    margin: 0px;
+    padding: 4px 8px;
     background-color: var(--color-accent);
     border-radius: 4px;
 }
@@ -671,6 +677,18 @@
 
 .slider:active {
     background-color: var(--color-accent);
+}
+
+.progress-bar {
+    padding: 4px 0px;
+    background-color: var(--color-surface-light);
+    border-radius: 2.5px;
+}
+
+.progress-bar-active {
+    padding: 4px 0px;
+    background-color: var(--color-accent);
+    border-radius: 2.5px;
 }
 
 .slider-grab {

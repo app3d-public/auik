@@ -7,7 +7,8 @@
 #define AUIK_POST_EFFECT_FADE_IN         1
 #define AUIK_POST_EFFECT_FADE_OUT        2
 #define AUIK_POST_EFFECT_ROTATE          3
-#define AUIK_POST_EFFECT_COUNT           4
+#define AUIK_POST_EFFECT_SCALE           4
+#define AUIK_POST_EFFECT_COUNT           5
 #define AUIK_INVALID_POST_EFFECT_DATA_ID 0xFFFFFFFFu
 
 namespace auik
@@ -32,6 +33,20 @@ namespace auik
     struct FadePostData
     {
         u32 id = AUIK_INVALID_POST_EFFECT_DATA_ID;
+    };
+
+    struct ScalePostData
+    {
+        u32 id = AUIK_INVALID_POST_EFFECT_DATA_ID;
+    };
+
+    struct ScalePostRuntimeData
+    {
+        amal::vec2 scale{1.0f, 1.0f};
+        amal::vec2 animation_from{1.0f, 1.0f};
+        amal::vec2 animation_to{1.0f, 1.0f};
+        f64 animation_start = 0.0;
+        bool animating = false;
     };
 
     template <class T>
@@ -74,16 +89,24 @@ namespace auik
     AUIK_EXPORT PostEffect *create_default_fade_in_post_effect();
     AUIK_EXPORT PostEffect *create_default_fade_out_post_effect();
     AUIK_EXPORT PostEffect *create_default_rotate_post_effect();
+    AUIK_EXPORT PostEffect *create_default_scale_post_effect();
     AUIK_EXPORT PostEffect *get_disabled_post_effect();
     AUIK_EXPORT PostEffect *get_fade_in_post_effect();
     AUIK_EXPORT PostEffect *get_fade_out_post_effect();
     AUIK_EXPORT PostEffect *get_rotate_post_effect();
+    AUIK_EXPORT PostEffect *get_scale_post_effect();
     AUIK_EXPORT u32 create_rotate_post_effect_data(PostEffect *effect, Widget *owner);
     AUIK_EXPORT RotatePostRuntimeData *get_rotate_post_effect_data(PostEffect *effect, u32 id);
     AUIK_EXPORT const RotatePostRuntimeData *get_rotate_post_effect_data(const PostEffect *effect, u32 id);
     AUIK_EXPORT void retain_rotate_post_effect_data(PostEffect *effect, u32 id);
     AUIK_EXPORT void release_rotate_post_effect_data(PostEffect *effect, u32 id);
     AUIK_EXPORT bool is_rotate_post_effect_data_valid(PostEffect *effect, u32 id);
+    AUIK_EXPORT u32 create_scale_post_effect_data(PostEffect *effect, Widget *owner);
+    AUIK_EXPORT ScalePostRuntimeData *get_scale_post_effect_data(PostEffect *effect, u32 id);
+    AUIK_EXPORT const ScalePostRuntimeData *get_scale_post_effect_data(const PostEffect *effect, u32 id);
+    AUIK_EXPORT void retain_scale_post_effect_data(PostEffect *effect, u32 id);
+    AUIK_EXPORT void release_scale_post_effect_data(PostEffect *effect, u32 id);
+    AUIK_EXPORT bool is_scale_post_effect_data_valid(PostEffect *effect, u32 id);
     AUIK_EXPORT u32 create_fade_post_effect_data(PostEffect *effect, Widget *owner, f32 duration_sec);
     AUIK_EXPORT void retain_fade_post_effect_data(PostEffect *effect, u32 id);
     AUIK_EXPORT void release_fade_post_effect_data(PostEffect *effect, u32 id);

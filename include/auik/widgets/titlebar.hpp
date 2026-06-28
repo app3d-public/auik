@@ -52,6 +52,7 @@ namespace auik
         AUIK_EXPORT void restore_hit_depth() override;
         AUIK_EXPORT void reset_clip_rect_records() override;
         AUIK_EXPORT void rebuild_clip_rects() override;
+        AUIK_EXPORT void reset_draw_records() override;
         AUIK_EXPORT void draw(DrawCtx &ctx) override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void on_attach() override;

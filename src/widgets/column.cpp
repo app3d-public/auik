@@ -2,6 +2,7 @@
 #include <auik/detail/rect.hpp>
 #include <auik/widgets/detail/draw_cull.hpp>
 #include <auik/widgets/column.hpp>
+#include <auik/widgets/text.hpp>
 #include "../core/session_stream_utils.hpp"
 
 namespace auik
@@ -163,6 +164,7 @@ namespace auik
         {
             auto *column = static_cast<Column *>(parent());
             const amal::vec4 parent_clip = column->get_content_clip_rect();
+            if (parent() && clip_id() == parent()->content_clip_id()) set_clip_id(0xFFFFu);
             ensure_own_clip_rect(
                 detail::intersect_rects(parent_clip, {position().x, position().y, size().x, size().y}));
             for (auto *child : children)
@@ -249,7 +251,15 @@ namespace auik
         set_columns(std::move(columns));
     }
 
-    Column::~Column() { clear_columns(); }
+    Column::~Column()
+    {
+        if (_model_binding)
+        {
+            _model_binding->on_records = nullptr;
+            detach_model_binding(*_model_binding);
+        }
+        clear_columns();
+    }
 
     void Column::clear_columns()
     {
@@ -263,10 +273,65 @@ namespace auik
         _row_heights.clear();
     }
 
+    void Column::set_model_binding(ModelBinding *binding, acul::vector<ModelFieldID> field_ids)
+    {
+        if (_model_binding)
+        {
+            _model_binding->on_records = nullptr;
+            _model_binding->on_field_change = nullptr;
+            detach_model_binding(*_model_binding);
+        }
+        _model_binding = binding;
+        if (!_model_binding) return;
+
+        _model_binding->presenter.field_ids = std::move(field_ids);
+        if (_model_binding->presenter.field_ids.empty()) _model_binding->presenter.field_ids.push_back(1u);
+        if (!_model_binding->presenter.present_field)
+        {
+            _model_binding->presenter.data = nullptr;
+            _model_binding->presenter.present_field = present_model_text_field;
+        }
+        _model_binding->on_records = [this](const ModelRecordsEvent &) { rebuild_from_model_binding(); };
+        _model_binding->on_field_change = [this](ModelRecordID, ModelFieldID) { rebuild_from_model_binding(); };
+        attach_model_binding(*_model_binding);
+        rebuild_model_binding_records(*_model_binding);
+        rebuild_from_model_binding();
+    }
+
     void Column::set_columns(ColumnItems columns)
     {
         clear_columns();
         for (auto &column : columns) add_slot(std::move(column));
+    }
+
+    void Column::rebuild_from_model_binding()
+    {
+        if (!_model_binding || !is_model_binding_valid(*_model_binding))
+        {
+            set_columns({});
+            return;
+        }
+
+        auto *model = find_model(_model_binding->db, _model_binding->model_id);
+        set_columns({});
+        if (model)
+        {
+            for (ModelRecordID record_id : _model_binding->records)
+            {
+                auto *record = model->find_record(record_id);
+                ColumnChildren children;
+                if (record)
+                {
+                    const auto &field_ids = _model_binding->presenter.field_ids;
+                    children.reserve(field_ids.size());
+                    for (ModelFieldID field_id : field_ids)
+                        if (auto *widget = present_model_field(*_model_binding, *record, field_id))
+                            children.push_back(widget);
+                }
+                add_column(std::move(children));
+            }
+        }
+        mark_changed();
     }
 
     void Column::add_column(ColumnChildren children) { add_slot(std::move(children)); }
@@ -332,6 +397,8 @@ namespace auik
         _row_heights.clear();
 
         amal::vec2 content_required{0.0f, 0.0f};
+        f32 max_column_width = 0.0f;
+        size_t column_count = 0u;
         bool has_column = false;
         for (auto *slot : _columns)
         {
@@ -341,6 +408,7 @@ namespace auik
             const amal::vec2 slot_required = slot->required_size();
             if (has_column) content_required.x += spacing;
             content_required.x += slot_required.x;
+            max_column_width = amal::max(max_column_width, slot_required.x);
             _column_widths.push_back(slot_required.x);
             for (size_t i = 0; i < slot->children.size(); ++i)
             {
@@ -350,21 +418,26 @@ namespace auik
                 _row_heights[i] = amal::max(_row_heights[i], child->required_size().y);
             }
             has_column = true;
+            ++column_count;
         }
+        if (!is_width_fixed() && column_count > 0u)
+            content_required.x = max_column_width * static_cast<f32>(column_count) +
+                                 spacing * static_cast<f32>(column_count - 1u);
         for (size_t i = 0; i < _row_heights.size(); ++i)
         {
             if (i > 0u) content_required.y += spacing;
             content_required.y += _row_heights[i];
         }
 
-        f32 required_width = size().x;
-        if (fill_width()) required_width = 0.0f;
-        else if (required_width <= 0.0f) required_width = content_required.x + padding.x + padding.z;
+        f32 required_width = 0.0f;
+        if (is_size_concrete(requested_size().x)) required_width = amal::max(requested_size().x, 0.0f);
+        else if (!fill_width()) required_width = content_required.x + padding.x + padding.z;
         if (required_width > 0.0f)
             required_width = amal::max(required_width, content_required.x + padding.x + padding.z);
 
-        f32 required_height = size().y;
-        if (required_height <= 0.0f) required_height = content_required.y + padding.y + padding.w;
+        f32 required_height = 0.0f;
+        if (is_size_concrete(requested_size().y)) required_height = amal::max(requested_size().y, 0.0f);
+        else required_height = content_required.y + padding.y + padding.w;
 
         set_required_size({required_width + margin.x + margin.z, required_height + margin.y + margin.w});
     }
@@ -539,6 +612,7 @@ namespace auik
     {
         const amal::vec4 parent_clip = parent() ? parent()->get_content_clip_rect() : get_main_viewport_rect();
         const amal::vec4 own_rect = {position().x, position().y, size().x, size().y};
+        if (parent() && clip_id() == parent()->content_clip_id()) set_clip_id(0xFFFFu);
         ensure_own_clip_rect(detail::intersect_rects(parent_clip, own_rect));
 
         const amal::vec4 own_clip = get_clip_rect(clip_id());
@@ -546,6 +620,7 @@ namespace auik
         {
             if (!slot) continue;
             const amal::vec4 slot_rect = {slot->position().x, slot->position().y, slot->size().x, slot->size().y};
+            if (slot->clip_id() == content_clip_id()) slot->set_clip_id(0xFFFFu);
             slot->ensure_own_clip_rect(detail::intersect_rects(own_clip, slot_rect));
             for (auto *child : slot->children)
                 if (child) child->set_clip_id(slot->clip_id());

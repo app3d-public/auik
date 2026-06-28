@@ -1,6 +1,7 @@
 #pragma once
 
 #include <acul/memory/alloc.hpp>
+#include "../model.hpp"
 #include "../theme.hpp"
 #include "widget.hpp"
 
@@ -18,6 +19,7 @@ namespace auik
     {
     public:
         AUIK_EXPORT Checkbox(u32 id, bool value, WidgetFlags widget_flags = get_default_checkbox_flags());
+        AUIK_EXPORT Checkbox(u32 id, ModelBinding *binding, WidgetFlags widget_flags = get_default_checkbox_flags());
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
         AUIK_EXPORT void update_layout_min_size() override;
@@ -33,9 +35,11 @@ namespace auik
 
         bool value() const { return _value; }
         AUIK_EXPORT void set_value(bool value);
+        AUIK_EXPORT void set_model_binding(ModelBinding *binding);
 
     private:
         bool _value = false;
+        ModelBinding *_model_binding = nullptr;
         DrawDataID _box_bg{};
         DrawDataID _checkmark_draw{};
         StyleSelector _style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_CHECKBOX};

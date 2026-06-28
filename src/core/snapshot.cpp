@@ -13,13 +13,14 @@
 #include <auik/widgets/menu.hpp>
 #include <auik/widgets/modal_window.hpp>
 #include <auik/widgets/primitives.hpp>
+#include <auik/widgets/progress_bar.hpp>
 #include <auik/widgets/radio_button.hpp>
 #include <auik/widgets/rubber_band.hpp>
 #include <auik/widgets/slider.hpp>
 #include <auik/widgets/switch_button.hpp>
 #include <auik/widgets/tabbar.hpp>
 #include <auik/widgets/table.hpp>
-#include <auik/widgets/table_tree.hpp>
+#include <auik/widgets/tree.hpp>
 #include <auik/widgets/text.hpp>
 #include <auik/widgets/text_button.hpp>
 #include <auik/widgets/textbox.hpp>
@@ -184,6 +185,7 @@ namespace auik
         resolver.streams[AUIK_TAG_SWITCH_BUTTON] = &streams::switch_button;
         resolver.streams[AUIK_TAG_TAB_BAR] = &streams::tab_bar;
         resolver.streams[AUIK_TAG_TABLE] = &streams::table;
+        resolver.streams[AUIK_TAG_TREE] = &streams::tree;
         resolver.streams[AUIK_TAG_TABLE_TREE] = &streams::table_tree;
         resolver.streams[AUIK_TAG_MENU_BAR] = &streams::menu_bar;
         resolver.streams[AUIK_TAG_POPUP_MENU] = &streams::popup_menu;
@@ -194,6 +196,7 @@ namespace auik
         resolver.streams[AUIK_TAG_GRADIENT_SLIDER] = &streams::gradient_slider;
         resolver.streams[AUIK_TAG_TRANSPARENCY_SLIDER] = &streams::transparency_slider;
         resolver.streams[AUIK_TAG_RANGE_SLIDER] = &streams::range_slider;
+        resolver.streams[AUIK_TAG_PROGRESS_BAR] = &streams::progress_bar;
         resolver.streams[AUIK_TAG_DRAG_INT] = &streams::drag_int;
         resolver.streams[AUIK_TAG_DRAG_FLOAT] = &streams::drag_float;
         resolver.streams[AUIK_TAG_DRAG_DOUBLE] = &streams::drag_double;

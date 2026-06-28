@@ -63,9 +63,7 @@ namespace auik
     constexpr inline bool is_size_dynamic(f32 value) { return is_size_min_fit(value) || value >= AUIK_SIZE_X_FILL; }
 
     constexpr inline bool is_size_dynamic(const amal::vec2 &size)
-    {
-        return is_size_dynamic(size.x) || is_size_dynamic(size.y);
-    }
+    { return is_size_dynamic(size.x) || is_size_dynamic(size.y); }
 
     struct WidgetFlagBits
     {
@@ -161,9 +159,7 @@ namespace auik
     constexpr inline detail::StylePropertyFlags g_style_parent_layout_mask = detail::StylePropertiesBits::margin;
 
     constexpr inline WidgetFlags get_default_widget_flags()
-    {
-        return WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::configurable;
-    }
+    { return WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::configurable; }
 
     class Widget : public umbf::Block
     {
@@ -264,9 +260,7 @@ namespace auik
               _requested_size(bounds.size),
               _viewport(get_main_viewport()),
               _rect(detail::make_rect_data(id, tag_id, bounds))
-        {
-            assert(_viewport && "main viewport must be set before creating widgets");
-        }
+        { assert(_viewport && "main viewport must be set before creating widgets"); }
 
         AUIK_EXPORT virtual ~Widget();
 
@@ -274,9 +268,7 @@ namespace auik
 
         template <class T, class... Args>
         T *emplace_user_data(Args &&...args)
-        {
-            return emplace_user_data_tagged<T>(AUIK_UD_CUSTOM_DATA, std::forward<Args>(args)...);
-        }
+        { return emplace_user_data_tagged<T>(AUIK_UD_CUSTOM_DATA, std::forward<Args>(args)...); }
 
         template <class T, class... Args>
         T *emplace_user_data_tagged(u32 tag, Args &&...args)
@@ -299,9 +291,7 @@ namespace auik
 
         template <class T>
         T *get_user_data(u32 tag = AUIK_UD_CUSTOM_DATA) const
-        {
-            return static_cast<T *>(get_user_data(tag));
-        }
+        { return static_cast<T *>(get_user_data(tag)); }
 
         const WidgetUserData *user_data_head() const { return _user_data; }
         AUIK_EXPORT void emplace_user_data_ref_head(u32 tag, void *handle);
@@ -370,11 +360,10 @@ namespace auik
             _rect.bounds.size = {is_size_concrete(size.x) ? size.x : 0.0f, is_size_concrete(size.y) ? size.y : 0.0f};
         }
         inline void set_layout_size(const amal::vec2 &size)
-        {
-            _rect.bounds.size = {is_size_concrete(size.x) ? size.x : 0.0f, is_size_concrete(size.y) ? size.y : 0.0f};
-        }
+        { _rect.bounds.size = {is_size_concrete(size.x) ? size.x : 0.0f, is_size_concrete(size.y) ? size.y : 0.0f}; }
         inline const amal::vec2 &required_size() const { return _required_size; }
         inline void set_required_size(const amal::vec2 &size) { _required_size = size; }
+        virtual amal::vec4 layout_margin() const { return {0.0f, 0.0f, 0.0f, 0.0f}; }
         inline amal::vec2 resolve_layout_size_from_required() const
         {
             amal::vec2 out = _rect.bounds.size;
@@ -555,6 +544,7 @@ namespace auik
         virtual void on_drop(ElementID drag_id, ElementID drop_id) {}
         virtual void on_key(Key key, KeyPressState state, KeyMode mods) {}
         virtual void on_char_input(u32 char_code, u32 count) {}
+        virtual void on_change(ChangeEvent &) {}
 
         inline void dispatch_hover(HoverState state)
         {
@@ -662,16 +652,21 @@ namespace auik
         inline bool mark_changed()
         {
             bool prevented = false;
-            for (Widget *widget = this; widget; widget = widget->parent()) prevented = widget->dispatch_change() || prevented;
+            for (Widget *widget = this; widget; widget = widget->parent())
+                prevented = widget->dispatch_change() || prevented;
             return prevented;
         }
 
     protected:
         inline bool dispatch_change()
         {
-            if (!_user_bind || !_user_bind->on_change_fn) return false;
             ChangeEvent e{};
-            _user_bind->on_change_fn(e);
+            if (_user_bind && _user_bind->on_change_fn)
+            {
+                _user_bind->on_change_fn(e);
+                if (e.is_prevented_default()) return true;
+            }
+            on_change(e);
             return e.is_prevented_default();
         }
 
@@ -872,8 +867,14 @@ namespace auik
     }
 
     inline StyleState resolve_widget_visual_state(const Widget &widget, StyleState state)
+    { return has_widget_state_style(widget, state) ? state : StyleState::normal; }
+
+    inline Widget *resolve_parent_layout_update_target(Widget *widget)
     {
-        return has_widget_state_style(widget, state) ? state : StyleState::normal;
+        if (!widget) return nullptr;
+        Widget *target = widget->parent() ? widget->parent() : widget;
+        while (target->parent() && !target->is_fixed()) target = target->parent();
+        return target;
     }
 
     inline bool apply_hover_style_state(Widget &widget, HoverState state)

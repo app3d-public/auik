@@ -1019,11 +1019,30 @@ namespace auik
     {
         _value = value;
         sync_text_presentation();
+        if (_model_binding) set_model_binding_value<acul::string>(*_model_binding, _value);
 
         auto &cursor = _edit_state.primary_cursor();
         cursor.cursor = static_cast<int>(this->value().size());
         cursor.select_start = cursor.cursor;
         cursor.select_end = cursor.cursor;
+    }
+
+    void TextBox::set_model_binding(ModelBinding *binding)
+    {
+        if (_model_binding) _model_binding->on_field_change = nullptr;
+        _model_binding = binding;
+        if (!_model_binding) return;
+        _model_binding->on_field_change = [this](ModelRecordID, ModelFieldID) {
+            acul::string value{};
+            if (read_model_binding_value(*_model_binding, value))
+            {
+                set_value(value);
+                add_render_command([this]() { apply_render_update(true); });
+            }
+        };
+        attach_model_binding(*_model_binding);
+        acul::string value{};
+        if (read_model_binding_value(*_model_binding, value)) set_value(value);
     }
 
     void TextBox::sync_text_presentation()

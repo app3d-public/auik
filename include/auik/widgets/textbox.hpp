@@ -54,6 +54,8 @@ namespace auik
             if (this->value() == value) return;
             set_value_internal(value);
         }
+        ModelBinding *model_binding() const { return _model_binding; }
+        AUIK_EXPORT void set_model_binding(ModelBinding *binding);
 
         const inline acul::string &placeholder() const
         {
@@ -216,6 +218,7 @@ namespace auik
         AUIK_EXPORT void on_disabled_changed(bool disabled) override;
 
         acul::string _value;
+        ModelBinding *_model_binding = nullptr;
         EText _text;
         Text *_placeholder = nullptr;
         TextBoxEditData *_edit = nullptr;

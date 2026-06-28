@@ -1367,10 +1367,6 @@ namespace auik
 
         if (_resize_dir.x != 0 || _resize_dir.y != 0)
         {
-            int current_resize_x = 0;
-            int current_resize_y = 0;
-            get_window_resize_direction(_resize_hit_rect, ctx.io.mouse_pos, current_resize_x, current_resize_y);
-            if (current_resize_x != 0 || current_resize_y != 0) { _resize_dir = {current_resize_x, current_resize_y}; }
             detail::set_window_cursor(get_window_resize_cursor(_resize_dir.x, _resize_dir.y), ctx.window_ctx);
             if (!(window_flags & WindowFlagBits::resizable)) return;
             if (window_flags & WindowFlagBits::docked) return;

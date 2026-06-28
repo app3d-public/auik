@@ -2,6 +2,7 @@
 
 #include <acul/pair.hpp>
 #include <acul/vector.hpp>
+#include "../model.hpp"
 #include "../theme.hpp"
 #include "detail/table_base.hpp"
 #include "widget.hpp"
@@ -200,6 +201,7 @@ namespace auik
         AUIK_EXPORT ~Table() override;
 
         AUIK_EXPORT void clear();
+        AUIK_EXPORT void set_model_binding(ModelBinding *binding, acul::vector<ModelFieldID> field_ids = {});
         AUIK_EXPORT void set_rows(Rows rows);
         AUIK_EXPORT void add_row(Row row);
         AUIK_EXPORT void set_cell(size_t row, size_t column, Widget *value);
@@ -298,6 +300,7 @@ namespace auik
         void sync_cell_parents();
         StyleUpdateFlags update_resize_indicator();
         bool is_resize_border_tag(u32 tag_id) const;
+        void rebuild_from_model_binding();
 
         Row _header;
         Rows _rows;
@@ -322,6 +325,7 @@ namespace auik
         size_t _resizing_row = static_cast<size_t>(-1);
         amal::vec2 _resize_drag_accum{0.0f, 0.0f};
         size_t _column_count = 0;
+        ModelBinding *_model_binding = nullptr;
     };
 
     inline Table *make_table(u32 id, Table::Rows rows = {}, amal::vec2 size = AUIK_SIZE_FIT, Widget *parent = nullptr)
