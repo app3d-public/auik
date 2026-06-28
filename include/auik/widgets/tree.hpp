@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../animation.hpp"
 #include "../post_effects.hpp"
 #include "detail/table_base.hpp"
 #include "table.hpp"
@@ -130,8 +131,8 @@ namespace auik
         struct ArrowAnimation
         {
             size_t node = invalid_node;
-            u32 rotate_post_id = AUIK_INVALID_POST_EFFECT_DATA_ID;
             DrawDataID draw{};
+            AnimationState state;
         };
 
         void rebuild_visible_nodes();
@@ -161,8 +162,6 @@ namespace auik
         ArrowAnimation *find_arrow_animation(size_t node);
         const ArrowAnimation *find_arrow_animation(size_t node) const;
         void start_arrow_animation(size_t node, bool opening);
-        void schedule_arrow_tick();
-        void tick_arrow_animations();
         void clear_arrow_animation_draw(ArrowAnimation &animation);
         void release_arrow_animations();
         void draw_arrow(DrawCtx &ctx, ArrowVisual &visual);
@@ -200,7 +199,6 @@ namespace auik
         amal::vec2 _resize_drag_accum{0.0f, 0.0f};
         size_t _column_count = 0u;
         f32 _indent_width = 16.0f;
-        bool _arrow_tick_scheduled = false;
         ModelBinding *_model_binding = nullptr;
     };
 

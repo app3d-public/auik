@@ -21,10 +21,10 @@ namespace auik
     static inline const Style &tree_resolved_style(const StyleSelector &selector)
     {
         auto *theme = get_theme();
-        const StyleID style_id = selector.id != Theme::STYLE_ID_INVALID
-                                     ? selector.id
-                                     : theme->get_resolved_style(selector.tag_id, selector.tag_id, 0u,
-                                                                 StyleState::normal);
+        const StyleID style_id =
+            selector.id != Theme::STYLE_ID_INVALID
+                ? selector.id
+                : theme->get_resolved_style(selector.tag_id, selector.tag_id, 0u, StyleState::normal);
         return theme->get_style(style_id);
     }
 
@@ -92,9 +92,7 @@ namespace auik
         : Widget(id, flags, EventFlagBits::click | EventFlagBits::hover | EventFlagBits::drag, parent,
                  {{0.0f, 0.0f}, size}, style_tag_id),
           _style({Theme::STYLE_ID_INVALID, style_tag_id})
-    {
-        _default_column_settings.valign = VAlign::center;
-    }
+    { _default_column_settings.valign = VAlign::center; }
 
     Tree::~Tree()
     {
@@ -349,9 +347,8 @@ namespace auik
                                  tree_arrow_slot_width(icon_style, _arrow_size, _indent_width);
                 }
                 _layout_metrics[column].x.min_value = amal::max(_layout_metrics[column].x.min_value, min_width);
-                _layout_metrics[row].y.min_value =
-                    amal::max(_layout_metrics[row].y.min_value,
-                              cell->required_size().y + cell_padding.y + cell_padding.w);
+                _layout_metrics[row].y.min_value = amal::max(_layout_metrics[row].y.min_value,
+                                                             cell->required_size().y + cell_padding.y + cell_padding.w);
             }
             _layout_metrics[row].y.value = _layout_metrics[row].y.min_value;
         }
@@ -393,10 +390,7 @@ namespace auik
                                            amal::max(required_size().y - margin.y - margin.w, 0.0f)};
 
         amal::vec2 outer_size = size();
-        if (!supports_columns())
-        {
-            outer_size = required_inner;
-        }
+        if (!supports_columns()) { outer_size = required_inner; }
         else
         {
             if (!is_width_fixed()) outer_size.x = amal::max(outer_size.x - margin.x - margin.z, required_inner.x);
@@ -517,8 +511,7 @@ namespace auik
 
                 const f32 level_indent = static_cast<f32>(level) * arrow_slot_w;
                 const f32 level_slot_x = inner_pos.x + level_indent;
-                const f32 line_center_x =
-                    tree_icon_center_x(level_slot_x, arrow_slot_w, icon_style);
+                const f32 line_center_x = tree_icon_center_x(level_slot_x, arrow_slot_w, icon_style);
                 const f32 line_x = amal::round(line_center_x - half_line);
                 const f32 top_y = amal::round(cursor_y);
                 const f32 bottom_y =
@@ -535,9 +528,9 @@ namespace auik
                     if (own_level)
                     {
                         const f32 branch_x = amal::round(line_center_x);
-                        add_line({{branch_x, row_mid_y - half_line},
-                                  {amal::max(inner_pos.x + level_indent + arrow_slot_w - branch_x, 0.0f),
-                                   line_thickness}});
+                        add_line(
+                            {{branch_x, row_mid_y - half_line},
+                             {amal::max(inner_pos.x + level_indent + arrow_slot_w - branch_x, 0.0f), line_thickness}});
                     }
                 }
             }
@@ -556,9 +549,8 @@ namespace auik
             const auto &resize_style = theme->get_style(resize_style_id);
             const amal::vec4 resize_margin = resize_style.margin();
             const amal::vec4 resize_padding = resize_style.padding();
-            const f32 resize_w =
-                amal::max(resize_margin.x + resize_margin.z + resize_padding.x + resize_padding.z,
-                          resize_style.border_thickness());
+            const f32 resize_w = amal::max(resize_margin.x + resize_margin.z + resize_padding.x + resize_padding.z,
+                                           resize_style.border_thickness());
             resize_hit_w = amal::max(resize_w, 1.0f);
         }
         if (supports_columns() && column_resizable() && resize_hit_w > 0.0f)
@@ -1231,95 +1223,29 @@ namespace auik
     void Tree::start_arrow_animation(size_t node, bool opening)
     {
         if (!detail::g_context) return;
-        auto *rotate_effect = get_rotate_post_effect();
-        if (!rotate_effect) return;
-
         auto *animation = find_arrow_animation(node);
+        bool added_animation = false;
         if (!animation)
         {
             _arrow_animations.push_back({});
             animation = &_arrow_animations.back();
             animation->node = node;
-            animation->rotate_post_id = create_rotate_post_effect_data(rotate_effect, this);
-            if (animation->rotate_post_id == AUIK_INVALID_POST_EFFECT_DATA_ID)
-            {
-                _arrow_animations.erase(_arrow_animations.end() - 1);
-                return;
-            }
+            added_animation = true;
         }
 
-        detail::update_window_time(detail::get_context().window_ctx);
-        auto *rotate_data = get_rotate_post_effect_data(rotate_effect, animation->rotate_post_id);
-        if (!rotate_data) return;
-        rotate_data->animation_start = detail::get_context().window_ctx->time;
-        rotate_data->animation_from = opening ? 0.0f : amal::half_pi<f32>();
-        rotate_data->animation_to = opening ? amal::half_pi<f32>() : 0.0f;
-        rotate_data->angle = rotate_data->animation_from;
-        rotate_data->animating = true;
-        push_widget_to_transient_cache(this);
-        detail::mark_host_refresh_request();
-        schedule_arrow_tick();
-    }
-
-    void Tree::schedule_arrow_tick()
-    {
-        if (!detail::g_context || _arrow_tick_scheduled) return;
-        detail::update_window_time(detail::get_context().window_ctx);
-        const f64 delay = get_max_animation_delay() > 0.0 ? get_max_animation_delay() : (1.0 / 60.0);
-        _arrow_tick_scheduled = true;
-        schedule_delayed_host_task(id(), detail::get_context().window_ctx->time + delay, [this]() {
-            _arrow_tick_scheduled = false;
-            tick_arrow_animations();
-        });
-    }
-
-    void Tree::tick_arrow_animations()
-    {
-        if (!detail::g_context) return;
-        auto *rotate_effect = get_rotate_post_effect();
-        if (!rotate_effect) return;
-        detail::update_window_time(detail::get_context().window_ctx);
-        const f64 now = detail::get_context().window_ctx->time;
-
-        bool any_active = false;
-        for (size_t index = 0; index < _arrow_animations.size();)
+        const u32 rotate_post_id = animation->state.post_data_id;
+        auto *rotate_data = get_rotate_post_effect_data(get_rotate_post_effect(), rotate_post_id);
+        const f32 current_angle = rotate_data && rotate_data->animating ? rotate_data->angle
+                                  : opening                             ? 0.0f
+                                                                        : amal::half_pi<f32>();
+        const f32 target_angle = opening ? amal::half_pi<f32>() : 0.0f;
+        configure_rotate_animation(animation->state, AUIK_TABLE_TREE_ARROW_ROTATE_DURATION, {0.0f, 0.0f}, current_angle,
+                                   target_angle);
+        if (!start_animation(animation->state, this))
         {
-            auto &animation = _arrow_animations[index];
-            auto *rotate_data = get_rotate_post_effect_data(rotate_effect, animation.rotate_post_id);
-            if (!rotate_data || !rotate_data->animating)
-            {
-                clear_arrow_animation_draw(animation);
-                if (animation.rotate_post_id != AUIK_INVALID_POST_EFFECT_DATA_ID)
-                    release_rotate_post_effect_data(rotate_effect, animation.rotate_post_id);
-                _arrow_animations.erase(_arrow_animations.begin() + index);
-                continue;
-            }
-
-            f64 raw_t = (now - rotate_data->animation_start) / AUIK_TABLE_TREE_ARROW_ROTATE_DURATION;
-            raw_t = amal::clamp(raw_t, 0.0, 1.0);
-            const f32 t = static_cast<f32>(raw_t);
-            const f32 eased = 1.0f - (1.0f - t) * (1.0f - t);
-            rotate_data->angle =
-                rotate_data->animation_from + (rotate_data->animation_to - rotate_data->animation_from) * eased;
-            if (t >= 1.0f)
-            {
-                rotate_data->angle = rotate_data->animation_to;
-                rotate_data->animating = false;
-                clear_arrow_animation_draw(animation);
-                if (animation.rotate_post_id != AUIK_INVALID_POST_EFFECT_DATA_ID)
-                    release_rotate_post_effect_data(rotate_effect, animation.rotate_post_id);
-                _arrow_animations.erase(_arrow_animations.begin() + index);
-                continue;
-            }
-            else any_active = true;
-            ++index;
+            if (added_animation) _arrow_animations.erase(_arrow_animations.end() - 1);
+            return;
         }
-
-        if (any_active) schedule_arrow_tick();
-        else erase_widget_from_transient_cache(this);
-
-        update_draw_commands(DrawReasonBits::external);
-        detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
         detail::mark_host_refresh_request();
     }
 
@@ -1334,16 +1260,13 @@ namespace auik
 
     void Tree::release_arrow_animations()
     {
-        auto *rotate_effect = get_rotate_post_effect();
         for (auto &animation : _arrow_animations)
         {
+            animation.state.clear(this);
             clear_arrow_animation_draw(animation);
-            if (rotate_effect && animation.rotate_post_id != AUIK_INVALID_POST_EFFECT_DATA_ID)
-                release_rotate_post_effect_data(rotate_effect, animation.rotate_post_id);
         }
         _arrow_animations.clear();
         erase_widget_from_transient_cache(this);
-        _arrow_tick_scheduled = false;
     }
 
     void Tree::draw_arrow(DrawCtx &ctx, ArrowVisual &visual)
@@ -1377,10 +1300,11 @@ namespace auik
 
         auto *animation = find_arrow_animation(visual.node);
         auto *rotate_effect = get_rotate_post_effect();
-        auto *rotate_data = animation && rotate_effect
-                                ? get_rotate_post_effect_data(rotate_effect, animation->rotate_post_id)
-                                : nullptr;
+        const u32 rotate_post_id = animation ? animation->state.post_data_id : AUIK_INVALID_POST_EFFECT_DATA_ID;
+        auto *rotate_data =
+            animation && rotate_effect ? get_rotate_post_effect_data(rotate_effect, rotate_post_id) : nullptr;
         const bool animating = rotate_data && rotate_data->animating;
+        if (animation && !animating) clear_arrow_animation_draw(*animation);
 
         TextureID closed_texture{};
         amal::rect closed_uv_rect{};
@@ -1405,14 +1329,13 @@ namespace auik
         const amal::vec4 icon_margin = icon_style.margin();
         const amal::vec4 icon_padding = icon_style.padding();
         const f32 icon_content_x = visual.rect.bounds.offset.x + icon_margin.x + icon_padding.x;
-        const f32 icon_content_w = amal::max(visual.rect.bounds.size.x - icon_margin.x - icon_margin.z -
-                                                 icon_padding.x - icon_padding.z,
-                                             0.0f);
+        const f32 icon_content_w = amal::max(
+            visual.rect.bounds.size.x - icon_margin.x - icon_margin.z - icon_padding.x - icon_padding.z, 0.0f);
         const f32 icon_center_x =
             visual.icon_center_x > 0.0f ? visual.icon_center_x : icon_content_x + icon_content_w * 0.5f;
-        amal::rect icon_rect{{amal::round(icon_center_x - icon_size.x * 0.5f),
-                              amal::round(icon_center_y - icon_size.y * 0.5f)},
-                             icon_size};
+        amal::rect icon_rect{
+            {amal::round(icon_center_x - icon_size.x * 0.5f), amal::round(icon_center_y - icon_size.y * 0.5f)},
+            icon_size};
 
         auto *stream = get_primary_textured_quads_stream();
         if (!stream) return;
@@ -1452,8 +1375,8 @@ namespace auik
             batch.index_count = 6u;
             batch.texture_id = animated_texture;
             batch.flags = AUIK_TEXTURE_INSTANCE_TEXT_BIT;
-            RotatePostData rotate_post{animation->rotate_post_id};
-            PostFxChain rotate_chain{rotate_effect, &rotate_post, animation->rotate_post_id, ctx.post_fx_chain};
+            RotatePostData rotate_post{rotate_post_id};
+            PostFxChain rotate_chain{rotate_effect, &rotate_post, rotate_post_id, ctx.post_fx_chain};
             DrawCtx rotated_ctx = ctx;
             rotated_ctx.post_fx_chain = &rotate_chain;
             emit_context_draw(rotated_ctx, vertex_stream, animation->draw, &batch, visual.rect, false);

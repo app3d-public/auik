@@ -93,22 +93,6 @@ set_target_properties(${PROJECT_NAME}
     CXX_EXTENSIONS YES
 )
 
-if(NOT DEFINED AUIK_GPU_BACKEND)
-    message(FATAL_ERROR "AUIK_GPU_BACKEND must be set by the parent project")
-endif()
-
-if(AUIK_GPU_BACKEND STREQUAL "VULKAN")
-    add_subdirectory(src/backends/agrb)
-else()
-    message(FATAL_ERROR "Unknown AUIK_GPU_BACKEND='${AUIK_GPU_BACKEND}'")
-endif()
-
-if(AUIK_WINDOW_BACKEND STREQUAL "AWIN")
-    add_subdirectory(src/backends/awin)
-else()
-    message(FATAL_ERROR "Unknown AUIK_WINDOW_BACKEND='${AUIK_WINDOW_BACKEND}'")
-endif()
-
 get_directory_property(AUIK_HAS_PARENT PARENT_DIRECTORY)
 
 if(AUIK_HAS_PARENT)

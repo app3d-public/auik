@@ -2,6 +2,7 @@
 
 #include <acul/memory/alloc.hpp>
 #include <amal/geometric.hpp>
+#include "../animation.hpp"
 #include "../model.hpp"
 #include "../pipelines.hpp"
 #include "widget.hpp"
@@ -62,9 +63,7 @@ namespace auik
         amal::rect _track_rect{};
         amal::vec2 _track_depth_range{0.0f, 1.0f};
         amal::vec2 _active_depth_range{0.0f, 1.0f};
-        u32 _scale_post_id = AUIK_INVALID_POST_EFFECT_DATA_ID;
-        bool _animating = false;
-        bool _tick_scheduled = false;
+        AnimationState _animation;
 
         f32 clamped_value(f32 value) const;
         f32 value_factor(f32 value) const;
@@ -72,14 +71,6 @@ namespace auik
         void rebuild_track_visual();
         void rebuild_active_visual(f32 factor);
         void rebuild_cached_visuals();
-        void ensure_scale_post_data();
-        void release_scale_post_data();
-        amal::vec2 factor_to_scale(f32 factor) const;
-        f32 animation_eased_t(const ScalePostRuntimeData &scale_data, f64 now) const;
-        f32 animation_value_at(const ScalePostRuntimeData &scale_data, f64 now) const;
-        void capture_current_animation_value();
-        void schedule_animation_tick();
-        void tick_animation();
     };
 
     inline ProgressBar *make_progress_bar(u32 id, f32 value = 0.0f, f32 min_value = 0.0f, f32 max_value = 1.0f,

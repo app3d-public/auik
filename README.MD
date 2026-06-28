@@ -6,10 +6,8 @@ It is not a windowing framework and does not own your main loop. Instead, it pro
 ## Features
 - Retained-mode UI architecture
 - Event-driven update model
+- Model bindings for data-driven widgets
 - Multi-pipeline GPU rendering
-- Single Draw Instancing (SDI)
-- Bindless texture model
-- SDF-based rendering
 - Unicode-aware typography
 - Animations and delayed UI tasks
 - Post-processing effects
@@ -26,7 +24,7 @@ Unlike traditional UI systems that generate a single vertex stream, Auik organiz
 Auik includes a CSS-inspired theme system. Themes can be created either through the native C++ API or through the CSS transpiler.
 
 ## Limitations
-Auik supports standard alpha blending but does not provide OIT order-independent transparency.
+Auik supports standard alpha blending but does not provide order-independent transparency (OIT).
 Transparent widgets rendered through different streams or pipelines may not preserve strict painter-order composition.
 
 ## Building
@@ -76,10 +74,10 @@ The host application is responsible for compiling the generated files into its o
 Auik uses external platform and rendering bindings.
 
 ### GPU bindings
-- [auik-vulkan](../auik-vulkan) - Vulkan rendering backend
+- [auik-gbe-agrb](../auik-gbe-agrb) - Agrb (Vulkan) rendering backend
 
 ### Window bindings
-- [auik-awin](../auik-awin) - Awin window system integration
+- [auik-wbe-awin](../auik-wbe-awin) - Awin window system integration
 
 ## License
 This project is licensed under the  [MIT License](LICENSE).

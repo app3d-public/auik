@@ -1,4 +1,5 @@
 #include <amal/trigonometric.hpp>
+#include <auik/animation.hpp>
 #include <auik/detail/depth.hpp>
 #include <auik/pipelines.hpp>
 #include <auik/widgets/detail/popup_trigger.hpp>
@@ -10,11 +11,6 @@
 namespace auik::detail
 {
     static inline bool draw_id_valid(const DrawDataID &id) { return id.render_id != AUIK_INVALID_DRAW_DATA_ID; }
-
-    static inline const RotatePostRuntimeData *get_rotate_data_const(u32 id)
-    {
-        return get_rotate_post_effect_data(get_rotate_post_effect(), id);
-    }
 
     static inline amal::vec2 resolve_icon_size(u32 icon_id)
     {
@@ -43,20 +39,18 @@ namespace auik::detail
         vertices[3] = {{min.x, max.y}, z, 0.0f, {uv_min.x, uv_max.y}, clip_id};
     }
 
+    class WRotateTransient;
+    void start_popup_icon_animation(AnimationState *state, Widget *owner, void *user_data, f64 now);
+    bool tick_popup_icon_animation(AnimationState *state, Widget *owner, void *user_data, f64 now);
+    void finish_popup_icon_animation(AnimationState *state, Widget *owner, void *user_data);
+    void destroy_popup_icon_animation(AnimationState *state, Widget *owner, void *user_data);
+
     class WRotateTransient final : public Widget
     {
     public:
-        explicit WRotateTransient()
-            : Widget(0u, WidgetFlagBits::visible, EventFlagBits::none, nullptr, {}, 0u)
-        {
-        }
+        explicit WRotateTransient() : Widget(0u, WidgetFlagBits::visible, EventFlagBits::none, nullptr, {}, 0u) {}
 
-        ~WRotateTransient() override
-        {
-            if (auto *rotate_effect = get_rotate_post_effect();
-                rotate_effect && _rotate_post_id != AUIK_INVALID_POST_EFFECT_DATA_ID)
-                release_rotate_post_effect_data(rotate_effect, _rotate_post_id);
-        }
+        ~WRotateTransient() override { _animation.clear(_update_target, this); }
 
         void configure(Widget *update_target, TextureID texture, const amal::rect &uv_rect, const amal::rect &icon_rect,
                        f32 depth, u16 clip_id)
@@ -69,62 +63,40 @@ namespace auik::detail
             _rect.depth = depth;
             _rect.hit_depth = depth;
             _rect.clip_id = clip_id;
-            if (auto *rotate_data = rotate_data_mut())
+            const u32 rotate_post_id = _animation.post_data_id;
+            if (auto *rotate_data = rotate_data_mut(rotate_post_id))
             {
                 rotate_data->center = _icon_rect.offset + _icon_rect.size * 0.5f;
                 if (!rotate_data->animating) rotate_data->angle = 0.0f;
             }
         }
 
-        bool is_animating() const
-        {
-            const auto *rotate_data = get_rotate_data_const(_rotate_post_id);
-            return rotate_data && rotate_data->animating;
-        }
+        bool is_animating() const { return _animation.active(); }
 
         bool start(bool opening, f32 open_angle)
         {
             if (!_update_target || !detail::g_context) return false;
-            auto *rotate_effect = get_rotate_post_effect();
-            if (!rotate_effect) return false;
-            if (_rotate_post_id == AUIK_INVALID_POST_EFFECT_DATA_ID)
-            {
-                _rotate_post_id = create_rotate_post_effect_data(rotate_effect, _update_target);
-                if (_rotate_post_id == AUIK_INVALID_POST_EFFECT_DATA_ID) return false;
-            }
-
-            detail::update_window_time(detail::get_context().window_ctx);
-            auto *rotate_data = rotate_data_mut();
-            if (!rotate_data) return false;
-            rotate_data->animation_start = detail::get_context().window_ctx->time;
-            rotate_data->animation_from = opening ? 0.0f : open_angle;
-            rotate_data->animation_to = opening ? open_angle : 0.0f;
-            rotate_data->angle = rotate_data->animation_from;
-            rotate_data->center = _icon_rect.offset + _icon_rect.size * 0.5f;
-            rotate_data->animating = true;
-            push_widget_to_transient_cache(this);
-            return true;
+            const u32 rotate_post_id = _animation.post_data_id;
+            auto *rotate_data = rotate_data_mut(rotate_post_id);
+            const f32 current_angle = rotate_data && rotate_data->animating ? rotate_data->angle
+                                      : opening                             ? 0.0f
+                                                                            : open_angle;
+            const f32 target_angle = opening ? open_angle : 0.0f;
+            _animation.duration = AUIK_POPUP_TRIGGER_ICON_ROTATE_DURATION;
+            _animation.center = _icon_rect.offset + _icon_rect.size * 0.5f;
+            _animation.from = current_angle;
+            _animation.to = target_angle;
+            _animation.current = current_angle;
+            _animation.at_start = &start_popup_icon_animation;
+            _animation.tick = &tick_popup_icon_animation;
+            _animation.at_finish = &finish_popup_icon_animation;
+            _animation.destroy = &destroy_popup_icon_animation;
+            _animation.scale_finish = nullptr;
+            _animation.rotate_finish = nullptr;
+            return start_animation(_animation, _update_target, this) != nullptr;
         }
 
-        bool tick(f64 now, f32 duration)
-        {
-            auto *rotate_data = rotate_data_mut();
-            if (!rotate_data || !rotate_data->animating) return false;
-
-            f64 raw_t = (now - rotate_data->animation_start) / duration;
-            raw_t = amal::clamp(raw_t, 0.0, 1.0);
-            const f32 t = static_cast<f32>(raw_t);
-            const f32 eased = 1.0f - (1.0f - t) * (1.0f - t);
-            rotate_data->angle =
-                rotate_data->animation_from + (rotate_data->animation_to - rotate_data->animation_from) * eased;
-
-            if (t < 1.0f) return true;
-            rotate_data->angle = rotate_data->animation_to;
-            rotate_data->animating = false;
-            clear_draw();
-            erase_widget_from_transient_cache(this);
-            return false;
-        }
+        AnimationState &animation() { return _animation; }
 
         void reset_clip_rect_records() override { _rect.clip_id = 0xFFFFu; }
 
@@ -139,7 +111,8 @@ namespace auik::detail
             if (!(ctx.reason & DrawReasonBits::transient)) return;
             auto *vertex_stream = get_primary_textured_vertex_stream();
             auto *rotate_effect = get_rotate_post_effect();
-            if (!vertex_stream || !rotate_effect || _rotate_post_id == AUIK_INVALID_POST_EFFECT_DATA_ID) return;
+            const u32 rotate_post_id = _animation.post_data_id;
+            if (!vertex_stream || !rotate_effect || rotate_post_id == AUIK_INVALID_POST_EFFECT_DATA_ID) return;
             if (!is_animating() || _texture.handle == 0 || _rect.clip_id == 0xFFFFu) return;
 
             TextureID texture = _texture;
@@ -161,18 +134,21 @@ namespace auik::detail
             batch.texture_id = texture;
             batch.flags = AUIK_TEXTURE_INSTANCE_TEXT_BIT;
 
-            RotatePostData rotate_post{_rotate_post_id};
-            PostFxChain rotate_chain{rotate_effect, &rotate_post, _rotate_post_id, ctx.post_fx_chain};
+            RotatePostData rotate_post{rotate_post_id};
+            PostFxChain rotate_chain{rotate_effect, &rotate_post, rotate_post_id, ctx.post_fx_chain};
             DrawCtx rotated_ctx = ctx;
             rotated_ctx.post_fx_chain = &rotate_chain;
             emit_context_draw(rotated_ctx, vertex_stream, _draw, &batch, _rect, false);
         }
 
     private:
-        RotatePostRuntimeData *rotate_data_mut()
-        {
-            return get_rotate_post_effect_data(get_rotate_post_effect(), _rotate_post_id);
-        }
+        friend void start_popup_icon_animation(AnimationState *state, Widget *owner, void *user_data, f64 now);
+        friend bool tick_popup_icon_animation(AnimationState *state, Widget *owner, void *user_data, f64 now);
+        friend void finish_popup_icon_animation(AnimationState *state, Widget *owner, void *user_data);
+        friend void destroy_popup_icon_animation(AnimationState *state, Widget *owner, void *user_data);
+
+        RotatePostRuntimeData *rotate_data_mut(u32 rotate_post_id)
+        { return get_rotate_post_effect_data(get_rotate_post_effect(), rotate_post_id); }
 
         void clear_draw()
         {
@@ -188,8 +164,67 @@ namespace auik::detail
         TextureID _texture{};
         amal::rect _uv_rect{{0.0f, 0.0f}, {1.0f, 1.0f}};
         amal::rect _icon_rect{};
-        u32 _rotate_post_id = AUIK_INVALID_POST_EFFECT_DATA_ID;
+        AnimationState _animation;
     };
+
+    void start_popup_icon_animation(AnimationState *state, Widget *owner, void *user_data, f64)
+    {
+        auto *self = static_cast<WRotateTransient *>(user_data);
+        if (!state || !owner || !self) return;
+        if (state->post_data_id != AUIK_INVALID_POST_EFFECT_DATA_ID)
+            release_rotate_post_effect_data(get_rotate_post_effect(), state->post_data_id);
+        state->post_data_id = create_rotate_post_effect_data(get_rotate_post_effect(), owner);
+        auto *rotate_data = self->rotate_data_mut(state->post_data_id);
+        if (!rotate_data) return;
+        rotate_data->animation_start = current_animation_time();
+        rotate_data->animation_from = state->from;
+        rotate_data->animation_to = state->to;
+        rotate_data->angle = state->from;
+        rotate_data->center = state->center;
+        rotate_data->animating = true;
+        push_widget_to_transient_cache(self);
+    }
+
+    bool tick_popup_icon_animation(AnimationState *state, Widget *, void *user_data, f64 now)
+    {
+        auto *self = static_cast<WRotateTransient *>(user_data);
+        auto *rotate_data = state && self ? self->rotate_data_mut(state->post_data_id) : nullptr;
+        if (!state || !rotate_data || !rotate_data->animating) return false;
+        const f32 eased = get_default_animation_progress(rotate_data->animation_start, state->duration, now);
+        rotate_data->angle =
+            rotate_data->animation_from + (rotate_data->animation_to - rotate_data->animation_from) * eased;
+        return eased < 1.0f;
+    }
+
+    void finish_popup_icon_animation(AnimationState *state, Widget *, void *user_data)
+    {
+        auto *self = static_cast<WRotateTransient *>(user_data);
+        auto *rotate_data = state && self ? self->rotate_data_mut(state->post_data_id) : nullptr;
+        if (rotate_data)
+        {
+            rotate_data->angle = rotate_data->animation_to;
+            rotate_data->animating = false;
+        }
+        if (state && state->post_data_id != AUIK_INVALID_POST_EFFECT_DATA_ID)
+        {
+            release_rotate_post_effect_data(get_rotate_post_effect(), state->post_data_id);
+            state->post_data_id = AUIK_INVALID_POST_EFFECT_DATA_ID;
+        }
+        if (!self) return;
+        self->clear_draw();
+        erase_widget_from_transient_cache(self);
+    }
+
+    void destroy_popup_icon_animation(AnimationState *state, Widget *, void *user_data)
+    {
+        auto *self = static_cast<WRotateTransient *>(user_data);
+        if (state && state->post_data_id != AUIK_INVALID_POST_EFFECT_DATA_ID)
+        {
+            release_rotate_post_effect_data(get_rotate_post_effect(), state->post_data_id);
+            state->post_data_id = AUIK_INVALID_POST_EFFECT_DATA_ID;
+        }
+        if (self) erase_widget_from_transient_cache(self);
+    }
 
     PopupTrigger::PopupTrigger(u32 style_tag, u32 hit_tag, u32 closed_icon, u32 open_icon, bool animated,
                                f32 open_angle)
@@ -398,36 +433,6 @@ namespace auik::detail
         _rotate_transient->configure(_update_target, _icon_texture, _icon_uv_rect, _icon_rect, _hit_rect.depth,
                                      _hit_rect.clip_id);
         if (!_rotate_transient->start(opening, _open_angle)) return;
-        detail::mark_host_refresh_request();
-        schedule_icon_tick();
-    }
-
-    void PopupTrigger::schedule_icon_tick()
-    {
-        if (!detail::g_context || !_update_target) return;
-        detail::update_window_time(detail::get_context().window_ctx);
-        const f64 delay = get_max_animation_delay() > 0.0 ? get_max_animation_delay() : (1.0 / 60.0);
-        schedule_delayed_host_task(_update_target->id(), detail::get_context().window_ctx->time + delay,
-                                   [this]() { tick_icon_animation(); });
-    }
-
-    void PopupTrigger::tick_icon_animation()
-    {
-        if (!detail::g_context || !_update_target) return;
-        if (!_rotate_transient || !_rotate_transient->is_animating()) return;
-
-        detail::update_window_time(detail::get_context().window_ctx);
-        const f64 now = detail::get_context().window_ctx->time;
-        const bool still_animating = _rotate_transient->tick(now, AUIK_POPUP_TRIGGER_ICON_ROTATE_DURATION);
-        if (!still_animating)
-        {
-            ensure_icon_resources();
-            update_layout(_outer_bounds, _hit_rect.clip_id);
-        }
-        else schedule_icon_tick();
-
-        _update_target->update_draw_commands(DrawReasonBits::external);
-        detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
         detail::mark_host_refresh_request();
     }
 

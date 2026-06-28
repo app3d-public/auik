@@ -49,8 +49,6 @@ namespace auik::detail
 
     private:
         void ensure_icon_resources();
-        void schedule_icon_tick();
-        void tick_icon_animation();
 
         Widget *_update_target = nullptr;
         u32 _closed_icon = 0u;

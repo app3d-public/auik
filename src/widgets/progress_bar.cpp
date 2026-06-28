@@ -99,7 +99,7 @@ namespace auik
 
     ProgressBar::~ProgressBar()
     {
-        release_scale_post_data();
+        _animation.clear(this);
         erase_widget_from_transient_cache(this);
         cancel_delayed_tasks(id());
     }
@@ -194,21 +194,19 @@ namespace auik
         auto *stream = get_primary_quads_stream();
         if (!stream) return;
 
-        emit_context_draw(ctx, stream, _track_draw_id, &_track_visual, get_rect(), false);
-
-        if (_animating && _scale_post_id != AUIK_INVALID_POST_EFFECT_DATA_ID)
+        if ((ctx.reason & DrawReasonBits::transient) && _animation.active())
         {
-            QuadsInstanceData active_full = _active_visual;
-            active_full.rect = _track_rect;
-            active_full.z_order = next_depth(_active_depth_range);
-            ScalePostData scale_post{_scale_post_id};
-            PostFxChain scale_chain{get_scale_post_effect(), &scale_post, _scale_post_id, ctx.post_fx_chain};
-            DrawCtx scaled_ctx = ctx;
-            scaled_ctx.post_fx_chain = &scale_chain;
-            emit_context_draw(scaled_ctx, stream, _active_draw_id, &active_full, get_rect(), false);
+            f32 current_factor = value_factor(_value);
+            get_animation_state_data(_animation, &current_factor);
+            QuadsInstanceData active = _active_visual;
+            active.rect = resolve_active_rect(current_factor);
+            active.z_order = next_depth(_active_depth_range);
+            emit_context_draw(ctx, stream, _active_draw_id, &active, get_rect(), false);
             return;
         }
 
+        emit_context_draw(ctx, stream, _track_draw_id, &_track_visual, get_rect(), false);
+        if (_animation.active()) return;
         emit_context_draw(ctx, stream, _active_draw_id, &_active_visual, get_rect(), false);
     }
 
@@ -217,32 +215,14 @@ namespace auik
         (void)event;
         if (_change_from_value == _value) return;
         if (!detail::g_context) return;
-        ensure_scale_post_data();
-        if (_scale_post_id == AUIK_INVALID_POST_EFFECT_DATA_ID) return;
-        detail::update_window_time(detail::get_context().window_ctx);
-        const f64 now = detail::get_context().window_ctx->time;
-        auto *scale_data = get_scale_post_effect_data(get_scale_post_effect(), _scale_post_id);
-        if (!scale_data) return;
-
-        if (_animating && scale_data->animating)
-        {
-            const f32 current_value = animation_value_at(*scale_data, now);
-            scale_data->scale = factor_to_scale(value_factor(current_value));
-            _display_value = current_value;
-            _change_from_value = current_value;
-        }
-
-        scale_data->animation_start = now;
-        scale_data->animation_from = factor_to_scale(value_factor(_change_from_value));
-        scale_data->animation_to = factor_to_scale(value_factor(_value));
-        scale_data->scale = scale_data->animation_from;
-        scale_data->animating = true;
-        _animating = true;
-        push_widget_to_transient_cache(this);
+        f32 from_factor = value_factor(_change_from_value);
+        if (_animation.active()) get_animation_state_data(_animation, &from_factor);
+        const f32 to_factor = value_factor(_value);
+        configure_scale_animation(_animation, AUIK_PROGRESS_BAR_SCALE_DURATION, from_factor, to_factor);
+        start_animation(_animation, this);
         update_draw_commands(DrawReasonBits::external);
         detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
         detail::mark_host_refresh_request();
-        schedule_animation_tick();
     }
 
     f32 ProgressBar::clamped_value(f32 value) const
@@ -298,15 +278,10 @@ namespace auik
     {
         const f32 next = clamped_value(value);
         if (_value == next) return;
-        capture_current_animation_value();
-        _change_from_value = _display_value;
+        _change_from_value = _value;
         _value = next;
         _display_value = next;
-        _animating = false;
-        erase_widget_from_transient_cache(this);
-        release_scale_post_data();
         rebuild_active_visual(value_factor(_display_value));
-        if (_model_binding) set_model_binding_value<f32>(*_model_binding, _value);
         if (_track_style.id != Theme::STYLE_ID_INVALID && _active_style.id != Theme::STYLE_ID_INVALID)
             redraw_external(has_draw_record());
     }
@@ -331,13 +306,9 @@ namespace auik
         _max_value = max_value;
         if (_max_value < _min_value) std::swap(_min_value, _max_value);
         const f32 next = clamped_value(_value);
-        capture_current_animation_value();
-        _change_from_value = _display_value;
+        _change_from_value = _value;
         _value = next;
         _display_value = next;
-        _animating = false;
-        erase_widget_from_transient_cache(this);
-        release_scale_post_data();
         rebuild_active_visual(value_factor(_display_value));
         if (_track_style.id != Theme::STYLE_ID_INVALID && _active_style.id != Theme::STYLE_ID_INVALID)
             redraw_external(has_draw_record());
@@ -363,97 +334,6 @@ namespace auik
     bool ProgressBar::has_draw_record() const
     {
         return detail::has_render_record(_track_draw_id) || detail::has_render_record(_active_draw_id);
-    }
-
-    void ProgressBar::ensure_scale_post_data()
-    {
-        auto *scale_effect = get_scale_post_effect();
-        if (!scale_effect) return;
-        if (_scale_post_id != AUIK_INVALID_POST_EFFECT_DATA_ID &&
-            is_scale_post_effect_data_valid(scale_effect, _scale_post_id))
-            return;
-        _scale_post_id = create_scale_post_effect_data(scale_effect, this);
-    }
-
-    void ProgressBar::release_scale_post_data()
-    {
-        auto *scale_effect = get_scale_post_effect();
-        if (scale_effect && _scale_post_id != AUIK_INVALID_POST_EFFECT_DATA_ID)
-            release_scale_post_effect_data(scale_effect, _scale_post_id);
-        _scale_post_id = AUIK_INVALID_POST_EFFECT_DATA_ID;
-    }
-
-    amal::vec2 ProgressBar::factor_to_scale(f32 factor) const
-    {
-        return _axis == amal::axis::y ? amal::vec2{1.0f, factor} : amal::vec2{factor, 1.0f};
-    }
-
-    f32 ProgressBar::animation_eased_t(const ScalePostRuntimeData &scale_data, f64 now) const
-    {
-        f64 raw_t = (now - scale_data.animation_start) / AUIK_PROGRESS_BAR_SCALE_DURATION;
-        raw_t = amal::clamp(raw_t, 0.0, 1.0);
-        const f32 t = static_cast<f32>(raw_t);
-        return 1.0f - (1.0f - t) * (1.0f - t);
-    }
-
-    f32 ProgressBar::animation_value_at(const ScalePostRuntimeData &scale_data, f64 now) const
-    {
-        const f32 eased = animation_eased_t(scale_data, now);
-        return _change_from_value + (_value - _change_from_value) * eased;
-    }
-
-    void ProgressBar::capture_current_animation_value()
-    {
-        if (!_animating || !detail::g_context) return;
-        auto *scale_data = get_scale_post_effect_data(get_scale_post_effect(), _scale_post_id);
-        if (!scale_data || !scale_data->animating) return;
-        detail::update_window_time(detail::get_context().window_ctx);
-        _display_value = animation_value_at(*scale_data, detail::get_context().window_ctx->time);
-    }
-
-    void ProgressBar::schedule_animation_tick()
-    {
-        if (!detail::g_context || _tick_scheduled) return;
-        detail::update_window_time(detail::get_context().window_ctx);
-        _tick_scheduled = true;
-        schedule_delayed_host_task(id(), detail::get_context().window_ctx->time + (1.0 / 60.0), [this]() {
-            _tick_scheduled = false;
-            tick_animation();
-        });
-    }
-
-    void ProgressBar::tick_animation()
-    {
-        if (!_animating || !detail::g_context) return;
-        auto *scale_data = get_scale_post_effect_data(get_scale_post_effect(), _scale_post_id);
-        if (!scale_data || !scale_data->animating)
-        {
-            _animating = false;
-            erase_widget_from_transient_cache(this);
-            return;
-        }
-        detail::update_window_time(detail::get_context().window_ctx);
-        const f64 now = detail::get_context().window_ctx->time;
-        const f32 eased = animation_eased_t(*scale_data, now);
-        scale_data->scale = scale_data->animation_from + (scale_data->animation_to - scale_data->animation_from) * eased;
-        _display_value = _change_from_value + (_value - _change_from_value) * eased;
-
-        if (eased >= 1.0f)
-        {
-            _display_value = _value;
-            _change_from_value = _value;
-            _animating = false;
-            scale_data->scale = scale_data->animation_to;
-            scale_data->animating = false;
-            release_scale_post_data();
-            erase_widget_from_transient_cache(this);
-            rebuild_active_visual(value_factor(_display_value));
-        }
-        else schedule_animation_tick();
-
-        update_draw_commands(DrawReasonBits::external);
-        detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
-        detail::mark_host_refresh_request();
     }
 
     namespace
