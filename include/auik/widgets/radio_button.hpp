@@ -10,17 +10,11 @@
 
 namespace auik
 {
-    constexpr inline WidgetFlags get_default_radio_button_flags()
-    {
-        return get_default_widget_flags() | WidgetFlagBits::hittable;
-    }
-
     class RadioButton final : public Widget
     {
     public:
-        AUIK_EXPORT RadioButton(u32 id, bool value, WidgetFlags widget_flags = get_default_radio_button_flags());
-        AUIK_EXPORT RadioButton(u32 id, ModelBinding *binding,
-                                WidgetFlags widget_flags = get_default_radio_button_flags());
+        AUIK_EXPORT RadioButton(u32 id, bool value, WidgetFlags widget_flags);
+        AUIK_EXPORT RadioButton(u32 id, ModelBinding *binding, WidgetFlags widget_flags);
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
         AUIK_EXPORT void update_layout_min_size() override;
@@ -58,7 +52,9 @@ namespace auik
 
     inline RadioButton *make_radio_button(u32 id, bool value)
     {
-        return acul::alloc<RadioButton>(id, value);
+        constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
+                                             WidgetFlagBits::configurable | WidgetFlagBits::hittable;
+        return acul::alloc<RadioButton>(id, value, widget_flags);
     }
 
     namespace streams

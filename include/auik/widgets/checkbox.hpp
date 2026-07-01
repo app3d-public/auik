@@ -10,16 +10,11 @@
 
 namespace auik
 {
-    constexpr inline WidgetFlags get_default_checkbox_flags()
-    {
-        return get_default_widget_flags() | WidgetFlagBits::hittable;
-    }
-
     class Checkbox final : public Widget
     {
     public:
-        AUIK_EXPORT Checkbox(u32 id, bool value, WidgetFlags widget_flags = get_default_checkbox_flags());
-        AUIK_EXPORT Checkbox(u32 id, ModelBinding *binding, WidgetFlags widget_flags = get_default_checkbox_flags());
+        AUIK_EXPORT Checkbox(u32 id, bool value, WidgetFlags widget_flags);
+        AUIK_EXPORT Checkbox(u32 id, ModelBinding *binding, WidgetFlags widget_flags);
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
         AUIK_EXPORT void update_layout_min_size() override;
@@ -59,7 +54,9 @@ namespace auik
 
     inline Checkbox *make_checkbox(u32 id, bool value)
     {
-        return acul::alloc<Checkbox>(id, value);
+        constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
+                                             WidgetFlagBits::configurable | WidgetFlagBits::hittable;
+        return acul::alloc<Checkbox>(id, value, widget_flags);
     }
 
     namespace streams

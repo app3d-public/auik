@@ -1,6 +1,7 @@
 #include <amal/trigonometric.hpp>
 #include <auik/animation.hpp>
 #include <auik/detail/depth.hpp>
+#include <auik/detail/pixel_snap.hpp>
 #include <auik/pipelines.hpp>
 #include <auik/widgets/detail/popup_trigger.hpp>
 #include <auik/widgets/image.hpp>
@@ -48,7 +49,7 @@ namespace auik::detail
     class WRotateTransient final : public Widget
     {
     public:
-        explicit WRotateTransient() : Widget(0u, WidgetFlagBits::visible, EventFlagBits::none, nullptr, {}, 0u) {}
+        explicit WRotateTransient() : Widget(0u, WidgetFlagBits::visible, EventFlagBits::none, {}, 0u) {}
 
         ~WRotateTransient() override { _animation.clear(_update_target, this); }
 
@@ -223,7 +224,11 @@ namespace auik::detail
             release_rotate_post_effect_data(get_rotate_post_effect(), state->post_data_id);
             state->post_data_id = AUIK_INVALID_POST_EFFECT_DATA_ID;
         }
-        if (self) erase_widget_from_transient_cache(self);
+        if (self)
+        {
+            self->clear_draw();
+            erase_widget_from_transient_cache(self);
+        }
     }
 
     PopupTrigger::PopupTrigger(u32 style_tag, u32 hit_tag, u32 closed_icon, u32 open_icon, bool animated,
@@ -267,21 +272,45 @@ namespace auik::detail
         return resolve_style_selector(_style, self_id, parent_id, _style_state);
     }
 
-    void PopupTrigger::ensure_icon_resources()
+    void PopupTrigger::update_icon_rect_from_slot()
+    {
+        amal::vec2 icon_size = _icon_size;
+        if (icon_size.x <= 0.0f || icon_size.y <= 0.0f) icon_size = _icon_slot.size;
+        _icon_rect = {{_icon_slot.offset.x + amal::max((_icon_slot.size.x - icon_size.x) * 0.5f, 0.0f),
+                       _icon_slot.offset.y + amal::max((_icon_slot.size.y - icon_size.y) * 0.5f, 0.0f)},
+                      icon_size};
+        _icon_rect = snap_rect_offset_to_pixel_grid(_icon_rect);
+    }
+
+    bool PopupTrigger::ensure_icon_resources()
     {
         const bool animating = _rotate_transient && _rotate_transient->is_animating();
         const u32 icon_id = animating ? _closed_icon : (_open ? _open_icon : _closed_icon);
+        const TextureID old_texture = _icon_texture;
+        const amal::vec2 old_size = _icon_size;
+        const amal::rect old_uv_rect = _icon_uv_rect;
         if (auto *cached = get_cached_image(icon_id))
         {
             _icon_texture = cached->texture_id();
             _icon_size = cached->size();
             _icon_uv_rect = {cached->uv_offset(), cached->uv_size()};
-            return;
+            const bool changed = old_texture.handle != _icon_texture.handle || old_size.x != _icon_size.x ||
+                                 old_size.y != _icon_size.y || old_uv_rect.offset.x != _icon_uv_rect.offset.x ||
+                                 old_uv_rect.offset.y != _icon_uv_rect.offset.y ||
+                                 old_uv_rect.size.x != _icon_uv_rect.size.x ||
+                                 old_uv_rect.size.y != _icon_uv_rect.size.y;
+            if (changed) update_icon_rect_from_slot();
+            return changed;
         }
 
         _icon_texture = {};
         _icon_size = {0.0f, 0.0f};
         _icon_uv_rect = {{0.0f, 0.0f}, {1.0f, 1.0f}};
+        const bool changed = old_texture.handle != 0 || old_size.x != 0.0f || old_size.y != 0.0f ||
+                             old_uv_rect.offset.x != 0.0f || old_uv_rect.offset.y != 0.0f ||
+                             old_uv_rect.size.x != 1.0f || old_uv_rect.size.y != 1.0f;
+        if (changed) update_icon_rect_from_slot();
+        return changed;
     }
 
     void PopupTrigger::update_layout_min_size(amal::vec2 requested_size, bool fixed)
@@ -298,16 +327,16 @@ namespace auik::detail
         if (fixed && min_size.x <= 0.0f && min_size.y <= 0.0f)
         {
             const f32 side = amal::max(content_required.x, content_required.y);
-            min_size = {side, side};
+            min_size = {side + margin.x + margin.z, side + margin.y + margin.w};
         }
         else if (!fixed) min_size.x = 0.0f;
 
-        if (min_size.x <= 0.0f) min_size.x = content_required.x;
-        else min_size.x = amal::max(min_size.x, content_required.x);
-        if (min_size.y <= 0.0f) min_size.y = content_required.y;
-        else min_size.y = amal::max(min_size.y, content_required.y);
+        if (min_size.x <= 0.0f) min_size.x = content_required.x + margin.x + margin.z;
+        else min_size.x = amal::max(min_size.x, content_required.x + margin.x + margin.z);
+        if (min_size.y <= 0.0f) min_size.y = content_required.y + margin.y + margin.w;
+        else min_size.y = amal::max(min_size.y, content_required.y + margin.y + margin.w);
 
-        _required_size = {min_size.x + margin.x + margin.z, min_size.y + margin.y + margin.w};
+        _required_size = min_size;
     }
 
     void PopupTrigger::update_layout(const amal::rect &bounds, u16 clip_id)
@@ -323,15 +352,11 @@ namespace auik::detail
         const f32 content_h = amal::max(_bounds.size.y - padding.y - padding.w, 0.0f);
         amal::vec2 slot_size = amal::max(resolve_icon_size(_closed_icon), resolve_icon_size(_open_icon));
         if (slot_size.x <= 0.0f || slot_size.y <= 0.0f) slot_size = {style.text_size(), style.text_size()};
-        amal::vec2 icon_size = _icon_size;
-        if (icon_size.x <= 0.0f || icon_size.y <= 0.0f) icon_size = slot_size;
 
         _icon_slot = {{_bounds.offset.x + _bounds.size.x - padding.z - slot_size.x,
                        _bounds.offset.y + padding.y + amal::max((content_h - slot_size.y) * 0.5f, 0.0f)},
                       slot_size};
-        _icon_rect = {{_icon_slot.offset.x + amal::max((_icon_slot.size.x - icon_size.x) * 0.5f, 0.0f),
-                       _icon_slot.offset.y + amal::max((_icon_slot.size.y - icon_size.y) * 0.5f, 0.0f)},
-                      icon_size};
+        update_icon_rect_from_slot();
         _hit_rect.bounds = _bounds;
         _hit_rect.clip_id = clip_id;
         _hit_rect.depth = next_depth(_content_depth_range);

@@ -25,7 +25,7 @@ namespace auik
     {
     public:
         ModalControlsRow(u32 owner_id, Checkbox *checkbox, Text *label, acul::vector<TextButton *> buttons)
-            : Widget(AUIK_MODAL_CONTROLS_ID, MODAL_INTERNAL_WIDGET_FLAGS, EventFlagBits::none, nullptr, {},
+            : Widget(AUIK_MODAL_CONTROLS_ID, MODAL_INTERNAL_WIDGET_FLAGS, EventFlagBits::none, {},
                      AUIK_STYLE_TAG_MODAL_CONTROLS_AREA),
               _owner_id(owner_id),
               _controls_style({Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_MODAL_CONTROLS_AREA}),
@@ -178,9 +178,7 @@ namespace auik
 
         u16 content_clip_id() const override { return parent() ? parent()->content_clip_id() : clip_id(); }
         amal::vec4 get_content_clip_rect() const override
-        {
-            return parent() ? parent()->get_content_clip_rect() : get_clip_rect(content_clip_id());
-        }
+        { return parent() ? parent()->get_content_clip_rect() : get_clip_rect(content_clip_id()); }
 
     private:
         u32 _owner_id = 0u;
@@ -220,16 +218,11 @@ namespace auik
     };
 
     ModalWindow::ModalWindow(u32 id, acul::string title, const amal::rect &bounds, WindowFlags window_flags,
-                             WidgetFlags widget_flags, Widget *parent)
-        : Window(id, std::move(title), bounds, window_flags, widget_flags, parent)
-    {
-        set_window_style_tag(AUIK_STYLE_TAG_MODAL_WINDOW);
-    }
+                             WidgetFlags widget_flags)
+        : Window(id, std::move(title), bounds, window_flags, widget_flags)
+    { set_window_style_tag(AUIK_STYLE_TAG_MODAL_WINDOW); }
 
-    void ModalWindow::update_layout(bool min_size_known)
-    {
-        Window::update_layout(min_size_known);
-    }
+    void ModalWindow::update_layout(bool min_size_known) { Window::update_layout(min_size_known); }
 
     void ModalWindow::close()
     {
@@ -241,8 +234,8 @@ namespace auik
         if (_on_close) _on_close();
     }
 
-    ModalQueue::ModalQueue(u32 id, WidgetFlags widget_flags, Widget *parent)
-        : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::hover | EventFlagBits::drag, parent, {},
+    ModalQueue::ModalQueue(u32 id, WidgetFlags widget_flags)
+        : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::hover | EventFlagBits::drag, {},
                  AUIK_TAG_MODAL_BACKDROP)
     {
     }
@@ -617,7 +610,8 @@ namespace auik
         f32 modal_width = _modal_width;
 
         auto *modal = acul::alloc<ModalWindow>(AUIK_TAG_MODAL_WINDOW, message.header,
-                                               amal::rect{{0.0f, 0.0f}, {modal_width, 0.0f}});
+                                               amal::rect{{0.0f, 0.0f}, {modal_width, 0.0f}}, WindowFlagBits::movable,
+                                               WidgetFlagBits::visible);
         modal->set_min_size({modal_width, 0.0f});
 
         auto *theme = get_theme();
@@ -643,31 +637,32 @@ namespace auik
         if (icon) icon->set_rect_tag_id(AUIK_STYLE_TAG_MODAL_ICON);
 
         auto *title = acul::alloc<Text>(AUIK_MODAL_HEADER_ID, message.header, amal::vec2{text_width, 0.0f},
-                                        MODAL_INTERNAL_WIDGET_FLAGS, AUIK_STYLE_TAG_MODAL_TITLE,
-                                        detail::TextOverflowMode::ellipsis, detail::TextVerticalAlign::top,
-                                        detail::TextWrapMode::word);
+                                        MODAL_INTERNAL_WIDGET_FLAGS,
+                                        make_text_layout_flags(TextOverflowMode::ellipsis, TextWrapMode::word));
+        title->set_style_tag(AUIK_STYLE_TAG_MODAL_TITLE);
         title->set_tight_content_height(true);
 
         auto *body = acul::alloc<Text>(AUIK_MODAL_MESSAGE_ID, message.message, amal::vec2{text_width, 0.0f},
-                                       MODAL_INTERNAL_WIDGET_FLAGS, AUIK_STYLE_TAG_NO_PAD,
-                                       detail::TextOverflowMode::ellipsis, detail::TextVerticalAlign::top,
-                                       detail::TextWrapMode::word);
+                                       MODAL_INTERNAL_WIDGET_FLAGS,
+                                       make_text_layout_flags(TextOverflowMode::ellipsis, TextWrapMode::word));
+        body->set_style_tag(AUIK_STYLE_TAG_NO_PAD);
         body->set_tight_content_height(true);
 
-        auto *header_block = acul::alloc<DrawBlock>(AUIK_MODAL_HEADER_ID, MODAL_INTERNAL_WIDGET_FLAGS, AUIK_TAG_BLOCK,
-                                                    AUIK_STYLE_TAG_MODAL_HEADER);
+        auto *header_block = acul::alloc<DrawBlock>(AUIK_MODAL_HEADER_ID, MODAL_INTERNAL_WIDGET_FLAGS, AUIK_TAG_BLOCK);
+        header_block->set_style_tag(AUIK_STYLE_TAG_MODAL_HEADER);
         header_block->add_child(title);
 
-        auto *message_block = acul::alloc<::auik::Block>(AUIK_MODAL_MESSAGE_ID, MODAL_INTERNAL_WIDGET_FLAGS);
+        auto *message_block = acul::alloc<::auik::Block>(AUIK_MODAL_MESSAGE_ID, MODAL_INTERNAL_WIDGET_FLAGS, 0u);
         message_block->add_child(header_block);
         message_block->add_child(body);
 
-        auto *message_row = acul::alloc<DrawBlock>(AUIK_MODAL_MESSAGE_ID, MODAL_INTERNAL_WIDGET_FLAGS, AUIK_TAG_BLOCK,
-                                                   AUIK_STYLE_TAG_MODAL_MESSAGE_AREA);
+        auto *message_row = acul::alloc<DrawBlock>(AUIK_MODAL_MESSAGE_ID, MODAL_INTERNAL_WIDGET_FLAGS, AUIK_TAG_BLOCK);
+        message_row->set_style_tag(AUIK_STYLE_TAG_MODAL_MESSAGE_AREA);
         if (icon)
         {
-            auto *icon_box = acul::alloc<DrawBlock>(AUIK_MODAL_DEFAULT_ICON, MODAL_INTERNAL_WIDGET_FLAGS,
-                                                    AUIK_TAG_BLOCK, AUIK_STYLE_TAG_MODAL_ICON);
+            auto *icon_box =
+                acul::alloc<DrawBlock>(AUIK_MODAL_DEFAULT_ICON, MODAL_INTERNAL_WIDGET_FLAGS, AUIK_TAG_BLOCK);
+            icon_box->set_style_tag(AUIK_STYLE_TAG_MODAL_ICON);
             icon_box->add_child(icon);
             message_row->add_child(icon_box, make_layout_flags(ChildLayout::inline_, HAlign::left, VAlign::center));
         }
@@ -678,12 +673,12 @@ namespace auik
         Text *batch_label = nullptr;
         if (message.group_id != 0u && group_count(message.group_id) > 1u)
         {
-            batch_checkbox = acul::alloc<Checkbox>(AUIK_MODAL_BATCH_ID, _batch_apply,
-                                                   MODAL_INTERNAL_HITTABLE_WIDGET_FLAGS);
-            batch_label = acul::alloc<Text>(AUIK_MODAL_BATCH_ID, "Apply to all", amal::vec2{90.0f, 0.0f},
-                                            MODAL_INTERNAL_WIDGET_FLAGS, AUIK_STYLE_TAG_MODAL_BATCH_LABEL,
-                                            detail::TextOverflowMode::ellipsis, detail::TextVerticalAlign::center,
-                                            detail::TextWrapMode::none);
+            batch_checkbox =
+                acul::alloc<Checkbox>(AUIK_MODAL_BATCH_ID, _batch_apply, MODAL_INTERNAL_HITTABLE_WIDGET_FLAGS);
+            batch_label =
+                acul::alloc<Text>(AUIK_MODAL_BATCH_ID, "Apply to all", amal::vec2{90.0f, 0.0f},
+                                  MODAL_INTERNAL_WIDGET_FLAGS, make_text_layout_flags(TextOverflowMode::ellipsis));
+            batch_label->set_style_tag(AUIK_STYLE_TAG_MODAL_BATCH_LABEL);
         }
 
         acul::vector<TextButton *> buttons;
@@ -691,9 +686,9 @@ namespace auik
         {
             const bool is_last_button = i + 1u == message.buttons.size();
             const u32 button_style = is_last_button ? AUIK_STYLE_TAG_TEXT_BUTTON : AUIK_STYLE_TAG_TRANSPARENT_BUTTON;
-            auto *button = acul::alloc<TextButton>(AUIK_MODAL_BUTTON_ID, message.buttons[i].first,
-                                                   amal::vec2{0.0f, 0.0f}, MODAL_INTERNAL_HITTABLE_WIDGET_FLAGS,
-                                                   EventFlagBits::none, button_style);
+            auto *button =
+                acul::alloc<TextButton>(AUIK_MODAL_BUTTON_ID, message.buttons[i].first, amal::vec2{0.0f, 0.0f},
+                                        MODAL_INTERNAL_HITTABLE_WIDGET_FLAGS, EventFlagBits::none, button_style);
             buttons.push_back(button);
         }
         modal->add_child(acul::alloc<ModalControlsRow>(id(), batch_checkbox, batch_label, std::move(buttons)));
@@ -769,7 +764,7 @@ namespace auik
             f32 modal_width = AUIK_MODAL_WINDOW_WIDTH;
             stream.read(modal_width);
 
-            auto *widget = acul::alloc<ModalQueue>(common.id, WidgetFlags(common.widget_flags), nullptr);
+            auto *widget = acul::alloc<ModalQueue>(common.id, WidgetFlags(common.widget_flags));
             widget->set_modal_width(modal_width);
             detail::apply_widget_common_data(widget, common);
             return widget;

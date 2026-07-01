@@ -75,8 +75,8 @@ namespace auik
     } // namespace
 
     ProgressBar::ProgressBar(u32 id, f32 value, f32 min_value, f32 max_value, f32 size, amal::axis axis,
-                             WidgetFlags widget_flags, Widget *parent)
-        : Widget(id, widget_flags, EventFlagBits::change, parent,
+                             WidgetFlags widget_flags)
+        : Widget(id, widget_flags, EventFlagBits::change,
                  {{0.0f, 0.0f}, make_progress_bar_requested_size(size, axis)}, AUIK_STYLE_TAG_PROGRESS_BAR),
           _min_value(min_value),
           _max_value(max_value),
@@ -91,8 +91,8 @@ namespace auik
     }
 
     ProgressBar::ProgressBar(u32 id, ModelBinding *binding, f32 min_value, f32 max_value, f32 size,
-                             amal::axis axis, WidgetFlags widget_flags, Widget *parent)
-        : ProgressBar(id, 0.0f, min_value, max_value, size, axis, widget_flags, parent)
+                             amal::axis axis, WidgetFlags widget_flags)
+        : ProgressBar(id, 0.0f, min_value, max_value, size, axis, widget_flags)
     {
         set_model_binding(binding);
     }
@@ -143,10 +143,11 @@ namespace auik
         const amal::vec2 layout_origin = position();
         const amal::vec4 margin = style.margin();
         const amal::vec2 min_required = required_size();
-        amal::vec2 body_size = size();
-        if (fill_width()) body_size.x = amal::max(body_size.x - margin.x - margin.z, min_required.x - margin.x - margin.z);
+        amal::vec2 body_size = {amal::max(size().x - margin.x - margin.z, 0.0f),
+                                amal::max(size().y - margin.y - margin.w, 0.0f)};
+        if (fill_width()) body_size.x = amal::max(body_size.x, min_required.x - margin.x - margin.z);
         else if (!is_width_fixed())
-            body_size.x = amal::max(body_size.x - margin.x - margin.z, min_required.x - margin.x - margin.z);
+            body_size.x = amal::max(body_size.x, min_required.x - margin.x - margin.z);
         else body_size.x = amal::max(body_size.x, min_required.x - margin.x - margin.z);
         if (!fill_height() && !is_height_fixed()) body_size.y = min_required.y - margin.y - margin.w;
         else body_size.y = amal::max(body_size.y, min_required.y - margin.y - margin.w);
@@ -363,7 +364,7 @@ namespace auik
 
             const f32 size = amal::axis(axis) == amal::axis::y ? common.requested_size.y : common.requested_size.x;
             auto *widget = acul::alloc<ProgressBar>(common.id, value, min_value, max_value, size, amal::axis(axis),
-                                                    WidgetFlags(common.widget_flags), nullptr);
+                                                    WidgetFlags(common.widget_flags));
             widget->set_style_tags(track_style_tag, active_style_tag);
             detail::apply_widget_common_data(widget, common);
             return widget;

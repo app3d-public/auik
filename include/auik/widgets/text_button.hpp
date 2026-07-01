@@ -8,24 +8,18 @@
 
 namespace auik
 {
-    constexpr inline WidgetFlags get_default_text_button_flags()
-    {
-        return get_default_widget_flags() | WidgetFlagBits::hittable;
-    }
-
     class TextButton : public Widget
     {
     public:
-        TextButton(u32 id, StringView text, amal::vec2 size, WidgetFlags widget_flags = get_default_text_button_flags(),
-                   EventFlags event_flags = EventFlagBits::none, u32 style_tag_id = AUIK_STYLE_TAG_TEXT_BUTTON)
-            : Widget(id, widget_flags, event_flags, nullptr, {{0.0f, 0.0f}, size}, style_tag_id),
+        TextButton(u32 id, StringView text, amal::vec2 size, WidgetFlags widget_flags, EventFlags event_flags,
+                   u32 style_tag_id)
+            : Widget(id, widget_flags, event_flags, {{0.0f, 0.0f}, size}, style_tag_id),
               _style({Theme::STYLE_ID_INVALID, style_tag_id}),
-              _text(acul::alloc<Text>(AUIK_TAG_TEXT, text, amal::vec2{0.0f, 0.0f},
-                                      get_default_text_flags()))
+              _text(acul::alloc<Text>(AUIK_TAG_TEXT, text, amal::vec2{0.0f, 0.0f}, WidgetFlagBits::visible,
+                                      default_text_layout_flags(), TextAnchorY::middle))
         {
             _text->set_parent(this);
-            _text->set_horizontal_align(detail::TextHorizontalAlign::center);
-            _text->set_vertical_align(detail::TextVerticalAlign::center);
+            _text->set_style_tag(AUIK_STYLE_TAG_NO_PAD);
         }
         ~TextButton() override { acul::release(_text); }
 
@@ -48,6 +42,12 @@ namespace auik
         bool is_translated_text() const { return _text && _text->is_translated_text(); }
         const char *translated_text_literal() const { return _text ? _text->translated_text_literal() : nullptr; }
         u32 style_tag() const { return _style.tag_id; }
+        void set_style_tag(u32 tag_id)
+        {
+            if (_style.tag_id == tag_id) return;
+            _style = {Theme::STYLE_ID_INVALID, tag_id};
+            set_rect_tag_id(tag_id);
+        }
 
     private:
         DrawDataID _bg;
@@ -57,12 +57,11 @@ namespace auik
         bool _text_draw_dirty = true;
     };
 
-    inline TextButton *make_text_button(u32 id, StringView text = "",
-                                        u32 style_tag_id = AUIK_STYLE_TAG_TEXT_BUTTON,
-                                        amal::vec2 size = AUIK_SIZE_FIT)
+    inline TextButton *make_text_button(u32 id, StringView text = "", amal::vec2 size = AUIK_SIZE_FIT)
     {
-        return acul::alloc<TextButton>(id, text, size, get_default_text_button_flags(), EventFlagBits::none,
-                                       style_tag_id);
+        constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
+                                             WidgetFlagBits::configurable | WidgetFlagBits::hittable;
+        return acul::alloc<TextButton>(id, text, size, widget_flags, EventFlagBits::none, AUIK_STYLE_TAG_TEXT_BUTTON);
     }
 
     namespace streams

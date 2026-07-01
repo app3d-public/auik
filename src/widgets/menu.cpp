@@ -77,24 +77,24 @@ namespace auik
     public:
         PopupItem(u32 owner_id, u32 item_id, u32 hit_element_id, const MenuItem *data, Widget *parent)
             : Widget(AUIK_TAG_COMBO_BOX_ITEM, WidgetFlagBits::visible | WidgetFlagBits::hittable, EventFlagBits::none,
-                     parent, {}, AUIK_TAG_COMBO_BOX_ITEM),
+                     {}, AUIK_TAG_COMBO_BOX_ITEM),
               _selected_options({}),
               _style({Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_COMBO_BOX_ITEM}),
               _selected_style({Theme::STYLE_ID_INVALID, _selected_options.tag_id}),
               _label(acul::alloc<Text>(AUIK_TAG_TEXT, data ? data->source_text() : StringView{}, amal::vec2{0.0f, 0.0f},
-                                       WidgetFlagBits::visible, AUIK_STYLE_TAG_NO_PAD,
-                                       detail::TextOverflowMode::ellipsis, detail::TextVerticalAlign::center)),
+                                       WidgetFlagBits::visible, make_text_layout_flags(TextOverflowMode::ellipsis))),
               _shortcut(acul::alloc<Text>(AUIK_TAG_TEXT, data ? data->shortcut() : "", amal::vec2{0.0f, 0.0f},
-                                          WidgetFlagBits::visible, AUIK_STYLE_TAG_MENU_SHORTCUT,
-                                          detail::TextOverflowMode::clip, detail::TextVerticalAlign::center)),
+                                          WidgetFlagBits::visible, make_text_layout_flags(TextOverflowMode::clip))),
               _item_id(item_id),
               _has_next(data && data->has_group_layer())
         {
+            set_parent(parent);
+            _label->set_style_tag(AUIK_STYLE_TAG_NO_PAD);
+            _shortcut->set_style_tag(AUIK_STYLE_TAG_MENU_SHORTCUT);
             _label->set_parent(this);
             _shortcut->set_parent(this);
             _rect.id.widget_id = owner_id;
             _rect.id.element_id = hit_element_id;
-            _shortcut->set_horizontal_align(detail::TextHorizontalAlign::right);
         }
 
         ~PopupItem() override
@@ -197,8 +197,10 @@ namespace auik
             const f32 right_w = next_size.x + (next_size.x > 0.0f ? spacing : 0.0f) + shortcut_required.x +
                                 (shortcut_required.x > 0.0f ? spacing : 0.0f);
             rebuild_selected_icon_layout(style, content_pos, content_size);
-            _label->set_layout_size({amal::max(content_size.x - selected_icon_w - right_w, 0.0f), content_size.y});
-            _label->set_position({content_pos.x + selected_icon_w, content_pos.y});
+            const amal::vec2 label_required = _label->required_size();
+            _label->set_layout_size({amal::max(content_size.x - selected_icon_w - right_w, 0.0f), label_required.y});
+            _label->set_position({content_pos.x + selected_icon_w,
+                                  content_pos.y + amal::floor((content_size.y - label_required.y) * 0.5f)});
             _label->update_layout(true);
             f32 right_x = content_pos.x + content_size.x;
             if (_has_next)
@@ -216,9 +218,9 @@ namespace auik
                 const amal::vec4 shortcut_margin = shortcut_style.margin();
                 const amal::vec2 shortcut_size = {
                     amal::max(shortcut_required.x - shortcut_margin.x - shortcut_margin.z, 0.0f),
-                    amal::max(content_size.y - shortcut_margin.y - shortcut_margin.w, 0.0f)};
+                    amal::max(shortcut_required.y - shortcut_margin.y - shortcut_margin.w, 0.0f)};
                 right_x -= shortcut_required.x;
-                _shortcut->set_position({right_x, content_pos.y});
+                _shortcut->set_position({right_x, content_pos.y + amal::floor((content_size.y - shortcut_required.y) * 0.5f)});
                 _shortcut->set_layout_size(shortcut_size);
                 _shortcut->update_layout(true);
             }
@@ -432,9 +434,8 @@ namespace auik
         bool _draw_recorded = false;
     };
 
-    MenuBar::MenuBar(u32 id, const acul::vector<StringView> &items, amal::vec2 size, WidgetFlags widget_flags,
-                     Widget *parent)
-        : TabBar(id, acul::vector<StringView>{}, TabBarFlagBits::none, size, widget_flags, parent, 0.0f, 0u,
+    MenuBar::MenuBar(u32 id, const acul::vector<StringView> &items, amal::vec2 size, WidgetFlags widget_flags)
+        : Tabbar(id, acul::vector<StringView>{}, TabbarFlagBits::none, size, widget_flags, 0.0f, 0u,
                  AUIK_STYLE_TAG_MENU_BAR_ITEM, AUIK_STYLE_TAG_MENU_BAR_ITEM, AUIK_STYLE_TAG_COMBO_BOX_ITEM),
           _menu_base(this, AUIK_STYLE_TAG_MENU_BAR_ITEM, AUIK_STYLE_TAG_MENU_BAR_ITEM)
     {
@@ -845,7 +846,7 @@ namespace auik
 
     StyleState MenuBar::resolve_tab_item_state(u32 index, const detail::WidgetStyleSelectorTransition &transition) const
     {
-        const StyleState transition_state = TabBar::resolve_tab_item_state(index, transition);
+        const StyleState transition_state = Tabbar::resolve_tab_item_state(index, transition);
         if (index >= _element_ids.size() || _open_path.empty()) return transition_state;
 
         const u32 element_id = _element_ids[index];
@@ -855,7 +856,7 @@ namespace auik
 
     StyleUpdateFlags MenuBar::update_style()
     {
-        StyleUpdateFlags out = TabBar::update_style();
+        StyleUpdateFlags out = Tabbar::update_style();
         out |= resolve_style_selector(_menu_style, id(), parent() ? parent()->id() : 0u, style_state());
         const auto transition = detail::get_widget_style_selector_transition(id());
         const bool local_popup_transition =
@@ -954,13 +955,13 @@ namespace auik
 
     void MenuBar::update_layout(bool min_size_known)
     {
-        TabBar::update_layout(min_size_known);
+        Tabbar::update_layout(min_size_known);
         refresh_menu_clip_rects();
     }
 
     void MenuBar::update_depth(const amal::vec2 &depth_range)
     {
-        TabBar::update_depth(depth_range);
+        Tabbar::update_depth(depth_range);
         const amal::vec2 popup_range =
             _popup_depth_mode == PopupDepthMode::workzone_overlay
                 ? get_menu_popup_depth_range(parent() ? parent()->depth_range() : this->depth_range())
@@ -973,21 +974,21 @@ namespace auik
 
     void MenuBar::back_hit_depth()
     {
-        TabBar::back_hit_depth();
+        Tabbar::back_hit_depth();
         for (auto *popup : _popups)
             if (popup) static_cast<Widget *>(popup)->back_hit_depth();
     }
 
     void MenuBar::restore_hit_depth()
     {
-        TabBar::restore_hit_depth();
+        Tabbar::restore_hit_depth();
         for (auto *popup : _popups)
             if (popup) static_cast<Widget *>(popup)->restore_hit_depth();
     }
 
     void MenuBar::translate(const amal::vec2 &delta)
     {
-        TabBar::translate(delta);
+        Tabbar::translate(delta);
         refresh_menu_clip_rects();
         for (auto *popup : _popups)
         {
@@ -999,14 +1000,14 @@ namespace auik
 
     void MenuBar::reset_clip_rect_records()
     {
-        TabBar::reset_clip_rect_records();
+        Tabbar::reset_clip_rect_records();
         for (auto *popup : _popups)
             if (popup) popup->reset_clip_rect_records();
     }
 
     void MenuBar::rebuild_clip_rects()
     {
-        TabBar::rebuild_clip_rects();
+        Tabbar::rebuild_clip_rects();
         refresh_menu_clip_rects();
         invalidate_hit_rect(_bg);
         for (auto *popup : _popups)
@@ -1077,7 +1078,7 @@ namespace auik
         bg.z_order = get_z_order();
         const bool visible = fill_quads_instance_by_style(get_theme()->get_style(_menu_style.id), clip_id(), bg);
         emit_quads_instance(ctx, quads_stream, _bg, bg, get_rect(), visible, can_emit_hit(ctx));
-        TabBar::draw(ctx);
+        Tabbar::draw(ctx);
         if (parent() && parent()->get_rect().id.tag_id == AUIK_TAG_WINDOW)
         {
             // Window draws menu popups after its content during full redraws.
@@ -1510,7 +1511,7 @@ namespace auik
 
     void MenuBar::on_hover(HoverState state)
     {
-        TabBar::on_hover(state);
+        Tabbar::on_hover(state);
         if (_open_path.empty() || state == HoverState::leave) return;
         const auto hover_id = detail::get_context().hover_id;
         if (hover_id.widget_id != id()) return;
@@ -1575,17 +1576,16 @@ namespace auik
         }
     }
 
-    PopupMenu::PopupMenu(u32 id, const acul::vector<StringView> &items, WidgetFlags widget_flags, Widget *parent,
+    PopupMenu::PopupMenu(u32 id, const acul::vector<StringView> &items, WidgetFlags widget_flags,
                          bool selected_enabled)
-        : Widget(id, widget_flags | WidgetFlagBits::hittable, EventFlagBits::click | EventFlagBits::focus, parent, {},
+        : Widget(id, widget_flags | WidgetFlagBits::hittable, EventFlagBits::click | EventFlagBits::focus, {},
                  AUIK_TAG_POPUP_MENU),
           _button(AUIK_STYLE_TAG_DOCK_TABBAR_MENU, AUIK_TAG_POPUP_MENU_BUTTON, AUIK_ICON_MENU, AUIK_ICON_MENU, false),
-          _menu(acul::alloc<MenuBar>(id ^ AUIK_TAG_MENU_POPUP, items))
+          _menu(acul::alloc<MenuBar>(id + AUIK_TAG_MENU_POPUP, items))
     {
         set_button_update_target(this);
         set_button_hit_id(make_element_id(id, AUIK_TAG_POPUP_MENU_BUTTON, 0u));
         _button.set_element_id(0u);
-        _menu->set_parent(parent);
         _menu->set_focus_parent(this);
         _menu->set_popup_depth_mode(MenuBar::PopupDepthMode::root_overlay_next);
         _menu->set_selected_enabled(selected_enabled);
@@ -1593,9 +1593,9 @@ namespace auik
         _menu->set_layout_size({0.0f, 0.0f});
     }
 
-    PopupMenu::PopupMenu(MenuBar *menu, WidgetFlags widget_flags, Widget *parent, bool selected_enabled)
-        : Widget(menu ? (menu->id() ^ AUIK_TAG_MENU_POPUP) : AUIK_TAG_POPUP_MENU,
-                 widget_flags | WidgetFlagBits::hittable, EventFlagBits::click | EventFlagBits::focus, parent, {},
+    PopupMenu::PopupMenu(MenuBar *menu, WidgetFlags widget_flags, bool selected_enabled)
+        : Widget(menu ? (menu->id() + AUIK_TAG_MENU_POPUP) : AUIK_TAG_POPUP_MENU,
+                 widget_flags | WidgetFlagBits::hittable, EventFlagBits::click | EventFlagBits::focus, {},
                  AUIK_TAG_POPUP_MENU),
           _button(AUIK_STYLE_TAG_DOCK_TABBAR_MENU, AUIK_TAG_POPUP_MENU_BUTTON, AUIK_ICON_MENU, AUIK_ICON_MENU, false),
           _menu(menu ? menu : acul::alloc<MenuBar>(AUIK_TAG_MENU_POPUP, acul::vector<StringView>{}))
@@ -1603,7 +1603,6 @@ namespace auik
         set_button_update_target(this);
         set_button_hit_id(make_element_id(id(), AUIK_TAG_POPUP_MENU_BUTTON, 0u));
         _button.set_element_id(0u);
-        _menu->set_parent(parent);
         _menu->set_focus_parent(this);
         _menu->set_popup_depth_mode(MenuBar::PopupDepthMode::root_overlay_next);
         _menu->set_selected_enabled(selected_enabled || _menu->selected_enabled());
@@ -1873,8 +1872,9 @@ namespace auik
             stream.read(menu_style_tag).read(menu_item_style_tag).read(popup_depth_mode).read(selected_enabled);
             auto items = read_menu_items(stream);
 
-            auto *menu = acul::alloc<MenuBar>(common.id, acul::vector<StringView>{}, common.requested_size,
-                                              WidgetFlags(common.widget_flags), nullptr);
+            auto *menu =
+                acul::alloc<MenuBar>(common.id, acul::vector<StringView>{}, common.requested_size,
+                                     WidgetFlags(common.widget_flags));
             menu->set_menu_style_tag(menu_style_tag);
             menu->set_menu_item_style_tag(menu_item_style_tag);
             menu->set_popup_depth_mode(static_cast<MenuBar::PopupDepthMode>(popup_depth_mode));
@@ -1901,7 +1901,7 @@ namespace auik
 
             MenuBar *menu = nullptr;
             if (!blocks.empty()) menu = static_cast<MenuBar *>(blocks[0]);
-            auto *popup = acul::alloc<PopupMenu>(menu, WidgetFlags(common.widget_flags), nullptr);
+            auto *popup = acul::alloc<PopupMenu>(menu, WidgetFlags(common.widget_flags));
             detail::apply_widget_common_data(popup, common);
             return popup;
         }

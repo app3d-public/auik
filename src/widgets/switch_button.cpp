@@ -6,12 +6,10 @@
 namespace auik
 {
     SwitchButton::SwitchButton(u32 id, bool value, WidgetFlags widget_flags)
-        : Widget(id, widget_flags, EventFlagBits::click, nullptr, {{0.0f, 0.0f}, {0.0f, 0.0f}}, AUIK_TAG_SWITCH_BUTTON),
+        : Widget(id, widget_flags, EventFlagBits::click, {{0.0f, 0.0f}, {0.0f, 0.0f}}, AUIK_TAG_SWITCH_BUTTON),
           _value(value),
           _grab_rect(detail::make_rect_data(AUIK_TAG_SWITCH_BUTTON_GRAB, AUIK_TAG_SWITCH_BUTTON_GRAB))
-    {
-        sync_track_tag();
-    }
+    { sync_track_tag(); }
 
     amal::vec2 SwitchButton::resolve_grab_size(const Style &grab_style) const
     {
@@ -27,14 +25,15 @@ namespace auik
                 amal::max(grab_size.y + padding.y + padding.w, 1.0f)};
     }
 
-    u32 SwitchButton::track_tag() const { return value() ? AUIK_TAG_SWITCH_BUTTON_ON : AUIK_TAG_SWITCH_BUTTON; }
+    u32 SwitchButton::track_rect_tag() const { return value() ? AUIK_TAG_SWITCH_BUTTON_ON : AUIK_TAG_SWITCH_BUTTON; }
+
+    u32 SwitchButton::track_style_tag() const
+    { return value() ? AUIK_STYLE_TAG_SWITCH_BUTTON_ON : AUIK_STYLE_TAG_SWITCH_BUTTON; }
 
     void SwitchButton::sync_track_tag()
     {
-        const u32 tag = track_tag();
-        if (_track_style.tag_id == tag) return;
-        _track_style.tag_id = tag;
-        set_rect_tag_id(tag);
+        _track_style.tag_id = track_style_tag();
+        set_rect_tag_id(track_rect_tag());
     }
 
     StyleUpdateFlags SwitchButton::update_style()
@@ -55,7 +54,8 @@ namespace auik
         const amal::vec4 margin = track_style.margin();
         const amal::vec2 track_size = resolve_track_size(track_style, grab_style);
 
-        amal::vec2 min_size = size();
+        amal::vec2 min_size = {is_size_concrete(requested_size().x) ? requested_size().x : 0.0f,
+                               is_size_concrete(requested_size().y) ? requested_size().y : 0.0f};
         if (!is_width_fixed()) min_size.x = 0.0f;
 
         if (min_size.x <= 0.0f) min_size.x = track_size.x;
@@ -97,7 +97,8 @@ namespace auik
         const amal::vec2 min_required = {amal::max(required_size().x - margin.x - margin.z, 0.0f),
                                          amal::max(required_size().y - margin.y - margin.w, 0.0f)};
 
-        amal::vec2 widget_size = size();
+        amal::vec2 widget_size = {amal::max(size().x - margin.x - margin.z, 0.0f),
+                                  amal::max(size().y - margin.y - margin.w, 0.0f)};
         widget_size.x = amal::max(widget_size.x, min_required.x);
         widget_size.y = amal::max(widget_size.y, min_required.y);
 
@@ -179,15 +180,11 @@ namespace auik
     }
 
     bool SwitchButton::has_draw_record() const
-    {
-        return _track_draw.render_id != AUIK_INVALID_DRAW_DATA_ID && _grab_draw.render_id != AUIK_INVALID_DRAW_DATA_ID;
-    }
+    { return _track_draw.render_id != AUIK_INVALID_DRAW_DATA_ID && _grab_draw.render_id != AUIK_INVALID_DRAW_DATA_ID; }
 
     SwitchButton::SwitchButton(u32 id, ModelBinding *binding, WidgetFlags widget_flags)
         : SwitchButton(id, false, widget_flags)
-    {
-        set_model_binding(binding);
-    }
+    { set_model_binding(binding); }
 
     void SwitchButton::set_model_binding(ModelBinding *binding)
     {

@@ -1,4 +1,5 @@
 #include <auik/auik.hpp>
+#include <auik/detail/pixel_snap.hpp>
 #include <auik/pipelines.hpp>
 #include <auik/widgets/image_button.hpp>
 #include "../core/session_stream_utils.hpp"
@@ -6,19 +7,18 @@
 namespace auik
 {
     ImageButton::ImageButton(u32 id, TextureID texture_id, amal::vec2 image_size, amal::vec2 size, amal::rect uv_rect,
-                             WidgetFlags widget_flags, Widget *parent, u32 style_tag)
-        : Widget(id, widget_flags, EventFlagBits::click, parent, {{0.0f, 0.0f}, size}, style_tag),
+                             WidgetFlags widget_flags, u32 style_tag)
+        : Widget(id, widget_flags, EventFlagBits::click, {{0.0f, 0.0f}, size}, style_tag),
           _style({Theme::STYLE_ID_INVALID, style_tag}),
           _texture_id(texture_id),
           _uv_rect(uv_rect),
           _image_rect(detail::make_rect_data(AUIK_TAG_IMAGE, AUIK_TAG_IMAGE)),
           _image_size(image_size)
-    {
-    }
+    {}
 
     ImageButton::ImageButton(u32 id, Image *image, amal::vec2 image_size, amal::vec2 size, WidgetFlags widget_flags,
-                             Widget *parent, u32 style_tag)
-        : ImageButton(id, AUIK_INVALID_TEXTURE_ID, image_size, size, {{0.0f, 0.0f}, {1.0f, 1.0f}}, widget_flags, parent,
+                             u32 style_tag)
+        : ImageButton(id, AUIK_INVALID_TEXTURE_ID, image_size, size, {{0.0f, 0.0f}, {1.0f, 1.0f}}, widget_flags,
                       style_tag)
     {
         _image = image;
@@ -84,16 +84,17 @@ namespace auik
         const amal::vec2 min_required = {amal::max(required_size().x - margin.x - margin.z, 0.0f),
                                          amal::max(required_size().y - margin.y - margin.w, 0.0f)};
 
-        amal::vec2 widget_size = size();
+        amal::vec2 widget_size = {amal::max(size().x - margin.x - margin.z, 0.0f),
+                                  amal::max(size().y - margin.y - margin.w, 0.0f)};
         if (fill_width())
-            widget_size.x = amal::max(widget_size.x - margin.x - margin.z, min_required.x);
+            widget_size.x = amal::max(widget_size.x, min_required.x);
         else if (!is_width_fixed()) widget_size.x = min_required.x;
         else
             widget_size.x =
                 amal::max(is_size_concrete(requested_size().x) && requested_size().x > 0.0f ? requested_size().x
                                                                                               : widget_size.x,
                           min_required.x);
-        if (fill_height()) widget_size.y = amal::max(widget_size.y - margin.y - margin.w, min_required.y);
+        if (fill_height()) widget_size.y = amal::max(widget_size.y, min_required.y);
         else if (!is_height_fixed()) widget_size.y = min_required.y;
         else
             widget_size.y =
@@ -115,6 +116,7 @@ namespace auik
         const amal::vec2 image_pos = {content_pos.x + amal::max((content_size.x - image_size.x) * 0.5f, 0.0f),
                                       content_pos.y + amal::max((content_size.y - image_size.y) * 0.5f, 0.0f)};
         _image_rect.bounds = {image_pos, image_size};
+        _image_rect.bounds = detail::snap_rect_offset_to_pixel_grid(_image_rect.bounds);
         _image_rect.clip_id = clip_id();
         _image_rect.depth = next_depth(_content_depth_range);
         _image_rect.hit_depth = _image_rect.depth;
@@ -221,7 +223,7 @@ namespace auik
 
             auto *widget = acul::alloc<ImageButton>(common.id, AUIK_INVALID_TEXTURE_ID, image_size,
                                                     common.requested_size, amal::rect{{0.0f, 0.0f}, {1.0f, 1.0f}},
-                                                    WidgetFlags(common.widget_flags), nullptr, style_tag);
+                                                    WidgetFlags(common.widget_flags), style_tag);
             widget->set_coverage_mode(coverage_mode);
             detail::apply_widget_common_data(widget, common);
             return widget;

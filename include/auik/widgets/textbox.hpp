@@ -10,24 +10,18 @@
 
 namespace auik
 {
-    struct TextBoxEditData;
+    struct TextboxEditData;
 
-    constexpr inline WidgetFlags get_default_textbox_flags()
-    {
-        return get_default_widget_flags() | WidgetFlagBits::hittable;
-    }
-
-    class TextBox : public Widget
+    class Textbox : public Widget
     {
     public:
         TextFlags text_flags = TextFlagBits::none;
 
-        AUIK_EXPORT TextBox(u32 id, const acul::string &value, amal::vec2 size, WidgetFlags flags,
-                            Widget *parent = nullptr, u32 style_tag_id = AUIK_STYLE_TAG_TEXTBOX,
+        AUIK_EXPORT Textbox(u32 id, const acul::string &value, amal::vec2 size, WidgetFlags flags, u32 style_tag_id,
                             TextFlags text_flags = TextFlagBits::none, StringView placeholder = {},
-                            detail::TextVerticalAlign text_vertical_align = detail::TextVerticalAlign::center,
-                            detail::TextWrapMode text_wrap = detail::TextWrapMode::none);
-        AUIK_EXPORT ~TextBox() override;
+                            TextAnchorY text_anchor_y = TextAnchorY::middle,
+                            TextWrapMode text_wrap = TextWrapMode::none);
+        AUIK_EXPORT ~Textbox() override;
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
         AUIK_EXPORT void update_layout_min_size() override;
@@ -54,6 +48,12 @@ namespace auik
             if (this->value() == value) return;
             set_value_internal(value);
         }
+        void set_text_flags(TextFlags flags)
+        {
+            if (text_flags == flags) return;
+            text_flags = flags;
+            sync_text_presentation();
+        }
         ModelBinding *model_binding() const { return _model_binding; }
         AUIK_EXPORT void set_model_binding(ModelBinding *binding);
 
@@ -63,7 +63,8 @@ namespace auik
             return _placeholder ? _placeholder->text() : empty;
         }
         bool is_translated_placeholder() const { return _placeholder && _placeholder->is_translated_text(); }
-        const char *placeholder_literal() const { return _placeholder ? _placeholder->translated_text_literal() : nullptr; }
+        const char *placeholder_literal() const
+        { return _placeholder ? _placeholder->translated_text_literal() : nullptr; }
         AUIK_EXPORT void set_placeholder(StringView value);
         inline void set_style_tag(u32 tag_id)
         {
@@ -72,19 +73,14 @@ namespace auik
             set_rect_tag_id(tag_id);
         }
         u32 style_tag() const { return _style.tag_id; }
-        detail::TextVerticalAlign text_vertical_align() const { return _text.vertical_align(); }
-        detail::TextWrapMode text_wrap() const
-        {
-            return _text.multiline() ? detail::TextWrapMode::word : detail::TextWrapMode::none;
-        }
+        TextAnchorY text_anchor_y() const { return _text.anchor_y(); }
+        TextWrapMode text_wrap() const { return _text.multiline() ? TextWrapMode::word : TextWrapMode::none; }
 
     protected:
         AUIK_EXPORT void set_value_internal(const acul::string &value);
 
         inline bool show_placeholder() const
-        {
-            return detail::get_context().focus_id != id() && value().empty() && _placeholder;
-        }
+        { return detail::get_context().focus_id != id() && value().empty() && _placeholder; }
 
         inline void apply_render_update(bool layout_dirty, DrawReasonFlags reason = DrawReasonBits::external)
         {
@@ -213,6 +209,9 @@ namespace auik
         AUIK_EXPORT void reset_caret_blink();
         AUIK_EXPORT void schedule_caret_blink();
         AUIK_EXPORT void tick_caret_blink();
+        AUIK_EXPORT void apply_content_scroll_delta(const amal::vec2 &old_scroll);
+        AUIK_EXPORT void redraw_after_scroll();
+        AUIK_EXPORT void redraw_after_edit_layout();
         AUIK_EXPORT void update_transient_draw_commands();
         AUIK_EXPORT void update_layout_from_current_bounds(bool min_size_known);
         AUIK_EXPORT void on_disabled_changed(bool disabled) override;
@@ -221,7 +220,7 @@ namespace auik
         ModelBinding *_model_binding = nullptr;
         EText _text;
         Text *_placeholder = nullptr;
-        TextBoxEditData *_edit = nullptr;
+        TextboxEditData *_edit = nullptr;
         detail::TextEditState _edit_state{};
         DrawDataID _bg{};
         StyleSelector _style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_TEXTBOX};
@@ -243,12 +242,12 @@ namespace auik
         static int edit_prev_char_index(void *user_data, int idx);
     };
 
-    class MultilineTextBox final : public TextBox
+    class MultilineTextbox final : public Textbox
     {
     public:
-        AUIK_EXPORT MultilineTextBox(u32 id, const acul::string &value, amal::vec2 size, bool can_expand_to_content,
-                                     WidgetFlags flags, Widget *parent = nullptr,
-                                     TextFlags text_flags = TextFlagBits::none, StringView placeholder = {});
+        AUIK_EXPORT MultilineTextbox(u32 id, const acul::string &value, amal::vec2 size, bool can_expand_to_content,
+                                     WidgetFlags flags, TextFlags text_flags = TextFlagBits::none,
+                                     StringView placeholder = {});
 
         bool can_expand_to_content() const { return _can_expand_to_content; }
         AUIK_EXPORT void set_can_expand_to_content(bool value);
@@ -265,57 +264,51 @@ namespace auik
         bool _can_expand_to_content = false;
     };
 
-    inline TextBox *make_textbox(u32 id, const acul::string &value, const acul::string &placeholder = {},
+    inline Textbox *make_textbox(u32 id, const acul::string &value, const acul::string &placeholder = {},
                                  TextFlags text_flags = TextFlagBits::none, amal::vec2 size = AUIK_SIZE_FIT)
     {
-        return acul::alloc<TextBox>(id, value, size,
-                                    WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::configurable,
-                                    nullptr, AUIK_TAG_TEXTBOX, text_flags, placeholder);
+        return acul::alloc<Textbox>(id, value, size,
+                                    WidgetFlagBits::visible | WidgetFlagBits::attachable |
+                                        WidgetFlagBits::configurable | WidgetFlagBits::hittable,
+                                    AUIK_STYLE_TAG_TEXTBOX, text_flags, placeholder);
     }
 
-    inline TextBox *make_textbox(u32 id, const acul::string &value, f32 width,
+    inline Textbox *make_textbox(u32 id, const acul::string &value, f32 width,
                                  TextFlags text_flags = TextFlagBits::none, const acul::string &placeholder = {})
-    {
-        return make_textbox(id, value, placeholder, text_flags, {width, AUIK_SIZE_Y_MIN_FIT});
-    }
+    { return make_textbox(id, value, placeholder, text_flags, {width, AUIK_SIZE_Y_MIN_FIT}); }
 
     // Auto-width multiline input. height is the minimum/control height; when can_expand_to_content is true the widget
     // grows vertically to fit text, otherwise overflowing text is clipped and can be scrolled internally.
-    inline MultilineTextBox *make_multiline_textbox(u32 id, const acul::string &value, f32 height = 96.0f,
+    inline MultilineTextbox *make_multiline_textbox(u32 id, const acul::string &value, f32 height = 96.0f,
                                                     bool can_expand_to_content = false,
                                                     TextFlags text_flags = TextFlagBits::none,
                                                     const acul::string &placeholder = {})
     {
-        return acul::alloc<MultilineTextBox>(id, value, amal::vec2{0.0f, height}, can_expand_to_content,
+        return acul::alloc<MultilineTextbox>(id, value, amal::vec2{0.0f, height}, can_expand_to_content,
                                              WidgetFlagBits::visible | WidgetFlagBits::attachable |
                                                  WidgetFlagBits::configurable,
-                                             nullptr, text_flags, placeholder);
+                                             text_flags, placeholder);
     }
 
-    inline MultilineTextBox *make_multiline_textbox(u32 id, const acul::string &value, amal::vec2 size,
+    inline MultilineTextbox *make_multiline_textbox(u32 id, const acul::string &value, amal::vec2 size,
                                                     bool can_expand_to_content = false,
                                                     TextFlags text_flags = TextFlagBits::none,
                                                     const acul::string &placeholder = {})
     {
-        return acul::alloc<MultilineTextBox>(id, value, size, can_expand_to_content,
+        return acul::alloc<MultilineTextbox>(id, value, size, can_expand_to_content,
                                              WidgetFlagBits::visible | WidgetFlagBits::attachable |
                                                  WidgetFlagBits::configurable,
-                                             nullptr, text_flags, placeholder);
+                                             text_flags, placeholder);
     }
 
-    inline MultilineTextBox *make_multiline_textbox(u32 id, const acul::string &value, amal::vec2 size,
-                                                    TextFlags text_flags,
-                                                    const acul::string &placeholder = {})
-    {
-        return make_multiline_textbox(id, value, size, false, text_flags, placeholder);
-    }
+    inline MultilineTextbox *make_multiline_textbox(u32 id, const acul::string &value, amal::vec2 size,
+                                                    TextFlags text_flags, const acul::string &placeholder = {})
+    { return make_multiline_textbox(id, value, size, false, text_flags, placeholder); }
 
-    inline MultilineTextBox *make_multiline_textbox(u32 id, const acul::string &value, bool can_expand_to_content,
+    inline MultilineTextbox *make_multiline_textbox(u32 id, const acul::string &value, bool can_expand_to_content,
                                                     TextFlags text_flags = TextFlagBits::none,
                                                     const acul::string &placeholder = {})
-    {
-        return make_multiline_textbox(id, value, 96.0f, can_expand_to_content, text_flags, placeholder);
-    }
+    { return make_multiline_textbox(id, value, 96.0f, can_expand_to_content, text_flags, placeholder); }
 
     namespace streams
     {

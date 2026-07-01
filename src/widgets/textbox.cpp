@@ -1,8 +1,9 @@
 #include <auik/auik.hpp>
 #include <auik/pipelines.hpp>
 #include <auik/widgets/textbox.hpp>
-#include "../core/session_stream_utils.hpp"
 #include <cctype>
+#include "../core/session_stream_utils.hpp"
+
 
 #define AUIK_TEXTBOX_CARET_ON_TIME                    0.80
 #define AUIK_TEXTBOX_CARET_PERIOD                     1.20
@@ -37,9 +38,7 @@ namespace auik
     }
 
     static acul::string make_textbox_presentation(const acul::string &value, TextFlags flags)
-    {
-        return (flags & TextFlagBits::password) ? make_password_presentation(value) : value;
-    }
+    { return (flags & TextFlagBits::password) ? make_password_presentation(value) : value; }
 
     static detail::TextEditKey map_key(Key key, KeyMode mods, bool multiline, bool read_only, bool password)
     {
@@ -49,11 +48,11 @@ namespace auik
         {
             case Key::left:
                 out = ((mods & KeyModeBits::control) && !password) ? AUIK_TEXT_EDIT_KEY_WORD_LEFT
-                                                                    : AUIK_TEXT_EDIT_KEY_LEFT;
+                                                                   : AUIK_TEXT_EDIT_KEY_LEFT;
                 break;
             case Key::right:
                 out = ((mods & KeyModeBits::control) && !password) ? AUIK_TEXT_EDIT_KEY_WORD_RIGHT
-                                                                    : AUIK_TEXT_EDIT_KEY_RIGHT;
+                                                                   : AUIK_TEXT_EDIT_KEY_RIGHT;
                 break;
             case Key::up:
                 out = multiline ? AUIK_TEXT_EDIT_KEY_UP : AUIK_TEXT_EDIT_KEY_TEXT_START;
@@ -79,6 +78,23 @@ namespace auik
         if (out && (mods & KeyModeBits::shift)) out |= AUIK_TEXT_EDIT_KEY_SHIFT;
         return out;
     }
+
+    static f32 resolve_textbox_anchor_y_offset(TextAnchorY anchor, f32 content_h, f32 layout_h)
+    {
+        switch (anchor)
+        {
+            case TextAnchorY::middle:
+                return amal::max((content_h - layout_h) * 0.5f, 0.0f);
+            case TextAnchorY::descent:
+                return amal::max(content_h - layout_h, 0.0f);
+            case TextAnchorY::baseline:
+            case TextAnchorY::ascent:
+            default:
+                return 0.0f;
+        }
+    }
+
+    static f32 snap_textbox_scroll_offset(f32 value) { return amal::round(value); }
 
     static void draw_text_drag_icon(DrawCtx &ctx, DrawDataID (&draw_ids)[AUIK_TEXTBOX_SELECTION_DRAG_DOT_COUNT],
                                     const amal::vec2 &drop_pos, f32 line_h, f32 z_order, u16 clip_id,
@@ -119,7 +135,7 @@ namespace auik
         emit_context_draw_batch(ctx, stream, draw_ids, dots, AUIK_TEXTBOX_SELECTION_DRAG_DOT_COUNT);
     }
 
-    struct TextBoxEditData
+    struct TextboxEditData
     {
         acul::vector<amal::rect> selection_rects;
         acul::vector<DrawDataID> selections;
@@ -133,27 +149,32 @@ namespace auik
         u8 flags = 0;
     };
 
-    TextBox::TextBox(u32 id, const acul::string &value, amal::vec2 size, WidgetFlags flags, Widget *parent,
-                     u32 style_tag_id, TextFlags text_flags, StringView placeholder,
-                     detail::TextVerticalAlign text_vertical_align, detail::TextWrapMode text_wrap)
-        : Widget(id, resolve_textbox_widget_flags(flags), resolve_textbox_event_flags(), parent,
-                 {{0.0f, 0.0f}, size}, style_tag_id),
+    Textbox::Textbox(u32 id, const acul::string &value, amal::vec2 size, WidgetFlags flags, u32 style_tag_id,
+                     TextFlags text_flags, StringView placeholder, TextAnchorY text_anchor_y, TextWrapMode text_wrap)
+        : Widget(id, resolve_textbox_widget_flags(flags), resolve_textbox_event_flags(), {{0.0f, 0.0f}, size},
+                 style_tag_id),
           _value(value),
           _text(AUIK_TAG_TEXT, make_textbox_presentation(value, text_flags), amal::vec2{0.0f, 0.0f},
-                WidgetFlagBits::visible, AUIK_STYLE_TAG_NO_PAD, detail::TextOverflowMode::clip, text_vertical_align, text_wrap,
-                text_wrap != detail::TextWrapMode::none ? detail::TextLayoutWidthMode::bounds
-                                                        : detail::TextLayoutWidthMode::viewport),
-          _placeholder((!placeholder.str || placeholder.str[0] == '\0')
-                           ? nullptr
-                           : acul::alloc<Text>(AUIK_TAG_TEXT, placeholder, amal::vec2{0.0f, 0.0f},
-                                               WidgetFlagBits::visible, AUIK_STYLE_TAG_PLACEHOLDER,
-                                               detail::TextOverflowMode::clip, text_vertical_align, text_wrap)),
-          _edit(acul::alloc<TextBoxEditData>())
+                WidgetFlagBits::visible,
+                make_text_layout_flags(TextOverflowMode::clip, text_wrap,
+                                       text_wrap != TextWrapMode::none ? TextLayoutWidthMode::bounds
+                                                                       : TextLayoutWidthMode::viewport),
+                text_anchor_y),
+          _placeholder(
+              (!placeholder.str || placeholder.str[0] == '\0')
+                  ? nullptr
+                  : acul::alloc<Text>(AUIK_TAG_TEXT, placeholder, amal::vec2{0.0f, 0.0f}, WidgetFlagBits::visible,
+                                      make_text_layout_flags(TextOverflowMode::clip, text_wrap), text_anchor_y)),
+          _edit(acul::alloc<TextboxEditData>())
     {
         _text.set_parent(this);
-        if (_placeholder) _placeholder->set_parent(this);
+        _text.set_style_tag(AUIK_STYLE_TAG_NO_PAD);
+        if (_placeholder)
+        {
+            _placeholder->set_style_tag(AUIK_STYLE_TAG_PLACEHOLDER);
+            _placeholder->set_parent(this);
+        }
         this->text_flags = text_flags;
-        sync_widget_flags();
         detail::text_edit_initialize_state(&_edit_state, true);
         register_shortcut(this->id(), Shortcut{.mods = KeyModeBits::control, .keys = {Key::c}},
                           [this]() { copy_selection_to_clipboard(); });
@@ -165,7 +186,7 @@ namespace auik
                           [this]() { cut_selection_to_clipboard(); });
     }
 
-    TextBox::~TextBox()
+    Textbox::~Textbox()
     {
         erase_widget_from_transient_cache(this);
         cancel_delayed_tasks(id());
@@ -174,7 +195,7 @@ namespace auik
         acul::release(_edit);
     }
 
-    StyleUpdateFlags TextBox::update_style()
+    StyleUpdateFlags Textbox::update_style()
     {
         const u32 parent_id = parent() ? parent()->id() : 0u;
         auto flags = resolve_style_selector(_style, id(), parent_id, style_state());
@@ -190,23 +211,20 @@ namespace auik
         return flags;
     }
 
-    void TextBox::sync_widget_flags()
-    {
-        Widget::sync_widget_flags(is_disabled() ? EventFlagBits::none : requested_event_flags);
-    }
+    void Textbox::sync_widget_flags()
+    { Widget::sync_widget_flags(is_disabled() ? EventFlagBits::none : requested_event_flags); }
 
-    void TextBox::on_disabled_changed(bool disabled)
+    void Textbox::on_disabled_changed(bool disabled)
     {
         if (!disabled || !_edit) return;
         cancel_delayed_tasks(id());
-        _edit->flags &= ~(AUIK_TEXTBOX_CARET_BLINK_TASK_SCHEDULED_BIT |
-                          AUIK_TEXTBOX_SELECTION_DRAG_PRESS_PENDING_BIT |
+        _edit->flags &= ~(AUIK_TEXTBOX_CARET_BLINK_TASK_SCHEDULED_BIT | AUIK_TEXTBOX_SELECTION_DRAG_PRESS_PENDING_BIT |
                           AUIK_TEXTBOX_SELECTION_DRAG_ACTIVE_BIT);
         _drag_scrollbar = nullptr;
         erase_widget_from_transient_cache(this);
     }
 
-    void TextBox::update_layout_min_size()
+    void Textbox::update_layout_min_size()
     {
         _text.update_layout_min_size();
         if (_placeholder) _placeholder->update_layout_min_size();
@@ -226,7 +244,7 @@ namespace auik
         set_required_size({min_size.x + margin.x + margin.z, min_size.y + margin.y + margin.w});
     }
 
-    void TextBox::update_layout(bool min_size_known)
+    void Textbox::update_layout(bool min_size_known)
     {
         if (!min_size_known) update_layout_min_size();
 
@@ -238,7 +256,8 @@ namespace auik
         amal::vec2 box_size = size();
         if (!fill_width() && !is_width_fixed()) box_size.x = required_size().x - margin.x - margin.z;
         else if (box_size.x <= 0.0f) box_size.x = required_size().x - margin.x - margin.z;
-        if ((!fill_height() && !is_height_fixed()) || box_size.y <= 0.0f || (!fill_height() && should_resize_to_content()))
+        if ((!fill_height() && !is_height_fixed()) || box_size.y <= 0.0f ||
+            (!fill_height() && should_resize_to_content()))
             box_size.y = required_size().y - margin.y - margin.w;
         box_size.x = amal::max(box_size.x, 1.0f);
         box_size.y = amal::max(box_size.y, style.text_size() + padding.y + padding.w);
@@ -247,12 +266,38 @@ namespace auik
         set_position(box_pos);
         set_layout_size(box_size);
         Widget::update_layout(true);
-        assert(parent() && "TextBox must have parent");
+        assert(parent() && "Textbox must have parent");
         set_clip_id(parent()->content_clip_id());
 
         _content_pos = {box_pos.x + padding.x, box_pos.y + padding.y};
         _content_size = {amal::max(box_size.x - padding.x - padding.z, 0.0f),
                          amal::max(box_size.y - padding.y - padding.w, 0.0f)};
+        if (should_resize_to_content())
+        {
+            _text.set_position(_content_pos);
+            _text.set_layout_size(_content_size);
+            _text.set_clip_id(text_content_clip_id());
+            _text.update_layout(false);
+            f32 content_h = _text.required_size().y;
+            if (_placeholder)
+            {
+                _placeholder->set_position(_content_pos);
+                _placeholder->set_layout_size(_content_size);
+                _placeholder->set_clip_id(text_content_clip_id());
+                _placeholder->update_layout(false);
+                content_h = amal::max(content_h, _placeholder->required_size().y);
+            }
+
+            const f32 fit_box_h = amal::max(content_h, style.text_size()) + padding.y + padding.w;
+            if (fit_box_h > box_size.y)
+            {
+                box_size.y = fit_box_h;
+                set_layout_size(box_size);
+                Widget::update_layout(true);
+                _content_size.y = amal::max(box_size.y - padding.y - padding.w, 0.0f);
+                set_required_size({box_size.x + margin.x + margin.z, box_size.y + margin.y + margin.w});
+            }
+        }
         update_text_content_clip_rect();
         if (has_internal_scrollbar())
         {
@@ -282,7 +327,8 @@ namespace auik
                 _scrollbar_y->configure({scrollbar_x, box_pos.y + track_margin.y},
                                         {bar_w, amal::max(box_size.y - track_margin.y - track_margin.w, 0.0f)},
                                         content_h, _content_size.y);
-                _content_scroll.y = _scrollbar_y->scroll_offset();
+                _content_scroll.y = snap_textbox_scroll_offset(_scrollbar_y->scroll_offset());
+                _scrollbar_y->set_scroll_offset(_content_scroll.y);
             }
             else
             {
@@ -312,7 +358,7 @@ namespace auik
         rebuild_selection_rect_cache();
     }
 
-    void TextBox::translate(const amal::vec2 &delta)
+    void Textbox::translate(const amal::vec2 &delta)
     {
         if (delta.x == 0.0f && delta.y == 0.0f) return;
         Widget::translate(delta);
@@ -325,9 +371,9 @@ namespace auik
             for (auto &rect : _edit->selection_rects) rect.offset += delta;
     }
 
-    void TextBox::rebuild_clip_rects()
+    void Textbox::rebuild_clip_rects()
     {
-        assert(parent() && "TextBox must have parent");
+        assert(parent() && "Textbox must have parent");
         set_clip_id(parent()->content_clip_id());
         _content_clip_id = 0xFFFFu;
         update_text_content_clip_rect();
@@ -346,7 +392,7 @@ namespace auik
         }
     }
 
-    void TextBox::update_depth(const amal::vec2 &depth_range)
+    void Textbox::update_depth(const amal::vec2 &depth_range)
     {
         Widget::update_depth(depth_range);
         amal::vec2 text_range{};
@@ -361,7 +407,7 @@ namespace auik
         }
     }
 
-    void TextBox::back_hit_depth()
+    void Textbox::back_hit_depth()
     {
         Widget::back_hit_depth();
         _text.back_hit_depth();
@@ -369,7 +415,7 @@ namespace auik
         if (_scrollbar_y) _scrollbar_y->back_hit_depth();
     }
 
-    void TextBox::restore_hit_depth()
+    void Textbox::restore_hit_depth()
     {
         Widget::restore_hit_depth();
         _text.restore_hit_depth();
@@ -377,7 +423,7 @@ namespace auik
         if (_scrollbar_y) _scrollbar_y->restore_hit_depth();
     }
 
-    void TextBox::draw(DrawCtx &ctx)
+    void Textbox::draw(DrawCtx &ctx)
     {
         const bool transient = ctx.reason & DrawReasonBits::transient;
         const bool draw_transient_payload = transient || (ctx.reason & DrawReasonBits::record);
@@ -398,7 +444,7 @@ namespace auik
         draw_selection_drag_icon(ctx, selection_z);
     }
 
-    void TextBox::draw_background(DrawCtx &ctx, DrawStream *quads_stream)
+    void Textbox::draw_background(DrawCtx &ctx, DrawStream *quads_stream)
     {
         QuadsInstanceData bg{};
         bg.rect = bounds();
@@ -407,7 +453,7 @@ namespace auik
         emit_quads_instance(ctx, quads_stream, _bg, bg, get_rect(), bg_visible, can_emit_hit(ctx));
     }
 
-    void TextBox::draw_selection(DrawCtx &ctx, DrawStream *quads_stream, f32 selection_z)
+    void Textbox::draw_selection(DrawCtx &ctx, DrawStream *quads_stream, f32 selection_z)
     {
         if (!_edit) return;
 
@@ -428,7 +474,7 @@ namespace auik
             selection.mask = text_content_clip_id();
 
             emit_context_draw(ctx, quads_stream, _edit->selections[selection_slot], &selection,
-                     detail::make_rect_data(id(), AUIK_STYLE_TAG_SELECTION, selection.rect), false);
+                              detail::make_rect_data(id(), AUIK_STYLE_TAG_SELECTION, selection.rect), false);
             ++selection_slot;
         };
 
@@ -436,7 +482,7 @@ namespace auik
         while (selection_slot < _edit->selections.size()) emit_selection({_content_pos, {0.0f, selection_h}}, false);
     }
 
-    void TextBox::draw_text_content(DrawCtx &ctx)
+    void Textbox::draw_text_content(DrawCtx &ctx)
     {
         DrawCtx text_ctx = ctx;
         text_ctx.is_hit_allowed = false;
@@ -450,7 +496,7 @@ namespace auik
         display_text->draw_local(text_ctx);
     }
 
-    void TextBox::draw_password_content(DrawCtx &ctx)
+    void Textbox::draw_password_content(DrawCtx &ctx)
     {
         auto *quads_stream = get_primary_quads_stream();
         if (!quads_stream || !_edit)
@@ -461,7 +507,7 @@ namespace auik
         if ((ctx.reason & DrawReasonBits::invalidate))
         {
             emit_context_draw_batch(ctx, quads_stream, _edit->password_dots.data(), nullptr,
-                           static_cast<u32>(_edit->password_dots.size()));
+                                    static_cast<u32>(_edit->password_dots.size()));
             _edit->password_dots.clear();
             return;
         }
@@ -470,8 +516,8 @@ namespace auik
         const auto &layout = _text.layout_result();
         const f32 line_h = amal::max(layout.line_height, style.text_size());
         const f32 dot_size = amal::max(amal::round(style.text_size() * 0.42f), 2.0f);
-        const u32 dot_slots = amal::max(static_cast<u32>(layout.glyphs.size()),
-                                        static_cast<u32>(_edit->password_dots.size()));
+        const u32 dot_slots =
+            amal::max(static_cast<u32>(layout.glyphs.size()), static_cast<u32>(_edit->password_dots.size()));
         if (_edit->password_dots.size() < dot_slots) _edit->password_dots.resize(dot_slots);
 
         Style dot_style;
@@ -507,16 +553,17 @@ namespace auik
 
         while (dot_slot < dots.size()) push_dot({_content_pos, {0.0f, 0.0f}}, false);
 
-        emit_context_draw_batch(ctx, quads_stream, _edit->password_dots.data(), dots.data(), static_cast<u32>(dots.size()));
+        emit_context_draw_batch(ctx, quads_stream, _edit->password_dots.data(), dots.data(),
+                                static_cast<u32>(dots.size()));
     }
 
-    void TextBox::draw_scrollbar(DrawCtx &ctx)
+    void Textbox::draw_scrollbar(DrawCtx &ctx)
     {
         DrawCtx scrollbar_ctx = ctx;
         _scrollbar_y->draw_local(scrollbar_ctx);
     }
 
-    void TextBox::draw_caret(DrawCtx &ctx)
+    void Textbox::draw_caret(DrawCtx &ctx)
     {
         auto *overlay_stream = get_overlay_quads_stream();
         if (!overlay_stream) return;
@@ -549,10 +596,10 @@ namespace auik
         caret.background_color = visible ? caret_style.background_color() : 0;
         caret.mask = text_content_clip_id();
         emit_context_draw(ctx, overlay_stream, _edit->caret, &caret,
-                 detail::make_rect_data(id(), _edit->caret_style.tag_id, caret.rect), false);
+                          detail::make_rect_data(id(), _edit->caret_style.tag_id, caret.rect), false);
     }
 
-    void TextBox::draw_selection_drag_icon(DrawCtx &ctx, f32 selection_z)
+    void Textbox::draw_selection_drag_icon(DrawCtx &ctx, f32 selection_z)
     {
         if (!_edit) return;
 
@@ -577,7 +624,7 @@ namespace auik
                             show_drag_icon);
     }
 
-    void TextBox::on_focus(bool focused)
+    void Textbox::on_focus(bool focused)
     {
         if (!focused && _edit)
         {
@@ -607,7 +654,7 @@ namespace auik
         });
     }
 
-    void TextBox::on_hover(HoverState state)
+    void Textbox::on_hover(HoverState state)
     {
         auto &ctx = detail::get_context();
         const bool scrollbar_hover = state != HoverState::leave && detail::is_scrollbar_tag(ctx.hover_id.tag_id);
@@ -616,7 +663,7 @@ namespace auik
                                   ctx.window_ctx);
     }
 
-    void TextBox::on_click(MouseKey key, KeyPressState state, u32 click_count)
+    void Textbox::on_click(MouseKey key, KeyPressState state, u32 click_count)
     {
         if (key != MouseKey::left) return;
         auto &ctx = detail::get_context();
@@ -624,6 +671,7 @@ namespace auik
         {
             if (state != KeyPressState::press) return;
             _drag_scrollbar = nullptr;
+            const amal::vec2 old_scroll = _content_scroll;
             _scrollbar_y->set_scroll_offset(_content_scroll.y);
             bool is_offset_changed = false;
             if (ctx.hover_id.tag_id == AUIK_TAG_SCROLLBAR_THUMB_Y) _drag_scrollbar = _scrollbar_y;
@@ -632,12 +680,13 @@ namespace auik
                 is_offset_changed = _scrollbar_y->scroll_to_track_click(ctx.io.mouse_pos);
                 _drag_scrollbar = _scrollbar_y;
             }
-            _content_scroll.y = _scrollbar_y->scroll_offset();
+            _content_scroll.y = snap_textbox_scroll_offset(_scrollbar_y->scroll_offset());
+            _scrollbar_y->set_scroll_offset(_content_scroll.y);
             if (is_offset_changed)
-                add_render_command<detail::ClickEventTraits>(this, [this]() {
-                    update_layout_from_current_bounds(true);
-                    redraw_external(!edit_draw_slots_need_record(), DrawReasonBits::layout);
-                });
+            {
+                apply_content_scroll_delta(old_scroll);
+                add_render_command<detail::ClickEventTraits>(this, [this]() { redraw_after_scroll(); });
+            }
             return;
         }
         if (state == KeyPressState::release)
@@ -661,7 +710,7 @@ namespace auik
         });
     }
 
-    void TextBox::on_drag(const amal::vec2 &delta, KeyPressState state)
+    void Textbox::on_drag(const amal::vec2 &delta, KeyPressState state)
     {
         if (_drag_scrollbar && state == KeyPressState::release)
         {
@@ -670,14 +719,16 @@ namespace auik
         }
         if (_drag_scrollbar)
         {
+            const amal::vec2 old_scroll = _content_scroll;
             _scrollbar_y->set_scroll_offset(_content_scroll.y);
             const bool is_offset_changed = _scrollbar_y->scroll_thumb_by_drag_delta(delta);
-            _content_scroll.y = _scrollbar_y->scroll_offset();
+            _content_scroll.y = snap_textbox_scroll_offset(_scrollbar_y->scroll_offset());
+            _scrollbar_y->set_scroll_offset(_content_scroll.y);
             if (is_offset_changed)
-                add_render_command<detail::DragEventTraits>(this, [this]() {
-                    update_layout_from_current_bounds(true);
-                    redraw_external(!edit_draw_slots_need_record(), DrawReasonBits::layout);
-                });
+            {
+                apply_content_scroll_delta(old_scroll);
+                add_render_command<detail::DragEventTraits>(this, [this]() { redraw_after_scroll(); });
+            }
             return;
         }
         if (state == KeyPressState::press)
@@ -713,7 +764,7 @@ namespace auik
         add_render_command<detail::DragEventTraits>(this, [this]() { apply_render_update(false); });
     }
 
-    bool TextBox::selection_contains_point(const amal::vec2 &point) const
+    bool Textbox::selection_contains_point(const amal::vec2 &point) const
     {
         if (!_edit) return false;
         for (const auto &rect : _edit->selection_rects)
@@ -723,7 +774,7 @@ namespace auik
         return false;
     }
 
-    bool TextBox::begin_selection_drag_press()
+    bool Textbox::begin_selection_drag_press()
     {
         if (!_edit) return false;
         if (detail::get_context().io.click_count > 1)
@@ -738,7 +789,7 @@ namespace auik
         return press_pending;
     }
 
-    void TextBox::collapse_cursor_at_point(const amal::vec2 &point)
+    void Textbox::collapse_cursor_at_point(const amal::vec2 &point)
     {
         auto &cursor = _edit_state.primary_cursor();
         cursor.cursor = cursor_from_point(point);
@@ -751,7 +802,7 @@ namespace auik
         schedule_caret_blink();
     }
 
-    void TextBox::select_text_range(int start, int end)
+    void Textbox::select_text_range(int start, int end)
     {
         const int len = static_cast<int>(value().size());
         start = amal::clamp(start, 0, len);
@@ -768,7 +819,7 @@ namespace auik
         schedule_caret_blink();
     }
 
-    void TextBox::select_word_at_point(const amal::vec2 &point)
+    void Textbox::select_word_at_point(const amal::vec2 &point)
     {
         const auto &text = value();
         if (text.empty())
@@ -794,7 +845,7 @@ namespace auik
         select_text_range(start, end);
     }
 
-    void TextBox::select_line_at_point(const amal::vec2 &point)
+    void Textbox::select_line_at_point(const amal::vec2 &point)
     {
         const auto &text = value();
         if (text.empty())
@@ -819,7 +870,7 @@ namespace auik
         select_text_range(static_cast<int>(line.text_start), static_cast<int>(line.text_end));
     }
 
-    void TextBox::select_all_text()
+    void Textbox::select_all_text()
     {
         const auto &text = value();
         if (text.empty()) return;
@@ -828,7 +879,7 @@ namespace auik
         add_render_command<detail::KeyEventTraits>(this, [this]() { apply_render_update(false); });
     }
 
-    void TextBox::copy_selection_to_clipboard()
+    void Textbox::copy_selection_to_clipboard()
     {
         if (is_password()) return;
         if (_edit_state.cursors.empty()) return;
@@ -846,7 +897,7 @@ namespace auik
                                      text.substr(static_cast<size_t>(start), static_cast<size_t>(end - start)));
     }
 
-    void TextBox::cut_selection_to_clipboard()
+    void Textbox::cut_selection_to_clipboard()
     {
         if (is_password()) return;
         if (is_read_only()) return;
@@ -854,7 +905,7 @@ namespace auik
         delete_selection();
     }
 
-    void TextBox::delete_selection()
+    void Textbox::delete_selection()
     {
         if (is_read_only()) return;
         if (_edit_state.cursors.empty()) return;
@@ -882,7 +933,7 @@ namespace auik
         if (!mark_changed()) add_render_command<detail::KeyEventTraits>(this, [this]() { apply_render_update(true); });
     }
 
-    void TextBox::paste_clipboard_at_cursor()
+    void Textbox::paste_clipboard_at_cursor()
     {
         if (is_read_only()) return;
         acul::string clip = detail::filter_text_input(detail::get_clipboard_string(detail::get_context().window_ctx),
@@ -899,7 +950,7 @@ namespace auik
         add_render_command<detail::KeyEventTraits>(this, [this]() { apply_render_update(true); });
     }
 
-    bool TextBox::move_selection_to_cursor(int drop_cursor, bool copy)
+    bool Textbox::move_selection_to_cursor(int drop_cursor, bool copy)
     {
         if (is_read_only()) return false;
         if (_edit_state.cursors.empty()) return false;
@@ -940,7 +991,7 @@ namespace auik
         return true;
     }
 
-    void TextBox::end_selection_drag(bool commit)
+    void Textbox::end_selection_drag(bool commit)
     {
         if (!_edit) return;
         const bool was_active = _edit->flags & AUIK_TEXTBOX_SELECTION_DRAG_ACTIVE_BIT;
@@ -953,7 +1004,7 @@ namespace auik
             add_render_command<detail::DragEventTraits>(this, [this]() { apply_render_update(true); });
     }
 
-    void TextBox::on_key(Key key, KeyPressState state, KeyMode mods)
+    void Textbox::on_key(Key key, KeyPressState state, KeyMode mods)
     {
         if (state == KeyPressState::release) return;
         if (key == Key::enter || key == Key::kp_enter)
@@ -992,7 +1043,7 @@ namespace auik
         add_render_command<detail::KeyEventTraits>(this, [this, layout_dirty]() { apply_render_update(layout_dirty); });
     }
 
-    void TextBox::on_char_input(u32 char_code, u32 count)
+    void Textbox::on_char_input(u32 char_code, u32 count)
     {
         if (is_read_only()) return;
         if (count == 0) return;
@@ -1015,7 +1066,7 @@ namespace auik
         add_render_command<detail::CharEventTraits>(this, [this]() { apply_render_update(true); });
     }
 
-    void TextBox::set_value_internal(const acul::string &value)
+    void Textbox::set_value_internal(const acul::string &value)
     {
         _value = value;
         sync_text_presentation();
@@ -1027,7 +1078,7 @@ namespace auik
         cursor.select_end = cursor.cursor;
     }
 
-    void TextBox::set_model_binding(ModelBinding *binding)
+    void Textbox::set_model_binding(ModelBinding *binding)
     {
         if (_model_binding) _model_binding->on_field_change = nullptr;
         _model_binding = binding;
@@ -1045,12 +1096,9 @@ namespace auik
         if (read_model_binding_value(*_model_binding, value)) set_value(value);
     }
 
-    void TextBox::sync_text_presentation()
-    {
-        _text.set_text(make_textbox_presentation(_value, text_flags));
-    }
+    void Textbox::sync_text_presentation() { _text.set_text(make_textbox_presentation(_value, text_flags)); }
 
-    void TextBox::set_placeholder(StringView value)
+    void Textbox::set_placeholder(StringView value)
     {
         if (!value.str || value.str[0] == '\0')
         {
@@ -1058,21 +1106,18 @@ namespace auik
             acul::release(_placeholder);
             _placeholder = nullptr;
         }
-        else if (_placeholder)
-        {
-            _placeholder->set_text(value);
-        }
+        else if (_placeholder) { _placeholder->set_text(value); }
         else
         {
-            _placeholder = acul::alloc<Text>(AUIK_TAG_TEXT, value, amal::vec2{0.0f, 0.0f},
-                                             WidgetFlagBits::visible, AUIK_STYLE_TAG_PLACEHOLDER);
+            _placeholder = acul::alloc<Text>(AUIK_TAG_TEXT, value, amal::vec2{0.0f, 0.0f}, WidgetFlagBits::visible);
+            _placeholder->set_style_tag(AUIK_STYLE_TAG_PLACEHOLDER);
             _placeholder->set_parent(this);
-            _placeholder->set_overflow_mode(detail::TextOverflowMode::clip);
-            _placeholder->set_vertical_align(detail::TextVerticalAlign::center);
+            _placeholder->set_overflow_mode(TextOverflowMode::clip);
+            _placeholder->set_anchor_y(TextAnchorY::middle);
         }
     }
 
-    void TextBox::reset_caret_blink()
+    void Textbox::reset_caret_blink()
     {
         if (!_edit) return;
         detail::update_window_time(detail::get_context().window_ctx);
@@ -1081,7 +1126,7 @@ namespace auik
         _edit->flags &= ~AUIK_TEXTBOX_CARET_BLINK_TASK_SCHEDULED_BIT;
     }
 
-    void TextBox::schedule_caret_blink()
+    void Textbox::schedule_caret_blink()
     {
         if (!_edit) return;
         if (detail::get_context().focus_id != id()) return;
@@ -1098,7 +1143,7 @@ namespace auik
                                    [this]() { tick_caret_blink(); });
     }
 
-    void TextBox::tick_caret_blink()
+    void Textbox::tick_caret_blink()
     {
         if (!_edit) return;
         _edit->flags &= ~AUIK_TEXTBOX_CARET_BLINK_TASK_SCHEDULED_BIT;
@@ -1107,19 +1152,47 @@ namespace auik
         schedule_caret_blink();
     }
 
-    void TextBox::on_scroll(const amal::vec2 &delta)
+    void Textbox::on_scroll(const amal::vec2 &delta)
     {
         if (!_scrollbar_y || !_scrollbar_y->is_visible()) return;
+        const amal::vec2 old_scroll = _content_scroll;
         if (!_scrollbar_y->scroll_by_pixels(-delta.y * static_cast<f32>(AUIK_SCROLL_STEP))) return;
-        _content_scroll.y = _scrollbar_y->scroll_offset();
-        add_render_command<detail::ScrollEventTraits>(this, [this]() {
-            update_layout_from_current_bounds(true);
-            redraw_external(!edit_draw_slots_need_record(), DrawReasonBits::layout);
-            update_transient_draw_commands();
-        });
+        _content_scroll.y = snap_textbox_scroll_offset(_scrollbar_y->scroll_offset());
+        _scrollbar_y->set_scroll_offset(_content_scroll.y);
+        apply_content_scroll_delta(old_scroll);
+        add_render_command<detail::ScrollEventTraits>(this, [this]() { redraw_after_scroll(); });
     }
 
-    void TextBox::update_transient_draw_commands()
+    void Textbox::apply_content_scroll_delta(const amal::vec2 &old_scroll)
+    {
+        const amal::vec2 visual_delta = old_scroll - _content_scroll;
+        if (visual_delta.x == 0.0f && visual_delta.y == 0.0f) return;
+
+        _text.translate(visual_delta);
+        if (_placeholder) _placeholder->translate(visual_delta);
+        if (_edit)
+            for (auto &rect : _edit->selection_rects) rect.offset += visual_delta;
+    }
+
+    void Textbox::redraw_after_scroll()
+    {
+        update_draw_commands(DrawReasonBits::layout);
+        update_transient_draw_commands();
+        detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
+    }
+
+    void Textbox::redraw_after_edit_layout()
+    {
+        if (edit_draw_slots_need_record())
+        {
+            invalidate_draw_commands(DrawReasonBits::layout | DrawReasonBits::record);
+            update_draw_commands(DrawReasonBits::layout | DrawReasonBits::record);
+        }
+        else update_draw_commands(DrawReasonBits::layout);
+        detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
+    }
+
+    void Textbox::update_transient_draw_commands()
     {
         if (!_edit) return;
         if (detail::get_context().focus_id != id()) return;
@@ -1131,7 +1204,7 @@ namespace auik
         update_draw_commands(DrawReasonBits::transient);
     }
 
-    void TextBox::update_layout_from_current_bounds(bool min_size_known)
+    void Textbox::update_layout_from_current_bounds(bool min_size_known)
     {
         const auto &style = get_theme()->get_style(_style.id);
         const amal::vec4 margin = style.margin();
@@ -1140,7 +1213,7 @@ namespace auik
         update_layout(min_size_known);
     }
 
-    detail::TextEditString TextBox::make_text_edit_string()
+    detail::TextEditString Textbox::make_text_edit_string()
     {
         detail::TextEditString out{};
         out.user_data = this;
@@ -1154,7 +1227,7 @@ namespace auik
         return out;
     }
 
-    int TextBox::cursor_from_point(const amal::vec2 &point) const
+    int Textbox::cursor_from_point(const amal::vec2 &point) const
     {
         const auto &layout = _text.layout_result();
         if (layout.lines.empty())
@@ -1188,7 +1261,7 @@ namespace auik
         return cursor_from_line_x(line_index, local_x);
     }
 
-    int TextBox::cursor_from_line_x(u32 line_index, f32 x) const
+    int Textbox::cursor_from_line_x(u32 line_index, f32 x) const
     {
         const auto &layout = _text.layout_result();
         if (layout.lines.empty()) return x < _content_size.x * 0.5f ? 0 : static_cast<int>(value().size());
@@ -1222,7 +1295,7 @@ namespace auik
         return best;
     }
 
-    f32 TextBox::cursor_x_on_line(u32 line_index, int cursor) const
+    f32 Textbox::cursor_x_on_line(u32 line_index, int cursor) const
     {
         const auto &layout = _text.layout_result();
         if (layout.lines.empty()) return 0.0f;
@@ -1242,9 +1315,9 @@ namespace auik
         return x;
     }
 
-    f32 TextBox::line_screen_y(u32 line_index) const { return line_selection_rect(line_index, 0.0f, 0.0f).offset.y; }
+    f32 Textbox::line_screen_y(u32 line_index) const { return line_selection_rect(line_index, 0.0f, 0.0f).offset.y; }
 
-    amal::rect TextBox::caret_rect(u32 line_index, f32 x, f32 width) const
+    amal::rect Textbox::caret_rect(u32 line_index, f32 x, f32 width) const
     {
         const auto &layout = _text.layout_result();
         const auto &style = get_theme()->get_style(_style.id);
@@ -1258,19 +1331,7 @@ namespace auik
         const f32 caret_h = amal::min(style.text_size(), _content_size.y);
         line_h = amal::max(line_h, caret_h);
         const f32 layout_h = accepts_newline() ? amal::max(layout.size.y, line_h) : _content_size.y;
-        f32 align_y = 0.0f;
-        switch (_text.vertical_align())
-        {
-            case detail::TextVerticalAlign::center:
-                align_y = amal::max((_content_size.y - layout_h) * 0.5f, 0.0f);
-                break;
-            case detail::TextVerticalAlign::bottom:
-                align_y = amal::max(_content_size.y - layout_h, 0.0f);
-                break;
-            case detail::TextVerticalAlign::top:
-            default:
-                break;
-        }
+        const f32 align_y = resolve_textbox_anchor_y_offset(_text.anchor_y(), _content_size.y, layout_h);
 
         f32 line_y = amal::max((layout_h - caret_h) * 0.5f, 0.0f);
         if (accepts_newline())
@@ -1285,7 +1346,7 @@ namespace auik
                 {width, caret_h}};
     }
 
-    amal::rect TextBox::line_selection_rect(u32 line_index, f32 x0, f32 x1) const
+    amal::rect Textbox::line_selection_rect(u32 line_index, f32 x0, f32 x1) const
     {
         const auto &layout = _text.layout_result();
         const auto &style = get_theme()->get_style(_style.id);
@@ -1293,19 +1354,7 @@ namespace auik
         const f32 line_h = amal::max(layout.line_height, style.text_size());
         const f32 selection_h = accepts_newline() ? amal::min(style.text_size(), line_h) : line_h;
         const f32 layout_h = layout.lines.size() <= 1 ? (accepts_newline() ? line_h : metrics_h) : layout.size.y;
-        f32 align_y = 0.0f;
-        switch (_text.vertical_align())
-        {
-            case detail::TextVerticalAlign::center:
-                align_y = amal::max((_content_size.y - layout_h) * 0.5f, 0.0f);
-                break;
-            case detail::TextVerticalAlign::bottom:
-                align_y = amal::max(_content_size.y - layout_h, 0.0f);
-                break;
-            case detail::TextVerticalAlign::top:
-            default:
-                break;
-        }
+        const f32 align_y = resolve_textbox_anchor_y_offset(_text.anchor_y(), _content_size.y, layout_h);
         if (layout.lines.empty())
             return {{_content_pos.x + x0 - _content_scroll.x,
                      _content_pos.y + align_y + amal::max((line_h - selection_h) * 0.5f, 0.0f) - _content_scroll.y},
@@ -1320,7 +1369,7 @@ namespace auik
                 {amal::max(x1 - x0, 0.0f), selection_h}};
     }
 
-    bool TextBox::update_content_scroll_x_for_cursor()
+    bool Textbox::update_content_scroll_x_for_cursor()
     {
         const f32 old_scroll_x = _content_scroll.x;
         if (accepts_newline() || value().empty() || _edit_state.cursors.empty())
@@ -1349,7 +1398,7 @@ namespace auik
         return old_scroll_x != _content_scroll.x;
     }
 
-    bool TextBox::update_content_scroll_y_for_cursor()
+    bool Textbox::update_content_scroll_y_for_cursor()
     {
         const f32 old_scroll_y = _content_scroll.y;
         if (!accepts_newline() || !has_internal_scrollbar() || value().empty() || _edit_state.cursors.empty())
@@ -1373,19 +1422,7 @@ namespace auik
         const f32 metrics_h = amal::max(layout.ascender - layout.descender, style.text_size());
         const f32 line_h = amal::max(layout.line_height, style.text_size());
         const f32 layout_h = layout.lines.size() <= 1 ? metrics_h : layout.size.y;
-        f32 align_y = 0.0f;
-        switch (_text.vertical_align())
-        {
-            case detail::TextVerticalAlign::center:
-                align_y = amal::max((_content_size.y - layout_h) * 0.5f, 0.0f);
-                break;
-            case detail::TextVerticalAlign::bottom:
-                align_y = amal::max(_content_size.y - layout_h, 0.0f);
-                break;
-            case detail::TextVerticalAlign::top:
-            default:
-                break;
-        }
+        const f32 align_y = resolve_textbox_anchor_y_offset(_text.anchor_y(), _content_size.y, layout_h);
 
         const auto &line = layout.lines[line_index];
         const f32 line_y = line.glyph_count > 0 ? layout.glyphs[line.glyph_offset].pen.y - layout.ascender
@@ -1404,12 +1441,13 @@ namespace auik
 
         const f32 max_scroll =
             _scrollbar_y ? _scrollbar_y->max_scroll() : amal::max(layout.size.y - _content_size.y, 0.0f);
+        _content_scroll.y = snap_textbox_scroll_offset(amal::clamp(_content_scroll.y, 0.0f, max_scroll));
         _content_scroll.y = amal::clamp(_content_scroll.y, 0.0f, max_scroll);
         if (_scrollbar_y) _scrollbar_y->set_scroll_offset(_content_scroll.y);
         return old_scroll_y != _content_scroll.y;
     }
 
-    void TextBox::update_text_content_clip_rect()
+    void Textbox::update_text_content_clip_rect()
     {
         if (_content_size.x <= 0.0f || _content_size.y <= 0.0f) return;
         amal::vec4 rect{_content_pos.x, _content_pos.y, _content_size.x, _content_size.y};
@@ -1429,7 +1467,7 @@ namespace auik
         else update_clip_rect(_content_clip_id, rect);
     }
 
-    void TextBox::rebuild_selection_rect_cache()
+    void Textbox::rebuild_selection_rect_cache()
     {
         if (!_edit) return;
 
@@ -1460,9 +1498,9 @@ namespace auik
         }
     }
 
-    u32 TextBox::line_index_from_cursor(int cursor) const { return line_index_from_cursor(cursor, false); }
+    u32 Textbox::line_index_from_cursor(int cursor) const { return line_index_from_cursor(cursor, false); }
 
-    u32 TextBox::line_index_from_cursor(int cursor, bool cursor_at_end_of_line) const
+    u32 Textbox::line_index_from_cursor(int cursor, bool cursor_at_end_of_line) const
     {
         const auto &layout = _text.layout_result();
         if (layout.lines.empty()) return 0;
@@ -1488,7 +1526,7 @@ namespace auik
         return best;
     }
 
-    void TextBox::refresh_text_layout_for_editing()
+    void Textbox::refresh_text_layout_for_editing()
     {
         _text.set_position(_content_pos);
         _text.set_layout_size(_content_size);
@@ -1501,7 +1539,7 @@ namespace auik
         rebuild_selection_rect_cache();
     }
 
-    void TextBox::refresh_placeholder_layout()
+    void Textbox::refresh_placeholder_layout()
     {
         if (!_placeholder) return;
         _placeholder->set_position(_content_pos);
@@ -1512,13 +1550,13 @@ namespace auik
         _placeholder->set_clip_id(text_content_clip_id());
     }
 
-    u32 TextBox::required_selection_draw_slots() const
+    u32 Textbox::required_selection_draw_slots() const
     {
         if (!_edit) return 0;
         return amal::max(static_cast<u32>(_edit->selection_rects.size()), 1u);
     }
 
-    bool TextBox::edit_draw_slots_need_record() const
+    bool Textbox::edit_draw_slots_need_record() const
     {
         if (!_edit) return false;
         if (_edit->selections.size() < required_selection_draw_slots()) return true;
@@ -1533,7 +1571,7 @@ namespace auik
         return false;
     }
 
-    amal::vec2 TextBox::cursor_screen_pos(int cursor) const
+    amal::vec2 Textbox::cursor_screen_pos(int cursor) const
     {
         const auto &layout = _text.layout_result();
         if (layout.lines.empty()) return {_content_pos.x, line_screen_y(0)};
@@ -1543,7 +1581,7 @@ namespace auik
         return {_content_pos.x + cursor_x_on_line(line_index, cursor) - _content_scroll.x, line_screen_y(line_index)};
     }
 
-    void TextBox::move_cursor_vertical(int dir, bool select)
+    void Textbox::move_cursor_vertical(int dir, bool select)
     {
         if (_edit_state.cursors.empty()) return;
         refresh_text_layout_for_editing();
@@ -1584,33 +1622,29 @@ namespace auik
         }
     }
 
-    int TextBox::edit_string_len(void *user_data)
+    int Textbox::edit_string_len(void *user_data)
     {
-        auto *self = static_cast<TextBox *>(user_data);
+        auto *self = static_cast<Textbox *>(user_data);
         return self ? static_cast<int>(self->value().size()) : 0;
     }
 
-    detail::TextEditChar TextBox::edit_get_char(void *user_data, int char_idx)
+    detail::TextEditChar Textbox::edit_get_char(void *user_data, int char_idx)
     {
-        auto *self = static_cast<TextBox *>(user_data);
+        auto *self = static_cast<Textbox *>(user_data);
         if (!self || char_idx < 0 || char_idx >= static_cast<int>(self->value().size())) return 0;
         return static_cast<unsigned char>(self->value()[char_idx]);
     }
 
-    bool TextBox::edit_insert_chars(void *user_data, int pos, const detail::TextEditChar *text, int text_len)
-    {
-        return edit_replace_chars(user_data, pos, 0, text, text_len);
-    }
+    bool Textbox::edit_insert_chars(void *user_data, int pos, const detail::TextEditChar *text, int text_len)
+    { return edit_replace_chars(user_data, pos, 0, text, text_len); }
 
-    void TextBox::edit_delete_chars(void *user_data, int pos, int count)
-    {
-        edit_replace_chars(user_data, pos, count, nullptr, 0);
-    }
+    void Textbox::edit_delete_chars(void *user_data, int pos, int count)
+    { edit_replace_chars(user_data, pos, count, nullptr, 0); }
 
-    bool TextBox::edit_replace_chars(void *user_data, int pos, int delete_count, const detail::TextEditChar *text,
+    bool Textbox::edit_replace_chars(void *user_data, int pos, int delete_count, const detail::TextEditChar *text,
                                      int text_len)
     {
-        auto *self = static_cast<TextBox *>(user_data);
+        auto *self = static_cast<Textbox *>(user_data);
         if (!self) return false;
         if (self->is_read_only()) return false;
 
@@ -1633,23 +1667,22 @@ namespace auik
         return true;
     }
 
-    int TextBox::edit_next_char_index(void *user_data, int idx)
+    int Textbox::edit_next_char_index(void *user_data, int idx)
     {
-        auto *self = static_cast<TextBox *>(user_data);
+        auto *self = static_cast<Textbox *>(user_data);
         return self ? detail::next_utf8_index(self->value(), idx) : idx + 1;
     }
 
-    int TextBox::edit_prev_char_index(void *user_data, int idx)
+    int Textbox::edit_prev_char_index(void *user_data, int idx)
     {
-        auto *self = static_cast<TextBox *>(user_data);
+        auto *self = static_cast<Textbox *>(user_data);
         return self ? detail::prev_utf8_index(self->value(), idx) : idx - 1;
     }
 
-    MultilineTextBox::MultilineTextBox(u32 id, const acul::string &value, amal::vec2 size, bool can_expand_to_content,
-                                       WidgetFlags flags, Widget *parent, TextFlags text_flags,
-                                       StringView placeholder)
-        : TextBox(id, value, size, flags, parent, AUIK_TAG_TEXTBOX, text_flags, placeholder,
-                  detail::TextVerticalAlign::top, detail::TextWrapMode::word),
+    MultilineTextbox::MultilineTextbox(u32 id, const acul::string &value, amal::vec2 size, bool can_expand_to_content,
+                                       WidgetFlags flags, TextFlags text_flags, StringView placeholder)
+        : Textbox(id, value, size, flags, AUIK_TAG_TEXTBOX, text_flags, placeholder, TextAnchorY::ascent,
+                  TextWrapMode::word),
           _can_expand_to_content(can_expand_to_content)
     {
         set_rect_tag_id(AUIK_TAG_MULTILINE_TEXTBOX);
@@ -1659,7 +1692,7 @@ namespace auik
         detail::text_edit_initialize_state(&_edit_state, false);
     }
 
-    void MultilineTextBox::set_can_expand_to_content(bool value)
+    void MultilineTextbox::set_can_expand_to_content(bool value)
     {
         if (_can_expand_to_content == value) return;
         _can_expand_to_content = value;
@@ -1667,7 +1700,7 @@ namespace auik
 
     namespace
     {
-        struct TextBoxData
+        struct TextboxData
         {
             detail::WidgetCommonData common{};
             acul::string value;
@@ -1675,68 +1708,63 @@ namespace auik
             bool placeholder_translated = false;
             u32 text_flags = 0u;
             u32 style_tag = AUIK_STYLE_TAG_TEXTBOX;
-            detail::TextVerticalAlign text_vertical_align = detail::TextVerticalAlign::center;
-            detail::TextWrapMode text_wrap = detail::TextWrapMode::none;
+            TextAnchorY text_anchor_y = TextAnchorY::middle;
+            TextWrapMode text_wrap = TextWrapMode::none;
         };
 
-        void write_textbox_payload(acul::bin_stream &stream, TextBox *widget)
+        void write_textbox_payload(acul::bin_stream &stream, Textbox *widget)
         {
             detail::write_widget_common_data(stream, *widget);
             const bool placeholder_translated = widget->is_translated_placeholder();
             const char *placeholder_literal = placeholder_translated ? widget->placeholder_literal() : nullptr;
-            stream.write(widget->value())
-                ;
-            detail::write_localized_string(
-                stream,
-                placeholder_translated ? acul::string(placeholder_literal ? placeholder_literal : "")
-                                       : widget->placeholder(),
-                placeholder_translated);
+            stream.write(widget->value());
+            detail::write_localized_string(stream,
+                                           placeholder_translated
+                                               ? acul::string(placeholder_literal ? placeholder_literal : "")
+                                               : widget->placeholder(),
+                                           placeholder_translated);
             stream.write(static_cast<u32>(widget->text_flags))
                 .write(widget->style_tag())
-                .write(static_cast<u32>(widget->text_vertical_align()))
+                .write(static_cast<u32>(widget->text_anchor_y()))
                 .write(static_cast<u32>(widget->text_wrap()));
         }
 
-        TextBoxData read_textbox_payload(acul::bin_stream &stream)
+        TextboxData read_textbox_payload(acul::bin_stream &stream)
         {
-            TextBoxData out{};
+            TextboxData out{};
             out.common = detail::read_widget_common_data(stream);
-            u32 text_vertical_align = static_cast<u32>(out.text_vertical_align);
+            u32 text_anchor_y = static_cast<u32>(out.text_anchor_y);
             u32 text_wrap = static_cast<u32>(out.text_wrap);
             stream.read(out.value);
             auto placeholder = detail::read_localized_string(stream);
             out.placeholder = std::move(placeholder.text);
             out.placeholder_translated = placeholder.translated;
-            stream.read(out.text_flags)
-                .read(out.style_tag)
-                .read(text_vertical_align)
-                .read(text_wrap);
-            out.text_vertical_align = static_cast<detail::TextVerticalAlign>(text_vertical_align);
-            out.text_wrap = static_cast<detail::TextWrapMode>(text_wrap);
+            stream.read(out.text_flags).read(out.style_tag).read(text_anchor_y).read(text_wrap);
+            out.text_anchor_y = static_cast<TextAnchorY>(text_anchor_y);
+            out.text_wrap = static_cast<TextWrapMode>(text_wrap);
             return out;
         }
 
         void write_textbox(acul::bin_stream &stream, umbf::Block *block)
         {
-            auto *widget = static_cast<TextBox *>(block);
+            auto *widget = static_cast<Textbox *>(block);
             write_textbox_payload(stream, widget);
         }
 
         umbf::Block *read_textbox(acul::bin_stream &stream)
         {
             const auto data = read_textbox_payload(stream);
-            auto *widget = acul::alloc<TextBox>(data.common.id, data.value, data.common.requested_size,
-                                                WidgetFlags(data.common.widget_flags), nullptr, data.style_tag,
-                                                TextFlags(data.text_flags),
-                                                StringView{data.placeholder.c_str(), data.placeholder_translated},
-                                                data.text_vertical_align, data.text_wrap);
+            auto *widget = acul::alloc<Textbox>(
+                data.common.id, data.value, data.common.requested_size, WidgetFlags(data.common.widget_flags),
+                data.style_tag, TextFlags(data.text_flags),
+                StringView{data.placeholder.c_str(), data.placeholder_translated}, data.text_anchor_y, data.text_wrap);
             detail::apply_widget_common_data(widget, data.common);
             return widget;
         }
 
         void write_multiline_textbox(acul::bin_stream &stream, umbf::Block *block)
         {
-            auto *widget = static_cast<MultilineTextBox *>(block);
+            auto *widget = static_cast<MultilineTextbox *>(block);
             write_textbox_payload(stream, widget);
             stream.write(widget->can_expand_to_content());
         }
@@ -1746,11 +1774,10 @@ namespace auik
             const auto data = read_textbox_payload(stream);
             bool can_expand_to_content = false;
             stream.read(can_expand_to_content);
-            auto *widget =
-                acul::alloc<MultilineTextBox>(data.common.id, data.value, data.common.requested_size,
-                                              can_expand_to_content, WidgetFlags(data.common.widget_flags), nullptr,
-                                              TextFlags(data.text_flags),
-                                              StringView{data.placeholder.c_str(), data.placeholder_translated});
+            auto *widget = acul::alloc<MultilineTextbox>(
+                data.common.id, data.value, data.common.requested_size, can_expand_to_content,
+                WidgetFlags(data.common.widget_flags), TextFlags(data.text_flags),
+                StringView{data.placeholder.c_str(), data.placeholder_translated});
             widget->set_style_tag(data.style_tag);
             detail::apply_widget_common_data(widget, data.common);
             return widget;

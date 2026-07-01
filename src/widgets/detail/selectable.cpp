@@ -1,5 +1,6 @@
 #include <auik/pipelines.hpp>
 #include <auik/detail/depth.hpp>
+#include <auik/detail/pixel_snap.hpp>
 #include <auik/widgets/detail/selectable.hpp>
 #include <auik/widgets/image.hpp>
 
@@ -27,18 +28,10 @@ namespace auik::detail
         const StyleState current_state = style_state();
         const StyleID prev_layout_style = _layout_style_id;
         auto flags = resolve_style_selector(_style, id(), parent_id, current_state);
-        if (selected_style_enabled())
-            flags |= resolve_style_selector(_selected_style, id(), parent_id,
-                                            _selected ? current_state : _selected_style_state);
+        if (_selected && selected_style_enabled())
+            flags |= resolve_style_selector(_selected_style, id(), parent_id, current_state);
         _layout_style_id = _selected && selected_style_enabled() ? _selected_style.id : _style.id;
         const auto &style = get_theme()->get_style(_layout_style_id);
-        _layout_config.size_px = round_font_px(style.text_size());
-        const u32 text_color = style.text_color();
-        if (_render_config.tint_color != text_color)
-        {
-            _render_config.tint_color = text_color;
-            _instances_gpu_dirty = true;
-        }
         if (prev_layout_style != Theme::STYLE_ID_INVALID && prev_layout_style != _layout_style_id)
             flags |= make_style_update_flags(get_theme()->get_style(prev_layout_style), style);
         return flags;
@@ -101,13 +94,6 @@ namespace auik::detail
         _bg = {};
         _selected_bg = {};
         _selected_icon_draw = {};
-    }
-
-    amal::vec4 Selectable::layout_margin() const
-    {
-        const StyleID style_id = effective_layout_style_id();
-        if (style_id == Theme::STYLE_ID_INVALID) return {0.0f, 0.0f, 0.0f, 0.0f};
-        return get_theme()->get_style(style_id).margin();
     }
 
     void Selectable::update_depth(const amal::vec2 &depth_range)
@@ -212,6 +198,7 @@ namespace auik::detail
         _selected_icon_rect.bounds = {{position().x + padding.x,
                                        position().y + amal::max((size().y - icon_size.y) * 0.5f, 0.0f)},
                                       icon_size};
+        _selected_icon_rect.bounds = snap_rect_offset_to_pixel_grid(_selected_icon_rect.bounds);
         _selected_icon_rect.clip_id = clip_id();
         _selected_icon_rect.depth = _selected_icon_z;
         _selected_icon_rect.hit_depth = _selected_icon_z;

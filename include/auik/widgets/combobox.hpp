@@ -19,17 +19,20 @@ namespace auik
     namespace detail
     {
         class PopupTrigger;
-    }
 
-    constexpr inline WidgetFlags get_default_combo_box_flags()
-    { return get_default_widget_flags() | WidgetFlagBits::hittable; }
-    class ComboBox final : public Widget
+        constexpr inline WidgetFlags get_combobox_widget_flags()
+        {
+            return WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::configurable |
+                   WidgetFlagBits::hittable;
+        }
+    } // namespace detail
+
+    class Combobox final : public Widget
     {
     public:
-        AUIK_EXPORT ComboBox(u32 id, const acul::vector<StringView> &items = {}, u32 selected_index = 0u,
-                             amal::vec2 size = {0.0f, 0.0f}, WidgetFlags widget_flags = get_default_combo_box_flags(),
-                             Widget *parent = nullptr);
-        AUIK_EXPORT ~ComboBox() override;
+        AUIK_EXPORT Combobox(u32 id, const acul::vector<StringView> &items, u32 selected_index, amal::vec2 size,
+                             WidgetFlags widget_flags);
+        AUIK_EXPORT ~Combobox() override;
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
         AUIK_EXPORT void update_layout_min_size() override;
@@ -89,14 +92,12 @@ namespace auik
         ModelBinding *_model_binding = nullptr;
     };
 
-    class MultipleComboBox final : public Widget
+    class MultipleCombobox final : public Widget
     {
     public:
-        AUIK_EXPORT MultipleComboBox(u32 id, const acul::vector<StringView> &items = {}, StringView placeholder = {},
-                                     amal::vec2 size = {0.0f, 0.0f},
-                                     WidgetFlags widget_flags = get_default_combo_box_flags(),
-                                     Widget *parent = nullptr);
-        AUIK_EXPORT ~MultipleComboBox() override;
+        AUIK_EXPORT MultipleCombobox(u32 id, const acul::vector<StringView> &items, StringView placeholder,
+                                     amal::vec2 size, WidgetFlags widget_flags);
+        AUIK_EXPORT ~MultipleCombobox() override;
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
         AUIK_EXPORT void update_layout_min_size() override;
@@ -156,12 +157,12 @@ namespace auik
         amal::vec2 _content_depth_range{0.0f, 1.0f};
     };
 
-    inline ComboBox *make_combo_box(u32 id, const acul::vector<StringView> &items = {}, u32 selected_index = 0u,
-                                    amal::vec2 size = AUIK_SIZE_FIT)
-    { return acul::alloc<ComboBox>(id, items, selected_index, size, get_default_combo_box_flags()); }
+    inline Combobox *make_combobox(u32 id, const acul::vector<StringView> &items = {}, u32 selected_index = 0u,
+                                   amal::vec2 size = AUIK_SIZE_FIT)
+    { return acul::alloc<Combobox>(id, items, selected_index, size, detail::get_combobox_widget_flags()); }
 
-    inline Model *make_combo_box_value_model(ModelDB *db, ModelID model_id, const acul::vector<StringView> &items,
-                                             u32 selected_index = 0u)
+    inline Model *make_combobox_value_model(ModelDB *db, ModelID model_id, const acul::vector<StringView> &items,
+                                            u32 selected_index = 0u)
     {
         if (!db) return nullptr;
         if (model_id == 0u) model_id = make_generated_model_id();
@@ -183,16 +184,16 @@ namespace auik
         return find_model(db, model_id);
     }
 
-    inline ModelBinding make_combo_box_value_model_binding(ModelDB *db, ModelID model_id)
+    inline ModelBinding make_combobox_value_model_binding(ModelDB *db, ModelID model_id)
     { return make_model_binding(db, model_id); }
 
-    inline MultipleComboBox *make_multiple_combo_box(u32 id, const acul::vector<StringView> &items = {},
+    inline MultipleCombobox *make_multiple_combobox(u32 id, const acul::vector<StringView> &items = {},
                                                      StringView placeholder = {}, amal::vec2 size = AUIK_SIZE_FIT)
-    { return acul::alloc<MultipleComboBox>(id, items, placeholder, size, get_default_combo_box_flags()); }
+    { return acul::alloc<MultipleCombobox>(id, items, placeholder, size, detail::get_combobox_widget_flags()); }
 
     namespace streams
     {
-        extern AUIK_EXPORT const umbf::streams::Stream combo_box;
-        extern AUIK_EXPORT const umbf::streams::Stream multiple_combo_box;
+        extern AUIK_EXPORT const umbf::streams::Stream combobox;
+        extern AUIK_EXPORT const umbf::streams::Stream multiple_combobox;
     } // namespace streams
 } // namespace auik

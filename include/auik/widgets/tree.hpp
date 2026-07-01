@@ -14,16 +14,10 @@
 #define AUIK_TABLE_TREE_FLAG_COLUMN_RESIZABLE        0x2u
 #define AUIK_TABLE_TREE_FLAG_RESIZE_INDICATOR_ACTIVE 0x4u
 #define AUIK_TABLE_TREE_FLAG_COLUMN_SIZE_OVERRIDES   0x8u
+#define AUIK_TREE_PARENT_FIELD 2u
 
 namespace auik
 {
-    constexpr inline ModelFieldID AUIK_TREE_PARENT_FIELD = 2u;
-
-    constexpr inline WidgetFlags get_default_table_tree_flags()
-    { return get_default_widget_flags() | WidgetFlagBits::hittable; }
-
-    constexpr inline WidgetFlags get_default_tree_flags() { return get_default_table_tree_flags(); }
-
     class Tree : public Widget
     {
     public:
@@ -36,8 +30,7 @@ namespace auik
             bool expanded = true;
         };
 
-        AUIK_EXPORT explicit Tree(u32 id, WidgetFlags flags = get_default_table_tree_flags(), Widget *parent = nullptr,
-                                  u32 style_tag_id = AUIK_STYLE_TAG_TREE);
+        AUIK_EXPORT explicit Tree(u32 id, WidgetFlags flags, u32 style_tag_id);
         AUIK_EXPORT ~Tree() override;
 
         AUIK_EXPORT void clear();
@@ -92,7 +85,7 @@ namespace auik
 
     protected:
         using Row = acul::vector<Widget *>;
-        AUIK_EXPORT explicit Tree(u32 id, amal::vec2 size, WidgetFlags flags, Widget *parent, u32 style_tag_id);
+        AUIK_EXPORT explicit Tree(u32 id, amal::vec2 size, WidgetFlags flags, u32 style_tag_id);
         virtual bool supports_columns() const { return false; }
         AUIK_EXPORT size_t add_node(Widget *label, Row cells, size_t parent);
         AUIK_EXPORT void set_default_column_settings(TableColumnSettings settings);
@@ -104,8 +97,6 @@ namespace auik
         AUIK_EXPORT void set_column_resizable(bool value);
         bool column_resizable() const
         { return detail::has_table_flag(_tree_flags, AUIK_TABLE_TREE_FLAG_COLUMN_RESIZABLE); }
-        AUIK_EXPORT void set_resize_border_style_tag(u32 tag_id);
-        u32 resize_border_style_tag() const { return _resize_border_style.tag_id; }
         AUIK_EXPORT bool is_resize_border_hovered(size_t element_id) const;
         const acul::vector<acul::point2D<f32>> &size_overrides() const { return _size_overrides; }
         AUIK_EXPORT void set_size_overrides(acul::vector<acul::point2D<f32>> values, bool column_overrides);
@@ -207,9 +198,8 @@ namespace auik
     public:
         using Row = acul::vector<Widget *>;
 
-        explicit TableTree(u32 id, amal::vec2 size = {0.0f, 0.0f}, WidgetFlags flags = get_default_table_tree_flags(),
-                           Widget *parent = nullptr, u32 style_tag_id = AUIK_STYLE_TAG_TREE)
-            : Tree(id, size, flags, parent, style_tag_id)
+        explicit TableTree(u32 id, amal::vec2 size, WidgetFlags flags, u32 style_tag_id)
+            : Tree(id, size, flags, style_tag_id)
         {
         }
 
@@ -230,8 +220,6 @@ namespace auik
         void set_column_resizable(bool value) { Tree::set_column_resizable(value); }
         bool column_resizable() const { return Tree::column_resizable(); }
         size_t column_count() const { return Tree::column_count_impl(); }
-        void set_resize_border_style_tag(u32 tag_id) { Tree::set_resize_border_style_tag(tag_id); }
-        u32 resize_border_style_tag() const { return Tree::resize_border_style_tag(); }
         bool is_resize_border_hovered(size_t element_id) const { return Tree::is_resize_border_hovered(element_id); }
         const acul::vector<acul::point2D<f32>> &size_overrides() const { return Tree::size_overrides(); }
         void set_size_overrides(acul::vector<acul::point2D<f32>> values, bool column_overrides)
@@ -243,11 +231,19 @@ namespace auik
         virtual bool supports_columns() const override { return true; }
     };
 
-    inline Tree *make_tree(u32 id, Widget *parent = nullptr)
-    { return acul::alloc<Tree>(id, get_default_tree_flags(), parent, AUIK_STYLE_TAG_TREE); }
+    inline Tree *make_tree(u32 id)
+    {
+        constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
+                                             WidgetFlagBits::configurable | WidgetFlagBits::hittable;
+        return acul::alloc<Tree>(id, widget_flags, AUIK_STYLE_TAG_TREE);
+    }
 
-    inline TableTree *make_table_tree(u32 id, amal::vec2 size = AUIK_SIZE_FIT, Widget *parent = nullptr)
-    { return acul::alloc<TableTree>(id, size, get_default_table_tree_flags(), parent, AUIK_STYLE_TAG_TREE); }
+    inline TableTree *make_table_tree(u32 id, amal::vec2 size = AUIK_SIZE_FIT)
+    {
+        constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
+                                             WidgetFlagBits::configurable | WidgetFlagBits::hittable;
+        return acul::alloc<TableTree>(id, size, widget_flags, AUIK_STYLE_TAG_TREE);
+    }
 
     template <class T>
     struct ModelTreeNode

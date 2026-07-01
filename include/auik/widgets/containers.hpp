@@ -23,23 +23,13 @@ namespace auik
                                               const amal::rect &content_rect, f32 inline_spacing_x);
     } // namespace detail
 
-    constexpr inline WidgetFlags get_default_block_flags()
-    {
-        return WidgetFlagBits::visible | WidgetFlagBits::attachable;
-    }
-
-    constexpr inline WidgetFlags get_default_dummy_flags()
-    {
-        return WidgetFlagBits::visible;
-    }
-
     class Block : public Widget
     {
     public:
         acul::vector<Widget *> children;
 
-        explicit Block(u32 id, WidgetFlags widget_flags = get_default_block_flags(), u32 tag_id = AUIK_TAG_BLOCK)
-            : Widget(id, widget_flags, EventFlagBits::none, nullptr, {{0.0f, 0.0f}, {0.0f, 0.0f}}, tag_id)
+        explicit Block(u32 id, WidgetFlags widget_flags, u32 tag_id)
+            : Widget(id, widget_flags, EventFlagBits::none, {{0.0f, 0.0f}, {0.0f, 0.0f}}, tag_id)
         {
         }
 
@@ -47,6 +37,7 @@ namespace auik
 
         AUIK_EXPORT void clear_children();
         AUIK_EXPORT void add_child(Widget *child, ChildLayoutFlags layout = default_child_layout_flags());
+        AUIK_EXPORT void set_child_layout(size_t index, ChildLayoutFlags layout);
         AUIK_EXPORT void set_width(f32 value);
         AUIK_EXPORT void set_height(f32 value);
         AUIK_EXPORT void set_size(const amal::vec2 &value);
@@ -54,6 +45,7 @@ namespace auik
         AUIK_EXPORT void set_kv_height(u32 key);
         AUIK_EXPORT void set_kv_size(u32 key);
         AUIK_EXPORT void set_kv_size(u32 width_key, u32 height_key);
+        void set_inline_spacing(f32 value) { _inline_spacing = value; }
         const acul::vector<ChildLayoutFlags> &child_layouts() const { return _child_layouts; }
         amal::vec2 explicit_size() const { return _explicit_size; }
         amal::uvec2 size_key() const { return _size_key; }
@@ -73,9 +65,7 @@ namespace auik
         u16 content_clip_id() const override { return parent() ? parent()->content_clip_id() : clip_id(); }
         u32 signature() const override { return AUIK_TAG_BLOCK; }
         amal::vec4 get_content_clip_rect() const override
-        {
-            return parent() ? parent()->get_content_clip_rect() : get_clip_rect(content_clip_id());
-        }
+        { return parent() ? parent()->get_content_clip_rect() : get_clip_rect(content_clip_id()); }
         AUIK_EXPORT void on_attach() override;
         AUIK_EXPORT void on_detach() override;
 
@@ -97,6 +87,7 @@ namespace auik
         amal::vec2 _explicit_size = AUIK_SIZE_FIT;
         amal::uvec2 _size_key{0u, 0u};
         u32 _size_vec_key = 0u;
+        f32 _inline_spacing = 0.0f;
     };
 
     struct DrawBlockFlagBits
@@ -118,9 +109,7 @@ namespace auik
     class DrawBlock : public Block
     {
     public:
-        AUIK_EXPORT explicit DrawBlock(u32 id,
-                                       WidgetFlags widget_flags = get_default_block_flags() | WidgetFlagBits::hittable,
-                                       u32 tag_id = AUIK_TAG_DRAW_BLOCK, u32 style_tag_id = 0u);
+        AUIK_EXPORT explicit DrawBlock(u32 id, WidgetFlags widget_flags, u32 tag_id);
         AUIK_EXPORT ~DrawBlock() override;
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
@@ -198,10 +187,8 @@ namespace auik
     class CollapseHeader final : public Block
     {
     public:
-        AUIK_EXPORT explicit CollapseHeader(u32 id, StringView label, bool expanded = true,
-                                            WidgetFlags widget_flags = get_default_block_flags() |
-                                                                       WidgetFlagBits::hittable,
-                                            u32 style_tag_id = AUIK_STYLE_TAG_COLLAPSE_HEADER);
+        AUIK_EXPORT explicit CollapseHeader(u32 id, StringView label, bool expanded, WidgetFlags widget_flags,
+                                            u32 style_tag_id);
         AUIK_EXPORT ~CollapseHeader() override;
 
         AUIK_EXPORT void set_label(StringView value);
@@ -260,11 +247,8 @@ namespace auik
     class Dummy final : public Widget
     {
     public:
-        explicit Dummy(u32 id, amal::vec2 size = {0.0f, 0.0f}, WidgetFlags widget_flags = get_default_dummy_flags(),
-                       u32 style_tag_id = 0u)
-            : Widget(id, widget_flags, EventFlagBits::none, nullptr, {{0.0f, 0.0f}, size}, AUIK_TAG_DUMMY),
-              _style_tag_id(style_tag_id),
-              _style({Theme::STYLE_ID_INVALID, style_tag_id})
+        explicit Dummy(u32 id, amal::vec2 size, WidgetFlags widget_flags)
+            : Widget(id, widget_flags, EventFlagBits::none, {{0.0f, 0.0f}, size}, AUIK_TAG_DUMMY), _style({})
         {
         }
 
@@ -274,32 +258,35 @@ namespace auik
         void draw(DrawCtx &) override {}
         u32 signature() const override { return AUIK_TAG_DUMMY; }
         u32 style_tag() const { return _style_tag_id; }
+        void set_style_tag(u32 tag_id)
+        {
+            _style_tag_id = tag_id;
+            _style = {Theme::STYLE_ID_INVALID, tag_id};
+        }
 
     private:
         u32 _style_tag_id = 0u;
         StyleSelector _style;
     };
 
-    inline Block *make_block()
+    inline Block *make_block(u32 id = AUIK_TAG_BLOCK)
+    { return acul::alloc<Block>(id, WidgetFlagBits::visible | WidgetFlagBits::attachable, AUIK_TAG_BLOCK); }
+
+    inline DrawBlock *make_draw_block()
     {
-        return acul::alloc<::auik::Block>(AUIK_TAG_BLOCK, get_default_block_flags(), AUIK_TAG_BLOCK);
+        return acul::alloc<DrawBlock>(AUIK_TAG_DRAW_BLOCK,
+                                      WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::hittable,
+                                      AUIK_TAG_DRAW_BLOCK);
     }
 
-    inline DrawBlock *make_draw_block(u32 style_tag_id = 0u)
-    {
-        return acul::alloc<DrawBlock>(AUIK_TAG_DRAW_BLOCK, get_default_block_flags() | WidgetFlagBits::hittable,
-                                      AUIK_TAG_DRAW_BLOCK, style_tag_id);
-    }
-
-    inline Dummy *make_dummy(amal::vec2 size = {0.0f, 0.0f}, u32 style_tag_id = 0u)
-    {
-        return acul::alloc<Dummy>(AUIK_TAG_DUMMY, size, get_default_dummy_flags(), style_tag_id);
-    }
+    inline Dummy *make_dummy(amal::vec2 size = AUIK_SIZE_AUTO)
+    { return acul::alloc<Dummy>(AUIK_TAG_DUMMY, size, WidgetFlagBits::visible); }
 
     inline CollapseHeader *make_collapse_header(u32 id, StringView label, bool expanded = true)
     {
-        return acul::alloc<CollapseHeader>(id, label, expanded, get_default_block_flags() | WidgetFlagBits::hittable,
-                                           AUIK_STYLE_TAG_COLLAPSE_HEADER);
+        return acul::alloc<CollapseHeader>(
+            id, label, expanded, WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::hittable,
+            AUIK_STYLE_TAG_COLLAPSE_HEADER);
     }
 
     namespace streams

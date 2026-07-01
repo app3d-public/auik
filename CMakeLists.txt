@@ -25,14 +25,6 @@ add_files(${PROJECT_NAME} RECURSE "${CMAKE_CURRENT_SOURCE_DIR}/src/widgets")
 compile_auik_default_style_ids("${AUIK_BASE_THEME}")
 list(APPEND AUIK_SRC ${AUIK_STYLE_IDS_HEADER})
 
-set(AUIK_CSS_THEME_ARGS)
-
-if(DEFINED AUIK_CSS_DIR)
-    list(APPEND AUIK_CSS_THEME_ARGS INPUT_FOLDER "${AUIK_CSS_DIR}")
-endif()
-
-compile_auik_css_theme("${AUIK_BASE_THEME}" ${AUIK_CSS_THEME_ARGS})
-
 add_library(${PROJECT_NAME} SHARED ${AUIK_SRC})
 add_dependencies(${PROJECT_NAME} ${AUIK_STYLE_IDS_TARGET})
 
@@ -58,7 +50,7 @@ if(PROJECT_IS_TOP_LEVEL)
     add_subdirectory(modules/acul)
 endif()
 
-target_link_libraries(${PROJECT_NAME} PRIVATE acul amal umbf)
+target_link_libraries(${PROJECT_NAME} PUBLIC acul amal umbf)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
     ${FREETYPE2_LIBRARIES}
@@ -96,6 +88,7 @@ set_target_properties(${PROJECT_NAME}
 get_directory_property(AUIK_HAS_PARENT PARENT_DIRECTORY)
 
 if(AUIK_HAS_PARENT)
+    set(AUIK_BASE_THEME "${AUIK_BASE_THEME}" PARENT_SCOPE)
     set(AUIK_CSS_SRC "${AUIK_CSS_SRC}" PARENT_SCOPE)
     set(AUIK_CSS_HEADER "${AUIK_CSS_HEADER}" PARENT_SCOPE)
     set(AUIK_CSS_INCLUDE_DIR "${AUIK_CSS_INCLUDE_DIR}" PARENT_SCOPE)

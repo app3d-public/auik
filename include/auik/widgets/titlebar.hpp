@@ -16,9 +16,15 @@
 #define AUIK_WINDOW_CAPTION_BTN_COUNT        3
 #define AUIK_TAG_TITLEBAR_MENU_BAR           0x6541ADB5u
 #define AUIK_TAG_TITLEBAR_MENU_ITEM          0xD9F76C8Au
+#define AUIK_ICON_CAP_MINIMIZE               0x7CB8CE8Du
+#define AUIK_ICON_CAP_MAXIMIZE               0x28392EA5u
+#define AUIK_ICON_CAP_RESTORE                0x2F89CAF9u
+#define AUIK_ICON_CAP_CLOSE                  0x6D0C422D
 
 namespace auik
 {
+    class Titlebar;
+
     inline bool is_titlebar_customizable()
     {
 #ifdef _WIN32
@@ -27,6 +33,43 @@ namespace auik
         return false;
 #endif
     }
+
+    // Flags for window creation, stored as u16 for memory efficiency.
+    struct TitlebarCreateFlagBits
+    {
+        enum enum_type : u16
+        {
+            resizable = 0x0001,     // Allows window resizing.
+            decorated = 0x0004,     // Adds decorations like title bar and borders.
+            fullscreen = 0x0008,    // Enables fullscreen mode.
+            minimize_box = 0x00010, // Includes a minimize button.
+            maximize_box = 0x00020, // Includes a maximize button.
+            hidden = 0x00040,       // Does not show the window on creation.
+            minimized = 0x00080,    // Minimized.
+            maximized = 0x00100,    // Maximized.
+            extended_nc_area = 0x00200,
+        };
+        using flag_bitmask = std::true_type;
+    };
+
+    using TitlebarCreateFlags = acul::flags<TitlebarCreateFlagBits>;
+
+    struct TitlebarState
+    {
+        Titlebar *titlebar = nullptr;
+        TitlebarCreateFlags flags;
+        f32 height = 0.0f;
+        i32 padding = 0;
+        acul::point2D<i32> frame;
+        amal::vec2 caption_button_size{};
+        bool caption_buttons[AUIK_WINDOW_CAPTION_BTN_COUNT]{};
+        ImageButton *caption_button_widgets[AUIK_WINDOW_CAPTION_BTN_COUNT]{};
+        f32 content_end_x = 0.0f;
+        f32 caption_buttons_width = 0.0f;
+        i32 hover_button = -1;
+        i32 active_button = -1;
+        void (*destroy)(TitlebarState *state) = nullptr;
+    };
 
     class Titlebar final : public Widget
     {
@@ -57,8 +100,14 @@ namespace auik
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void on_attach() override;
         AUIK_EXPORT void on_detach() override;
-        void set_titlebar_state(struct TitlebarState *state) { _state = state; }
-        struct TitlebarState *titlebar_state() const { return _state; }
+        void set_titlebar_state(TitlebarState *state)
+        {
+            _state = state;
+            if (_state) _state->titlebar = this;
+        }
+        TitlebarState *titlebar_state() const { return _state; }
+        AUIK_EXPORT void set_caption_hover_button(i32 index);
+        AUIK_EXPORT void set_caption_active_button(i32 index);
         virtual u32 signature() const override { return AUIK_TAG_TITLEBAR; }
 
     private:
@@ -79,35 +128,17 @@ namespace auik
         u32 _leading_count = 0u;
         amal::rect _leading_region_rect{};
         bool _show_icon = false;
-        struct TitlebarState *_state = nullptr;
+        TitlebarState *_state = nullptr;
     };
-
-    // Flags for window creation, stored as u16 for memory efficiency.
-    struct TitlebarCreateFlagBits
-    {
-        enum enum_type : u16
-        {
-            resizable = 0x0001,     // Allows window resizing.
-            decorated = 0x0004,     // Adds decorations like title bar and borders.
-            fullscreen = 0x0008,    // Enables fullscreen mode.
-            minimize_box = 0x00010, // Includes a minimize button.
-            maximize_box = 0x00020, // Includes a maximize button.
-            hidden = 0x00040,       // Does not show the window on creation.
-            minimized = 0x00080,    // Minimized.
-            maximized = 0x00100,    // Maximized.
-            extended_nc_area = 0x00200,
-        };
-        using flag_bitmask = std::true_type;
-    };
-
-    using TitlebarCreateFlags = acul::flags<TitlebarCreateFlagBits>;
 
     AUIK_EXPORT bool adjust_window_by_titlebar_settings(Titlebar *titlebar, TitlebarCreateFlags flags,
                                                         const FontRegistry &fonts);
 
     inline Titlebar *make_titlebar(u32 id = AUIK_TAG_TITLEBAR)
     {
-        return acul::alloc<Titlebar>(id, get_default_widget_flags());
+        constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
+                                             WidgetFlagBits::configurable;
+        return acul::alloc<Titlebar>(id, widget_flags);
     }
 
     inline MenuBar *make_titlebar_menu_bar(u32 id, const acul::vector<StringView> &items = {})

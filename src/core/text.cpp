@@ -315,60 +315,43 @@ namespace auik
                 out.size.y = amal::max(out.size.y, line_y + out.line_height);
             }
 
-            static f32 resolve_horizontal_offset(TextHorizontalAlign align, f32 bounds_width, f32 line_width)
-            {
-                switch (align)
-                {
-                    case TextHorizontalAlign::center:
-                        return (bounds_width - line_width) * 0.5f;
-                    case TextHorizontalAlign::right:
-                        return bounds_width - line_width;
-                    case TextHorizontalAlign::left:
-                    default:
-                        return 0.0f;
-                }
-            }
-
-            static f32 resolve_vertical_offset(TextVerticalAlign align, f32 bounds_height, f32 layout_height)
-            {
-                assert(align != TextVerticalAlign::none && "Text vertical alignment does not support none");
-                switch (align)
-                {
-                    case TextVerticalAlign::center:
-                        return (bounds_height - layout_height) * 0.5f;
-                    case TextVerticalAlign::bottom:
-                        return bounds_height - layout_height;
-                    case TextVerticalAlign::none:
-                    case TextVerticalAlign::top:
-                    default:
-                        return 0.0f;
-                }
-            }
-
-            static f32 resolve_vertical_align_height(const TextLayoutResult &layout)
+            static f32 resolve_metrics_height(const TextLayoutResult &layout)
             {
                 const f32 metrics_height = amal::max(layout.ascender - layout.descender, 0.0f);
                 if (layout.lines.size() <= 1 && metrics_height > 0.0f) return metrics_height;
                 return layout.size.y;
             }
 
+            static f32 resolve_anchor_y_offset(TextAnchorY anchor, const TextLayoutResult &layout,
+                                               const amal::vec2 &bounds_size)
+            {
+                const f32 metrics_height = resolve_metrics_height(layout);
+                switch (anchor)
+                {
+                    case TextAnchorY::baseline:
+                        return -layout.ascender;
+                    case TextAnchorY::middle:
+                        return (bounds_size.y - metrics_height) * 0.5f;
+                    case TextAnchorY::descent:
+                        return bounds_size.y - metrics_height;
+                    case TextAnchorY::ascent:
+                    default:
+                        return 0.0f;
+                }
+            }
+
             static bool append_instances_from_layout(Font &font, u32 size_px, const TextLayoutResult &layout,
-                                                     const TextRenderConfig &render_config,
+                                                     const TextRenderConfig &render_config, u32 tint_color,
                                                      acul::vector<TexturesInstanceData> &out)
             {
                 out.clear();
 
-                const f32 base_x = render_config.bounds.offset.x;
-                const f32 align_height = resolve_vertical_align_height(layout);
-                const f32 base_y =
-                    render_config.bounds.offset.y +
-                    resolve_vertical_offset(render_config.vertical_align, render_config.bounds.size.y, align_height);
+                const f32 base_x = render_config.origin.x;
+                const f32 base_y = render_config.origin.y + resolve_anchor_y_offset(render_config.anchor_y, layout,
+                                                                                    render_config.size);
 
                 for (const auto &line : layout.lines)
                 {
-                    const f32 line_shift = resolve_horizontal_offset(render_config.horizontal_align,
-                                                                     render_config.bounds.size.x, line.width);
-
                     for (u32 i = 0; i < line.glyph_count; ++i)
                     {
                         const auto &shaped = layout.glyphs[line.glyph_offset + i];
@@ -377,7 +360,7 @@ namespace auik
 
                         if (glyph && glyph->empty) continue;
 
-                        if (!glyph && render_config.fallback_question_mark)
+                        if (!glyph)
                         {
                             if (!font.find_glyph(size_px, '?')) font.load_glyph(size_px, '?');
                             glyph = font.find_glyph(size_px, '?');
@@ -391,10 +374,9 @@ namespace auik
                         if (!glyph || !glyph->visible()) continue;
 
                         TexturesInstanceData instance{};
-                        instance.rect.offset = {amal::round(base_x + line_shift + glyph_offset.x),
-                                                amal::round(base_y + glyph_offset.y)};
+                        instance.rect.offset = {amal::round(base_x + glyph_offset.x), amal::round(base_y + glyph_offset.y)};
                         instance.rect.size = {static_cast<f32>(glyph->size.x), static_cast<f32>(glyph->size.y)};
-                        instance.tint_color = render_config.tint_color;
+                        instance.tint_color = tint_color;
                         instance.uv_rect = glyph->uv_rect;
                         instance.z_order = render_config.z_order;
                         instance.texture_id = static_cast<u16>(glyph->texture_id.bind_slot);
@@ -462,14 +444,14 @@ namespace auik
                 return true;
             }
 
-            static bool layout_wrapped_span(TextLayoutResult &out, Font &font, const acul::string &text, size_t start,
-                                            size_t end, const TextLayoutConfig &config, f32 &line_y, bool &truncated)
+            static bool layout_wrapped_span(TextLayoutResult &out, Font &font, u32 size_px,
+                                            const acul::string &text, size_t start, size_t end,
+                                            const TextLayoutConfig &config, f32 &line_y, bool &truncated)
             {
-                const u32 size_px = config.size_px;
                 size_t cursor = start;
                 while (cursor < end)
                 {
-                    if (config.trim_trailing_spaces)
+                    if (config.flags & TextLayoutFlagBits::trim_trailing_spaces)
                     {
                         cursor = skip_leading_spaces(text, cursor, end);
                         if (cursor >= end) break;
@@ -511,7 +493,8 @@ namespace auik
                         if (line_end > cursor)
                         {
                             const size_t untrimmed_end = line_end;
-                            if (config.trim_trailing_spaces) line_end = trim_trailing_spaces(text, cursor, line_end);
+                            if (config.flags & TextLayoutFlagBits::trim_trailing_spaces)
+                                line_end = trim_trailing_spaces(text, cursor, line_end);
                             if (line_end == cursor) line_end = untrimmed_end;
                             if (!append_shaped_line(out, font, size_px, text, cursor, line_end, line_y)) return false;
                             line_y += out.line_height;
@@ -534,7 +517,8 @@ namespace auik
                     if (probe > cursor)
                     {
                         size_t line_end = probe;
-                        if (config.trim_trailing_spaces) line_end = trim_trailing_spaces(text, cursor, probe);
+                        if (config.flags & TextLayoutFlagBits::trim_trailing_spaces)
+                            line_end = trim_trailing_spaces(text, cursor, probe);
                         if (line_end == cursor) line_end = probe;
                         if (!append_shaped_line(out, font, size_px, text, cursor, line_end, line_y)) return false;
                         line_y += out.line_height;
@@ -560,49 +544,49 @@ namespace auik
         } // namespace
 
         bool build_text_instances_from_layout(Font &font, u32 size_px, const TextLayoutResult &layout,
-                                              const TextRenderConfig &render_config,
+                                              const TextRenderConfig &render_config, u32 tint_color,
                                               acul::vector<TexturesInstanceData> &out)
-        { return append_instances_from_layout(font, size_px, layout, render_config, out); }
+        { return append_instances_from_layout(font, size_px, layout, render_config, tint_color, out); }
 
-        bool layout_single_line(Font &font, const acul::string &utf8_text, const TextLayoutConfig &config,
+        bool layout_single_line(Font &font, u32 size_px, const acul::string &utf8_text, const TextLayoutConfig &config,
                                 TextLayoutResult &out)
         {
             out.clear();
-            if (config.size_px == 0) return false;
-            out.ascender = TextFontAccess::ascender(font, config.size_px);
-            out.descender = TextFontAccess::descender(font, config.size_px);
-            out.line_height = TextFontAccess::line_height(font, config.size_px);
+            if (size_px == 0) return false;
+            out.ascender = TextFontAccess::ascender(font, size_px);
+            out.descender = TextFontAccess::descender(font, size_px);
+            out.line_height = TextFontAccess::line_height(font, size_px);
 
             if (utf8_text.empty()) return true;
 
             ShapedRun run;
-            if (!shape_range(font, config.size_px, utf8_text, 0, utf8_text.size(), run)) return false;
+            if (!shape_range(font, size_px, utf8_text, 0, utf8_text.size(), run)) return false;
 
-            if (config.max_width <= 0.0f || run.width <= config.max_width || config.overflow == TextOverflowMode::clip)
+            if (config.max_width <= 0.0f || run.width <= config.max_width ||
+                text_overflow_mode(config.flags) == TextOverflowMode::clip)
             {
                 if (config.max_width > 0.0f && run.width > config.max_width &&
-                    config.overflow == TextOverflowMode::clip)
+                    text_overflow_mode(config.flags) == TextOverflowMode::clip)
                 {
                     f32 trimmed_width = 0.0f;
                     const size_t trim_end = trim_run_to_width(run, config.max_width, trimmed_width);
-                    return append_shaped_line(out, font, config.size_px, utf8_text, 0, trim_end, 0.0f);
+                    return append_shaped_line(out, font, size_px, utf8_text, 0, trim_end, 0.0f);
                 }
-                return append_shaped_line(out, font, config.size_px, utf8_text, 0, utf8_text.size(), 0.0f);
+                return append_shaped_line(out, font, size_px, utf8_text, 0, utf8_text.size(), 0.0f);
             }
 
             out.truncated = true;
-            return append_ellipsized_line(out, font, config.size_px, utf8_text, 0, utf8_text.size(), 0.0f,
-                                          config.max_width);
+            return append_ellipsized_line(out, font, size_px, utf8_text, 0, utf8_text.size(), 0.0f, config.max_width);
         }
 
-        bool layout_multiline(Font &font, const acul::string &utf8_text, const TextLayoutConfig &config,
+        bool layout_multiline(Font &font, u32 size_px, const acul::string &utf8_text, const TextLayoutConfig &config,
                               TextLayoutResult &out)
         {
             out.clear();
-            if (config.size_px == 0) return false;
-            out.ascender = TextFontAccess::ascender(font, config.size_px);
-            out.descender = TextFontAccess::descender(font, config.size_px);
-            out.line_height = TextFontAccess::line_height(font, config.size_px);
+            if (size_px == 0) return false;
+            out.ascender = TextFontAccess::ascender(font, size_px);
+            out.descender = TextFontAccess::descender(font, size_px);
+            out.line_height = TextFontAccess::line_height(font, size_px);
 
             f32 line_y = 0.0f;
             size_t cursor = 0;
@@ -619,10 +603,11 @@ namespace auik
                 }
 
                 if (span_end == cursor) append_empty_line(out, cursor, line_y);
-                else if (config.wrap == TextWrapMode::word)
+                else if (text_wrap_mode(config.flags) == TextWrapMode::word)
                 {
                     bool truncated = false;
-                    if (!layout_wrapped_span(out, font, utf8_text, cursor, span_end, config, line_y, truncated))
+                    if (!layout_wrapped_span(out, font, size_px, utf8_text, cursor, span_end, config, line_y,
+                                             truncated))
                         return false;
                     if (truncated)
                     {
@@ -635,15 +620,14 @@ namespace auik
                     if (config.max_lines != 0 && out.lines.size() + 1 >= config.max_lines &&
                         (span_end < utf8_text.size() || span_end - cursor > 0))
                     {
-                        if (!append_ellipsized_line(out, font, config.size_px, utf8_text, cursor, span_end, line_y,
+                        if (!append_ellipsized_line(out, font, size_px, utf8_text, cursor, span_end, line_y,
                                                     config.max_width))
                             return false;
                         out.truncated = span_end < utf8_text.size();
                         break;
                     }
 
-                    if (!append_shaped_line(out, font, config.size_px, utf8_text, cursor, span_end, line_y))
-                        return false;
+                    if (!append_shaped_line(out, font, size_px, utf8_text, cursor, span_end, line_y)) return false;
                     line_y += out.line_height;
                 }
 
@@ -654,32 +638,36 @@ namespace auik
             return true;
         }
 
-        bool build_single_line_instances(Font &font, const acul::string &utf8_text,
+        bool build_single_line_instances(Font &font, u32 size_px, const acul::string &utf8_text,
                                          const TextLayoutConfig &layout_config, const TextRenderConfig &render_config,
-                                         acul::vector<TexturesInstanceData> &out, TextLayoutResult *layout_result)
+                                         u32 tint_color, acul::vector<TexturesInstanceData> &out,
+                                         TextLayoutResult *layout_result)
         {
             TextLayoutResult local_layout;
             auto &layout = layout_result ? *layout_result : local_layout;
             auto effective_layout = layout_config;
-            if (effective_layout.size_px == 0) return false;
-            if (effective_layout.width_mode == TextLayoutWidthMode::bounds && effective_layout.max_width <= 0.0f)
-                effective_layout.max_width = render_config.bounds.size.x;
-            if (!layout_single_line(font, utf8_text, effective_layout, layout)) return false;
-            return append_instances_from_layout(font, effective_layout.size_px, layout, render_config, out);
+            if (size_px == 0) return false;
+            if (text_width_mode(effective_layout.flags) == TextLayoutWidthMode::bounds &&
+                effective_layout.max_width <= 0.0f)
+                effective_layout.max_width = render_config.size.x;
+            if (!layout_single_line(font, size_px, utf8_text, effective_layout, layout)) return false;
+            return append_instances_from_layout(font, size_px, layout, render_config, tint_color, out);
         }
 
-        bool build_multiline_instances(Font &font, const acul::string &utf8_text, const TextLayoutConfig &layout_config,
-                                       const TextRenderConfig &render_config, acul::vector<TexturesInstanceData> &out,
+        bool build_multiline_instances(Font &font, u32 size_px, const acul::string &utf8_text,
+                                       const TextLayoutConfig &layout_config, const TextRenderConfig &render_config,
+                                       u32 tint_color, acul::vector<TexturesInstanceData> &out,
                                        TextLayoutResult *layout_result)
         {
             TextLayoutResult local_layout;
             auto &layout = layout_result ? *layout_result : local_layout;
             auto effective_layout = layout_config;
-            if (effective_layout.size_px == 0) return false;
-            if (effective_layout.width_mode == TextLayoutWidthMode::bounds && effective_layout.max_width <= 0.0f)
-                effective_layout.max_width = render_config.bounds.size.x;
-            if (!layout_multiline(font, utf8_text, effective_layout, layout)) return false;
-            return append_instances_from_layout(font, effective_layout.size_px, layout, render_config, out);
+            if (size_px == 0) return false;
+            if (text_width_mode(effective_layout.flags) == TextLayoutWidthMode::bounds &&
+                effective_layout.max_width <= 0.0f)
+                effective_layout.max_width = render_config.size.x;
+            if (!layout_multiline(font, size_px, utf8_text, effective_layout, layout)) return false;
+            return append_instances_from_layout(font, size_px, layout, render_config, tint_color, out);
         }
     } // namespace detail
 } // namespace auik

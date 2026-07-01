@@ -5,34 +5,6 @@
 
 namespace auik
 {
-    static const DragUnit *find_unit(const DragUnitResolver *resolver, const acul::string &name)
-    {
-        if (!resolver || name.empty()) return nullptr;
-        for (u32 i = 0; i < resolver->unit_count; ++i)
-        {
-            const DragUnit &unit = resolver->units[i];
-            if (unit.name && name == unit.name) return &unit;
-        }
-        return nullptr;
-    }
-
-    static const DragUnit *find_default_unit(const DragUnitResolver *resolver, const char *preferred)
-    {
-        if (!resolver) return nullptr;
-        if (auto *unit = find_unit(resolver, preferred ? acul::string(preferred) : acul::string{})) return unit;
-        return find_unit(resolver, resolver->default_unit ? acul::string(resolver->default_unit) : acul::string{});
-    }
-
-    static bool only_trailing_spaces(const char *str)
-    {
-        while (*str)
-        {
-            if (!isspace(static_cast<unsigned char>(*str))) return false;
-            ++str;
-        }
-        return true;
-    }
-
     static f64 round_float_noise(f64 value)
     {
         if (!std::isfinite(value)) return value;
@@ -82,12 +54,6 @@ namespace auik
         }
     }
 
-    static f64 resolve_base_speed(const DragUnitResolver *resolver, const char *default_unit, f32 speed)
-    {
-        const DragUnit *unit = find_default_unit(resolver, default_unit);
-        return unit ? static_cast<f64>(speed) * unit->to_base : static_cast<f64>(speed);
-    }
-
     namespace detail
     {
         enum DragInteractionFlagBits : u8
@@ -110,27 +76,23 @@ namespace auik
         static inline void clear_drag_interaction_flags(u8 &flags, u8 bits) { flags &= static_cast<u8>(~bits); }
 
         template <typename T>
-        static inline TextFlags drag_text_flags(const DragUnitResolver *resolver)
+        static inline TextFlags drag_text_flags()
         {
-            if (resolver) return TextFlagBits::chars_ascii;
             if constexpr (std::is_integral_v<T>)
                 return TextFlagBits::chars_decimal | TextFlagBits::chars_no_blank | TextFlagBits::chars_ascii;
             else return TextFlagBits::chars_scientific | TextFlagBits::chars_ascii;
         }
 
         template <typename T>
-        Draggable<T>::Draggable(u32 id, T *value, T min_value, T max_value, f32 speed, amal::vec2 size,
-                                WidgetFlags flags, Widget *parent, const DragUnitResolver *unit_resolver,
-                                const char *default_unit)
-            : TextBox(id, "", size, flags, parent, AUIK_TAG_TEXTBOX, drag_text_flags<T>(unit_resolver)),
+        Draggable<T>::Draggable(u32 id, u32 tag_id, T value, T min_value, T max_value, f32 speed, amal::vec2 size,
+                                WidgetFlags flags)
+            : Textbox(id, "", size, flags, tag_id, drag_text_flags<T>()),
               _value(value),
-              _fallback_value(value ? *value : T{}),
               _min_value(min_value),
               _max_value(max_value),
               _speed(speed),
-              _unit_resolver(unit_resolver),
-              _default_unit(default_unit),
-              _last_value(value ? *value : T{})
+              _last_value(value),
+              _presented_value(value)
         {
             set_drag_interaction_flag(_interaction_flags, drag_interaction_select_all_on_next_focus);
             sync_text_from_value();
@@ -138,13 +100,17 @@ namespace auik
 
         template <typename T>
         void Draggable<T>::set_value(T value)
+        { set_value_internal(value, false); }
+
+        template <typename T>
+        void Draggable<T>::set_value_internal(T value, bool manual_change)
         {
             value = clamp_value(value, _min_value, _max_value);
             const T prev_value = this->value();
-            if (prev_value == value) return;
-            if (_value) *_value = value;
-            else _fallback_value = value;
-            _last_value = value;
+            if (prev_value == value && !manual_change) return;
+            _last_value = prev_value;
+            _value = value;
+            _manual_change = manual_change;
             if (_value_model_binding) set_model_binding_value<T>(*_value_model_binding, value);
             const bool prevented = mark_changed();
             sync_text_from_value();
@@ -168,12 +134,10 @@ namespace auik
         }
 
         template <typename T>
-        void Draggable<T>::set_unit_resolver(const DragUnitResolver *resolver, const char *default_unit)
+        void Draggable<T>::set_postfix(StringView value)
         {
-            _unit_resolver = resolver;
-            _default_unit = default_unit;
-            text_flags = drag_text_flags<T>(resolver);
-            sync_text_from_value();
+            _postfix = value.is_translated ? translate_string(value) : acul::string(value.str ? value.str : "");
+            sync_text_presentation_from_value();
         }
 
         template <typename T>
@@ -187,8 +151,8 @@ namespace auik
         template <typename T>
         void Draggable<T>::update_layout(bool min_size_known)
         {
-            if (value() != _last_value) sync_text_from_value();
-            TextBox::update_layout(min_size_known);
+            if (value() != _presented_value) sync_text_from_value();
+            Textbox::update_layout(min_size_known);
         }
 
         template <typename T>
@@ -199,7 +163,7 @@ namespace auik
                 if (!commit_text_value()) sync_text_from_value();
                 _pending_text_commit = false;
             }
-            TextBox::on_focus(focused);
+            Textbox::on_focus(focused);
             if (focused && has_drag_interaction_flag(_interaction_flags, drag_interaction_select_all_on_next_focus))
             {
                 clear_drag_interaction_flag(_interaction_flags, drag_interaction_select_all_on_next_focus);
@@ -226,7 +190,7 @@ namespace auik
             if (key != MouseKey::left)
             {
                 if (has_drag_interaction_flag(_interaction_flags, drag_interaction_text_edit_mode))
-                    TextBox::on_click(key, state, click_count);
+                    Textbox::on_click(key, state, click_count);
                 return;
             }
 
@@ -250,7 +214,7 @@ namespace auik
 
             if (has_drag_interaction_flag(_interaction_flags, drag_interaction_text_edit_mode))
             {
-                TextBox::on_click(key, state, click_count);
+                Textbox::on_click(key, state, click_count);
                 return;
             }
 
@@ -278,7 +242,7 @@ namespace auik
             if (has_drag_interaction_flag(_interaction_flags, drag_interaction_text_edit_mode) &&
                 !has_drag_interaction_flag(_interaction_flags, drag_interaction_select_all_on_release))
             {
-                TextBox::on_drag(delta, state);
+                Textbox::on_drag(delta, state);
                 return;
             }
 
@@ -307,9 +271,8 @@ namespace auik
                 _drag_value = _drag_origin_value;
             }
             _drag_delta_steps += static_cast<f64>(delta.x);
-            const f64 base_speed = resolve_base_speed(_unit_resolver, _default_unit, _speed);
             const T next_value =
-                clamp_value(cast_relative_stepped_drag_value<T>(_drag_origin_value, _drag_delta_steps, base_speed),
+                clamp_value(cast_relative_stepped_drag_value<T>(_drag_origin_value, _drag_delta_steps, _speed),
                             _min_value, _max_value);
             _drag_value = static_cast<f64>(next_value);
             set_value(next_value);
@@ -334,31 +297,32 @@ namespace auik
                 add_render_command<KeyEventTraits>(this, [this]() { apply_render_update(true); });
                 return;
             }
-            TextBox::on_key(key, state, mods);
+            Textbox::on_key(key, state, mods);
             _pending_text_commit = true;
         }
 
         template <typename T>
         void Draggable<T>::on_char_input(u32 char_code, u32 count)
         {
-            if constexpr (std::is_integral_v<T>)
-            {
-                if (!_unit_resolver)
-                {
-                    const bool digit = char_code >= '0' && char_code <= '9';
-                    const bool sign = char_code == '+' || char_code == '-';
-                    if (!digit && !sign) return;
-                }
-            }
-            TextBox::on_char_input(char_code, count);
+            Textbox::on_char_input(char_code, count);
             _pending_text_commit = true;
         }
 
         template <typename T>
         void Draggable<T>::sync_text_from_value()
         {
-            _last_value = value();
-            TextBox::set_value_internal(format_value(value()));
+            _presented_value = value();
+            Textbox::set_value_internal(format_value(value()));
+            _pending_text_commit = false;
+            _manual_change = false;
+        }
+
+        template <typename T>
+        void Draggable<T>::sync_text_presentation_from_value()
+        {
+            _presented_value = value();
+            Textbox::_value = format_value(value());
+            sync_text_presentation();
             _pending_text_commit = false;
         }
 
@@ -367,74 +331,42 @@ namespace auik
         {
             T parsed{};
             if (!parse_text_value(parsed)) return false;
-            set_value(parsed);
+            set_value_internal(parsed, true);
             return true;
         }
 
         template <typename T>
         void Draggable<T>::step_value(f64 delta)
         {
-            const f64 base_speed = resolve_base_speed(_unit_resolver, _default_unit, _speed);
-            const T next_value = cast_relative_stepped_drag_value<T>(static_cast<f64>(value()), delta, base_speed);
+            const T next_value = cast_relative_stepped_drag_value<T>(static_cast<f64>(value()), delta, _speed);
             set_value(clamp_value(next_value, _min_value, _max_value));
         }
 
         template <typename T>
         acul::string Draggable<T>::format_value(T value) const
         {
-            const auto *unit = find_default_unit(_unit_resolver, _default_unit);
             f64 display_value = static_cast<f64>(value);
-            if (unit && unit->to_base != 0.0) display_value /= unit->to_base;
             if constexpr (!std::is_integral_v<T>) display_value = round_float_noise(display_value);
 
             acul::string out;
             if constexpr (std::is_integral_v<T>) out = acul::to_string(static_cast<int>(std::llround(display_value)));
             else out = format_display_float(display_value);
 
-            if (unit && unit->name)
-            {
-                out += " ";
-                out += unit->name;
-            }
+            out += _postfix;
             return out;
         }
 
         template <typename T>
         bool Draggable<T>::parse_text_value(T &out) const
         {
-            const acul::string text = acul::trim(TextBox::value());
+            const acul::string text = acul::trim(Textbox::value());
             if (text.empty()) return false;
 
             const char *ptr = text.c_str();
             f32 parsed = 0.0f;
             if (!acul::stof(ptr, parsed)) return false;
-
-            while (isspace(static_cast<unsigned char>(*ptr))) ++ptr;
-            const char *unit_begin = ptr;
-            while (*ptr && !isspace(static_cast<unsigned char>(*ptr))) ++ptr;
-            acul::string unit_name(unit_begin, ptr - unit_begin);
-            if (!only_trailing_spaces(ptr)) return false;
-
-            const DragUnit *unit = nullptr;
-            if (_unit_resolver)
-            {
-                unit = unit_name.empty() ? find_default_unit(_unit_resolver, _default_unit)
-                                         : find_unit(_unit_resolver, unit_name);
-                if (!unit) return false;
-            }
-            else if (!unit_name.empty()) return false;
-
-            f64 base_value = static_cast<f64>(parsed);
-            if (unit) base_value *= unit->to_base;
-            out = clamp_value(cast_drag_value<T>(base_value), _min_value, _max_value);
+            out = clamp_value(cast_drag_value<T>(parsed), _min_value, _max_value);
             return true;
-        }
-
-        template <typename T>
-        const char *Draggable<T>::resolve_default_unit() const
-        {
-            if (_default_unit) return _default_unit;
-            return _unit_resolver ? _unit_resolver->default_unit : nullptr;
         }
 
         template <typename T>
@@ -446,41 +378,35 @@ namespace auik
         template class Draggable<f64>;
     } // namespace detail
 
-    DragInt::DragInt(u32 id, int *value, int min_value, int max_value, f32 speed, amal::vec2 size, WidgetFlags flags,
-                     Widget *parent, const DragUnitResolver *unit_resolver, const char *default_unit)
-        : Draggable(id, value, min_value, max_value, speed, size, flags, parent, unit_resolver, default_unit)
+    DragInt::DragInt(u32 id, int value, int min_value, int max_value, f32 speed, amal::vec2 size, WidgetFlags flags)
+        : Draggable(id, AUIK_TAG_DRAG_INT, value, min_value, max_value, speed, size, flags)
     {
     }
 
     DragInt::DragInt(u32 id, ModelBinding *binding, int min_value, int max_value, f32 speed, amal::vec2 size,
-                     WidgetFlags flags, Widget *parent, const DragUnitResolver *unit_resolver, const char *default_unit)
-        : Draggable(id, nullptr, min_value, max_value, speed, size, flags, parent, unit_resolver, default_unit)
+                     WidgetFlags flags)
+        : Draggable(id, AUIK_TAG_DRAG_INT, 0, min_value, max_value, speed, size, flags)
     { set_model_binding(binding); }
 
-    DragFloat::DragFloat(u32 id, f32 *value, f32 min_value, f32 max_value, f32 speed, amal::vec2 size,
-                         WidgetFlags flags, Widget *parent, const DragUnitResolver *unit_resolver,
-                         const char *default_unit)
-        : Draggable(id, value, min_value, max_value, speed, size, flags, parent, unit_resolver, default_unit)
+    DragFloat::DragFloat(u32 id, f32 value, f32 min_value, f32 max_value, f32 speed, amal::vec2 size, WidgetFlags flags)
+        : Draggable(id, AUIK_TAG_DRAG_FLOAT, value, min_value, max_value, speed, size, flags)
     {
     }
 
     DragFloat::DragFloat(u32 id, ModelBinding *binding, f32 min_value, f32 max_value, f32 speed, amal::vec2 size,
-                         WidgetFlags flags, Widget *parent, const DragUnitResolver *unit_resolver,
-                         const char *default_unit)
-        : Draggable(id, nullptr, min_value, max_value, speed, size, flags, parent, unit_resolver, default_unit)
+                         WidgetFlags flags)
+        : Draggable(id, AUIK_TAG_DRAG_FLOAT, 0, min_value, max_value, speed, size, flags)
     { set_model_binding(binding); }
 
-    DragDouble::DragDouble(u32 id, f64 *value, f64 min_value, f64 max_value, f32 speed, amal::vec2 size,
-                           WidgetFlags flags, Widget *parent, const DragUnitResolver *unit_resolver,
-                           const char *default_unit)
-        : Draggable(id, value, min_value, max_value, speed, size, flags, parent, unit_resolver, default_unit)
+    DragDouble::DragDouble(u32 id, f64 value, f64 min_value, f64 max_value, f32 speed, amal::vec2 size,
+                           WidgetFlags flags)
+        : Draggable(id, AUIK_TAG_DRAG_DOUBLE, value, min_value, max_value, speed, size, flags)
     {
     }
 
     DragDouble::DragDouble(u32 id, ModelBinding *binding, f64 min_value, f64 max_value, f32 speed, amal::vec2 size,
-                           WidgetFlags flags, Widget *parent, const DragUnitResolver *unit_resolver,
-                           const char *default_unit)
-        : Draggable(id, nullptr, min_value, max_value, speed, size, flags, parent, unit_resolver, default_unit)
+                           WidgetFlags flags)
+        : Draggable(id, AUIK_TAG_DRAG_DOUBLE, 0.0, min_value, max_value, speed, size, flags)
     { set_model_binding(binding); }
 
     namespace
@@ -508,11 +434,10 @@ namespace auik
             u32 style_tag = AUIK_STYLE_TAG_TEXTBOX;
             stream.read(value).read(min_value).read(max_value).read(speed).read(text_flags).read(style_tag);
 
-            auto *widget = acul::alloc<DragInt>(common.id, static_cast<int *>(nullptr), min_value, max_value, speed,
-                                                common.requested_size, WidgetFlags(common.widget_flags), nullptr);
+            auto *widget = acul::alloc<DragInt>(common.id, value, min_value, max_value, speed, common.requested_size,
+                                                WidgetFlags(common.widget_flags));
             widget->set_style_tag(style_tag);
             widget->text_flags = TextFlags(text_flags);
-            widget->set_value(value);
             detail::apply_widget_common_data(widget, common);
             return widget;
         }
@@ -540,11 +465,10 @@ namespace auik
             u32 style_tag = AUIK_STYLE_TAG_TEXTBOX;
             stream.read(value).read(min_value).read(max_value).read(speed).read(text_flags).read(style_tag);
 
-            auto *widget = acul::alloc<DragFloat>(common.id, static_cast<f32 *>(nullptr), min_value, max_value, speed,
-                                                  common.requested_size, WidgetFlags(common.widget_flags), nullptr);
+            auto *widget = acul::alloc<DragFloat>(common.id, value, min_value, max_value, speed, common.requested_size,
+                                                  WidgetFlags(common.widget_flags));
             widget->set_style_tag(style_tag);
             widget->text_flags = TextFlags(text_flags);
-            widget->set_value(value);
             detail::apply_widget_common_data(widget, common);
             return widget;
         }
@@ -572,11 +496,10 @@ namespace auik
             u32 style_tag = AUIK_STYLE_TAG_TEXTBOX;
             stream.read(value).read(min_value).read(max_value).read(speed).read(text_flags).read(style_tag);
 
-            auto *widget = acul::alloc<DragDouble>(common.id, static_cast<f64 *>(nullptr), min_value, max_value, speed,
-                                                   common.requested_size, WidgetFlags(common.widget_flags), nullptr);
+            auto *widget = acul::alloc<DragDouble>(common.id, value, min_value, max_value, speed, common.requested_size,
+                                                   WidgetFlags(common.widget_flags));
             widget->set_style_tag(style_tag);
             widget->text_flags = TextFlags(text_flags);
-            widget->set_value(value);
             detail::apply_widget_common_data(widget, common);
             return widget;
         }

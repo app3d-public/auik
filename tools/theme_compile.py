@@ -501,7 +501,7 @@ def build_defines(ids: dict[str, str], variable_names: set[str]) -> list[dict[st
     return defines
 
 
-def build_generated_model(tree: ThemeTree, ids: dict[str, str], header_ids: dict[str, str]) -> dict:
+def build_generated_model(tree: ThemeTree, ids: dict[str, str], header_ids: dict[str, str], include_headers: list[str]) -> dict:
     variables = {name: local_var_name(name) for name in tree.variables}
     var_def_map: OrderedDict[str, dict[str, str]] = OrderedDict()
     style_rule_map: OrderedDict[tuple[str, str], dict] = OrderedDict()
@@ -558,7 +558,12 @@ def build_generated_model(tree: ThemeTree, ids: dict[str, str], header_ids: dict
 
     header_variables = tree.variables & set(header_ids)
 
-    return {"defines": build_defines(header_ids, header_variables), "variables": list(var_def_map.values()), "rules": style_rules}
+    return {
+        "defines": build_defines(header_ids, header_variables),
+        "include_headers": include_headers,
+        "variables": list(var_def_map.values()),
+        "rules": style_rules,
+    }
 
 
 def write_outputs(output_folder: Path, model: dict) -> None:
@@ -588,8 +593,10 @@ namespace auik
 #include <acul/memory/alloc.hpp>
 #include <amal/color.hpp>
 #include <auik/auik.hpp>
-#include <auik/widget_tags.hpp>
 #include <auik/theme.hpp>
+{% for header in include_headers %}
+#include "{{ header }}"
+{% endfor %}
 
 namespace auik
 {
@@ -611,7 +618,14 @@ namespace auik
     )
 
     write_text_if_changed(header, header_template.render(defines=model["defines"]))
-    write_text_if_changed(source, source_template.render(variables=model["variables"], rules=model["rules"]))
+    write_text_if_changed(
+        source,
+        source_template.render(
+            include_headers=model["include_headers"],
+            variables=model["variables"],
+            rules=model["rules"],
+        ),
+    )
 
 
 def write_ids_header(path: Path, ids: dict[str, str], variable_names: set[str]) -> None:
@@ -631,8 +645,18 @@ def write_ids_header(path: Path, ids: dict[str, str], variable_names: set[str]) 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Compile auik CSS theme sources.")
-    parser.add_argument("--input-folder", type=Path, help="Folder with project CSS files")
+    parser.add_argument("--input-folder", action="append", type=Path, help="Folder with project CSS files")
     parser.add_argument("--input-base", required=True, type=Path, help="Base CSS file")
+    parser.add_argument("--ids-csv", action="append", type=Path, default=[], help="Additional predeclared style ids CSV")
+    parser.add_argument(
+        "--processed-ids",
+        action="append",
+        nargs=2,
+        metavar=("IDS_CSV", "HEADER"),
+        default=[],
+        help="Style ids CSV and generated header already owned by a module",
+    )
+    parser.add_argument("--ids-output-csv", type=Path, help="Path to the ids CSV updated from --input-base")
     parser.add_argument("--output-folder", type=Path, help="Folder for generated hpp/cpp")
     parser.add_argument("--ids-header", type=Path, help="Generate default widget/style tag defines from the base CSS id cache")
     parser.add_argument("--ids-only", action="store_true", help="Only update id caches and generate --ids-header")
@@ -641,7 +665,7 @@ def main() -> int:
     args = parser.parse_args()
 
     input_base = args.input_base.resolve()
-    input_folder = args.input_folder.resolve() if args.input_folder else input_base.parent
+    input_folders = [path.resolve() for path in args.input_folder] if args.input_folder else [input_base.parent]
     output_folder = args.output_folder.resolve() if args.output_folder else None
     sign_request_path = str(args.sign_request.resolve()) if args.sign_request else ""
     if not args.ids_only and output_folder is None:
@@ -651,35 +675,63 @@ def main() -> int:
 
     if not input_base.exists():
         raise FileNotFoundError(f"Base CSS not found: {input_base}")
-    if not input_folder.exists():
-        raise FileNotFoundError(f"Input folder not found: {input_folder}")
+    for input_folder in input_folders:
+        if not input_folder.exists():
+            raise FileNotFoundError(f"Input folder not found: {input_folder}")
+    for ids_csv in args.ids_csv:
+        if not ids_csv.exists():
+            raise FileNotFoundError(f"Style ids CSV not found: {ids_csv}")
+    for ids_csv, header in args.processed_ids:
+        if not Path(ids_csv).exists():
+            raise FileNotFoundError(f"Processed style ids CSV not found: {ids_csv}")
+        if not Path(header).exists():
+            raise FileNotFoundError(f"Processed style ids header not found: {header}")
 
     base_css_files = [input_base]
     app_css_files = []
-    if input_folder != input_base.parent:
-        app_css_files = [path for path in sorted(input_folder.rglob("*.css")) if path.resolve() != input_base]
-    else:
-        base_css_files.extend(path for path in sorted(input_folder.rglob("*.css")) if path.resolve() != input_base)
+    for input_folder in input_folders:
+        folder_files = [path for path in sorted(input_folder.rglob("*.css")) if path.resolve() != input_base]
+        if input_folder == input_base.parent:
+            base_css_files.extend(folder_files)
+        else:
+            app_css_files.extend(folder_files)
 
     css_files = base_css_files + app_css_files
     base_tree = collect_tree(base_css_files)
     app_tree = collect_tree(app_css_files)
     tree = collect_tree(css_files)
 
-    base_csv_path = input_base.parent / DEFAULT_IDS_CSV_NAME
+    base_csv_path = args.ids_output_csv.resolve() if args.ids_output_csv else input_base.parent / DEFAULT_IDS_CSV_NAME
     base_ids = update_ids(base_csv_path, base_tree.tags | base_tree.variables, sign_request_path=sign_request_path)
+    processed_ids = {}
+    external_header_ids = {}
+    include_headers = []
+    for ids_csv, header in args.processed_ids:
+        processed_ids.update(read_ids(Path(ids_csv).resolve()))
+        include_headers.append(str(Path(header).resolve()).replace("\\", "/"))
+    for ids_csv in args.ids_csv:
+        external_header_ids.update(read_ids(ids_csv.resolve()))
 
     app_csv_path = None
     app_ids = {}
-    app_names = (app_tree.tags | app_tree.variables) - set(base_ids)
+    app_names = (app_tree.tags | app_tree.variables) - set(base_ids) - set(processed_ids) - set(external_header_ids)
     if app_names:
-        app_csv_path = input_folder / APP_IDS_CSV_NAME
-        app_ids = update_ids(app_csv_path, app_names, set(base_ids.values()), sign_request_path)
+        if len(input_folders) == 1:
+            app_csv_path = input_folders[0] / APP_IDS_CSV_NAME
+        else:
+            app_csv_path = output_folder / APP_IDS_CSV_NAME
+        app_ids = update_ids(
+            app_csv_path,
+            app_names,
+            set(base_ids.values()) | set(processed_ids.values()) | set(external_header_ids.values()),
+            sign_request_path,
+        )
 
-    ids = merge_ids(base_ids, app_ids)
+    app_header_ids = merge_ids(external_header_ids, app_ids)
+    ids = merge_ids(merge_ids(base_ids, processed_ids), app_header_ids)
 
     if not args.ids_only:
-        model = build_generated_model(tree, ids, app_ids)
+        model = build_generated_model(tree, ids, app_header_ids, include_headers)
         write_outputs(output_folder, model)
     if args.ids_header:
         write_ids_header(args.ids_header.resolve(), base_ids, base_tree.variables)

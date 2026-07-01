@@ -11,8 +11,7 @@ namespace auik
     class WLine final : public Widget
     {
     public:
-        AUIK_EXPORT explicit WLine(u32 id, amal::axis axis = amal::axis::x,
-                                   WidgetFlags flags = get_default_widget_flags());
+        AUIK_EXPORT explicit WLine(u32 id, amal::axis axis, WidgetFlags flags);
 
         amal::axis axis() const { return _axis; }
         u32 style_tag() const { return _style.tag_id; }
@@ -36,8 +35,7 @@ namespace auik
     class WRect final : public Widget
     {
     public:
-        AUIK_EXPORT explicit WRect(u32 id, const amal::rect &bounds = {},
-                                   WidgetFlags flags = get_default_widget_flags());
+        AUIK_EXPORT explicit WRect(u32 id, const amal::rect &bounds, WidgetFlags flags);
 
         u32 style_tag() const { return _style.tag_id; }
         AUIK_EXPORT void set_style_tag(u32 tag_id);
@@ -55,11 +53,19 @@ namespace auik
         DrawDataID _draw{};
     };
 
-    inline WLine *make_w_line(u32 id, amal::axis axis = amal::axis::x, WidgetFlags flags = get_default_widget_flags())
-    { return acul::alloc<WLine>(id, axis, flags); }
+    inline WLine *make_w_line(u32 id, amal::axis axis = amal::axis::x)
+    {
+        constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
+                                             WidgetFlagBits::configurable;
+        return acul::alloc<WLine>(id, axis, widget_flags);
+    }
 
-    inline WRect *make_w_rect(u32 id, const amal::rect &bounds = {}, WidgetFlags flags = get_default_widget_flags())
-    { return acul::alloc<WRect>(id, bounds, flags); }
+    inline WRect *make_w_rect(u32 id, const amal::rect &bounds = {})
+    {
+        constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
+                                             WidgetFlagBits::configurable;
+        return acul::alloc<WRect>(id, bounds, widget_flags);
+    }
 
     namespace streams
     {

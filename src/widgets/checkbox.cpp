@@ -1,4 +1,5 @@
 #include <auik/auik.hpp>
+#include <auik/detail/pixel_snap.hpp>
 #include <auik/pipelines.hpp>
 #include <auik/widgets/checkbox.hpp>
 #include <auik/widgets/image.hpp>
@@ -7,12 +8,10 @@
 namespace auik
 {
     Checkbox::Checkbox(u32 id, bool value, WidgetFlags widget_flags)
-        : Widget(id, widget_flags, EventFlagBits::click, nullptr, {{0.0f, 0.0f}, {0.0f, 0.0f}}, AUIK_TAG_CHECKBOX),
+        : Widget(id, widget_flags, EventFlagBits::click, {{0.0f, 0.0f}, {0.0f, 0.0f}}, AUIK_TAG_CHECKBOX),
           _value(value),
           _checkmark_rect(detail::make_rect_data(AUIK_TAG_CHECKBOX_CHECKMARK, AUIK_TAG_CHECKBOX_CHECKMARK))
-    {
-        ensure_checkmark_resource();
-    }
+    { ensure_checkmark_resource(); }
 
     void Checkbox::ensure_checkmark_resource()
     {
@@ -59,6 +58,7 @@ namespace auik
         const amal::vec2 mark_pos = {_box_rect.offset.x + amal::max((_box_rect.size.x - mark_size.x) * 0.5f, 0.0f),
                                      _box_rect.offset.y + amal::max((_box_rect.size.y - mark_size.y) * 0.5f, 0.0f)};
         _checkmark_rect.bounds = {mark_pos, mark_size};
+        _checkmark_rect.bounds = detail::snap_rect_offset_to_pixel_grid(_checkmark_rect.bounds);
         _checkmark_rect.clip_id = clip_id();
         _checkmark_rect.depth = next_depth(_content_depth_range);
         _checkmark_rect.hit_depth = _checkmark_rect.depth;
@@ -76,7 +76,8 @@ namespace auik
         const amal::vec2 min_required = {amal::max(required_size().x - margin.x - margin.z, 0.0f),
                                          amal::max(required_size().y - margin.y - margin.w, 0.0f)};
 
-        amal::vec2 widget_size = size();
+        amal::vec2 widget_size = {amal::max(size().x - margin.x - margin.z, 0.0f),
+                                  amal::max(size().y - margin.y - margin.w, 0.0f)};
         widget_size.x = amal::max(widget_size.x, min_required.x);
         widget_size.y = amal::max(widget_size.y, min_required.y);
 
@@ -175,11 +176,8 @@ namespace auik
         return true;
     }
 
-    Checkbox::Checkbox(u32 id, ModelBinding *binding, WidgetFlags widget_flags)
-        : Checkbox(id, false, widget_flags)
-    {
-        set_model_binding(binding);
-    }
+    Checkbox::Checkbox(u32 id, ModelBinding *binding, WidgetFlags widget_flags) : Checkbox(id, false, widget_flags)
+    { set_model_binding(binding); }
 
     void Checkbox::set_model_binding(ModelBinding *binding)
     {

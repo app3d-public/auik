@@ -1,5 +1,6 @@
 #include <amal/trigonometric.hpp>
 #include <auik/auik.hpp>
+#include <auik/detail/depth.hpp>
 #include <auik/detail/rect.hpp>
 #include <auik/pipelines.hpp>
 #include <auik/post_effects.hpp>
@@ -48,6 +49,21 @@ namespace auik
         return content_x + content_w * 0.5f;
     }
 
+    static inline void apply_tree_cell_alignment(Widget *cell, HAlign halign, VAlign valign,
+                                                 const amal::vec2 &cell_pos, const amal::vec2 &cell_size)
+    {
+        if (!cell) return;
+        const amal::vec2 required = cell->required_size();
+        amal::vec2 pos = cell_pos;
+        if (halign == HAlign::center) pos.x += amal::floor(amal::max(cell_size.x - required.x, 0.0f) * 0.5f);
+        else if (halign == HAlign::right) pos.x += amal::max(cell_size.x - required.x, 0.0f);
+
+        if (valign == VAlign::center) pos.y += amal::floor(amal::max(cell_size.y - required.y, 0.0f) * 0.5f);
+        else if (valign == VAlign::bottom) pos.y += amal::max(cell_size.y - required.y, 0.0f);
+
+        cell->set_position(pos);
+    }
+
     static inline void build_tree_arrow_vertices(TexturedVertexStreamVertex (&vertices)[4], const amal::rect &icon_rect,
                                                  const amal::rect &uv_rect, f32 z, u32 clip_id)
     {
@@ -83,16 +99,18 @@ namespace auik
         return false;
     }
 
-    Tree::Tree(u32 id, WidgetFlags flags, Widget *parent, u32 style_tag_id)
-        : Tree(id, AUIK_SIZE_FIT, flags, parent, style_tag_id)
+    Tree::Tree(u32 id, WidgetFlags flags, u32 style_tag_id)
+        : Tree(id, AUIK_SIZE_FIT, flags, style_tag_id)
     {
     }
 
-    Tree::Tree(u32 id, amal::vec2 size, WidgetFlags flags, Widget *parent, u32 style_tag_id)
-        : Widget(id, flags, EventFlagBits::click | EventFlagBits::hover | EventFlagBits::drag, parent,
+    Tree::Tree(u32 id, amal::vec2 size, WidgetFlags flags, u32 style_tag_id)
+        : Widget(id, flags, EventFlagBits::click | EventFlagBits::hover | EventFlagBits::drag,
                  {{0.0f, 0.0f}, size}, style_tag_id),
           _style({Theme::STYLE_ID_INVALID, style_tag_id})
-    { _default_column_settings.valign = VAlign::center; }
+    {
+        _default_column_settings.valign = VAlign::center;
+    }
 
     Tree::~Tree()
     {
@@ -225,13 +243,6 @@ namespace auik
         invalidate_layout();
     }
 
-    void Tree::set_resize_border_style_tag(u32 tag_id)
-    {
-        if (_resize_border_style.tag_id == tag_id) return;
-        _resize_border_style = {Theme::STYLE_ID_INVALID, tag_id};
-        invalidate_layout();
-    }
-
     void Tree::set_size_overrides(acul::vector<acul::point2D<f32>> values, bool column_overrides)
     {
         _size_overrides = std::move(values);
@@ -292,16 +303,19 @@ namespace auik
         const u32 parent_id = parent() ? parent()->id() : 0u;
         const auto transition = detail::get_widget_style_selector_transition(id());
         StyleUpdateFlags out = resolve_style_selector(_style, id(), parent_id, style_state());
-        out |= resolve_style_selector(_cell_style, AUIK_TAG_TABLE_CELL, id(), StyleState::normal);
+        out |= resolve_style_selector(_cell_style, _cell_style.tag_id, id(), StyleState::normal);
         out |= resolve_style_selector(_alternating_row_style, _alternating_row_style.tag_id, id(), StyleState::normal);
         out |= resolve_style_selector(_line_style, _line_style.tag_id, id(), StyleState::normal);
         out |= resolve_style_selector(_collapse_icon_style, _collapse_icon_style.tag_id, id(), StyleState::normal);
+        const auto is_local_element_tag = [this](u32 tag_id) {
+            return tag_id == signature() || tag_id == AUIK_TAG_TABLE_CELL || tag_id == AUIK_TAG_TABLE_TREE_ARROW ||
+                   tag_id == AUIK_TAG_TABLE_RESIZE_BORDER_V;
+        };
+        if (is_local_element_tag(transition.prev_id.tag_id) || is_local_element_tag(transition.current_id.tag_id))
+            out |= StyleUpdateFlagBits::redraw;
         if (supports_columns())
         {
             out |= resolve_style_selector(_resize_border_style, _resize_border_style.tag_id, id(), StyleState::normal);
-            if (transition.prev_id.tag_id == AUIK_TAG_TABLE_RESIZE_BORDER_V ||
-                transition.current_id.tag_id == AUIK_TAG_TABLE_RESIZE_BORDER_V)
-                out |= StyleUpdateFlagBits::redraw;
             out |= update_resize_indicator();
         }
         for (auto &row : _cells)
@@ -318,7 +332,10 @@ namespace auik
         _column_count = resolve_column_count();
         _layout_metrics.assign(amal::max(_column_count, _visible_nodes.size()), {});
 
-        const amal::vec4 cell_padding = tree_resolved_style(_cell_style).padding();
+        const Style &cell_style = tree_resolved_style(_cell_style);
+        const amal::vec4 cell_margin = cell_style.margin();
+        const amal::vec4 cell_padding = cell_style.padding();
+        const amal::vec4 cell_insets = cell_margin + cell_padding;
         for (size_t row = 0; row < _visible_nodes.size(); ++row)
         {
             const size_t node = _visible_nodes[row];
@@ -339,7 +356,7 @@ namespace auik
                 auto *cell = cell_widget(row, column);
                 if (!cell) continue;
                 cell->update_layout(false);
-                f32 min_width = cell->required_size().x + cell_padding.x + cell_padding.z;
+                f32 min_width = cell->required_size().x + cell_insets.x + cell_insets.z;
                 if (column == 0u)
                 {
                     const auto &icon_style = get_theme()->get_style(_collapse_icon_style.id);
@@ -348,7 +365,7 @@ namespace auik
                 }
                 _layout_metrics[column].x.min_value = amal::max(_layout_metrics[column].x.min_value, min_width);
                 _layout_metrics[row].y.min_value = amal::max(_layout_metrics[row].y.min_value,
-                                                             cell->required_size().y + cell_padding.y + cell_padding.w);
+                                                             cell->required_size().y + cell_insets.y + cell_insets.w);
             }
             _layout_metrics[row].y.value = _layout_metrics[row].y.min_value;
         }
@@ -389,11 +406,12 @@ namespace auik
         const amal::vec2 required_inner = {amal::max(required_size().x - margin.x - margin.z, 0.0f),
                                            amal::max(required_size().y - margin.y - margin.w, 0.0f)};
 
-        amal::vec2 outer_size = size();
+        amal::vec2 outer_size = {amal::max(size().x - margin.x - margin.z, 0.0f),
+                                 amal::max(size().y - margin.y - margin.w, 0.0f)};
         if (!supports_columns()) { outer_size = required_inner; }
         else
         {
-            if (!is_width_fixed()) outer_size.x = amal::max(outer_size.x - margin.x - margin.z, required_inner.x);
+            if (!is_width_fixed()) outer_size.x = amal::max(outer_size.x, required_inner.x);
             else if (outer_size.x <= 0.0f) outer_size.x = required_inner.x;
             if (outer_size.y <= 0.0f) outer_size.y = required_inner.y;
             if (!is_height_fixed()) outer_size.y = amal::max(outer_size.y, required_inner.y);
@@ -413,7 +431,8 @@ namespace auik
         {
             _resize_border_hit_visuals[index].rect =
                 detail::make_rect_data(id(), AUIK_TAG_TABLE_RESIZE_BORDER_V, {{0.0f, 0.0f}, {0.0f, 0.0f}}, clip_id(),
-                                       next_depth(depth_range()), 0u, static_cast<u32>(index));
+                                       next_depth(detail::depth_work_range(depth_range())), 0u,
+                                       static_cast<u32>(index));
         }
         _tree_line_data.clear();
 
@@ -425,10 +444,12 @@ namespace auik
             const f32 row_h = _layout_metrics[row].y.value;
             _row_visuals[row].rect =
                 detail::make_rect_data(id(), signature(), {{inner_pos.x, cursor_y}, {inner_size.x, row_h}}, clip_id(),
-                                       next_depth(depth_range()), 0u, static_cast<u32>(row));
+                                       next_depth(detail::depth_work_range(depth_range())), 0u,
+                                       static_cast<u32>(row));
             _alt_row_visuals[row].rect = detail::make_rect_data(id(), AUIK_STYLE_TAG_TREE_ROW_ALT,
                                                                 {{inner_pos.x, cursor_y}, {inner_size.x, row_h}},
-                                                                clip_id(), next_depth(depth_range()));
+                                                                clip_id(),
+                                                                next_depth(detail::depth_work_range(depth_range())));
 
             amal::vec2 tree_icon_size = _arrow_size;
             if (tree_icon_size.y <= 0.0f)
@@ -443,7 +464,7 @@ namespace auik
             _arrow_visuals[row].node = node;
             _arrow_visuals[row].rect = detail::make_rect_data(
                 id(), AUIK_TAG_TABLE_TREE_ARROW, {{arrow_slot_x, cursor_y}, {arrow_slot_w, row_h}}, clip_id(),
-                next_depth(depth_range()), 0u, static_cast<u32>(node));
+                next_depth(detail::depth_foreground_range(depth_range())), 0u, static_cast<u32>(node));
             _arrow_visuals[row].icon_center_x = tree_icon_center_x(arrow_slot_x, arrow_slot_w, icon_style);
             _arrow_visuals[row].icon_center_y = cursor_y + row_h * 0.5f;
 
@@ -455,7 +476,8 @@ namespace auik
                 if (cell)
                 {
                     const auto &settings = settings_for_column(column);
-                    const amal::vec4 cell_padding = tree_resolved_style(_cell_style).padding();
+                    const Style &cell_style = tree_resolved_style(_cell_style);
+                    const amal::vec4 cell_insets = cell_style.margin() + cell_style.padding();
                     amal::vec2 cell_pos{cursor_x, cursor_y};
                     amal::vec2 cell_size{column_w, row_h};
                     if (column == 0u)
@@ -464,10 +486,11 @@ namespace auik
                         cell_pos.x += left_offset;
                         cell_size.x = amal::max(cell_size.x - left_offset, 0.0f);
                     }
-                    detail::apply_table_cell_alignment(cell, settings.halign, settings.valign);
-                    cell->set_position(cell_pos + amal::vec2{cell_padding.x, cell_padding.y});
-                    cell->set_layout_size({amal::max(cell_size.x - cell_padding.x - cell_padding.z, 0.0f),
-                                           amal::max(cell_size.y - cell_padding.y - cell_padding.w, 0.0f)});
+                    cell->set_layout_size({amal::max(cell_size.x - cell_insets.x - cell_insets.z, 0.0f),
+                                           amal::max(cell_size.y - cell_insets.y - cell_insets.w, 0.0f)});
+                    apply_tree_cell_alignment(cell, settings.halign, settings.valign,
+                                              cell_pos + amal::vec2{cell_insets.x, cell_insets.y},
+                                              cell->size());
                     cell->update_layout(true);
                     if (column == 0u)
                         _arrow_visuals[row].icon_center_y = cell->bounds().offset.y + cell->bounds().size.y * 0.5f;
@@ -476,7 +499,8 @@ namespace auik
                 {
                     _cell_visuals[visual_index].rect =
                         detail::make_rect_data(id(), AUIK_TAG_TABLE_CELL, {{cursor_x, cursor_y}, {column_w, row_h}},
-                                               clip_id(), next_depth(depth_range()), 0u, cell_element_id(row, column));
+                                               clip_id(), next_depth(detail::depth_work_range(depth_range())), 0u,
+                                               cell_element_id(row, column));
                 }
                 cursor_x += column_w;
                 ++visual_index;
@@ -497,7 +521,7 @@ namespace auik
                 if (!valid_tree_rect_size(rect.size)) return;
                 QuadsInstanceData line{};
                 line.rect = rect;
-                line.z_order = next_depth(depth_range());
+                line.z_order = next_depth(detail::depth_work_range(depth_range()));
                 _tree_line_data.push_back(line);
             };
             const size_t depth = node_depth(node);
@@ -538,7 +562,7 @@ namespace auik
         }
 
         auto *theme = get_theme();
-        f32 resize_hit_w = 0.0f;
+        f32 resize_w = 0.0f;
         if (supports_columns())
         {
             const StyleID resize_style_id =
@@ -547,13 +571,15 @@ namespace auik
                     : theme->get_resolved_style(_resize_border_style.tag_id, _resize_border_style.tag_id, id(),
                                                 StyleState::normal);
             const auto &resize_style = theme->get_style(resize_style_id);
-            const amal::vec4 resize_margin = resize_style.margin();
-            const amal::vec4 resize_padding = resize_style.padding();
-            const f32 resize_w = amal::max(resize_margin.x + resize_margin.z + resize_padding.x + resize_padding.z,
-                                           resize_style.border_thickness());
-            resize_hit_w = amal::max(resize_w, 1.0f);
+            if ((resize_style.mask() & detail::g_style_visible_draw_mask) != 0u)
+            {
+                const amal::vec4 resize_margin = resize_style.margin();
+                const amal::vec4 resize_padding = resize_style.padding();
+                resize_w = amal::max(resize_margin.x + resize_margin.z + resize_padding.x + resize_padding.z,
+                                     resize_style.border_thickness());
+            }
         }
-        if (supports_columns() && column_resizable() && resize_hit_w > 0.0f)
+        if (supports_columns() && resize_w > 0.0f)
         {
             f32 cursor_x = inner_pos.x;
             for (size_t column = 0; column + 1 < _column_count; ++column)
@@ -563,7 +589,7 @@ namespace auik
                 auto &visual = _resize_border_hit_visuals[column];
                 visual.rect = detail::make_rect_data(
                     id(), AUIK_TAG_TABLE_RESIZE_BORDER_V,
-                    {{cursor_x - resize_hit_w * 0.5f, inner_pos.y}, {resize_hit_w, cursor_y - inner_pos.y}}, clip_id(),
+                    {{cursor_x - resize_w * 0.5f, inner_pos.y}, {resize_w, cursor_y - inner_pos.y}}, clip_id(),
                     depth_range().y, 0u, static_cast<u32>(column));
             }
         }
@@ -626,14 +652,10 @@ namespace auik
     void Tree::update_depth(const amal::vec2 &depth_range)
     {
         Widget::update_depth(depth_range);
+        const amal::vec2 content_range = detail::depth_foreground_range(this->depth_range());
         for (auto &row : _cells)
-        {
             for (auto *cell : row)
-            {
-                if (!cell) continue;
-                cell->update_depth(this->depth_range());
-            }
-        }
+                if (cell) cell->update_depth(content_range);
     }
 
     void Tree::back_hit_depth()
@@ -694,7 +716,7 @@ namespace auik
             {
                 const StyleState state = detail::resolve_table_element_state(visual.rect);
                 const StyleID style_id =
-                    theme->get_resolved_style(_cell_style.tag_id, AUIK_TAG_TABLE_CELL, parent_id, state);
+                    theme->get_resolved_style(_cell_style.tag_id, _cell_style.tag_id, parent_id, state);
                 detail::draw_table_cell_visual(ctx, quads_stream, visual, theme->get_style(style_id), clip_id(),
                                                can_emit_hit(ctx));
             }
@@ -703,17 +725,19 @@ namespace auik
             {
                 const StyleState state = detail::resolve_table_element_state(visual.rect);
                 const StyleID style_id =
-                    theme->get_resolved_style(_cell_style.tag_id, AUIK_TAG_TABLE_CELL, parent_id, state);
-                detail::draw_table_cell_visual(ctx, quads_stream, visual, theme->get_style(style_id), clip_id(), false);
+                    theme->get_resolved_style(_cell_style.tag_id, _cell_style.tag_id, parent_id, state);
+                detail::draw_table_cell_visual(ctx, quads_stream, visual, theme->get_style(style_id), clip_id(), false,
+                                               true);
             }
 
-            if (supports_columns() && column_resizable())
+            if (supports_columns() && !_resize_border_hit_visuals.empty())
             {
                 const size_t resize_count = _column_count > 0u ? _column_count - 1u : 0u;
+                const bool resize_hit = column_resizable() && can_emit_hit(ctx);
                 for (size_t index = 0; index < _resize_border_hit_visuals.size() && index < resize_count; ++index)
                     detail::draw_table_resize_border_visual(ctx, quads_stream, _resize_border_hit_visuals[index], theme,
                                                             _resize_border_style.tag_id, id(), clip_id(),
-                                                            can_emit_hit(ctx));
+                                                            resize_hit);
             }
 
             draw_tree_lines(ctx, quads_stream);
@@ -1122,7 +1146,11 @@ namespace auik
     {
         for (auto &row : _cells)
             for (auto *cell : row)
-                if (cell) cell->set_parent(this);
+                if (cell)
+                {
+                    cell->set_parent(this);
+                    cell->set_focus_parent(this);
+                }
     }
 
     void Tree::invalidate_layout()
@@ -1171,10 +1199,10 @@ namespace auik
                     : theme->get_resolved_style(_resize_border_style.tag_id, _resize_border_style.tag_id, id(),
                                                 StyleState::normal);
             const auto &style = theme->get_style(style_id);
-            const f32 visual_w = amal::max(style.border_thickness(), 1.0f);
-            _resize_indicator_visual.rect.bounds.offset.x +=
-                _resize_indicator_visual.rect.bounds.size.x * 0.5f - visual_w * 0.5f;
-            _resize_indicator_visual.rect.bounds.size.x = visual_w;
+            QuadsInstanceData indicator{};
+            indicator.rect = _resize_indicator_visual.rect.bounds;
+            detail::apply_table_resize_border_visual_box(indicator, style);
+            _resize_indicator_visual.rect.bounds = indicator.rect;
         }
         else
         {
@@ -1486,7 +1514,6 @@ namespace auik
             stream.write(tree->style_tag())
                 .write(tree->cell_style_tag())
                 .write(tree->alternating_row_style_tag())
-                .write(tree->resize_border_style_tag())
                 .write(tree->line_style_tag())
                 .write(tree->collapse_icon_style_tag())
                 .write(tree->indent_width())
@@ -1533,7 +1560,6 @@ namespace auik
             u32 style_tag = AUIK_STYLE_TAG_TREE;
             u32 cell_style_tag = AUIK_STYLE_TAG_TREE_CELL;
             u32 alternating_row_style_tag = AUIK_STYLE_TAG_TREE_ROW_ALT;
-            u32 resize_border_style_tag = AUIK_STYLE_TAG_TABLE_TREE_RESIZE_BORDER;
             u32 line_style_tag = AUIK_STYLE_TAG_TREE_LINE;
             u32 collapse_icon_style_tag = AUIK_STYLE_TAG_TREE_COLLAPSE_ICON;
             f32 indent_width = 16.0f;
@@ -1541,7 +1567,6 @@ namespace auik
             stream.read(style_tag)
                 .read(cell_style_tag)
                 .read(alternating_row_style_tag)
-                .read(resize_border_style_tag)
                 .read(line_style_tag)
                 .read(collapse_icon_style_tag)
                 .read(indent_width)
@@ -1563,10 +1588,9 @@ namespace auik
             if (!size_overrides.empty()) stream.read(size_overrides.data(), size_overrides.size());
 
             auto *tree = acul::alloc<TableTree>(common.id, common.requested_size, WidgetFlags(common.widget_flags),
-                                                nullptr, style_tag);
+                                                style_tag);
             tree->set_cell_style_tag(cell_style_tag);
             tree->set_alternating_row_style_tag(alternating_row_style_tag);
-            tree->set_resize_border_style_tag(resize_border_style_tag);
             tree->set_line_style_tag(line_style_tag);
             tree->set_collapse_icon_style_tag(collapse_icon_style_tag);
             tree->set_indent_width(indent_width);
@@ -1671,7 +1695,7 @@ namespace auik
                 .read(indent_width)
                 .read(tree_flags);
 
-            auto *tree = acul::alloc<Tree>(common.id, WidgetFlags(common.widget_flags), nullptr, style_tag);
+            auto *tree = acul::alloc<Tree>(common.id, WidgetFlags(common.widget_flags), style_tag);
             tree->set_cell_style_tag(cell_style_tag);
             tree->set_alternating_row_style_tag(alternating_row_style_tag);
             tree->set_line_style_tag(line_style_tag);

@@ -40,10 +40,10 @@ Auik is distributed as a CMake project and is intended to be integrated as a sub
 
 ### Bundled submodules
 The following dependencies are included as git submodules and must be checked out when cloning:
-- [acbt](../acbt)
-- [acul](../acul)
-- [amal](../amal)
-- [umbf](../umbf)
+- [acbt](https://repos.homedatasrv.ru/app3d/acbt)
+- [acul](https://repos.homedatasrv.ru/app3d/acul)
+- [amal](https://repos.homedatasrv.ru/app3d/amal)
+- [umbf](https://repos.homedatasrv.ru/app3d/umbf)
 
 The following dependencies must be installed on your system:
 - [Python 3](https://www.python.org/)
@@ -55,11 +55,15 @@ The following dependencies must be installed on your system:
 
 ### CSS Theme Generation
 
-If `AUIK_CSS_DIR` is set before adding Auik, CSS files from that directory are parsed and converted into generated C++ theme sources.
+Auik itself generates the built-in style and variable ids required by the public widget headers. Optional modules can generate their own public style id headers and register them with the theme compiler. Host applications generate concrete CSS theme sources explicitly with `compile_auik_css_theme()`.
 
 ```cmake
-set(AUIK_CSS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/ui")
 add_subdirectory(modules/auik)
+
+Call `compile_auik_css_theme()` even when the host application only wants the default theme:
+
+```cmake
+compile_auik_css_theme("${AUIK_BASE_THEME}")
 ```
 
 Generated files are exported through:

@@ -39,24 +39,15 @@ namespace auik
         popup
     };
 
-    constexpr inline WindowFlags get_default_window_flags()
+    constexpr inline WindowFlags get_decorated_window_flags()
     {
         return WindowFlagBits::resizable | WindowFlagBits::movable | WindowFlagBits::decorated |
                WindowFlagBits::scrollable | WindowFlagBits::dockable;
     }
-
-    constexpr inline WindowFlags get_decorated_window_flags() { return get_default_window_flags(); }
-
     constexpr inline WindowFlags get_fixed_window_flags()
-    {
-        return get_default_window_flags() & ~WindowFlagBits::resizable;
-    }
-
+    { return WindowFlagBits::decorated | WindowFlagBits::scrollable; }
     constexpr inline WindowFlags get_popup_window_flags()
-    {
-        return get_default_window_flags() &
-               ~(WindowFlagBits::decorated | WindowFlagBits::resizable | WindowFlagBits::dockable);
-    }
+    { return WindowFlagBits::movable | WindowFlagBits::scrollable; }
 
     class Window : public Widget
     {
@@ -67,10 +58,8 @@ namespace auik
         acul::vector<Widget *> &children;
         WindowFlags window_flags;
 
-        AUIK_EXPORT Window(u32 id, StringView title = "", const amal::rect &bounds = {},
-                           WindowFlags window_flags = get_default_window_flags(),
-                           WidgetFlags widget_flags = get_default_widget_flags() | WidgetFlagBits::hittable,
-                           Widget *parent = nullptr);
+        AUIK_EXPORT Window(u32 id, StringView title, const amal::rect &bounds, WindowFlags window_flags,
+                           WidgetFlags widget_flags);
         AUIK_EXPORT ~Window() override;
 
         AUIK_EXPORT void clear_children();
@@ -202,28 +191,27 @@ namespace auik
         void sync_header_popup_menu();
     };
 
-    inline Window *make_decorated_window(u32 id, StringView title = "", const amal::rect &bounds = {},
-                                         WidgetFlags widget_flags = get_default_widget_flags() |
-                                                                    WidgetFlagBits::hittable,
-                                         Widget *parent = nullptr)
+    inline Window *make_decorated_window(u32 id, StringView title = "",
+                                         const amal::rect &bounds = {AUIK_POS_IGNORE, AUIK_SIZE_AUTO})
     {
-        return acul::alloc<Window>(id, title, bounds, get_decorated_window_flags(), widget_flags, parent);
+        constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
+                                             WidgetFlagBits::configurable | WidgetFlagBits::hittable;
+        return acul::alloc<Window>(id, title, bounds, get_decorated_window_flags(), widget_flags);
     }
 
-    inline Window *make_popup_window(u32 id, const amal::rect &bounds = {},
-                                     WidgetFlags widget_flags = get_default_widget_flags() | WidgetFlagBits::hittable,
-                                     Widget *parent = nullptr)
+    inline Window *make_popup_window(u32 id, const amal::rect &bounds = {AUIK_POS_IGNORE, AUIK_SIZE_AUTO})
     {
-        return acul::alloc<Window>(id, "", bounds, get_popup_window_flags(), widget_flags, parent);
+        constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
+                                             WidgetFlagBits::configurable | WidgetFlagBits::hittable;
+        return acul::alloc<Window>(id, "", bounds, get_popup_window_flags(), widget_flags);
     }
 
-    inline Window *make_viewport_window(u32 id, StringView title = "",
-                                        WidgetFlags widget_flags = get_default_widget_flags() |
-                                                                   WidgetFlagBits::hittable,
-                                        Widget *parent = nullptr)
+    inline Window *make_viewport_window(u32 id, StringView title = "")
     {
+        constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
+                                             WidgetFlagBits::configurable | WidgetFlagBits::hittable;
         auto *window = acul::alloc<Window>(id, title, amal::rect{AUIK_POS_IGNORE, AUIK_SIZE_FILL},
-                                           get_decorated_window_flags(), widget_flags, parent);
+                                           get_popup_window_flags(), widget_flags);
         window->set_rect_tag_id(AUIK_TAG_VIEWPORT_WINDOW);
         return window;
     }

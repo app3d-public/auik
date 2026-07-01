@@ -6,8 +6,7 @@
 namespace auik
 {
     WLine::WLine(u32 id, amal::axis axis, WidgetFlags flags)
-        : Widget(id, flags, EventFlagBits::none, nullptr, {}, AUIK_TAG_WLINE),
-          _axis(axis)
+        : Widget(id, flags, EventFlagBits::none, {}, AUIK_TAG_WLINE), _axis(axis)
     {
         set_size(_axis == amal::axis::x ? amal::vec2{AUIK_SIZE_X_FILL, AUIK_SIZE_Y_FIT}
                                         : amal::vec2{AUIK_SIZE_X_FIT, AUIK_SIZE_Y_FILL});
@@ -20,21 +19,17 @@ namespace auik
     }
 
     StyleUpdateFlags WLine::update_style()
-    {
-        return resolve_style_selector(_style, id(), parent() ? parent()->id() : 0u, style_state());
-    }
+    { return resolve_style_selector(_style, id(), parent() ? parent()->id() : 0u, style_state()); }
 
     void WLine::update_layout_min_size()
     {
         if (_style.id == Theme::STYLE_ID_INVALID) update_style();
         const auto padding = get_theme()->get_style(_style.id).padding();
-        const f32 thickness = _axis == amal::axis::x ? amal::max(padding.y + padding.w, 1.0f)
-                                                     : amal::max(padding.x + padding.z, 1.0f);
-        const f32 length = _axis == amal::axis::x
-                               ? (is_width_fixed() && !fill_width() ? requested_size().x : 0.0f)
-                               : (is_height_fixed() && !fill_height() ? requested_size().y : 0.0f);
-        set_required_size(_axis == amal::axis::x ? amal::vec2{length, thickness}
-                                                 : amal::vec2{thickness, length});
+        const f32 thickness =
+            _axis == amal::axis::x ? amal::max(padding.y + padding.w, 1.0f) : amal::max(padding.x + padding.z, 1.0f);
+        const f32 length = _axis == amal::axis::x ? (is_width_fixed() && !fill_width() ? requested_size().x : 0.0f)
+                                                  : (is_height_fixed() && !fill_height() ? requested_size().y : 0.0f);
+        set_required_size(_axis == amal::axis::x ? amal::vec2{length, thickness} : amal::vec2{thickness, length});
     }
 
     void WLine::update_layout(bool min_size_known)
@@ -68,7 +63,7 @@ namespace auik
     }
 
     WRect::WRect(u32 id, const amal::rect &bounds, WidgetFlags flags)
-        : Widget(id, flags, EventFlagBits::none, nullptr, bounds, AUIK_TAG_WRECT)
+        : Widget(id, flags, EventFlagBits::none, bounds, AUIK_TAG_WRECT)
     {
     }
 
@@ -79,9 +74,7 @@ namespace auik
     }
 
     StyleUpdateFlags WRect::update_style()
-    {
-        return resolve_style_selector(_style, id(), parent() ? parent()->id() : 0u, style_state());
-    }
+    { return resolve_style_selector(_style, id(), parent() ? parent()->id() : 0u, style_state()); }
 
     void WRect::update_layout_min_size()
     {
@@ -143,8 +136,8 @@ namespace auik
             u32 style_tag = AUIK_STYLE_TAG_SEPARATOR;
             stream.read(axis).read(style_tag);
 
-            auto *widget = acul::alloc<WLine>(common.id, static_cast<amal::axis>(axis),
-                                              WidgetFlags(common.widget_flags));
+            auto *widget =
+                acul::alloc<WLine>(common.id, static_cast<amal::axis>(axis), WidgetFlags(common.widget_flags));
             widget->set_style_tag(style_tag);
             detail::apply_widget_common_data(widget, common);
             return widget;

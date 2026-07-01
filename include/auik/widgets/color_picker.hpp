@@ -17,10 +17,7 @@ namespace auik
     class CircleColorPicker final : public Widget
     {
     public:
-        AUIK_EXPORT CircleColorPicker(u32 id, const amal::vec4 &value, f32 diameter = 0.0f,
-                                      WidgetFlags widget_flags = get_default_widget_flags() | WidgetFlagBits::hittable,
-                                      Widget *parent = nullptr);
-
+        AUIK_EXPORT CircleColorPicker(u32 id, const amal::vec4 &value, f32 diameter, WidgetFlags widget_flags);
         AUIK_EXPORT StyleUpdateFlags update_style() override;
         AUIK_EXPORT void update_layout_min_size() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
@@ -80,29 +77,29 @@ namespace auik
         static amal::vec2 resolve_grab_size(const Style &grab_style);
     };
 
-    inline CircleColorPicker *make_circle_color_picker(u32 id, const amal::vec4 &value, Widget *parent = nullptr)
+    inline CircleColorPicker *make_circle_color_picker(u32 id, const amal::vec4 &value = {1.0f, 1.0f, 1.0f, 1.0f})
     {
         auto *theme = get_theme();
         assert(theme && "theme is null");
         f32 diameter = theme->get_var<f32>(AUIK_STYLE_VAR_COLOR_PICKER_SIZE);
-        return acul::alloc<CircleColorPicker>(id, value, diameter,
-                                              get_default_widget_flags() | WidgetFlagBits::hittable, parent);
+        constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
+                                             WidgetFlagBits::configurable | WidgetFlagBits::hittable;
+        return acul::alloc<CircleColorPicker>(id, value, diameter, widget_flags);
     }
 
-    inline CircleColorPicker *make_circle_color_picker(u32 id, const amal::vec4 &value, f32 diameter,
-                                                       Widget *parent = nullptr)
+    inline CircleColorPicker *make_circle_color_picker(u32 id, f32 diameter,
+                                                       const amal::vec4 &value = {1.0f, 1.0f, 1.0f, 1.0f})
     {
-        return acul::alloc<CircleColorPicker>(id, value, diameter,
-                                              get_default_widget_flags() | WidgetFlagBits::hittable, parent);
+        constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
+                                             WidgetFlagBits::configurable | WidgetFlagBits::hittable;
+        return acul::alloc<CircleColorPicker>(id, value, diameter, widget_flags);
     }
 
     class GradientColorPicker final : public Widget
     {
     public:
-        AUIK_EXPORT GradientColorPicker(u32 id, const amal::vec4 &value, const amal::vec2 &size = {0.0f, 0.0f},
-                                        WidgetFlags widget_flags = get_default_widget_flags() |
-                                                                   WidgetFlagBits::hittable,
-                                        Widget *parent = nullptr);
+        AUIK_EXPORT GradientColorPicker(u32 id, const amal::vec4 &value, const amal::vec2 &size,
+                                        WidgetFlags widget_flags);
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
         AUIK_EXPORT void update_layout_min_size() override;
@@ -160,21 +157,20 @@ namespace auik
         static amal::vec2 resolve_grab_size(const Style &grab_style);
     };
 
-    inline GradientColorPicker *make_gradient_color_picker(u32 id, const amal::vec4 &value, const amal::vec2 &size,
-                                                           Widget *parent = nullptr)
+    inline GradientColorPicker *make_gradient_color_picker(u32 id,
+                                                           const amal::vec4 &value = {1.0f, 0.0f, 0.0f, 1.0f},
+                                                           const amal::vec2 &size = AUIK_SIZE_FIT)
     {
-        return acul::alloc<GradientColorPicker>(id, value, size, get_default_widget_flags() | WidgetFlagBits::hittable,
-                                                parent);
+        constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
+                                             WidgetFlagBits::configurable | WidgetFlagBits::hittable;
+        return acul::alloc<GradientColorPicker>(id, value, size, widget_flags);
     }
 
     class SquareColorPicker final : public Widget
     {
     public:
+        AUIK_EXPORT SquareColorPicker(u32 id, const amal::vec4 &value, f32 size, WidgetFlags widget_flags);
         AUIK_EXPORT ~SquareColorPicker() override;
-        AUIK_EXPORT SquareColorPicker(u32 id, const amal::vec4 &value, f32 size = 0.0f,
-                                      WidgetFlags widget_flags = get_default_widget_flags() | WidgetFlagBits::hittable,
-                                      Widget *parent = nullptr);
-
         AUIK_EXPORT StyleUpdateFlags update_style() override;
         AUIK_EXPORT void update_layout_min_size() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
@@ -244,17 +240,19 @@ namespace auik
         static amal::vec2 resolve_grab_size(const Style &grab_style);
     };
 
-    inline SquareColorPicker *make_square_color_picker(u32 id, const amal::vec4 &value, Widget *parent = nullptr)
+    inline SquareColorPicker *make_square_color_picker(u32 id, const amal::vec4 &value = {1.0f, 1.0f, 1.0f, 1.0f})
     {
-        return acul::alloc<SquareColorPicker>(id, value, 0.0f, get_default_widget_flags() | WidgetFlagBits::hittable,
-                                              parent);
+        constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
+                                             WidgetFlagBits::configurable | WidgetFlagBits::hittable;
+        return acul::alloc<SquareColorPicker>(id, value, 0.0f, widget_flags);
     }
 
-    inline SquareColorPicker *make_square_color_picker(u32 id, const amal::vec4 &value, f32 size,
-                                                       Widget *parent = nullptr)
+    inline SquareColorPicker *make_square_color_picker(u32 id, f32 size,
+                                                       const amal::vec4 &value = {1.0f, 1.0f, 1.0f, 1.0f})
     {
-        return acul::alloc<SquareColorPicker>(id, value, size, get_default_widget_flags() | WidgetFlagBits::hittable,
-                                              parent);
+        constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
+                                             WidgetFlagBits::configurable | WidgetFlagBits::hittable;
+        return acul::alloc<SquareColorPicker>(id, value, size, widget_flags);
     }
 
     namespace streams

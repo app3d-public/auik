@@ -1,16 +1,15 @@
 #include <auik/auik.hpp>
 #include <auik/detail/depth.hpp>
-#include <auik/detail/text.hpp>
 #include <auik/pipelines.hpp>
 #include <auik/widgets/tooltip.hpp>
+
+#define AUIK_TOOLTIP_SCREEN_PADDING 8.0f
+#define AUIK_TOOLTIP_MOUSE_OFFSET_Y 18.0f
 
 namespace auik
 {
     namespace
     {
-        constexpr f32 g_tooltip_screen_padding = 8.0f;
-        constexpr f32 g_tooltip_mouse_offset_y = 18.0f;
-
         static inline amal::vec4 intersect_rect(const amal::vec4 &a, const amal::vec4 &b)
         {
             const amal::vec2 a_min = {a.x, a.y};
@@ -26,19 +25,17 @@ namespace auik
         }
 
         static inline f32 clamp_axis(f32 value, f32 min_value, f32 max_value)
-        {
-            return amal::max(min_value, amal::min(value, max_value));
-        }
+        { return amal::max(min_value, amal::min(value, max_value)); }
     } // namespace
 
     Tooltip::Tooltip(u32 id)
-        : Widget(id, get_default_widget_flags(), EventFlagBits::none, nullptr, {},
-                 AUIK_TAG_TOOLTIP)
+        : Widget(id, get_default_widget_flags(), EventFlagBits::none, {}, AUIK_TAG_TOOLTIP),
+          _text(AUIK_TAG_ETEXT, StringView{""}, AUIK_SIZE_FIT, WidgetFlagBits::visible,
+                make_text_layout_flags(TextOverflowMode::ellipsis, TextWrapMode::none, TextLayoutWidthMode::bounds),
+                TextAnchorY::baseline)
     {
-        _layout_config.wrap = detail::TextWrapMode::word;
-        _layout_config.overflow = detail::TextOverflowMode::clip;
-        _render_config.horizontal_align = detail::TextHorizontalAlign::left;
-        _render_config.vertical_align = detail::TextVerticalAlign::top;
+        _text.set_parent(this);
+        _text.set_style_tag(AUIK_STYLE_TAG_TOOLTIP);
         unset_visible();
         sync_widget_flags();
     }
@@ -63,6 +60,7 @@ namespace auik
 
         _anchor_x = x;
         _text_source = text_source;
+        _text.set_text(*text_source);
         set_visible();
         sync_widget_flags();
         update_style();
@@ -79,9 +77,8 @@ namespace auik
         if (_text_source) _dismissed_for_current_source = true;
         _rect.clip_id = 0xFFFFu;
         _bg = {};
-        _draw_ids.clear();
-        _applied_clip_id = 0xFFFFu;
-        _instances_gpu_dirty = true;
+        _text.set_text(StringView{""});
+        _text.reset_draw_records();
     }
 
     void Tooltip::clear_if_source(const acul::string *text_source)
@@ -93,51 +90,29 @@ namespace auik
 
     StyleUpdateFlags Tooltip::update_style()
     {
-        const auto flags = resolve_style_selector(_style, id(), 0, style_state());
-        const auto &style = get_theme()->get_style(_style.id);
-        _layout_config.size_px = round_font_px(style.text_size());
-        _render_config.tint_color = style.text_color();
+        auto flags = resolve_style_selector(_style, id(), 0, style_state());
+        flags |= _text.update_style();
         return flags;
     }
 
     void Tooltip::update_layout_min_size()
     {
-        _layout_result.clear();
-        _instances.clear();
-        _draw_ids.clear();
-        _instances_gpu_dirty = true;
-
         const auto &style = get_theme()->get_style(_style.id);
-        const amal::vec4 padding = style.padding();
         const amal::vec2 display = get_display_size();
-        const f32 max_outer_width = amal::max(display.x - g_tooltip_screen_padding * 2.0f, 0.0f);
-        const f32 max_content_width = amal::max(max_outer_width - padding.x - padding.z, 1.0f);
+        const f32 max_outer_width = amal::max(display.x - AUIK_TOOLTIP_SCREEN_PADDING * 2.0f, 0.0f);
+        const amal::vec4 padding = style.padding();
+        const f32 max_text_width = amal::max(max_outer_width - padding.x - padding.z, 1.0f);
+        _text.set_max_width(max_text_width);
 
-        auto *font = style.font();
-        if (!font || !_text_source || _text_source->empty() || _layout_config.size_px == 0)
+        if (!_text_source || _text_source->empty())
         {
-            set_required_size({padding.x + padding.z, padding.y + padding.w});
+            _text.update_layout_min_size();
+            set_required_size(_text.required_size());
             return;
         }
 
-        auto measure_config = _layout_config;
-        if (!detail::layout_single_line(*font, *_text_source, measure_config, _layout_result))
-        {
-            set_required_size({padding.x + padding.z, padding.y + padding.w});
-            return;
-        }
-
-        const f32 natural_content_width = amal::max(_layout_result.size.x, 1.0f);
-        const f32 resolved_content_width = amal::min(natural_content_width, max_content_width);
-        measure_config.max_width = resolved_content_width;
-        if (!detail::layout_multiline(*font, *_text_source, measure_config, _layout_result))
-        {
-            set_required_size({padding.x + padding.z, padding.y + padding.w});
-            return;
-        }
-
-        set_required_size(
-            {_layout_result.size.x + padding.x + padding.z, _layout_result.size.y + padding.y + padding.w});
+        _text.update_layout_min_size();
+        set_required_size(_text.required_size());
     }
 
     void Tooltip::update_layout(bool min_size_known)
@@ -145,33 +120,37 @@ namespace auik
         if (!min_size_known) update_layout_min_size();
 
         Widget::update_layout(true);
-        const auto &style = get_theme()->get_style(_style.id);
-        const amal::vec4 padding = style.padding();
         const amal::vec2 display = get_display_size();
 
         set_layout_size(required_size());
 
-        const f32 max_x = amal::max(display.x - size().x - g_tooltip_screen_padding, g_tooltip_screen_padding);
-        const f32 pos_x = clamp_axis(_anchor_x, g_tooltip_screen_padding, max_x);
+        const f32 max_x = amal::max(display.x - size().x - AUIK_TOOLTIP_SCREEN_PADDING, AUIK_TOOLTIP_SCREEN_PADDING);
+        const f32 pos_x = clamp_axis(_anchor_x, AUIK_TOOLTIP_SCREEN_PADDING, max_x);
 
-        const f32 mouse_y = get_mouse_pos().y + g_tooltip_mouse_offset_y;
-        const f32 max_y = amal::max(display.y - size().y - g_tooltip_screen_padding, g_tooltip_screen_padding);
-        f32 pos_y = clamp_axis(mouse_y, g_tooltip_screen_padding, max_y);
+        const f32 mouse_y = get_mouse_pos().y + AUIK_TOOLTIP_MOUSE_OFFSET_Y;
+        const f32 max_y = amal::max(display.y - size().y - AUIK_TOOLTIP_SCREEN_PADDING, AUIK_TOOLTIP_SCREEN_PADDING);
+        f32 pos_y = clamp_axis(mouse_y, AUIK_TOOLTIP_SCREEN_PADDING, max_y);
         if (mouse_y > max_y)
-            pos_y =
-                clamp_axis(get_mouse_pos().y - size().y - g_tooltip_mouse_offset_y, g_tooltip_screen_padding, max_y);
+            pos_y = clamp_axis(get_mouse_pos().y - size().y - AUIK_TOOLTIP_MOUSE_OFFSET_Y, AUIK_TOOLTIP_SCREEN_PADDING,
+                               max_y);
 
         set_position({pos_x, pos_y});
 
         const amal::vec4 self_clip_rect =
             intersect_rect({position().x, position().y, size().x, size().y}, {0.0f, 0.0f, display.x, display.y});
         ensure_own_clip_rect(self_clip_rect);
-
-        rebuild_text_buffers(
-            {amal::max(size().x - padding.x - padding.z, 1.0f), amal::max(size().y - padding.y - padding.w, 0.0f)});
+        _text.set_position(position());
+        _text.set_layout_size(size());
+        _text.update_layout(true);
     }
 
-    void Tooltip::update_depth(const amal::vec2 &depth_range) { Widget::update_depth(depth_range); }
+    void Tooltip::update_depth(const amal::vec2 &depth_range)
+    {
+        Widget::update_depth(depth_range);
+        amal::vec2 text_range{};
+        assign_next_depth(this->depth_range(), text_range);
+        _text.update_depth(text_range);
+    }
 
     void Tooltip::translate(const amal::vec2 &delta)
     {
@@ -184,8 +163,7 @@ namespace auik
             clip.y += delta.y;
             update_clip_rect(clip_id(), clip);
         }
-        for (auto &instance : _instances) instance.rect.offset += delta;
-        if (!_instances.empty()) _instances_gpu_dirty = true;
+        _text.translate(delta);
     }
 
     void Tooltip::rebuild_clip_rects()
@@ -196,16 +174,17 @@ namespace auik
             intersect_rect({position().x, position().y, size().x, size().y}, {0.0f, 0.0f, display.x, display.y});
         ensure_own_clip_rect(self_clip_rect);
         _bg = {};
-        _draw_ids.clear();
-        _applied_clip_id = 0xFFFFu;
+        _text.set_clip_id(clip_id());
+        _text.reset_draw_records();
+        _text.rebuild_clip_rects();
     }
 
     void Tooltip::draw(DrawCtx &ctx)
     {
-        if ((!is_visible() || !_text_source || _text_source->empty()) && !(ctx.reason & DrawReasonBits::invalidate)) return;
+        if ((!is_visible() || !_text_source || _text_source->empty()) && !(ctx.reason & DrawReasonBits::invalidate))
+            return;
 
         auto *quads_stream = get_primary_quads_stream();
-        auto *textured_quads_stream = get_primary_textured_quads_stream();
         auto *theme = get_theme();
         QuadsInstanceData bg{};
         bg.rect = bounds();
@@ -213,51 +192,8 @@ namespace auik
         const bool bg_visible = fill_quads_instance_by_style(theme->get_style(_style.id), clip_id(), bg);
         emit_quads_instance(ctx, quads_stream, _bg, bg, get_rect(), bg_visible, false);
 
-        if (!textured_quads_stream || _instances.empty()) return;
-
-        const u16 current_clip = clip_id();
-        const f32 current_z = get_z_order();
-        const bool draw_state_changed = (_applied_clip_id != current_clip);
-        if (draw_state_changed || _instances_gpu_dirty)
-        {
-            for (auto &instance : _instances)
-            {
-                instance.clip_id = current_clip;
-                instance.z_order = current_z;
-            instance.tint_color = _render_config.tint_color;
-            }
-        }
-
-        if ((ctx.reason & DrawReasonBits::record))
-        {
-            _draw_ids.resize(_instances.size());
-            push_textured_quads_batch_to_stream(textured_quads_stream, _instances.data(),
-                                                static_cast<u32>(_instances.size()), _draw_ids.data());
-        }
-        else if (draw_state_changed || _instances_gpu_dirty)
-            update_textured_quads_batch_in_stream(textured_quads_stream, _draw_ids.data(), _instances.data(),
-                                                  static_cast<u32>(_instances.size()));
-
-        _applied_clip_id = current_clip;
-        _instances_gpu_dirty = false;
-    }
-
-    bool Tooltip::rebuild_text_buffers(const amal::vec2 &bounds_size)
-    {
-        _instances.clear();
-        _instances_gpu_dirty = true;
-        if (!_text_source || _text_source->empty()) return false;
-
-        auto *font = get_theme()->get_style(_style.id).font();
-        if (!font || _layout_config.size_px == 0) return false;
-
-        _render_config.bounds = {position() + amal::vec2{get_theme()->get_style(_style.id).padding().x,
-                                                         get_theme()->get_style(_style.id).padding().y},
-                                 bounds_size};
-        _render_config.z_order = get_z_order();
-        _render_config.clip_id = clip_id();
-
-        return detail::build_multiline_instances(*font, *_text_source, _layout_config, _render_config, _instances,
-                                                 &_layout_result);
+        DrawCtx text_ctx = ctx;
+        text_ctx.is_hit_allowed = false;
+        _text.draw(text_ctx);
     }
 } // namespace auik

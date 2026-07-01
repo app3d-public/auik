@@ -530,8 +530,13 @@ namespace auik
         acul::vector<u32> ids;
         FontLoadFlags load_flags = FontLoadFlagBits::none;
         FontRenderMode render_mode = FontRenderMode::normal;
+        amal::vec2 display_size{0.0f, 0.0f};
         const FontIconGlyphLoader *next = nullptr;
     };
+
+    AUIK_EXPORT bool load_font_icons(Font *font, const FontIconGlyphLoader *loader);
+    AUIK_EXPORT bool load_font_icons(const FontRegistry &fonts, const acul::string &family,
+                                     const FontIconGlyphLoader *loader);
 
     AUIK_EXPORT bool load_material_icons(const FontRegistry &fonts, f32 dpi = 1.0f,
                                          const FontIconGlyphLoader *next = nullptr);

@@ -60,9 +60,9 @@ namespace auik
 
     } // namespace
 
-    ComboBox::ComboBox(u32 id, const acul::vector<StringView> &items, u32 selected_index, amal::vec2 size,
-                       WidgetFlags widget_flags, Widget *parent)
-        : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::focus, parent, {{0.0f, 0.0f}, size},
+    Combobox::Combobox(u32 id, const acul::vector<StringView> &items, u32 selected_index, amal::vec2 size,
+                       WidgetFlags widget_flags)
+        : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::focus, {{0.0f, 0.0f}, size},
                  AUIK_TAG_COMBO_BOX),
           _selected_index(selected_index)
     {
@@ -70,27 +70,21 @@ namespace auik
                                                      AUIK_ICON_CHEVRON_DOWN, AUIK_ICON_CHEVRON_UP, true);
         _trigger->set_update_target(this);
         _trigger->set_hit_id(make_element_id(id, AUIK_TAG_COMBO_BOX, 0u));
-        _trigger->update_style(id, parent ? parent->id() : 0u, StyleState::normal);
-        _label = acul::alloc<Text>(AUIK_TAG_TEXT, "", amal::vec2{0.0f, 0.0f},
-                                   get_default_text_flags() & ~WidgetFlagBits::attachable, AUIK_STYLE_TAG_NO_PAD);
+        _label = acul::alloc<Text>(AUIK_TAG_TEXT, "", amal::vec2{0.0f, 0.0f}, WidgetFlagBits::visible);
+        _label->set_style_tag(AUIK_STYLE_TAG_NO_PAD);
         _label->set_parent(this);
-        _label->set_horizontal_align(detail::TextHorizontalAlign::left);
-        _label->set_vertical_align(detail::TextVerticalAlign::center);
-        _label->update_style();
+        _label->set_anchor_y(TextAnchorY::middle);
 
         _popup = acul::alloc<Window>(AUIK_TAG_COMBO_BOX_POPUP, "", amal::rect{{0.0f, 0.0f}, {0.0f, 0.0f}},
-                                     WindowFlagBits::scrollable, WidgetFlagBits::visible | WidgetFlagBits::hittable);
+                                     WindowFlagBits::scrollable, WidgetFlagBits::hittable);
         _popup->get_rect().id.widget_id = this->id();
         _popup->set_window_style_tag(AUIK_STYLE_TAG_COMBO_BOX_POPUP);
         _popup->set_focus_parent(this);
-        _popup->update_style();
-        _popup->unset_visible();
-        _popup->sync_widget_flags();
 
         set_items(items);
     }
 
-    ComboBox::~ComboBox()
+    Combobox::~Combobox()
     {
         if (_model_binding)
         {
@@ -111,7 +105,7 @@ namespace auik
         if (_trigger) acul::release(_trigger);
     }
 
-    const acul::string &ComboBox::selected_text() const
+    const acul::string &Combobox::selected_text() const
     {
         static const acul::string empty{};
         if (!_popup || _selected_index >= _popup->children.size()) return empty;
@@ -119,7 +113,7 @@ namespace auik
         return item ? item->text() : empty;
     }
 
-    acul::vector<acul::string> ComboBox::items() const
+    acul::vector<acul::string> Combobox::items() const
     {
         acul::vector<acul::string> out{};
         if (!_popup) return out;
@@ -132,7 +126,7 @@ namespace auik
         return out;
     }
 
-    acul::vector<StringView> ComboBox::item_text_views() const
+    acul::vector<StringView> Combobox::item_text_views() const
     {
         acul::vector<StringView> out{};
         if (!_popup) return out;
@@ -150,7 +144,7 @@ namespace auik
         return out;
     }
 
-    void ComboBox::set_model_binding(ModelBinding *binding)
+    void Combobox::set_model_binding(ModelBinding *binding)
     {
         if (_model_binding)
         {
@@ -168,7 +162,7 @@ namespace auik
         rebuild_from_model_binding();
     }
 
-    void ComboBox::rebuild_from_model_binding()
+    void Combobox::rebuild_from_model_binding()
     {
         if (!_model_binding || !is_model_binding_valid(*_model_binding))
         {
@@ -208,7 +202,7 @@ namespace auik
         if (has_selected) set_selected_index(selected_index);
     }
 
-    void ComboBox::request_model_selected_index(u32 index)
+    void Combobox::request_model_selected_index(u32 index)
     {
         if (!_model_binding || !is_model_binding_valid(*_model_binding)) return;
         acul::vector<ModelField *> changed_fields;
@@ -233,7 +227,7 @@ namespace auik
             if (field) dispatch_model_field(*field);
     }
 
-    void ComboBox::set_items(const acul::vector<StringView> &items)
+    void Combobox::set_items(const acul::vector<StringView> &items)
     {
         const u32 prev_selected = _selected_index;
         _popup->unset_visible();
@@ -242,11 +236,11 @@ namespace auik
 
         for (u32 i = 0; i < items.size(); ++i)
         {
-            auto *item =
-                acul::alloc<detail::Selectable>(AUIK_TAG_COMBO_BOX_ITEM, AUIK_TAG_COMBO_BOX_ITEM, i, items[i],
-                                                amal::vec2{AUIK_SIZE_X_FILL, AUIK_SIZE_Y_FIT}, _popup,
-                                                AUIK_STYLE_TAG_COMBO_BOX_ITEM, detail::get_selectable_item_flags());
-            item->get_rect().id.widget_id = id();
+            auto *item = acul::alloc<detail::Selectable>(
+                make_element_id(id(), AUIK_TAG_COMBO_BOX_ITEM, i), items[i], false,
+                amal::vec2{AUIK_SIZE_X_FILL, AUIK_SIZE_Y_FIT}, _popup, detail::get_selectable_item_flags());
+            item->set_style_tag(AUIK_STYLE_TAG_COMBO_BOX_ITEM);
+            item->set_selected_style_tag(AUIK_STYLE_TAG_COMBO_BOX_ITEM_SELECTED);
             item->set_focus_parent(_popup);
             _popup->add_child(item);
         }
@@ -276,15 +270,15 @@ namespace auik
         }
     }
 
-    void ComboBox::add_item(StringView text)
+    void Combobox::add_item(StringView text)
     {
         if (!_popup) return;
         const u32 index = static_cast<u32>(_popup->children.size());
-        auto *item =
-            acul::alloc<detail::Selectable>(AUIK_TAG_COMBO_BOX_ITEM, AUIK_TAG_COMBO_BOX_ITEM, index, text,
-                                            amal::vec2{AUIK_SIZE_X_FILL, AUIK_SIZE_Y_FIT}, _popup,
-                                            AUIK_STYLE_TAG_COMBO_BOX_ITEM, detail::get_selectable_item_flags());
-        item->get_rect().id.widget_id = id();
+        auto *item = acul::alloc<detail::Selectable>(
+            make_element_id(id(), AUIK_TAG_COMBO_BOX_ITEM, index), text, false,
+            amal::vec2{AUIK_SIZE_X_FILL, AUIK_SIZE_Y_FIT}, _popup, detail::get_selectable_item_flags());
+        item->set_style_tag(AUIK_STYLE_TAG_COMBO_BOX_ITEM);
+        item->set_selected_style_tag(AUIK_STYLE_TAG_COMBO_BOX_ITEM_SELECTED);
         item->set_focus_parent(_popup);
         item->set_style_state(StyleState::normal);
         item->set_selected(index == _selected_index);
@@ -303,12 +297,12 @@ namespace auik
         }
     }
 
-    void ComboBox::add_items(const acul::vector<StringView> &items)
+    void Combobox::add_items(const acul::vector<StringView> &items)
     {
         for (StringView item : items) add_item(item);
     }
 
-    void ComboBox::set_selected_index(u32 index)
+    void Combobox::set_selected_index(u32 index)
     {
         const u32 count = _popup ? static_cast<u32>(_popup->children.size()) : 0u;
         if (count == 0u)
@@ -344,7 +338,7 @@ namespace auik
         detail::mark_host_refresh_request();
     }
 
-    StyleUpdateFlags ComboBox::update_style()
+    StyleUpdateFlags Combobox::update_style()
     {
         const u32 parent_id = parent() ? parent()->id() : 0u;
         const StyleState control_state = get_combo_control_style_state(_open, style_state(), id());
@@ -377,12 +371,11 @@ namespace auik
         return flags;
     }
 
-    void ComboBox::update_layout_min_size()
+    void Combobox::update_layout_min_size()
     {
         const auto &style = get_theme()->get_style(_style.id);
-        const StyleID popup_style_id =
-            get_theme()->get_resolved_style(AUIK_STYLE_TAG_COMBO_BOX_POPUP, _popup ? _popup->id() : 0u, 0,
-                                            StyleState::normal);
+        const StyleID popup_style_id = get_theme()->get_resolved_style(
+            AUIK_STYLE_TAG_COMBO_BOX_POPUP, _popup ? _popup->id() : 0u, 0, StyleState::normal);
         const amal::vec4 popup_padding = get_theme()->get_style(popup_style_id).padding();
         const amal::vec2 prev_label_size = _label->size();
         // Measure label natural size, independent of the currently assigned combo bounds.
@@ -423,7 +416,7 @@ namespace auik
         set_required_size({min_size.x + margin.x + margin.z, min_size.y + margin.y + margin.w});
     }
 
-    void ComboBox::update_layout(bool min_size_known)
+    void Combobox::update_layout(bool min_size_known)
     {
         if (!min_size_known) update_layout_min_size();
 
@@ -433,8 +426,9 @@ namespace auik
         const amal::vec2 min_required = required_size();
         const amal::vec2 min_combo = {amal::max(min_required.x - margin.x - margin.z, 0.0f),
                                       amal::max(min_required.y - margin.y - margin.w, 0.0f)};
-        amal::vec2 widget_size = size();
-        if (fill_width()) widget_size.x = amal::max(widget_size.x - margin.x - margin.z, min_combo.x);
+        amal::vec2 widget_size = {amal::max(size().x - margin.x - margin.z, 0.0f),
+                                  amal::max(size().y - margin.y - margin.w, 0.0f)};
+        if (fill_width()) widget_size.x = amal::max(widget_size.x, min_combo.x);
         else if (!is_width_fixed()) widget_size.x = min_combo.x;
         else widget_size.x = amal::max(widget_size.x, min_combo.x);
         if (!fill_height() && !is_height_fixed()) widget_size.y = min_combo.y;
@@ -461,7 +455,7 @@ namespace auik
         }
     }
 
-    void ComboBox::translate(const amal::vec2 &delta)
+    void Combobox::translate(const amal::vec2 &delta)
     {
         if (delta.x == 0.0f && delta.y == 0.0f) return;
         Widget::translate(delta);
@@ -471,16 +465,16 @@ namespace auik
         if (_open && _popup) static_cast<Widget *>(_popup)->translate(delta);
     }
 
-    void ComboBox::rebuild_clip_rects()
+    void Combobox::rebuild_clip_rects()
     {
-        assert(parent() && "ComboBox must have parent");
+        assert(parent() && "Combobox must have parent");
         set_clip_id(parent()->content_clip_id());
         if (_trigger) _trigger->rebuild_clip_rects(clip_id());
         if (_label) _label->rebuild_clip_rects();
         if (_popup) _popup->rebuild_clip_rects();
     }
 
-    void ComboBox::update_depth(const amal::vec2 &depth_range)
+    void Combobox::update_depth(const amal::vec2 &depth_range)
     {
         Widget::update_depth(depth_range);
         amal::vec2 trigger_range{};
@@ -491,7 +485,7 @@ namespace auik
         if (_popup) static_cast<Widget *>(_popup)->update_depth(get_combo_popup_depth_range());
     }
 
-    void ComboBox::back_hit_depth()
+    void Combobox::back_hit_depth()
     {
         Widget::back_hit_depth();
         if (_trigger) _trigger->back_hit_depth();
@@ -499,7 +493,7 @@ namespace auik
         if (_popup) static_cast<Widget *>(_popup)->back_hit_depth();
     }
 
-    void ComboBox::restore_hit_depth()
+    void Combobox::restore_hit_depth()
     {
         Widget::restore_hit_depth();
         if (_trigger) _trigger->restore_hit_depth();
@@ -507,7 +501,7 @@ namespace auik
         if (_popup) static_cast<Widget *>(_popup)->restore_hit_depth();
     }
 
-    void ComboBox::draw(DrawCtx &ctx)
+    void Combobox::draw(DrawCtx &ctx)
     {
         const bool transient = ctx.reason & DrawReasonBits::transient;
         const bool draw_transient_payload = transient || (ctx.reason & DrawReasonBits::record);
@@ -532,7 +526,7 @@ namespace auik
         }
     }
 
-    void ComboBox::on_focus(bool focused)
+    void Combobox::on_focus(bool focused)
     {
         if (!focused)
         {
@@ -547,7 +541,7 @@ namespace auik
         if (_open) set_style_state(StyleState::focus);
     }
 
-    void ComboBox::on_click(MouseKey key, KeyPressState state, u32 click_count)
+    void Combobox::on_click(MouseKey key, KeyPressState state, u32 click_count)
     {
         (void)click_count;
         if (key != MouseKey::left || state != KeyPressState::press) return;
@@ -577,7 +571,7 @@ namespace auik
         detail::mark_host_refresh_request();
     }
 
-    void ComboBox::open()
+    void Combobox::open()
     {
         if (_open) return;
         _open = true;
@@ -589,7 +583,7 @@ namespace auik
         if (_trigger) _trigger->start_icon_animation(true);
     }
 
-    void ComboBox::close()
+    void Combobox::close()
     {
         if (!_open) return;
         _open = false;
@@ -604,27 +598,29 @@ namespace auik
         if (_trigger) _trigger->start_icon_animation(false);
     }
 
-    void ComboBox::toggle()
+    void Combobox::toggle()
     {
         if (_open) close();
         else open();
     }
 
-    void ComboBox::rebuild_control_layout()
+    void Combobox::rebuild_control_layout()
     {
         const auto &style = get_theme()->get_style(_style.id);
         const amal::vec4 padding = style.padding();
         const f32 icon_slot_x = _trigger ? _trigger->icon_slot_left() : position().x + size().x - padding.z;
         const f32 label_w = amal::max(icon_slot_x - (position().x + padding.x) - 6.0f, 0.0f);
-        _label_rect = {{position().x + padding.x, position().y + padding.y},
-                       {label_w, amal::max(size().y - padding.y - padding.w, 0.0f)}};
+        const f32 label_h = _label->required_size().y;
+        const f32 content_h = amal::max(size().y - padding.y - padding.w, 0.0f);
+        _label_rect = {{position().x + padding.x, position().y + padding.y + amal::floor((content_h - label_h) * 0.5f)},
+                       {label_w, label_h}};
         _label->set_position(_label_rect.offset);
         _label->set_layout_size(_label_rect.size);
         _label->update_layout(false);
         _label->set_clip_id(clip_id());
     }
 
-    void ComboBox::sync_label_text()
+    void Combobox::sync_label_text()
     {
         if (!_popup || _selected_index >= _popup->children.size())
         {
@@ -636,7 +632,7 @@ namespace auik
         else _label->set_text(*item);
     }
 
-    void ComboBox::update_popup_layout()
+    void Combobox::update_popup_layout()
     {
         _popup->set_window_style_tag(AUIK_STYLE_TAG_COMBO_BOX_POPUP);
         _popup->update_style();
@@ -664,11 +660,7 @@ namespace auik
             if (!child || !child->is_visible()) continue;
             ++visible_items;
             child->update_layout_min_size();
-            const amal::vec4 child_margin = child->layout_margin();
-            const amal::vec2 child_layout_size = {
-                amal::max(content_width - child_margin.x - child_margin.z, 0.0f),
-                amal::max(child->required_size().y - child_margin.y - child_margin.w, 0.0f)};
-            child->set_layout_size(child_layout_size);
+            child->set_layout_size({content_width, child->required_size().y});
             child->set_position(cursor);
             child->update_layout(true);
             cursor = {content_origin.x, cursor.y + child->required_size().y};
@@ -697,7 +689,7 @@ namespace auik
         static_cast<Widget *>(_popup)->update_layout(false);
     }
 
-    void ComboBox::schedule_outside_click_tick()
+    void Combobox::schedule_outside_click_tick()
     {
         if (!detail::g_context) return;
         detail::update_window_time(detail::get_context().window_ctx);
@@ -706,7 +698,7 @@ namespace auik
                                    [this]() { tick_outside_click(); });
     }
 
-    void ComboBox::tick_outside_click()
+    void Combobox::tick_outside_click()
     {
         if (!_open || !detail::g_context) return;
 
@@ -748,38 +740,32 @@ namespace auik
         detail::mark_host_refresh_request();
     }
 
-    bool ComboBox::has_draw_record() const { return _trigger && _trigger->has_draw_record(); }
+    bool Combobox::has_draw_record() const { return _trigger && _trigger->has_draw_record(); }
 
-    MultipleComboBox::MultipleComboBox(u32 id, const acul::vector<StringView> &items, StringView placeholder,
-                                       amal::vec2 size, WidgetFlags widget_flags, Widget *parent)
-        : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::focus, parent, {{0.0f, 0.0f}, size},
+    MultipleCombobox::MultipleCombobox(u32 id, const acul::vector<StringView> &items, StringView placeholder,
+                                       amal::vec2 size, WidgetFlags widget_flags)
+        : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::focus, {{0.0f, 0.0f}, size},
                  AUIK_TAG_COMBO_BOX)
     {
         _trigger = acul::alloc<detail::PopupTrigger>(AUIK_STYLE_TAG_COMBO_BOX, AUIK_TAG_COMBO_BOX,
                                                      AUIK_ICON_CHEVRON_DOWN, AUIK_ICON_CHEVRON_UP, true);
         _trigger->set_update_target(this);
         _trigger->set_hit_id(make_element_id(id, AUIK_TAG_COMBO_BOX, 0u));
-        _trigger->update_style(id, parent ? parent->id() : 0u, StyleState::normal);
-        _label = acul::alloc<Text>(AUIK_TAG_TEXT, "", amal::vec2{0.0f, 0.0f},
-                                   get_default_text_flags() & ~WidgetFlagBits::attachable, AUIK_STYLE_TAG_NO_PAD);
+        _label = acul::alloc<Text>(AUIK_TAG_TEXT, "", amal::vec2{0.0f, 0.0f}, WidgetFlagBits::visible);
+        _label->set_style_tag(AUIK_STYLE_TAG_NO_PAD);
         _label->set_parent(this);
-        _label->set_horizontal_align(detail::TextHorizontalAlign::left);
-        _label->set_vertical_align(detail::TextVerticalAlign::center);
-        _label->update_style();
+        _label->set_anchor_y(TextAnchorY::middle);
 
         _popup = acul::alloc<Window>(AUIK_TAG_COMBO_BOX_POPUP, "", amal::rect{{0.0f, 0.0f}, {0.0f, 0.0f}},
-                                     WindowFlagBits::scrollable, WidgetFlagBits::visible | WidgetFlagBits::hittable);
+                                     WindowFlagBits::scrollable, WidgetFlagBits::hittable);
         _popup->get_rect().id.widget_id = this->id();
         _popup->set_window_style_tag(AUIK_STYLE_TAG_COMBO_BOX_POPUP);
         _popup->set_focus_parent(this);
-        _popup->update_style();
-        _popup->unset_visible();
-        _popup->sync_widget_flags();
         set_items(items);
         set_placeholder(placeholder);
     }
 
-    MultipleComboBox::~MultipleComboBox()
+    MultipleCombobox::~MultipleCombobox()
     {
         _open = false;
         if (_popup)
@@ -794,7 +780,7 @@ namespace auik
         if (_trigger) acul::release(_trigger);
     }
 
-    acul::vector<acul::string> MultipleComboBox::items() const
+    acul::vector<acul::string> MultipleCombobox::items() const
     {
         acul::vector<acul::string> out{};
         if (!_popup) return out;
@@ -807,7 +793,7 @@ namespace auik
         return out;
     }
 
-    acul::vector<StringView> MultipleComboBox::item_text_views() const
+    acul::vector<StringView> MultipleCombobox::item_text_views() const
     {
         acul::vector<StringView> out{};
         if (!_popup) return out;
@@ -821,7 +807,7 @@ namespace auik
         return out;
     }
 
-    void MultipleComboBox::set_items(const acul::vector<StringView> &items)
+    void MultipleCombobox::set_items(const acul::vector<StringView> &items)
     {
         _popup->unset_visible();
         _popup->sync_widget_flags();
@@ -829,11 +815,10 @@ namespace auik
         _selected_indices.clear();
         for (u32 i = 0; i < items.size(); ++i)
         {
-            auto *item =
-                acul::alloc<detail::Selectable>(AUIK_TAG_COMBO_BOX_ITEM, AUIK_TAG_COMBO_BOX_ITEM, i, items[i],
-                                                amal::vec2{AUIK_SIZE_X_FILL, AUIK_SIZE_Y_FIT}, _popup,
-                                                AUIK_STYLE_TAG_COMBO_BOX_ITEM, detail::get_selectable_item_flags());
-            item->get_rect().id.widget_id = id();
+            auto *item = acul::alloc<detail::Selectable>(
+                make_element_id(id(), AUIK_TAG_COMBO_BOX_ITEM, i), items[i], false,
+                amal::vec2{AUIK_SIZE_X_FILL, AUIK_SIZE_Y_FIT}, _popup, detail::get_selectable_item_flags());
+            item->set_style_tag(AUIK_STYLE_TAG_COMBO_BOX_ITEM);
             item->set_selected_icon(AUIK_ICON_CHECKMARK);
             item->set_focus_parent(_popup);
             _popup->add_child(item);
@@ -843,9 +828,9 @@ namespace auik
         detail::mark_host_refresh_request();
     }
 
-    void MultipleComboBox::set_placeholder(acul::string value) { set_placeholder(StringView{value}); }
+    void MultipleCombobox::set_placeholder(acul::string value) { set_placeholder(StringView{value}); }
 
-    void MultipleComboBox::set_placeholder(StringView value)
+    void MultipleCombobox::set_placeholder(StringView value)
     {
         _placeholder = value.str ? value.str : "";
         _translated_placeholder = value.is_translated;
@@ -853,14 +838,14 @@ namespace auik
         sync_label_text();
     }
 
-    bool MultipleComboBox::is_selected(u32 index) const
+    bool MultipleCombobox::is_selected(u32 index) const
     {
         for (u32 selected : _selected_indices)
             if (selected == index) return true;
         return false;
     }
 
-    void MultipleComboBox::set_selected_indices(const acul::vector<u32> &indices)
+    void MultipleCombobox::set_selected_indices(const acul::vector<u32> &indices)
     {
         const auto prev_selected = _selected_indices;
         _selected_indices.clear();
@@ -887,7 +872,7 @@ namespace auik
         detail::mark_host_refresh_request();
     }
 
-    StyleUpdateFlags MultipleComboBox::update_style()
+    StyleUpdateFlags MultipleCombobox::update_style()
     {
         const u32 parent_id = parent() ? parent()->id() : 0u;
         const StyleState control_state = get_combo_control_style_state(_open, style_state(), id());
@@ -922,12 +907,11 @@ namespace auik
         return flags;
     }
 
-    void MultipleComboBox::update_layout_min_size()
+    void MultipleCombobox::update_layout_min_size()
     {
         const auto &style = get_theme()->get_style(_style.id);
-        const StyleID popup_style_id =
-            get_theme()->get_resolved_style(AUIK_STYLE_TAG_COMBO_BOX_POPUP, _popup ? _popup->id() : 0u, 0,
-                                            StyleState::normal);
+        const StyleID popup_style_id = get_theme()->get_resolved_style(
+            AUIK_STYLE_TAG_COMBO_BOX_POPUP, _popup ? _popup->id() : 0u, 0, StyleState::normal);
         const amal::vec4 popup_padding = get_theme()->get_style(popup_style_id).padding();
         const amal::vec2 prev_label_size = _label->size();
         _label->set_layout_size({0.0f, 0.0f});
@@ -966,7 +950,7 @@ namespace auik
         set_required_size({min_size.x + margin.x + margin.z, min_size.y + margin.y + margin.w});
     }
 
-    void MultipleComboBox::update_layout(bool min_size_known)
+    void MultipleCombobox::update_layout(bool min_size_known)
     {
         if (!min_size_known) update_layout_min_size();
         const auto &style = get_theme()->get_style(_style.id);
@@ -975,8 +959,9 @@ namespace auik
         const amal::vec2 min_required = required_size();
         const amal::vec2 min_combo = {amal::max(min_required.x - margin.x - margin.z, 0.0f),
                                       amal::max(min_required.y - margin.y - margin.w, 0.0f)};
-        amal::vec2 widget_size = size();
-        if (fill_width()) widget_size.x = amal::max(widget_size.x - margin.x - margin.z, min_combo.x);
+        amal::vec2 widget_size = {amal::max(size().x - margin.x - margin.z, 0.0f),
+                                  amal::max(size().y - margin.y - margin.w, 0.0f)};
+        if (fill_width()) widget_size.x = amal::max(widget_size.x, min_combo.x);
         else if (!is_width_fixed()) widget_size.x = min_combo.x;
         else widget_size.x = amal::max(widget_size.x, min_combo.x);
         if (!fill_height() && !is_height_fixed()) widget_size.y = min_combo.y;
@@ -1000,7 +985,7 @@ namespace auik
         }
     }
 
-    void MultipleComboBox::translate(const amal::vec2 &delta)
+    void MultipleCombobox::translate(const amal::vec2 &delta)
     {
         if (delta.x == 0.0f && delta.y == 0.0f) return;
         Widget::translate(delta);
@@ -1010,16 +995,16 @@ namespace auik
         if (_open && _popup) static_cast<Widget *>(_popup)->translate(delta);
     }
 
-    void MultipleComboBox::rebuild_clip_rects()
+    void MultipleCombobox::rebuild_clip_rects()
     {
-        assert(parent() && "MultipleComboBox must have parent");
+        assert(parent() && "MultipleCombobox must have parent");
         set_clip_id(parent()->content_clip_id());
         if (_trigger) _trigger->rebuild_clip_rects(clip_id());
         if (_label) _label->rebuild_clip_rects();
         if (_popup) _popup->rebuild_clip_rects();
     }
 
-    void MultipleComboBox::update_depth(const amal::vec2 &depth_range)
+    void MultipleCombobox::update_depth(const amal::vec2 &depth_range)
     {
         Widget::update_depth(depth_range);
         amal::vec2 trigger_range{};
@@ -1030,7 +1015,7 @@ namespace auik
         if (_popup) static_cast<Widget *>(_popup)->update_depth(get_combo_popup_depth_range());
     }
 
-    void MultipleComboBox::back_hit_depth()
+    void MultipleCombobox::back_hit_depth()
     {
         Widget::back_hit_depth();
         if (_trigger) _trigger->back_hit_depth();
@@ -1038,7 +1023,7 @@ namespace auik
         if (_popup) static_cast<Widget *>(_popup)->back_hit_depth();
     }
 
-    void MultipleComboBox::restore_hit_depth()
+    void MultipleCombobox::restore_hit_depth()
     {
         Widget::restore_hit_depth();
         if (_trigger) _trigger->restore_hit_depth();
@@ -1046,7 +1031,7 @@ namespace auik
         if (_popup) static_cast<Widget *>(_popup)->restore_hit_depth();
     }
 
-    void MultipleComboBox::draw(DrawCtx &ctx)
+    void MultipleCombobox::draw(DrawCtx &ctx)
     {
         const bool transient = ctx.reason & DrawReasonBits::transient;
         const bool draw_transient_payload = transient || (ctx.reason & DrawReasonBits::record);
@@ -1067,7 +1052,7 @@ namespace auik
         }
     }
 
-    void MultipleComboBox::on_focus(bool focused)
+    void MultipleCombobox::on_focus(bool focused)
     {
         if (!focused)
         {
@@ -1082,7 +1067,7 @@ namespace auik
         if (_open) set_style_state(StyleState::focus);
     }
 
-    void MultipleComboBox::on_click(MouseKey key, KeyPressState state, u32 click_count)
+    void MultipleCombobox::on_click(MouseKey key, KeyPressState state, u32 click_count)
     {
         (void)click_count;
         if (key != MouseKey::left || state != KeyPressState::press) return;
@@ -1126,7 +1111,7 @@ namespace auik
         detail::mark_host_refresh_request();
     }
 
-    void MultipleComboBox::open()
+    void MultipleCombobox::open()
     {
         if (_open) return;
         _open = true;
@@ -1138,7 +1123,7 @@ namespace auik
         if (_trigger) _trigger->start_icon_animation(true);
     }
 
-    void MultipleComboBox::close()
+    void MultipleCombobox::close()
     {
         if (!_open) return;
         _open = false;
@@ -1153,27 +1138,29 @@ namespace auik
         if (_trigger) _trigger->start_icon_animation(false);
     }
 
-    void MultipleComboBox::toggle()
+    void MultipleCombobox::toggle()
     {
         if (_open) close();
         else open();
     }
 
-    void MultipleComboBox::rebuild_control_layout()
+    void MultipleCombobox::rebuild_control_layout()
     {
         const auto &style = get_theme()->get_style(_style.id);
         const amal::vec4 padding = style.padding();
         const f32 icon_slot_x = _trigger ? _trigger->icon_slot_left() : position().x + size().x - padding.z;
         const f32 label_w = amal::max(icon_slot_x - (position().x + padding.x) - 6.0f, 0.0f);
-        _label_rect = {{position().x + padding.x, position().y + padding.y},
-                       {label_w, amal::max(size().y - padding.y - padding.w, 0.0f)}};
+        const f32 label_h = _label->required_size().y;
+        const f32 content_h = amal::max(size().y - padding.y - padding.w, 0.0f);
+        _label_rect = {{position().x + padding.x, position().y + padding.y + amal::floor((content_h - label_h) * 0.5f)},
+                       {label_w, label_h}};
         _label->set_position(_label_rect.offset);
         _label->set_layout_size(_label_rect.size);
         _label->update_layout(false);
         _label->set_clip_id(clip_id());
     }
 
-    void MultipleComboBox::sync_label_text()
+    void MultipleCombobox::sync_label_text()
     {
         if (_selected_indices.size() == 1u && _selected_indices[0] < _popup->children.size())
         {
@@ -1187,7 +1174,7 @@ namespace auik
         else _label->set_text(_placeholder);
     }
 
-    void MultipleComboBox::update_popup_layout()
+    void MultipleCombobox::update_popup_layout()
     {
         _popup->set_window_style_tag(AUIK_STYLE_TAG_COMBO_BOX_POPUP);
         _popup->update_style();
@@ -1214,11 +1201,7 @@ namespace auik
             if (!child || !child->is_visible()) continue;
             ++visible_items;
             child->update_layout_min_size();
-            const amal::vec4 child_margin = child->layout_margin();
-            const amal::vec2 child_layout_size = {
-                amal::max(content_width - child_margin.x - child_margin.z, 0.0f),
-                amal::max(child->required_size().y - child_margin.y - child_margin.w, 0.0f)};
-            child->set_layout_size(child_layout_size);
+            child->set_layout_size({content_width, child->required_size().y});
             child->set_position(cursor);
             child->update_layout(true);
             cursor = {content_origin.x, cursor.y + child->required_size().y};
@@ -1243,7 +1226,7 @@ namespace auik
         static_cast<Widget *>(_popup)->update_layout(false);
     }
 
-    void MultipleComboBox::schedule_outside_click_tick()
+    void MultipleCombobox::schedule_outside_click_tick()
     {
         if (!detail::g_context) return;
         detail::update_window_time(detail::get_context().window_ctx);
@@ -1252,7 +1235,7 @@ namespace auik
                                    [this]() { tick_outside_click(); });
     }
 
-    void MultipleComboBox::tick_outside_click()
+    void MultipleCombobox::tick_outside_click()
     {
         if (!_open || !detail::g_context) return;
         add_render_command<detail::ClickEventTraits>(this, [this]() {
@@ -1291,13 +1274,13 @@ namespace auik
         detail::mark_host_refresh_request();
     }
 
-    bool MultipleComboBox::has_draw_record() const { return _trigger && _trigger->has_draw_record(); }
+    bool MultipleCombobox::has_draw_record() const { return _trigger && _trigger->has_draw_record(); }
 
     namespace
     {
-        void write_combo_box(acul::bin_stream &stream, umbf::Block *block)
+        void write_combobox(acul::bin_stream &stream, umbf::Block *block)
         {
-            auto *widget = static_cast<ComboBox *>(block);
+            auto *widget = static_cast<Combobox *>(block);
             detail::write_widget_common_data(stream, *widget);
             const auto items = widget->item_text_views();
             stream.write(static_cast<u32>(items.size()));
@@ -1306,7 +1289,7 @@ namespace auik
             stream.write(widget->selected_index()).write(widget->style_tag());
         }
 
-        umbf::Block *read_combo_box(acul::bin_stream &stream)
+        umbf::Block *read_combobox(acul::bin_stream &stream)
         {
             const auto common = detail::read_widget_common_data(stream);
             u32 item_count = 0u;
@@ -1329,16 +1312,16 @@ namespace auik
             items.reserve(item_storage.size());
             for (u32 i = 0u; i < item_storage.size(); ++i)
                 items.push_back({item_storage[i].c_str(), item_translated[i]});
-            auto *widget = acul::alloc<ComboBox>(common.id, items, selected_index, common.requested_size,
-                                                 WidgetFlags(common.widget_flags), nullptr);
+            auto *widget = acul::alloc<Combobox>(common.id, items, selected_index, common.requested_size,
+                                                 WidgetFlags(common.widget_flags));
             widget->set_style_tag(style_tag);
             detail::apply_widget_common_data(widget, common);
             return widget;
         }
 
-        void write_multiple_combo_box(acul::bin_stream &stream, umbf::Block *block)
+        void write_multiple_combobox(acul::bin_stream &stream, umbf::Block *block)
         {
-            auto *widget = static_cast<MultipleComboBox *>(block);
+            auto *widget = static_cast<MultipleCombobox *>(block);
             detail::write_widget_common_data(stream, *widget);
             const auto items = widget->item_text_views();
             stream.write(static_cast<u32>(items.size()));
@@ -1354,7 +1337,7 @@ namespace auik
             stream.write(widget->style_tag());
         }
 
-        umbf::Block *read_multiple_combo_box(acul::bin_stream &stream)
+        umbf::Block *read_multiple_combobox(acul::bin_stream &stream)
         {
             const auto common = detail::read_widget_common_data(stream);
             u32 item_count = 0u;
@@ -1382,9 +1365,9 @@ namespace auik
             items.reserve(item_storage.size());
             for (u32 i = 0u; i < item_storage.size(); ++i)
                 items.push_back({item_storage[i].c_str(), item_translated[i]});
-            auto *widget = acul::alloc<MultipleComboBox>(
-                common.id, items, StringView{placeholder.text.c_str(), placeholder.translated}, common.requested_size,
-                WidgetFlags(common.widget_flags), nullptr);
+            auto *widget = acul::alloc<MultipleCombobox>(common.id, items,
+                                                         StringView{placeholder.text.c_str(), placeholder.translated},
+                                                         common.requested_size, WidgetFlags(common.widget_flags));
             widget->set_style_tag(style_tag);
             widget->set_selected_indices(selected_indices);
             detail::apply_widget_common_data(widget, common);
@@ -1394,7 +1377,7 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::streams::Stream combo_box{read_combo_box, write_combo_box};
-        AUIK_EXPORT const umbf::streams::Stream multiple_combo_box{read_multiple_combo_box, write_multiple_combo_box};
+        AUIK_EXPORT const umbf::streams::Stream combobox{read_combobox, write_combobox};
+        AUIK_EXPORT const umbf::streams::Stream multiple_combobox{read_multiple_combobox, write_multiple_combobox};
     } // namespace streams
 } // namespace auik

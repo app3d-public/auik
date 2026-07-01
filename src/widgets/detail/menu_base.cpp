@@ -20,11 +20,12 @@ namespace auik::detail
 
     MenuItem::MenuItem(MenuBase *owner, u32 element_id, StringView text, Widget *parent, u32 style_tag_id,
                        u32 selected_style_tag_id)
-        : Selectable(style_tag_id, style_tag_id, element_id, text, amal::vec2{0.0f, 0.0f}, parent, style_tag_id,
-                     get_selectable_item_flags(), selected_style_tag_id),
+        : Selectable(make_element_id(owner ? owner->owner_widget_id() : 0u, style_tag_id, element_id), text, false,
+                     amal::vec2{0.0f, 0.0f}, parent, get_selectable_item_flags()),
           _owner(owner)
     {
-        if (owner) get_rect().id.widget_id = owner->owner_widget_id();
+        set_style_tag(style_tag_id);
+        set_selected_style_tag(selected_style_tag_id);
         set_focus_parent(owner ? owner->owner_widget() : nullptr);
     }
 

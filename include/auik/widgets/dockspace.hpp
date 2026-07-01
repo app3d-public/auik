@@ -53,11 +53,6 @@ namespace auik
     using DockspaceFlags = acul::flags<DockspaceFlagBits>;
 
     using DockNodeID = u32;
-    constexpr inline WidgetFlags get_default_dockspace_flags()
-    {
-        return WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::hittable |
-               WidgetFlagBits::configurable;
-    }
 
     struct DockNodeSettings
     {
@@ -66,7 +61,7 @@ namespace auik
         amal::vec2 min_size{80.0f, 80.0f};
         DockspaceFlags flags = DockspaceFlagBits::resize_helper | DockspaceFlagBits::visible_resize_helper |
                                DockspaceFlagBits::addable | DockspaceFlagBits::tabpanel;
-        TabBarFlags tabbar_flags = TabBarFlagBits::none;
+        TabbarFlags tabbar_flags = TabbarFlagBits::none;
         amal::vec2 tabbar_size = AUIK_SIZE_FIT;
 
         DockNodeSettings &enable_tabpanel()
@@ -87,7 +82,7 @@ namespace auik
         const amal::vec2 &min_size = {80.0f, 80.0f},
         DockspaceFlags flags = DockspaceFlagBits::resize_helper | DockspaceFlagBits::visible_resize_helper |
                                DockspaceFlagBits::addable | DockspaceFlagBits::tabpanel,
-        TabBarFlags tabbar_flags = TabBarFlagBits::none, const amal::vec2 &tabbar_size = AUIK_SIZE_FIT)
+        TabbarFlags tabbar_flags = TabbarFlagBits::none, const amal::vec2 &tabbar_size = AUIK_SIZE_FIT)
     {
         DockNodeSettings settings{};
         settings.requested_size = requested_size;
@@ -106,8 +101,7 @@ namespace auik
     public:
         using MenuGroup = acul::vector<acul::string>;
 
-        AUIK_EXPORT explicit Dockspace(u32 id, WidgetFlags widget_flags = get_default_dockspace_flags(),
-                                       Widget *parent = nullptr, u32 style_tag_id = 0u);
+        AUIK_EXPORT explicit Dockspace(u32 id, WidgetFlags widget_flags);
         AUIK_EXPORT ~Dockspace() override;
 
         DockNodeID root_node() const { return 0u; }
@@ -116,7 +110,7 @@ namespace auik
         AUIK_EXPORT DockNodeID create_leaf(DockNodeID parent, DockNodeSettings settings = DockNodeSettings{});
         AUIK_EXPORT void set_split_axis(DockNodeID node, amal::axis axis);
         AUIK_EXPORT void set_node_settings(DockNodeID node, DockNodeSettings settings);
-        AUIK_EXPORT void set_node_tabbar_flags(DockNodeID node, TabBarFlags flags);
+        AUIK_EXPORT void set_node_tabbar_flags(DockNodeID node, TabbarFlags flags);
         AUIK_EXPORT void set_new_node_settings(DockNodeSettings settings);
         AUIK_EXPORT void update_drag_zones();
         AUIK_EXPORT void add_window(DockNodeID node, Window *window);
@@ -168,7 +162,7 @@ namespace auik
             acul::vector<amal::rect> undocked_bounds;
             acul::vector<acul::string> tab_titles;
             acul::vector<u32> tab_element_ids;
-            TabBar *tabbar = nullptr;
+            Tabbar *tabbar = nullptr;
             DockMenu *menu = nullptr;
             detail::RectData tab_panel_rect{};
             DrawDataID tab_panel_draw{};
@@ -251,8 +245,6 @@ namespace auik
         amal::vec2 _tabbar_depth_range{0.0f, 0.0f};
         DockNodeID _open_menu_node = AUIK_DOCK_NODE_INVALID;
         bool _drag_zones_dirty = true;
-        u32 _style_tag_id = 0u;
-        StyleSelector _style{Theme::STYLE_ID_INVALID, 0u};
         StyleSelector _resize_helper_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_DOCKSPACE_RESIZE_HELPER};
         StyleSelector _resize_helper_drag_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_DOCKSPACE_RESIZE_HELPER_DRAG};
         StyleSelector _tab_panel_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_DOCK_NODE_TAB_PANEL};
@@ -260,21 +252,20 @@ namespace auik
             make_dockspace_settings(AUIK_SIZE_FILL, {0.0f, 0.0f}, {80.0f, 80.0f},
                                     DockspaceFlagBits::resize_helper | DockspaceFlagBits::visible_resize_helper |
                                         DockspaceFlagBits::addable | DockspaceFlagBits::tabpanel,
-                                    TabBarFlagBits::none);
+                                    TabbarFlagBits::none);
         MenuGroup _menu_group;
     };
 
-    inline Dockspace *make_dockspace(u32 id, Widget *parent = nullptr)
+    inline Dockspace *make_dockspace(u32 id)
     {
-        return acul::alloc<Dockspace>(id, get_default_dockspace_flags(), parent);
+        return acul::alloc<Dockspace>(id, WidgetFlagBits::visible | WidgetFlagBits::attachable |
+                                              WidgetFlagBits::hittable | WidgetFlagBits::configurable);
     }
 
-    inline Window *make_dock_window(u32 id, Dockspace *dockspace, StringView title = "",
-                                    const amal::rect &bounds = {},
-                                    WidgetFlags widget_flags = get_default_widget_flags() | WidgetFlagBits::hittable,
-                                    Widget *parent = nullptr)
+    inline Window *make_dock_window(u32 id, Dockspace *dockspace, StringView title = "", const amal::rect &bounds = {})
     {
-        auto *window = make_decorated_window(id, title, bounds, widget_flags, parent ? parent : dockspace);
+        auto *window = make_decorated_window(id, title, bounds);
+        window->set_parent(dockspace);
         window->window_flags |= WindowFlagBits::docked;
         return window;
     }

@@ -7,17 +7,11 @@
 
 namespace auik
 {
-    constexpr inline WidgetFlags get_default_image_flags()
-    {
-        return get_default_widget_flags();
-    }
-
     class Image : public Widget
     {
     public:
-        Image(u32 id, TextureID texture_id, amal::vec2 size, amal::rect uv_rect = {{0.0f, 0.0f}, {1.0f, 1.0f}},
-              WidgetFlags flags = get_default_image_flags())
-            : Widget(id, flags, EventFlagBits::none, nullptr, {{0.0f}, size}, AUIK_TAG_IMAGE),
+        Image(u32 id, TextureID texture_id, amal::vec2 size, amal::rect uv_rect, WidgetFlags flags)
+            : Widget(id, flags, EventFlagBits::none, {{0.0f}, size}, AUIK_TAG_IMAGE),
               _texture_id(texture_id),
               _uv_rect(uv_rect)
         {
@@ -57,9 +51,8 @@ namespace auik
     class CheckerImage : public Widget
     {
     public:
-        CheckerImage(u32 id, amal::vec2 size, u32 style_tag = AUIK_STYLE_TAG_GRADIENT_SLIDER,
-                     WidgetFlags flags = get_default_widget_flags())
-            : Widget(id, flags, EventFlagBits::none, nullptr, {{0.0f}, size}, AUIK_TAG_CHECKER_IMAGE),
+        CheckerImage(u32 id, amal::vec2 size, u32 style_tag, WidgetFlags flags)
+            : Widget(id, flags, EventFlagBits::none, {{0.0f}, size}, AUIK_TAG_CHECKER_IMAGE),
               _style({Theme::STYLE_ID_INVALID, style_tag})
         {
         }
@@ -88,7 +81,8 @@ namespace auik
     inline Image *make_image(u32 id, TextureID texture_id, amal::vec2 size,
                              amal::rect uv_rect = {{0.0f, 0.0f}, {1.0f, 1.0f}})
     {
-        return acul::alloc<Image>(id, texture_id, size, uv_rect);
+        return acul::alloc<Image>(id, texture_id, size, uv_rect,
+                                  WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::configurable);
     }
 
     inline void cache_image(u32 id, Image *image)
@@ -127,5 +121,5 @@ namespace auik
     {
         extern AUIK_EXPORT const umbf::streams::Stream image;
         extern AUIK_EXPORT const umbf::streams::Stream checker_image;
-    }
+    } // namespace streams
 } // namespace auik

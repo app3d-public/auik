@@ -54,7 +54,9 @@ namespace auik::detail
             const f32 t = amal::clamp((mouse_pos.y - track_min) / track_len, 0.0f, 1.0f);
             const f32 old_offset = _behavior.scroll_offset();
             _behavior.set_scroll_normalized(t);
-            return _behavior.scroll_offset() != old_offset;
+            const bool changed = _behavior.scroll_offset() != old_offset;
+            if (changed) update_thumb_rect();
+            return changed;
         }
 
         const f32 track_min = position().x;
@@ -62,7 +64,9 @@ namespace auik::detail
         const f32 t = amal::clamp((mouse_pos.x - track_min) / track_len, 0.0f, 1.0f);
         const f32 old_offset = _behavior.scroll_offset();
         _behavior.set_scroll_normalized(t);
-        return _behavior.scroll_offset() != old_offset;
+        const bool changed = _behavior.scroll_offset() != old_offset;
+        if (changed) update_thumb_rect();
+        return changed;
     }
 
     bool Scrollbar::is_point_on_thumb(const amal::vec2 &mouse_pos) const
@@ -109,7 +113,9 @@ namespace auik::detail
             const f32 thumb_y = mouse_pos.y - _thumb_drag_grab_offset;
             const f32 normalized = (thumb_y - lane_y - thumb_padding.y) / thumb_range;
             _behavior.set_scroll_normalized(normalized);
-            return _behavior.scroll_offset() != old_offset;
+            const bool changed = _behavior.scroll_offset() != old_offset;
+            if (changed) update_thumb_rect();
+            return changed;
         }
 
         const f32 lane_x = position().x + track_padding.x + thumb_margin.x;
@@ -123,7 +129,9 @@ namespace auik::detail
         const f32 thumb_x = mouse_pos.x - _thumb_drag_grab_offset;
         const f32 normalized = (thumb_x - lane_x - thumb_padding.x) / thumb_range;
         _behavior.set_scroll_normalized(normalized);
-        return _behavior.scroll_offset() != old_offset;
+        const bool changed = _behavior.scroll_offset() != old_offset;
+        if (changed) update_thumb_rect();
+        return changed;
     }
 
     bool Scrollbar::scroll_thumb_by_drag_delta(const amal::vec2 &delta)
@@ -164,7 +172,30 @@ namespace auik::detail
 
         if (thumb_range <= 0.0f || delta_axis == 0.0f) return false;
         const f32 scroll_delta_px = delta_axis * (max_scroll_px / thumb_range);
-        return _behavior.scroll_by_pixels(scroll_delta_px);
+        const bool changed = _behavior.scroll_by_pixels(scroll_delta_px);
+        if (changed) update_thumb_rect();
+        return changed;
+    }
+
+    void Scrollbar::set_scroll_normalized(f32 value)
+    {
+        const f32 old_offset = _behavior.scroll_offset();
+        _behavior.set_scroll_normalized(value);
+        if (_behavior.scroll_offset() != old_offset) update_thumb_rect();
+    }
+
+    void Scrollbar::set_scroll_offset(f32 offset_px)
+    {
+        const f32 old_offset = _behavior.scroll_offset();
+        _behavior.set_scroll_offset(offset_px);
+        if (_behavior.scroll_offset() != old_offset) update_thumb_rect();
+    }
+
+    bool Scrollbar::scroll_by_pixels(f32 delta_px)
+    {
+        const bool changed = _behavior.scroll_by_pixels(delta_px);
+        if (changed) update_thumb_rect();
+        return changed;
     }
 
     amal::vec4 Scrollbar::get_track_margin() const
@@ -200,7 +231,11 @@ namespace auik::detail
         _behavior.set_metrics(content_size, view_size);
         set_position(track_pos);
         set_layout_size(track_size);
+        update_thumb_rect();
+    }
 
+    void Scrollbar::update_thumb_rect()
+    {
         auto *theme = get_theme();
         const auto &track_style = theme->get_style(_track_style.id);
         const auto &thumb_style = theme->get_style(_thumb_style.id);
@@ -208,18 +243,18 @@ namespace auik::detail
         const amal::vec4 thumb_margin = axis_reverse_offsets(thumb_style.margin(), _behavior.axis);
         const amal::vec4 thumb_padding = axis_reverse_offsets(thumb_style.padding(), _behavior.axis);
 
-        const f32 safe_content = amal::max(content_size, 1.0f);
-        const f32 safe_view = amal::max(view_size, 0.0f);
+        const f32 safe_content = amal::max(_content_size, 1.0f);
+        const f32 safe_view = amal::max(_view_size, 0.0f);
         const f32 ratio = amal::clamp(safe_view / safe_content, 0.0f, 1.0f);
         const f32 scroll_norm = amal::clamp(_behavior.normalized, 0.0f, 1.0f);
 
         if (_behavior.axis == amal::axis::y)
         {
-            const amal::vec2 lane_pos = {track_pos.x + track_padding.x + thumb_margin.x,
-                                         track_pos.y + track_padding.y + thumb_margin.y};
+            const amal::vec2 lane_pos = {position().x + track_padding.x + thumb_margin.x,
+                                         position().y + track_padding.y + thumb_margin.y};
             const amal::vec2 lane_size = {
-                amal::max(track_size.x - track_padding.x - track_padding.z - thumb_margin.x - thumb_margin.z, 0.0f),
-                amal::max(track_size.y - track_padding.y - track_padding.w - thumb_margin.y - thumb_margin.w, 0.0f)};
+                amal::max(size().x - track_padding.x - track_padding.z - thumb_margin.x - thumb_margin.z, 0.0f),
+                amal::max(size().y - track_padding.y - track_padding.w - thumb_margin.y - thumb_margin.w, 0.0f)};
 
             const f32 min_thumb_h = 18.0f;
             const f32 base_thumb_h = amal::max(lane_size.y * ratio, amal::min(min_thumb_h, lane_size.y));
@@ -238,11 +273,11 @@ namespace auik::detail
             return;
         }
 
-        const amal::vec2 lane_pos = {track_pos.x + track_padding.x + thumb_margin.x,
-                                     track_pos.y + track_padding.y + thumb_margin.y};
+        const amal::vec2 lane_pos = {position().x + track_padding.x + thumb_margin.x,
+                                     position().y + track_padding.y + thumb_margin.y};
         const amal::vec2 lane_size = {
-            amal::max(track_size.x - track_padding.x - track_padding.z - thumb_margin.x - thumb_margin.z, 0.0f),
-            amal::max(track_size.y - track_padding.y - track_padding.w - thumb_margin.y - thumb_margin.w, 0.0f)};
+            amal::max(size().x - track_padding.x - track_padding.z - thumb_margin.x - thumb_margin.z, 0.0f),
+            amal::max(size().y - track_padding.y - track_padding.w - thumb_margin.y - thumb_margin.w, 0.0f)};
         _thumb_rect.clip_id = clip_id();
 
         const f32 min_thumb_w = 18.0f;

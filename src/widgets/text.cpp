@@ -1,10 +1,9 @@
+#include <acul/hash/utils.hpp>
 #include <auik/auik.hpp>
 #include <auik/detail/context.hpp>
 #include <auik/pipelines.hpp>
 #include <auik/widgets/text.hpp>
-#include <acul/hash/utils.hpp>
 #include "../core/session_stream_utils.hpp"
-
 
 #define AUIK_TOOLTIP_SHOW_DELAY             0.35
 #define AUIK_TEXT_SHRINK_RECORD_RATIO       8
@@ -46,41 +45,99 @@ namespace auik
         return old_count >= new_count * AUIK_TEXT_SHRINK_RECORD_RATIO;
     }
 
-    static amal::vec2 resolve_text_size(const Text &widget, const amal::vec2 &measured_size)
+    static amal::vec2 resolve_text_size(const Text &widget, const amal::vec2 &measured_size, const amal::vec4 &margin)
     {
-        amal::vec2 out = widget.size();
+        amal::vec2 out = {amal::max(widget.size().x - margin.x - margin.z, 0.0f),
+                          amal::max(widget.size().y - margin.y - margin.w, 0.0f)};
         if (!is_size_concrete(out.x) || out.x <= 0.0f) out.x = measured_size.x;
         if (!is_size_concrete(out.y) || out.y <= 0.0f) out.y = measured_size.y;
         return out;
+    }
+
+    struct TextVisualYBounds
+    {
+        f32 min = 0.0f;
+        f32 max = 0.0f;
+        bool valid = false;
+    };
+
+    static TextVisualYBounds resolve_visual_y_bounds(const detail::TextLayoutResult &layout)
+    {
+        TextVisualYBounds out{};
+        for (const auto &glyph : layout.glyphs)
+        {
+            if (!glyph.visible()) continue;
+            const f32 glyph_min = glyph.rect.offset.y;
+            const f32 glyph_max = glyph.rect.offset.y + glyph.rect.size.y;
+            if (!out.valid)
+            {
+                out.min = glyph_min;
+                out.max = glyph_max;
+                out.valid = true;
+                continue;
+            }
+            out.min = amal::min(out.min, glyph_min);
+            out.max = amal::max(out.max, glyph_max);
+        }
+        return out;
+    }
+
+    static f32 resolve_metrics_height(const detail::TextLayoutResult &layout)
+    {
+        const f32 metrics_height = amal::max(layout.ascender - layout.descender, 0.0f);
+        if (layout.lines.size() <= 1 && metrics_height > 0.0f) return metrics_height;
+        return layout.size.y;
+    }
+
+    static f32 resolve_text_anchor_y_offset(TextAnchorY anchor, const detail::TextLayoutResult &layout,
+                                            const amal::vec2 &bounds_size)
+    {
+        const f32 metrics_height = resolve_metrics_height(layout);
+        switch (anchor)
+        {
+            case TextAnchorY::baseline:
+                return -layout.ascender;
+            case TextAnchorY::middle:
+                return (bounds_size.y - metrics_height) * 0.5f;
+            case TextAnchorY::descent:
+                return bounds_size.y - metrics_height;
+            case TextAnchorY::ascent:
+            default:
+                return 0.0f;
+        }
     }
 
     static f32 resolve_layout_height_for_widget(const Text &widget, const detail::TextLayoutResult &layout)
     {
         if (!widget.tight_content_height()) return layout.size.y;
 
-        bool has_visible_glyph = false;
-        f32 min_y = 0.0f;
-        f32 max_y = 0.0f;
-        for (const auto &glyph : layout.glyphs)
-        {
-            if (!glyph.visible()) continue;
-            const f32 glyph_min = glyph.rect.offset.y;
-            const f32 glyph_max = glyph.rect.offset.y + glyph.rect.size.y;
-            if (!has_visible_glyph)
-            {
-                min_y = glyph_min;
-                max_y = glyph_max;
-                has_visible_glyph = true;
-                continue;
-            }
-            min_y = amal::min(min_y, glyph_min);
-            max_y = amal::max(max_y, glyph_max);
-        }
-        if (has_visible_glyph) return amal::max(max_y - min_y, 0.0f);
+        const auto visual_bounds = resolve_visual_y_bounds(layout);
+        if (visual_bounds.valid) return amal::max(visual_bounds.max - visual_bounds.min, 0.0f);
 
-        const f32 metrics_height = amal::max(layout.ascender - layout.descender, 0.0f);
-        if (layout.lines.size() <= 1 && metrics_height > 0.0f) return metrics_height;
-        return layout.size.y;
+        return resolve_metrics_height(layout);
+    }
+
+    static amal::vec2 resolve_text_widget_render_origin(const Text &widget, Font *font, u32 font_size_px,
+                                                        const detail::TextLayoutResult *layout = nullptr,
+                                                        const amal::vec2 *bounds_size = nullptr)
+    {
+        amal::vec2 origin = widget.position();
+        if (layout && bounds_size && widget.tight_content_height())
+        {
+            const auto visual_bounds = resolve_visual_y_bounds(*layout);
+            if (visual_bounds.valid)
+            {
+                origin.y -= visual_bounds.min + resolve_text_anchor_y_offset(widget.anchor_y(), *layout, *bounds_size);
+                return origin;
+            }
+        }
+        if (widget.anchor_y() == TextAnchorY::baseline)
+        {
+            const f32 ascender =
+                layout ? layout->ascender : (font ? detail::TextFontAccess::ascender(*font, font_size_px) : 0.0f);
+            origin.y += ascender;
+        }
+        return origin;
     }
 
     static void invalidate_text_draw_ids(DrawStream *stream, acul::vector<DrawDataID> &draw_ids, size_t first)
@@ -92,22 +149,16 @@ namespace auik
     StyleUpdateFlags Text::update_style()
     {
         const u32 parent_id = parent() ? parent()->id() : 0u;
-        const auto flags = resolve_style_selector(_style, id(), parent_id, style_state());
-        const auto &style = get_theme()->get_style(_style.id);
-        _layout_config.size_px = round_font_px(style.text_size());
-        _render_config.tint_color = style.text_color();
-        return flags;
+        return resolve_style_selector(_style, id(), parent_id, style_state());
     }
 
     Text *Text::clone(u32 id) const
     {
-        auto *out = acul::alloc<Text>(id, source_text(), requested_size(), widget_flags, _style.tag_id,
-                                      _layout_config.overflow, _render_config.vertical_align, _layout_config.wrap,
-                                      _layout_config.width_mode);
+        auto *out = acul::alloc<Text>(id, source_text(), requested_size(), widget_flags, _layout_config.flags,
+                                      _render_config.anchor_y);
+        out->set_style_tag(_style.tag_id);
         out->text_flags = text_flags;
-        out->set_horizontal_align(_render_config.horizontal_align);
         out->set_max_lines(_layout_config.max_lines);
-        out->set_trim_trailing_spaces(_layout_config.trim_trailing_spaces);
         out->set_tight_content_height(_tight_content_height);
         return out;
     }
@@ -209,9 +260,7 @@ namespace auik
     }
 
     const char *Text::translated_text_literal() const
-    {
-        return static_cast<const char *>(get_user_data(AUIK_UD_LOCALE_LITERAL));
-    }
+    { return static_cast<const char *>(get_user_data(AUIK_UD_LOCALE_LITERAL)); }
 
     bool Text::update_translated_text()
     {
@@ -230,6 +279,7 @@ namespace auik
 
     void Text::update_layout_min_size()
     {
+        assert(_style.id != Theme::STYLE_ID_INVALID && "Text style must be resolved before layout update");
         if (detail::get_context().dirty_flags & DirtyFlagBits::locale) update_translated_text();
         _layout_result.clear();
         _content_bounds = {position(), {0.0f, 0.0f}};
@@ -239,9 +289,10 @@ namespace auik
         const amal::vec4 margin = style.margin();
         const amal::vec4 padding = style.padding();
 
-        auto *font = get_theme()->get_style(_style.id).font();
+        auto *font = style.font();
+        const u32 font_size_px = round_font_px(style.text_size());
         const bool allow_empty_layout = multiline();
-        if (!font || (!allow_empty_layout && _text.empty()) || _layout_config.size_px == 0)
+        if (!font || (!allow_empty_layout && _text.empty()) || font_size_px == 0)
         {
             const amal::vec2 content_size = {is_width_fixed() && !fill_width() ? requested_size().x : 0.0f,
                                              is_height_fixed() && !fill_height() ? requested_size().y : 0.0f};
@@ -251,12 +302,13 @@ namespace auik
         }
 
         auto measure_config = _layout_config;
-        if (_layout_config.width_mode == detail::TextLayoutWidthMode::bounds && is_size_concrete(size().x) &&
-            size().x > 0.0f && (is_width_fixed() || multiline()))
+        if (width_mode() == TextLayoutWidthMode::bounds && is_size_concrete(size().x) && size().x > 0.0f &&
+            (is_width_fixed() || multiline()))
             measure_config.max_width = size().x;
 
-        const bool is_ok = multiline() ? detail::layout_multiline(*font, _text, measure_config, _layout_result)
-                                       : detail::layout_single_line(*font, _text, measure_config, _layout_result);
+        const bool is_ok =
+            multiline() ? detail::layout_multiline(*font, font_size_px, _text, measure_config, _layout_result)
+                        : detail::layout_single_line(*font, font_size_px, _text, measure_config, _layout_result);
         if (!is_ok)
         {
             _layout_result.clear();
@@ -281,11 +333,15 @@ namespace auik
 
     void Text::update_layout(bool min_size_known)
     {
+        assert(_style.id != Theme::STYLE_ID_INVALID && "Text style must be resolved before layout update");
         if (!min_size_known) update_layout_min_size();
 
         const auto &style = get_theme()->get_style(_style.id);
         const amal::vec4 margin = style.margin();
         const amal::vec4 padding = style.padding();
+        auto *font = style.font();
+        const u32 font_size_px = round_font_px(style.text_size());
+        const u32 tint_color = style.text_color();
         const amal::vec2 required_outer = required_size();
         const amal::vec2 required_inner = {amal::max(required_outer.x - margin.x - margin.z, 0.0f),
                                            amal::max(required_outer.y - margin.y - margin.w, 0.0f)};
@@ -295,7 +351,7 @@ namespace auik
         const amal::vec2 outer_pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
         set_position(outer_pos);
 
-        amal::vec2 outer_size = resolve_text_size(*this, required_inner);
+        amal::vec2 outer_size = resolve_text_size(*this, required_inner, margin);
         set_layout_size(outer_size);
         Widget::update_layout(true);
         assert(parent() && "Text must have parent");
@@ -307,13 +363,14 @@ namespace auik
         const bool can_reuse_layout = detail::is_fast_layout_update() && !multiline() && !_layout_result.lines.empty();
         if (can_reuse_layout)
         {
-            auto *font = get_theme()->get_style(_style.id).font();
             auto render_config = _render_config;
-            render_config.bounds = {position(), inner_size};
+            render_config.size = inner_size;
+            render_config.origin =
+                resolve_text_widget_render_origin(*this, font, font_size_px, &_layout_result, &render_config.size);
             render_config.z_order = get_z_order();
             render_config.clip_id = clip_id();
-            if (font && detail::build_text_instances_from_layout(*font, _layout_config.size_px, _layout_result,
-                                                                 render_config, _instances))
+            if (font && detail::build_text_instances_from_layout(*font, font_size_px, _layout_result, render_config,
+                                                                 tint_color, _instances))
                 _instances_gpu_dirty = true;
             else rebuild_text_buffers(inner_size);
         }
@@ -332,12 +389,6 @@ namespace auik
             set_required_size({resolved_width + padding.x + padding.z + margin.x + margin.z,
                                resolved_height + padding.y + padding.w + margin.y + margin.w});
         }
-    }
-
-    amal::vec4 Text::layout_margin() const
-    {
-        if (_style.id == Theme::STYLE_ID_INVALID) return {0.0f, 0.0f, 0.0f, 0.0f};
-        return get_theme()->get_style(_style.id).margin();
     }
 
     void Text::translate(const amal::vec2 &delta)
@@ -474,10 +525,11 @@ namespace auik
         }
         if (draw_state_changed || instances_changed)
         {
+            const u32 tint_color = get_theme()->get_style(_style.id).text_color();
             for (auto &instance : _instances)
             {
                 instance.z_order = current_z;
-                instance.tint_color = _render_config.tint_color;
+                instance.tint_color = tint_color;
             }
         }
 
@@ -529,22 +581,35 @@ namespace auik
     bool Text::rebuild_text_buffers(const amal::vec2 &bounds_size)
     {
         _instances.clear();
-        _layout_result.clear();
         _instances_gpu_dirty = true;
 
-        auto *font = get_theme()->get_style(_style.id).font();
+        const auto &style = get_theme()->get_style(_style.id);
+        auto *font = style.font();
+        const u32 font_size_px = round_font_px(style.text_size());
+        const u32 tint_color = style.text_color();
         const bool allow_empty_layout = multiline();
-        if (!font || (!allow_empty_layout && _text.empty()) || _layout_config.size_px == 0) return false;
+        if (!font || (!allow_empty_layout && _text.empty()) || font_size_px == 0) return false;
 
         auto render_config = _render_config;
-        render_config.bounds = {position(), bounds_size};
+        render_config.size = bounds_size;
         render_config.z_order = get_z_order();
         render_config.clip_id = clip_id();
 
-        return multiline() ? detail::build_multiline_instances(*font, _text, _layout_config, render_config, _instances,
-                                                               &_layout_result)
-                           : detail::build_single_line_instances(*font, _text, _layout_config, render_config,
-                                                                 _instances, &_layout_result);
+        if (!_layout_result.lines.empty())
+        {
+            render_config.origin =
+                resolve_text_widget_render_origin(*this, font, font_size_px, &_layout_result, &render_config.size);
+            return detail::build_text_instances_from_layout(*font, font_size_px, _layout_result, render_config,
+                                                            tint_color, _instances);
+        }
+
+        render_config.origin = resolve_text_widget_render_origin(*this, font, font_size_px);
+
+        return multiline()
+                   ? detail::build_multiline_instances(*font, font_size_px, _text, _layout_config, render_config,
+                                                       tint_color, _instances, &_layout_result)
+                   : detail::build_single_line_instances(*font, font_size_px, _text, _layout_config, render_config,
+                                                         tint_color, _instances, &_layout_result);
     }
 
     static EventFlags resolve_etext_event_flags()
@@ -554,9 +619,7 @@ namespace auik
     }
 
     static u64 etext_tooltip_task_owner(u32 id)
-    {
-        return (static_cast<u64>(AUIK_TAG_TEXT) << 32u) | static_cast<u64>(id);
-    }
+    { return (static_cast<u64>(AUIK_TAG_TEXT) << 32u) | static_cast<u64>(id); }
 
     static detail::TextEditKey map_etext_key(Key key, KeyMode mods, bool multiline, bool read_only)
     {
@@ -632,14 +695,10 @@ namespace auik
     }
 
     static bool etext_edit_insert_chars(void *user_data, int pos, const detail::TextEditChar *text, int text_len)
-    {
-        return etext_edit_replace_chars(user_data, pos, 0, text, text_len);
-    }
+    { return etext_edit_replace_chars(user_data, pos, 0, text, text_len); }
 
     static void etext_edit_delete_chars(void *user_data, int pos, int count)
-    {
-        etext_edit_replace_chars(user_data, pos, count, nullptr, 0);
-    }
+    { etext_edit_replace_chars(user_data, pos, count, nullptr, 0); }
 
     static int etext_edit_next_char_index(void *user_data, int idx)
     {
@@ -659,23 +718,30 @@ namespace auik
         u8 flags = 0;
     };
 
-    EText::EText(u32 id, acul::string text, amal::vec2 size, WidgetFlags flags, u32 style_tag_id,
-                 detail::TextOverflowMode overflow, detail::TextVerticalAlign vertical_align, detail::TextWrapMode wrap,
-                 detail::TextLayoutWidthMode width_mode)
-        : Text(id, std::move(text), size, flags, style_tag_id, overflow, vertical_align, wrap, width_mode),
+    EText::EText(u32 id, acul::string text, amal::vec2 max_size, WidgetFlags flags, TextLayoutFlags layout_flags,
+                 TextAnchorY anchor_y)
+        : Text(id, std::move(text), max_size, flags, layout_flags, anchor_y),
           _edit((flags & WidgetFlagBits::hittable) ? acul::alloc<ETextEditData>() : nullptr)
     {
         set_rect_tag_id(AUIK_TAG_ETEXT);
         if (_edit)
         {
             set_post_data(_edit);
-            set_event_flags(resolve_etext_event_flags());
-            detail::text_edit_initialize_state(&_edit_state, wrap != detail::TextWrapMode::word);
+            requested_event_flags = resolve_etext_event_flags();
+            event_flags = is_disabled() ? EventFlagBits::none : requested_event_flags;
+            detail::text_edit_initialize_state(&_edit_state, text_wrap_mode(layout_flags) != TextWrapMode::word);
             register_shortcut(this->id(), Shortcut{.mods = KeyModeBits::control, .keys = {Key::c}},
                               [this]() { copy_selection_to_clipboard(); });
             register_shortcut(this->id(), Shortcut{.mods = KeyModeBits::control, .keys = {Key::a}},
                               [this]() { select_all_text(); });
         }
+    }
+
+    EText::EText(u32 id, StringView text, amal::vec2 max_size, WidgetFlags flags, TextLayoutFlags layout_flags,
+                 TextAnchorY anchor_y)
+        : EText(id, acul::string(text.str ? text.str : ""), max_size, flags, layout_flags, anchor_y)
+    {
+        if (text.is_translated) set_translated_text_literal(text.str);
     }
 
     EText::~EText()
@@ -695,9 +761,7 @@ namespace auik
     }
 
     void EText::sync_widget_flags()
-    {
-        Widget::sync_widget_flags(is_disabled() ? EventFlagBits::none : requested_event_flags);
-    }
+    { Widget::sync_widget_flags(is_disabled() ? EventFlagBits::none : requested_event_flags); }
 
     StyleUpdateFlags EText::update_style()
     {
@@ -749,9 +813,7 @@ namespace auik
     }
 
     bool EText::should_show_lazy_tooltip() const
-    {
-        return overflow_mode() == detail::TextOverflowMode::ellipsis && _layout_result.truncated && !_text.empty();
-    }
+    { return overflow_mode() == TextOverflowMode::ellipsis && _layout_result.truncated && !_text.empty(); }
 
     void EText::schedule_lazy_tooltip()
     {
@@ -1286,13 +1348,9 @@ namespace auik
                                            translated);
             stream.write(static_cast<u32>(widget.text_flags))
                 .write(widget.style_tag())
-                .write(static_cast<u32>(widget.overflow_mode()))
-                .write(static_cast<u32>(widget.multiline() ? detail::TextWrapMode::word : detail::TextWrapMode::none))
-                .write(static_cast<u32>(widget.width_mode()))
-                .write(static_cast<u32>(widget.horizontal_align()))
-                .write(static_cast<u32>(widget.vertical_align()))
+                .write(static_cast<u32>(widget.layout_flags()))
+                .write(static_cast<u32>(widget.anchor_y()))
                 .write(widget.max_lines())
-                .write(widget.trim_trailing_spaces())
                 .write(widget.tight_content_height());
         }
 
@@ -1302,13 +1360,9 @@ namespace auik
             bool translated = false;
             u32 text_flags = 0u;
             u32 style_tag = AUIK_STYLE_TAG_NO_PAD;
-            u32 overflow = 0u;
-            u32 wrap = 0u;
-            u32 width_mode = 0u;
-            u32 horizontal_align = 0u;
-            u32 vertical_align = 0u;
+            u32 layout_flags = static_cast<u32>(default_text_layout_flags());
+            u32 anchor_y = static_cast<u32>(TextAnchorY::baseline);
             u32 max_lines = 0u;
-            bool trim_trailing_spaces = true;
             bool tight_content_height = false;
         };
 
@@ -1320,13 +1374,9 @@ namespace auik
             out.translated = text.translated;
             stream.read(out.text_flags)
                 .read(out.style_tag)
-                .read(out.overflow)
-                .read(out.wrap)
-                .read(out.width_mode)
-                .read(out.horizontal_align)
-                .read(out.vertical_align)
+                .read(out.layout_flags)
+                .read(out.anchor_y)
                 .read(out.max_lines)
-                .read(out.trim_trailing_spaces)
                 .read(out.tight_content_height);
             return out;
         }
@@ -1334,9 +1384,7 @@ namespace auik
         void apply_text_payload(Text &widget, const TextPayload &payload)
         {
             widget.text_flags = TextFlags(payload.text_flags);
-            widget.set_horizontal_align(static_cast<detail::TextHorizontalAlign>(payload.horizontal_align));
             widget.set_max_lines(payload.max_lines);
-            widget.set_trim_trailing_spaces(payload.trim_trailing_spaces);
             widget.set_tight_content_height(payload.tight_content_height);
         }
 
@@ -1353,10 +1401,8 @@ namespace auik
             const auto payload = read_text_payload(stream);
             auto *widget =
                 acul::alloc<Text>(common.id, payload.text, common.requested_size, WidgetFlags(common.widget_flags),
-                                  payload.style_tag, static_cast<detail::TextOverflowMode>(payload.overflow),
-                                  static_cast<detail::TextVerticalAlign>(payload.vertical_align),
-                                  static_cast<detail::TextWrapMode>(payload.wrap),
-                                  static_cast<detail::TextLayoutWidthMode>(payload.width_mode));
+                                  TextLayoutFlags(payload.layout_flags), static_cast<TextAnchorY>(payload.anchor_y));
+            widget->set_style_tag(payload.style_tag);
             detail::apply_widget_common_data(widget, common);
             if (payload.translated) widget->set_translated_text_literal(payload.text.c_str());
             apply_text_payload(*widget, payload);
@@ -1369,10 +1415,8 @@ namespace auik
             const auto payload = read_text_payload(stream);
             auto *widget =
                 acul::alloc<EText>(common.id, payload.text, common.requested_size, WidgetFlags(common.widget_flags),
-                                   payload.style_tag, static_cast<detail::TextOverflowMode>(payload.overflow),
-                                   static_cast<detail::TextVerticalAlign>(payload.vertical_align),
-                                   static_cast<detail::TextWrapMode>(payload.wrap),
-                                   static_cast<detail::TextLayoutWidthMode>(payload.width_mode));
+                                   TextLayoutFlags(payload.layout_flags), static_cast<TextAnchorY>(payload.anchor_y));
+            widget->set_style_tag(payload.style_tag);
             detail::apply_widget_common_data(widget, common);
             if (payload.translated) widget->set_translated_text_literal(payload.text.c_str());
             apply_text_payload(*widget, payload);

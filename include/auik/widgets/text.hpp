@@ -11,62 +11,37 @@
 
 namespace auik
 {
-    constexpr inline WidgetFlags get_default_text_flags() { return get_default_widget_flags(); }
-
-    constexpr inline WidgetFlags make_etext_flags()
-    {
-        return get_default_text_flags() | WidgetFlagBits::hittable | WidgetFlagBits::read_only;
-    }
 
     class Text : public Widget
     {
     public:
         TextFlags text_flags = TextFlagBits::none;
 
-        Text(u32 id, acul::string text, amal::vec2 size, WidgetFlags flags = get_default_text_flags(),
-             u32 style_tag_id = AUIK_STYLE_TAG_NO_PAD,
-             detail::TextOverflowMode overflow = detail::TextOverflowMode::ellipsis,
-             detail::TextVerticalAlign vertical_align = detail::TextVerticalAlign::top,
-             detail::TextWrapMode wrap = detail::TextWrapMode::none,
-             detail::TextLayoutWidthMode width_mode = detail::TextLayoutWidthMode::bounds)
-            : Widget(id, flags, EventFlagBits::none, nullptr, {{0.0f}, size}, AUIK_TAG_TEXT),
+        Text(u32 id, acul::string text, amal::vec2 max_size, WidgetFlags flags,
+             TextLayoutFlags layout_flags = default_text_layout_flags(), TextAnchorY anchor_y = TextAnchorY::baseline)
+            : Widget(id, flags, EventFlagBits::none, {{0.0f}, max_size}, AUIK_TAG_TEXT),
               _text(std::move(text)),
-              _style({Theme::STYLE_ID_INVALID, style_tag_id})
+              _style({Theme::STYLE_ID_INVALID, Theme::STYLE_ID_INVALID})
         {
-            _layout_config.overflow = overflow;
-            _layout_config.wrap = wrap;
-            _layout_config.width_mode = width_mode;
-            _render_config.vertical_align = vertical_align;
+            _layout_config.flags = layout_flags;
+            _render_config.anchor_y = anchor_y;
         }
-        Text(u32 id, StringView text, amal::vec2 size, WidgetFlags flags = get_default_text_flags(),
-             u32 style_tag_id = AUIK_STYLE_TAG_NO_PAD,
-             detail::TextOverflowMode overflow = detail::TextOverflowMode::ellipsis,
-             detail::TextVerticalAlign vertical_align = detail::TextVerticalAlign::top,
-             detail::TextWrapMode wrap = detail::TextWrapMode::none,
-             detail::TextLayoutWidthMode width_mode = detail::TextLayoutWidthMode::bounds)
-            : Text(id, acul::string(text.str), size, flags, style_tag_id, overflow, vertical_align, wrap, width_mode)
+        Text(u32 id, StringView text, amal::vec2 max_size, WidgetFlags flags,
+             TextLayoutFlags layout_flags = default_text_layout_flags(), TextAnchorY anchor_y = TextAnchorY::baseline)
+            : Text(id, acul::string(text.str ? text.str : ""), max_size, flags, layout_flags, anchor_y)
         {
             if (text.is_translated) set_translated_text_literal(text.str);
         }
-        Text(u32 id, const char *text, amal::vec2 size, WidgetFlags flags = get_default_text_flags(),
-             u32 style_tag_id = AUIK_STYLE_TAG_NO_PAD,
-             detail::TextOverflowMode overflow = detail::TextOverflowMode::ellipsis,
-             detail::TextVerticalAlign vertical_align = detail::TextVerticalAlign::top,
-             detail::TextWrapMode wrap = detail::TextWrapMode::none,
-             detail::TextLayoutWidthMode width_mode = detail::TextLayoutWidthMode::bounds)
-            : Text(id, StringView{text}, size, flags, style_tag_id, overflow, vertical_align, wrap, width_mode)
+        Text(u32 id, const char *text, amal::vec2 max_size, WidgetFlags flags,
+             TextLayoutFlags layout_flags = default_text_layout_flags(), TextAnchorY anchor_y = TextAnchorY::baseline)
+            : Text(id, StringView{text}, max_size, flags, layout_flags, anchor_y)
         {
         }
-        Text(u32 id, ModelBinding *binding, amal::vec2 size, WidgetFlags flags = get_default_text_flags(),
-             u32 style_tag_id = AUIK_STYLE_TAG_NO_PAD,
-             detail::TextOverflowMode overflow = detail::TextOverflowMode::ellipsis,
-             detail::TextVerticalAlign vertical_align = detail::TextVerticalAlign::top,
-             detail::TextWrapMode wrap = detail::TextWrapMode::none,
-             detail::TextLayoutWidthMode width_mode = detail::TextLayoutWidthMode::bounds)
-            : Text(id, acul::string{}, size, flags, style_tag_id, overflow, vertical_align, wrap, width_mode)
-        {
-            set_model_binding(binding);
-        }
+        
+        Text(u32 id, ModelBinding *binding, amal::vec2 max_size, WidgetFlags flags,
+             TextLayoutFlags layout_flags = default_text_layout_flags(), TextAnchorY anchor_y = TextAnchorY::baseline)
+            : Text(id, acul::string{}, max_size, flags, layout_flags, anchor_y)
+        { set_model_binding(binding); }
         AUIK_EXPORT StyleUpdateFlags update_style() override;
         AUIK_EXPORT void update_layout_min_size() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
@@ -74,7 +49,6 @@ namespace auik
         AUIK_EXPORT void update_depth(const amal::vec2 &depth_range) override;
         AUIK_EXPORT void rebuild_clip_rects() override;
         AUIK_EXPORT void reset_draw_records() override;
-        AUIK_EXPORT amal::vec4 layout_margin() const override;
         AUIK_EXPORT void invalidate_draw_records();
         AUIK_EXPORT void draw(DrawCtx &ctx) override;
         u32 signature() const override { return AUIK_TAG_TEXT; }
@@ -109,49 +83,53 @@ namespace auik
 
         const detail::TextLayoutResult &layout_result() const { return _layout_result; }
         u32 style_tag() const { return _style.tag_id; }
+        void set_style_tag(u32 tag_id)
+        {
+            if (_style.tag_id == tag_id) return;
+            _style = {Theme::STYLE_ID_INVALID, tag_id};
+        }
 
-        bool multiline() const { return _layout_config.wrap == detail::TextWrapMode::word; }
+        bool multiline() const { return text_wrap_mode(_layout_config.flags) == TextWrapMode::word; }
         void set_multiline(bool value)
         {
-            const auto next = value ? detail::TextWrapMode::word : detail::TextWrapMode::none;
-            if (_layout_config.wrap == next) return;
-            _layout_config.wrap = next;
+            if (multiline() == value) return;
+            if (value) _layout_config.flags |= TextLayoutFlagBits::wrap_word;
+            else _layout_config.flags &= ~TextLayoutFlagBits::wrap_word;
         }
 
-        detail::TextOverflowMode overflow_mode() const { return _layout_config.overflow; }
-        void set_overflow_mode(detail::TextOverflowMode value)
+        TextLayoutFlags layout_flags() const { return _layout_config.flags; }
+        void set_layout_flags(TextLayoutFlags value) { _layout_config.flags = value; }
+
+        TextOverflowMode overflow_mode() const { return text_overflow_mode(_layout_config.flags); }
+        void set_overflow_mode(TextOverflowMode value)
         {
-            if (_layout_config.overflow == value) return;
-            _layout_config.overflow = value;
+            if (overflow_mode() == value) return;
+            if (value == TextOverflowMode::ellipsis) _layout_config.flags |= TextLayoutFlagBits::ellipsis;
+            else _layout_config.flags &= ~TextLayoutFlagBits::ellipsis;
         }
 
-        bool trim_trailing_spaces() const { return _layout_config.trim_trailing_spaces; }
+        bool trim_trailing_spaces() const { return _layout_config.flags & TextLayoutFlagBits::trim_trailing_spaces; }
         void set_trim_trailing_spaces(bool value)
         {
-            if (_layout_config.trim_trailing_spaces == value) return;
-            _layout_config.trim_trailing_spaces = value;
+            if (trim_trailing_spaces() == value) return;
+            if (value) _layout_config.flags |= TextLayoutFlagBits::trim_trailing_spaces;
+            else _layout_config.flags &= ~TextLayoutFlagBits::trim_trailing_spaces;
         }
 
-        detail::TextLayoutWidthMode width_mode() const { return _layout_config.width_mode; }
-        void set_width_mode(detail::TextLayoutWidthMode value)
+        TextLayoutWidthMode width_mode() const { return text_width_mode(_layout_config.flags); }
+        void set_width_mode(TextLayoutWidthMode value)
         {
-            if (_layout_config.width_mode == value) return;
-            _layout_config.width_mode = value;
+            if (width_mode() == value) return;
+            _layout_config.flags &= ~(TextLayoutFlagBits::width_viewport | TextLayoutFlagBits::width_bounds);
+            if (value == TextLayoutWidthMode::viewport) _layout_config.flags |= TextLayoutFlagBits::width_viewport;
+            else if (value == TextLayoutWidthMode::bounds) _layout_config.flags |= TextLayoutFlagBits::width_bounds;
         }
 
-        detail::TextHorizontalAlign horizontal_align() const { return _render_config.horizontal_align; }
-        void set_horizontal_align(detail::TextHorizontalAlign value)
+        TextAnchorY anchor_y() const { return _render_config.anchor_y; }
+        void set_anchor_y(TextAnchorY value)
         {
-            if (_render_config.horizontal_align == value) return;
-            _render_config.horizontal_align = value;
-        }
-
-        detail::TextVerticalAlign vertical_align() const { return _render_config.vertical_align; }
-        void set_vertical_align(detail::TextVerticalAlign value)
-        {
-            assert(value != detail::TextVerticalAlign::none && "Text vertical alignment does not support none");
-            if (_render_config.vertical_align == value) return;
-            _render_config.vertical_align = value;
+            if (_render_config.anchor_y == value) return;
+            _render_config.anchor_y = value;
         }
 
         u32 max_lines() const { return _layout_config.max_lines; }
@@ -159,6 +137,13 @@ namespace auik
         {
             if (_layout_config.max_lines == value) return;
             _layout_config.max_lines = value;
+        }
+
+        f32 max_width() const { return _layout_config.max_width; }
+        void set_max_width(f32 value)
+        {
+            if (_layout_config.max_width == value) return;
+            _layout_config.max_width = value;
         }
 
         bool tight_content_height() const { return _tight_content_height; }
@@ -199,12 +184,10 @@ namespace auik
     class EText : public Text
     {
     public:
-        AUIK_EXPORT EText(u32 id, acul::string text, amal::vec2 size, WidgetFlags flags = make_etext_flags(),
-                          u32 style_tag_id = AUIK_STYLE_TAG_NO_PAD,
-                          detail::TextOverflowMode overflow = detail::TextOverflowMode::ellipsis,
-                          detail::TextVerticalAlign vertical_align = detail::TextVerticalAlign::top,
-                          detail::TextWrapMode wrap = detail::TextWrapMode::none,
-                          detail::TextLayoutWidthMode width_mode = detail::TextLayoutWidthMode::bounds);
+        AUIK_EXPORT EText(u32 id, acul::string text, amal::vec2 max_size, WidgetFlags flags,
+                          TextLayoutFlags layout_flags, TextAnchorY anchor_y);
+        AUIK_EXPORT EText(u32 id, StringView text, amal::vec2 max_size, WidgetFlags flags, TextLayoutFlags layout_flags,
+                          TextAnchorY anchor_y);
         AUIK_EXPORT ~EText() override;
 
         AUIK_EXPORT void sync_widget_flags() override;
@@ -258,10 +241,13 @@ namespace auik
         void on_disabled_changed(bool disabled) override;
     };
 
-    inline Text *make_text(u32 id, StringView text = "", amal::vec2 size = AUIK_SIZE_FIT)
+    inline Text *make_text(u32 id, StringView text = "", amal::vec2 max_size = AUIK_SIZE_FIT,
+                           TextLayoutFlags layout_flags = default_text_layout_flags(),
+                           TextAnchorY anchor_y = TextAnchorY::baseline)
     {
-        auto *out = acul::alloc<Text>(id, text, size, get_default_text_flags(), Theme::STYLE_ID_INVALID,
-                                      detail::TextOverflowMode::ellipsis, detail::TextVerticalAlign::center);
+        constexpr WidgetFlags flags =
+            WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::configurable;
+        auto *out = acul::alloc<Text>(id, text, max_size, flags, layout_flags, anchor_y);
         return out;
     }
 
@@ -272,11 +258,12 @@ namespace auik
     AUIK_EXPORT Widget *present_model_text_field(ModelBinding *binding, ModelRecord &record, ModelFieldID field_id,
                                                  void *data);
 
-    inline EText *make_etext(u32 id, StringView text = "", amal::vec2 size = AUIK_SIZE_FIT)
+    inline EText *make_etext(u32 id, StringView text = "", amal::vec2 max_size = AUIK_SIZE_FIT)
     {
-        auto *out = acul::alloc<EText>(id, acul::string(text.str ? text.str : ""), size, make_etext_flags(),
-                                       Theme::STYLE_ID_INVALID, detail::TextOverflowMode::ellipsis,
-                                       detail::TextVerticalAlign::center);
+        constexpr WidgetFlags flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
+                                      WidgetFlagBits::configurable | WidgetFlagBits::hittable |
+                                      WidgetFlagBits::read_only;
+        auto *out = acul::alloc<EText>(id, text, max_size, flags, default_text_layout_flags(), TextAnchorY::baseline);
         if (text.is_translated) out->set_translated_text_literal(text.str);
         return out;
     }

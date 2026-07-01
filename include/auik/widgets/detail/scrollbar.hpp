@@ -38,16 +38,15 @@ namespace auik::detail
     class Scrollbar : public Widget
     {
     public:
-        Scrollbar(u32 id, u32 track_tag_id, u32 thumb_tag_id, Widget *parent = nullptr, amal::axis axis = amal::axis::y,
-                  u32 track_style_tag = AUIK_STYLE_TAG_SCROLLBAR_TRACK, u32 thumb_style_tag = AUIK_STYLE_TAG_SCROLLBAR_THUMB)
-            : Widget(id, WidgetFlagBits::visible | WidgetFlagBits::hittable, EventFlagBits::none, parent, {},
-                     track_tag_id),
-              _track_style({Theme::STYLE_ID_INVALID, track_style_tag}),
-              _thumb_style({Theme::STYLE_ID_INVALID, thumb_style_tag}),
+        Scrollbar(u32 id, u32 track_tag_id, u32 thumb_tag_id, Widget *parent = nullptr, amal::axis axis = amal::axis::y)
+            : Widget(id, WidgetFlagBits::visible | WidgetFlagBits::hittable, EventFlagBits::none, {}, track_tag_id),
+              _track_style({Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_SCROLLBAR_TRACK}),
+              _thumb_style({Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_SCROLLBAR_THUMB}),
               _thumb_rect(detail::make_rect_data(0, thumb_tag_id)),
               _behavior(axis)
         {
             assert(parent);
+            set_parent(parent);
             u32 owner_id = parent->id();
             _rect.id.widget_id = owner_id;
             _thumb_rect.id.widget_id = owner_id;
@@ -60,19 +59,20 @@ namespace auik::detail
         AUIK_EXPORT amal::vec4 get_track_margin() const;
         AUIK_EXPORT f32 get_min_track_thickness() const;
         void set_axis(amal::axis axis) { _behavior.set_axis(axis); }
-        void set_scroll_normalized(f32 value) { _behavior.set_scroll_normalized(value); }
+        AUIK_EXPORT void set_scroll_normalized(f32 value);
         void set_metrics(f32 content_size, f32 view_size) { _behavior.set_metrics(content_size, view_size); }
         f32 max_scroll() const { return _behavior.max_scroll(); }
         f32 scroll_offset() const { return _behavior.scroll_offset(); }
-        void set_scroll_offset(f32 offset_px) { _behavior.set_scroll_offset(offset_px); }
-        bool scroll_by_pixels(f32 delta_px) { return _behavior.scroll_by_pixels(delta_px); }
+        AUIK_EXPORT void set_scroll_offset(f32 offset_px);
+        AUIK_EXPORT bool scroll_by_pixels(f32 delta_px);
         AUIK_EXPORT bool scroll_to_track_click(const amal::vec2 &mouse_pos);
         AUIK_EXPORT void begin_thumb_drag(const amal::vec2 &mouse_pos);
         AUIK_EXPORT bool scroll_thumb_to_mouse_pos(const amal::vec2 &mouse_pos);
         AUIK_EXPORT bool scroll_thumb_by_drag_delta(const amal::vec2 &delta);
         AUIK_EXPORT bool is_point_on_thumb(const amal::vec2 &mouse_pos) const;
         const ScrollBehavior &behavior() const { return _behavior; }
-        AUIK_EXPORT void configure(const amal::vec2 &track_pos, const amal::vec2 &track_size, f32 content_size, f32 view_size);
+        AUIK_EXPORT void configure(const amal::vec2 &track_pos, const amal::vec2 &track_size, f32 content_size,
+                                   f32 view_size);
         AUIK_EXPORT StyleUpdateFlags update_style() override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void rebuild_clip_rects() override;
@@ -82,7 +82,12 @@ namespace auik::detail
         AUIK_EXPORT void draw(DrawCtx &ctx) override;
         AUIK_EXPORT bool has_draw_record() const;
 
+        void set_track_style_tag(u32 tag_id) { _track_style.tag_id = tag_id; }
+        void set_thumb_style_tag(u32 tag_id) { _thumb_style.tag_id = tag_id; }
+
     private:
+        void update_thumb_rect();
+
         DrawDataID _track_draw_id;
         DrawDataID _thumb_draw_id;
         StyleSelector _track_style;
@@ -95,19 +100,13 @@ namespace auik::detail
     };
 
     inline bool is_scrollbar_track_tag(u32 tag_id)
-    {
-        return tag_id == AUIK_TAG_SCROLLBAR_TRACK_X || tag_id == AUIK_TAG_SCROLLBAR_TRACK_Y;
-    }
+    { return tag_id == AUIK_TAG_SCROLLBAR_TRACK_X || tag_id == AUIK_TAG_SCROLLBAR_TRACK_Y; }
 
     inline bool is_scrollbar_thumb_tag(u32 tag_id)
-    {
-        return tag_id == AUIK_TAG_SCROLLBAR_THUMB_X || tag_id == AUIK_TAG_SCROLLBAR_THUMB_Y;
-    }
+    { return tag_id == AUIK_TAG_SCROLLBAR_THUMB_X || tag_id == AUIK_TAG_SCROLLBAR_THUMB_Y; }
 
     inline bool is_scrollbar_tag(u32 tag_id)
-    {
-        return is_scrollbar_track_tag(tag_id) || is_scrollbar_thumb_tag(tag_id);
-    }
+    { return is_scrollbar_track_tag(tag_id) || is_scrollbar_thumb_tag(tag_id); }
 
     inline Scrollbar *make_x_scrollbar(Widget *parent)
     {
@@ -123,16 +122,18 @@ namespace auik::detail
 
     inline Scrollbar *make_internal_y_scrollbar(Widget *parent)
     {
-        return acul::alloc<Scrollbar>(AUIK_ID_SCROLLBAR_Y, AUIK_TAG_SCROLLBAR_TRACK_Y, AUIK_TAG_SCROLLBAR_THUMB_Y,
-                                      parent, amal::axis::y, AUIK_STYLE_TAG_SCROLLBAR_TRACK_INTERNAL,
-                                      AUIK_STYLE_TAG_SCROLLBAR_THUMB_INTERNAL);
+        Scrollbar *scrollbar = make_y_scrollbar(parent);
+        scrollbar->set_track_style_tag(AUIK_STYLE_TAG_SCROLLBAR_TRACK_INTERNAL);
+        scrollbar->set_thumb_style_tag(AUIK_STYLE_TAG_SCROLLBAR_THUMB_INTERNAL);
+        return scrollbar;
     }
 
     inline Scrollbar *make_internal_x_scrollbar(Widget *parent)
     {
-        return acul::alloc<Scrollbar>(AUIK_ID_SCROLLBAR_X, AUIK_TAG_SCROLLBAR_TRACK_X, AUIK_TAG_SCROLLBAR_THUMB_X,
-                                      parent, amal::axis::x, AUIK_STYLE_TAG_SCROLLBAR_TRACK_INTERNAL,
-                                      AUIK_STYLE_TAG_SCROLLBAR_THUMB_INTERNAL);
+        Scrollbar *scrollbar = make_x_scrollbar(parent);
+        scrollbar->set_track_style_tag(AUIK_STYLE_TAG_SCROLLBAR_TRACK_INTERNAL);
+        scrollbar->set_thumb_style_tag(AUIK_STYLE_TAG_SCROLLBAR_THUMB_INTERNAL);
+        return scrollbar;
     }
 
     inline void ensure_x_scrollbar(Scrollbar *&scrollbar, Widget *parent)
@@ -172,8 +173,6 @@ namespace auik::detail
     }
 
     inline bool is_scrollbar_thumb_drag(ElementID drag_id)
-    {
-        return drag_id.tag_id == AUIK_TAG_SCROLLBAR_THUMB_X || drag_id.tag_id == AUIK_TAG_SCROLLBAR_THUMB_Y;
-    }
+    { return drag_id.tag_id == AUIK_TAG_SCROLLBAR_THUMB_X || drag_id.tag_id == AUIK_TAG_SCROLLBAR_THUMB_Y; }
 
 } // namespace auik::detail

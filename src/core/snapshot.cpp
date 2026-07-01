@@ -201,8 +201,8 @@ namespace auik
         resolver.streams[AUIK_TAG_DRAG_FLOAT] = &streams::drag_float;
         resolver.streams[AUIK_TAG_DRAG_DOUBLE] = &streams::drag_double;
         resolver.streams[AUIK_TAG_RUBBER_BAND] = &streams::rubber_band;
-        resolver.streams[AUIK_TAG_COMBO_BOX] = &streams::combo_box;
-        resolver.streams[AUIK_TAG_MULTIPLE_COMBO_BOX] = &streams::multiple_combo_box;
+        resolver.streams[AUIK_TAG_COMBO_BOX] = &streams::combobox;
+        resolver.streams[AUIK_TAG_MULTIPLE_COMBO_BOX] = &streams::multiple_combobox;
         resolver.streams[AUIK_TAG_CIRCLE_COLOR_PICKER] = &streams::circle_color_picker;
         resolver.streams[AUIK_TAG_GRADIENT_COLOR_PICKER] = &streams::gradient_color_picker;
         resolver.streams[AUIK_TAG_SQUARE_COLOR_PICKER] = &streams::square_color_picker;

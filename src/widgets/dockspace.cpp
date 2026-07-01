@@ -118,7 +118,7 @@ namespace auik
 
     static f32 get_dock_helper_hit_depth() { return next_depth(get_dock_drag_hit_depth_range()); }
 
-    static amal::vec2 get_tab_drag_grab_offset(TabBar *tabbar, u32 element_id, const amal::vec2 &fallback)
+    static amal::vec2 get_tab_drag_grab_offset(Tabbar *tabbar, u32 element_id, const amal::vec2 &fallback)
     {
         if (!tabbar) return fallback;
         const auto mouse = detail::get_io().mouse_pos;
@@ -141,7 +141,7 @@ namespace auik
         return grab;
     }
 
-    static bool is_tabbar_drag_escape(TabBar *tabbar, u32 element_id)
+    static bool is_tabbar_drag_escape(Tabbar *tabbar, u32 element_id)
     {
         if (!tabbar || element_id == 0u) return false;
         const auto &element_ids = tabbar->element_ids();
@@ -181,14 +181,10 @@ namespace auik
     }
 
     static f32 cross_size(const amal::vec2 &value, amal::axis axis)
-    {
-        return axis == amal::axis::x ? value.y : value.x;
-    }
+    { return axis == amal::axis::x ? value.y : value.x; }
 
     static amal::vec2 make_axis_size(amal::axis axis, f32 main, f32 cross)
-    {
-        return axis == amal::axis::x ? amal::vec2{main, cross} : amal::vec2{cross, main};
-    }
+    { return axis == amal::axis::x ? amal::vec2{main, cross} : amal::vec2{cross, main}; }
 
     static void set_axis_size(amal::vec2 &value, amal::axis axis, f32 size)
     {
@@ -226,14 +222,10 @@ namespace auik
     }
 
     static u32 resize_helper_tag_for_axis(amal::axis axis)
-    {
-        return axis == amal::axis::x ? AUIK_TAG_DOCKSPACE_RESIZE_HELPER_V : AUIK_TAG_DOCKSPACE_RESIZE_HELPER_H;
-    }
+    { return axis == amal::axis::x ? AUIK_TAG_DOCKSPACE_RESIZE_HELPER_V : AUIK_TAG_DOCKSPACE_RESIZE_HELPER_H; }
 
     static bool is_resize_helper_tag(u32 tag_id)
-    {
-        return tag_id == AUIK_TAG_DOCKSPACE_RESIZE_HELPER_V || tag_id == AUIK_TAG_DOCKSPACE_RESIZE_HELPER_H;
-    }
+    { return tag_id == AUIK_TAG_DOCKSPACE_RESIZE_HELPER_V || tag_id == AUIK_TAG_DOCKSPACE_RESIZE_HELPER_H; }
 
     static void update_existing_resize_helper_hit(DrawDataID &draw_id, const detail::RectData &rect)
     {
@@ -242,14 +234,10 @@ namespace auik
     }
 
     static u32 make_dockspace_tabbar_id(u32 dockspace_id, DockNodeID node_id)
-    {
-        return dockspace_id + AUIK_DOCKSPACE_TABBAR_ID_BASE + node_id;
-    }
+    { return dockspace_id + AUIK_DOCKSPACE_TABBAR_ID_BASE + node_id; }
 
     static u32 make_dockspace_menu_id(u32 dockspace_id, DockNodeID node_id)
-    {
-        return dockspace_id + AUIK_DOCKSPACE_MENU_ID_BASE + node_id;
-    }
+    { return dockspace_id + AUIK_DOCKSPACE_MENU_ID_BASE + node_id; }
 
     static amal::vec2 make_dockspace_tabbar_depth_range(const amal::vec2 &dock_depth_range)
     {
@@ -317,13 +305,14 @@ namespace auik
         DockMenu(Dockspace *dockspace, DockNodeID node_id)
             : Widget(make_dockspace_menu_id(dockspace->id(), node_id),
                      WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::hittable,
-                     EventFlagBits::click | EventFlagBits::hover | EventFlagBits::focus, dockspace, {},
+                     EventFlagBits::click | EventFlagBits::hover | EventFlagBits::focus, {},
                      AUIK_TAG_DOCKSPACE_MENU_BUTTON),
               _dockspace(dockspace),
               _node_id(node_id),
               _button(AUIK_STYLE_TAG_DOCK_TABBAR_MENU, AUIK_TAG_DOCKSPACE_MENU_BUTTON, AUIK_ICON_MENU, AUIK_ICON_MENU,
                       false)
         {
+            set_parent(dockspace);
             set_focus_parent(dockspace);
             _button.set_update_target(this);
             _button.set_hit_id(make_element_id(id(), AUIK_TAG_DOCKSPACE_MENU_BUTTON, 0u));
@@ -386,9 +375,7 @@ namespace auik
         }
 
         void update_depth(const amal::vec2 &dock_depth_range) override
-        {
-            update_depth(dock_depth_range, make_dockspace_tabbar_depth_range(dock_depth_range));
-        }
+        { update_depth(dock_depth_range, make_dockspace_tabbar_depth_range(dock_depth_range)); }
 
         void update_depth(const amal::vec2 &dock_depth_range, const amal::vec2 &tabbar_depth_range)
         {
@@ -479,15 +466,15 @@ namespace auik
 
         void on_attach() override
         {
-            detail::get_context().id_map[id()] = this;
+            Widget::on_attach();
             if (_menu && (_menu->widget_flags & WidgetFlagBits::attachable)) _menu->on_attach();
         }
 
         void on_detach() override
         {
-            detail::get_context().id_map.erase(id());
             if (_menu && (_menu->widget_flags & WidgetFlagBits::attachable)) _menu->on_detach();
             erase_widget_from_transient_cache(this);
+            Widget::on_detach();
         }
 
         void close_popup()
@@ -631,8 +618,10 @@ namespace auik
             }
             if (!_menu)
             {
-                _menu = acul::alloc<PopupMenu>(make_dockspace_menu_id(_dockspace->id(), _node_id) ^ 0x59D12A6Bu,
-                                               acul::vector<StringView>{});
+                constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
+                                                     WidgetFlagBits::configurable | WidgetFlagBits::hittable;
+                _menu = acul::alloc<PopupMenu>(make_dockspace_menu_id(_dockspace->id(), _node_id) + AUIK_TAG_POPUP_MENU,
+                                               acul::vector<StringView>{}, widget_flags, false);
             }
             _menu->set_parent(parent());
             _menu->set_focus_parent(this);
@@ -705,12 +694,10 @@ namespace auik
         bool _open = false;
     };
 
-    Dockspace::Dockspace(u32 id, WidgetFlags widget_flags, Widget *parent, u32 style_tag_id)
+    Dockspace::Dockspace(u32 id, WidgetFlags widget_flags)
         : Widget(id, widget_flags,
-                 EventFlagBits::click | EventFlagBits::hover | EventFlagBits::drag | EventFlagBits::drop, parent,
-                 {{0.0f, 0.0f}, {0.0f, 0.0f}}, AUIK_TAG_DOCKSPACE),
-          _style_tag_id(style_tag_id),
-          _style({Theme::STYLE_ID_INVALID, style_tag_id})
+                 EventFlagBits::click | EventFlagBits::hover | EventFlagBits::drag | EventFlagBits::drop,
+                 {{0.0f, 0.0f}, {0.0f, 0.0f}}, AUIK_TAG_DOCKSPACE)
     {
         set_size(AUIK_SIZE_FILL);
         _nodes.push_back({});
@@ -761,9 +748,7 @@ namespace auik
     }
 
     DockNodeID Dockspace::create_leaf(DockNodeID parent, DockNodeSettings settings)
-    {
-        return create_node(parent, false, settings);
-    }
+    { return create_node(parent, false, settings); }
 
     void Dockspace::set_split_axis(DockNodeID node, amal::axis axis)
     {
@@ -784,7 +769,7 @@ namespace auik
         }
     }
 
-    void Dockspace::set_node_tabbar_flags(DockNodeID node, TabBarFlags flags)
+    void Dockspace::set_node_tabbar_flags(DockNodeID node, TabbarFlags flags)
     {
         auto *n = get_node(node);
         if (!n || n->settings.tabbar_flags == flags) return;
@@ -804,9 +789,7 @@ namespace auik
     }
 
     void Dockspace::set_new_node_settings(DockNodeSettings settings)
-    {
-        _new_node_settings = normalize_dock_node_settings(settings);
-    }
+    { _new_node_settings = normalize_dock_node_settings(settings); }
 
     void Dockspace::set_menu_group(MenuGroup group)
     {
@@ -829,9 +812,7 @@ namespace auik
     }
 
     bool Dockspace::needs_node_tab_panel(const Node &node) const
-    {
-        return !node.windows.empty() && (node.settings.flags & DockspaceFlagBits::tabpanel);
-    }
+    { return !node.windows.empty() && (node.settings.flags & DockspaceFlagBits::tabpanel); }
 
     void Dockspace::attach_window(Window *window)
     {
@@ -1110,11 +1091,6 @@ namespace auik
     StyleUpdateFlags Dockspace::update_style()
     {
         StyleUpdateFlags out = StyleUpdateFlagBits::none;
-        if (_style_tag_id != 0u)
-        {
-            const u32 parent_id = parent() ? parent()->id() : 0u;
-            out |= resolve_style_selector(_style, id(), parent_id, style_state());
-        }
         out |= resolve_style_selector(_resize_helper_style, id(), parent() ? parent()->id() : 0u, style_state());
         out |= resolve_style_selector(_resize_helper_drag_style, id(), parent() ? parent()->id() : 0u, style_state());
         out |= resolve_style_selector(_tab_panel_style, id(), parent() ? parent()->id() : 0u, style_state());
@@ -1155,10 +1131,12 @@ namespace auik
 
         if (!node.tabbar)
         {
-            node.tabbar = acul::alloc<TabBar>(make_dockspace_tabbar_id(id(), node_id), acul::vector<acul::string>{},
+            node.tabbar = acul::alloc<Tabbar>(make_dockspace_tabbar_id(id(), node_id), acul::vector<acul::string>{},
                                               node.settings.tabbar_flags, node.settings.tabbar_size,
-                                              get_default_tab_bar_flags(), this, 0.0f, 0u, AUIK_STYLE_TAG_DOCK_TAB_ITEM,
-                                              AUIK_STYLE_TAG_DOCK_TAB_ITEM_SELECTED);
+                                              detail::get_tabbar_widget_flags(), 0.0f, 0u, AUIK_STYLE_TAG_DOCK_TAB_ITEM,
+                                              AUIK_STYLE_TAG_DOCK_TAB_ITEM_SELECTED,
+                                              AUIK_STYLE_TAG_COMBO_BOX_ITEM);
+            node.tabbar->set_parent(this);
             node.tabbar->set_style_tag(AUIK_STYLE_TAG_DOCK_TABBAR);
             node.tabbar->set_focus_parent(this);
             node.tabbar->bind()
@@ -1511,18 +1489,8 @@ namespace auik
 
     void Dockspace::update_layout_min_size()
     {
-        amal::vec4 margin{0.0f};
-        amal::vec4 padding{0.0f};
-        if (_style_tag_id != 0u)
-        {
-            if (_style.id == Theme::STYLE_ID_INVALID) update_style();
-            const auto &style = get_theme()->get_style(_style.id);
-            margin = style.margin();
-            padding = style.padding();
-        }
         const amal::vec2 root_required = measure_node(root_node());
-        set_required_size({margin.x + margin.z + padding.x + padding.z + root_required.x,
-                           margin.y + margin.w + padding.y + padding.w + root_required.y});
+        set_required_size(root_required);
     }
 
     void Dockspace::layout_leaf_window(Node &node, Window *window)
@@ -1772,8 +1740,8 @@ namespace auik
                     menu_reserved = menu_size.x;
                     menu_h = menu_size.y;
                 }
-                const f32 panel_h = amal::min(node->bounds.size.y, amal::max(chrome_required.y, menu_h) +
-                                                                       panel_padding.y + panel_padding.w);
+                const f32 panel_h = amal::min(node->bounds.size.y,
+                                              amal::max(chrome_required.y, menu_h) + panel_padding.y + panel_padding.w);
                 const amal::rect panel_bounds{{node->bounds.offset.x, node->bounds.offset.y},
                                               {node->bounds.size.x, panel_h}};
                 node->tab_panel_rect.bounds = panel_bounds;
@@ -1785,8 +1753,8 @@ namespace auik
                 {
                     const amal::vec2 menu_size = node->menu->required_size();
                     const f32 menu_x = panel_bounds.offset.x + panel_bounds.size.x - panel_padding.z - menu_size.x;
-                    const f32 menu_y = panel_bounds.offset.y + panel_padding.y +
-                                       amal::max((panel_inner_h - menu_size.y) * 0.5f, 0.0f);
+                    const f32 menu_y =
+                        panel_bounds.offset.y + panel_padding.y + amal::max((panel_inner_h - menu_size.y) * 0.5f, 0.0f);
                     node->menu->layout_button({{menu_x, menu_y}, menu_size}, clip_id());
                 }
 
@@ -2065,28 +2033,11 @@ namespace auik
     {
         if (!min_size_known) update_layout_min_size();
 
-        amal::vec4 margin{0.0f};
-        amal::vec4 padding{0.0f};
-        if (_style_tag_id != 0u)
-        {
-            if (_style.id == Theme::STYLE_ID_INVALID) update_style();
-            const auto &style = get_theme()->get_style(_style.id);
-            margin = style.margin();
-            padding = style.padding();
-        }
-        if (parent())
-        {
-            const amal::vec2 inner_required = {amal::max(required_size().x - margin.x - margin.z, 0.0f),
-                                               amal::max(required_size().y - margin.y - margin.w, 0.0f)};
-            set_layout_size(amal::max(size(), inner_required));
-            set_position(position() + amal::vec2{margin.x, margin.y});
-        }
+        if (parent()) { set_layout_size(amal::max(size(), required_size())); }
         Widget::update_layout(true);
         ensure_own_clip_rect({position().x, position().y, size().x, size().y});
 
-        const amal::rect content_bounds{
-            {position().x + padding.x, position().y + padding.y},
-            {amal::max(size().x - padding.x - padding.z, 0.0f), amal::max(size().y - padding.y - padding.w, 0.0f)}};
+        const amal::rect content_bounds{position(), size()};
         const size_t previous_resize_helper_count = begin_resize_helpers();
         layout_node(root_node(), content_bounds);
         _drag_zones_dirty = true;
@@ -2251,7 +2202,7 @@ namespace auik
         Window *window = node.windows[window_index];
         if (!window) return false;
 
-        TabBar *tabbar = node.tabbar;
+        Tabbar *tabbar = node.tabbar;
         const amal::vec2 mouse = detail::get_io().mouse_pos;
         const auto drag_grab =
             get_tab_drag_grab_offset(tabbar, element_id, {amal::min(window->size().x * 0.5f, 80.0f), 12.0f});
@@ -2894,7 +2845,7 @@ namespace auik
                 .read(tabbar_flags)
                 .read(settings.tabbar_size);
             settings.flags = DockspaceFlags(flags);
-            settings.tabbar_flags = TabBarFlags(tabbar_flags);
+            settings.tabbar_flags = TabbarFlags(tabbar_flags);
             return normalize_dock_node_settings(settings);
         }
 
@@ -2985,7 +2936,6 @@ namespace auik
         {
             auto *dockspace = static_cast<Dockspace *>(block);
             detail::write_widget_common_data(stream, *dockspace);
-            stream.write(dockspace->_style_tag_id);
             write_node_settings(stream, dockspace->_new_node_settings);
             write_menu_group(stream, dockspace->_menu_group);
             stream.write(dockspace->_open_menu_node);
@@ -2997,14 +2947,12 @@ namespace auik
         static umbf::Block *read(acul::bin_stream &stream)
         {
             const auto common = detail::read_widget_common_data(stream);
-            u32 style_tag = 0u;
-            stream.read(style_tag);
             auto new_node_settings = read_node_settings(stream);
             auto menu_group = read_menu_group(stream);
             DockNodeID open_menu_node = AUIK_DOCK_NODE_INVALID;
             stream.read(open_menu_node);
 
-            auto *dockspace = acul::alloc<Dockspace>(common.id, WidgetFlags(common.widget_flags), nullptr, style_tag);
+            auto *dockspace = acul::alloc<Dockspace>(common.id, WidgetFlags(common.widget_flags));
             detail::apply_widget_common_data(dockspace, common);
             dockspace->_new_node_settings = new_node_settings;
             dockspace->_menu_group = std::move(menu_group);

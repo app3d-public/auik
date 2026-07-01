@@ -60,9 +60,7 @@ namespace auik
         }
 
         static inline StyleState resolve_grab_visual_state(StyleState state)
-        {
-            return (state == StyleState::active || state == StyleState::focus) ? state : StyleState::normal;
-        }
+        { return (state == StyleState::active || state == StyleState::focus) ? state : StyleState::normal; }
 
         static inline amal::vec4 make_circle_color(f32 hue_deg, f32 radius_t)
         {
@@ -212,10 +210,9 @@ namespace auik
         }
     } // namespace detail
 
-    CircleColorPicker::CircleColorPicker(u32 id, const amal::vec4 &value, f32 diameter, WidgetFlags widget_flags,
-                                         Widget *parent)
-        : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::drag, parent,
-                 {{0.0f, 0.0f}, {diameter, diameter}}, AUIK_TAG_CIRCLE_COLOR_PICKER),
+    CircleColorPicker::CircleColorPicker(u32 id, const amal::vec4 &value, f32 diameter, WidgetFlags widget_flags)
+        : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::drag, {{0.0f, 0.0f}, {diameter, diameter}},
+                 AUIK_TAG_CIRCLE_COLOR_PICKER),
           _preferred_side(diameter),
           _value(value)
     {
@@ -294,9 +291,11 @@ namespace auik
 
         const auto transition = detail::get_widget_style_selector_transition(id());
         if (transition.prev_id.tag_id == _grab_hit_rect.id.tag_id &&
-            (transition.current_id.tag_id != _grab_hit_rect.id.tag_id || transition.prev_state != transition.current_state))
+            (transition.current_id.tag_id != _grab_hit_rect.id.tag_id ||
+             transition.prev_state != transition.current_state))
             out |= resolve_grab_state(StyleState::normal);
-        if (transition.current_id.tag_id == _grab_hit_rect.id.tag_id) out |= resolve_grab_state(transition.current_state);
+        if (transition.current_id.tag_id == _grab_hit_rect.id.tag_id)
+            out |= resolve_grab_state(transition.current_state);
 
         const StyleState widget_grab_state = detail::resolve_grab_visual_state(style_state());
         if (widget_grab_state == StyleState::active || widget_grab_state == StyleState::focus)
@@ -388,7 +387,8 @@ namespace auik
         bool hit_pending = can_emit_hit(ctx);
 
         const bool wheel_visible = _wheel_batch.vertex_count > 0 && _wheel_batch.index_count > 0;
-        if ((ctx.reason & DrawReasonBits::record) || wheel_visible || _wheel_draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID)
+        if ((ctx.reason & DrawReasonBits::record) || wheel_visible ||
+            _wheel_draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID)
         {
             emit_context_draw(ctx, vertex_stream, _wheel_draw_id, &_wheel_batch, get_rect(), hit_pending);
             hit_pending = false;
@@ -559,7 +559,7 @@ namespace auik
             border_rect.size = {border_w, border_h};
             border_rect.offset = {pick_pos.x - border_w * 0.5f, pick_pos.y - border_h * 0.5f};
             detail::fill_circle_grab_instance(*border_style, border_rect, grab_z, grab_clip,
-                                               border_style->background_color(), _grab_back_visual);
+                                              border_style->background_color(), _grab_back_visual);
         }
     }
 
@@ -586,8 +586,7 @@ namespace auik
         _grab_hit_rect.bounds.offset += delta;
         _grab_visual.rect.offset += delta;
         _grab_back_visual.rect.offset += delta;
-        for (auto &vertex : _wheel_vertices)
-            vertex.position += delta;
+        for (auto &vertex : _wheel_vertices) vertex.position += delta;
         sync_batch();
     }
 
@@ -637,9 +636,9 @@ namespace auik
     }
 
     GradientColorPicker::GradientColorPicker(u32 id, const amal::vec4 &value, const amal::vec2 &size,
-                                             WidgetFlags widget_flags, Widget *parent)
-        : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::drag, parent,
-                 {{0.0f, 0.0f}, size}, AUIK_TAG_GRADIENT_COLOR_PICKER),
+                                             WidgetFlags widget_flags)
+        : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::drag, {{0.0f, 0.0f}, size},
+                 AUIK_TAG_GRADIENT_COLOR_PICKER),
           _preferred_size(size)
     {
         _grab_hit_rect = detail::make_rect_data(id, AUIK_TAG_GRADIENT_COLOR_PICKER_GRAB);
@@ -961,16 +960,15 @@ namespace auik
         _grab_hit_rect.bounds.offset += delta;
         _grab_visual.rect.offset += delta;
         _grab_back_visual.rect.offset += delta;
-        for (auto &vertex : _gradient_vertices)
-            vertex.position += delta;
+        for (auto &vertex : _gradient_vertices) vertex.position += delta;
         sync_batch();
     }
 
     void GradientColorPicker::update_value_from_mouse()
     {
         const amal::vec2 mouse = get_mouse_pos();
-        const f32 s = amal::clamp((mouse.x - _gradient_rect.offset.x) / amal::max(_gradient_rect.size.x, 1e-5f),
-                                  0.0f, 1.0f);
+        const f32 s =
+            amal::clamp((mouse.x - _gradient_rect.offset.x) / amal::max(_gradient_rect.size.x, 1e-5f), 0.0f, 1.0f);
         const f32 v = amal::clamp(1.0f - (mouse.y - _gradient_rect.offset.y) / amal::max(_gradient_rect.size.y, 1e-5f),
                                   0.0f, 1.0f);
         set_hsv(_hue_deg, s, v);
@@ -1004,15 +1002,14 @@ namespace auik
         add_render_command<detail::DragEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
     }
 
-    SquareColorPicker::SquareColorPicker(u32 id, const amal::vec4 &value, f32 size, WidgetFlags widget_flags, Widget *parent)
-        : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::drag, parent,
-                 {{0.0f, 0.0f}, {size, size}},
+    SquareColorPicker::SquareColorPicker(u32 id, const amal::vec4 &value, f32 size, WidgetFlags widget_flags)
+        : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::drag, {{0.0f, 0.0f}, {size, size}},
                  AUIK_TAG_SQUARE_COLOR_PICKER),
           _preferred_side(size)
     {
         _ring_grab_hit_rect = detail::make_rect_data(id, AUIK_TAG_SQUARE_COLOR_PICKER_GRAB);
-        _gradient = acul::alloc<GradientColorPicker>(id, value, amal::vec2{0.0f, 0.0f},
-                                                     WidgetFlagBits::visible, this);
+        _gradient = acul::alloc<GradientColorPicker>(id, value, amal::vec2{0.0f, 0.0f}, WidgetFlagBits::visible);
+        _gradient->set_parent(this);
         _ring_vertices.reserve(384);
         _ring_indices.reserve(1152);
         _hue_deg = _gradient->hue_deg();
@@ -1131,7 +1128,8 @@ namespace auik
         bool hit_pending = can_emit_hit(ctx);
 
         const bool ring_visible = _ring_batch.vertex_count > 0 && _ring_batch.index_count > 0;
-        if ((ctx.reason & DrawReasonBits::record) || ring_visible || _ring_draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID)
+        if ((ctx.reason & DrawReasonBits::record) || ring_visible ||
+            _ring_draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID)
         {
             emit_context_draw(ctx, vertex_stream, _ring_draw_id, &_ring_batch, get_rect(), hit_pending);
             hit_pending = false;
@@ -1142,9 +1140,11 @@ namespace auik
             _ring_grab_back_visual.rect.size.x > 0.0f && _ring_grab_back_visual.rect.size.y > 0.0f;
         if ((ctx.reason & DrawReasonBits::record) || ring_back_visible ||
             _ring_grab_back_draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID)
-            emit_context_draw(ctx, overlay_stream, _ring_grab_back_draw_id, &_ring_grab_back_visual, _ring_grab_hit_rect, false);
+            emit_context_draw(ctx, overlay_stream, _ring_grab_back_draw_id, &_ring_grab_back_visual,
+                              _ring_grab_hit_rect, false);
 
-        emit_context_draw(ctx, overlay_stream, _ring_grab_draw_id, &_ring_grab_visual, _ring_grab_hit_rect, can_emit_hit(ctx));
+        emit_context_draw(ctx, overlay_stream, _ring_grab_draw_id, &_ring_grab_visual, _ring_grab_hit_rect,
+                          can_emit_hit(ctx));
     }
 
     bool SquareColorPicker::has_draw_record() const
@@ -1254,8 +1254,8 @@ namespace auik
 
         const f32 z = next_depth(_ring_depth_range);
         const u16 cid = clip_id();
-        detail::append_hue_ring_vertices(_ring_vertices, _layout.center, _layout.ring_inner_radius, fringe_segments, 0.0f,
-                                         z, cid);
+        detail::append_hue_ring_vertices(_ring_vertices, _layout.center, _layout.ring_inner_radius, fringe_segments,
+                                         0.0f, z, cid);
         detail::append_hue_ring_vertices(_ring_vertices, _layout.center, main_inner, main_segments, 1.0f, z, cid);
         detail::append_hue_ring_vertices(_ring_vertices, _layout.center, main_outer, main_segments, 1.0f, z, cid);
         detail::append_hue_ring_vertices(_ring_vertices, _layout.center, _layout.ring_outer_radius, fringe_segments,
@@ -1339,8 +1339,7 @@ namespace auik
         _ring_grab_hit_rect.bounds.offset += delta;
         _ring_grab_visual.rect.offset += delta;
         _ring_grab_back_visual.rect.offset += delta;
-        for (auto &vertex : _ring_vertices)
-            vertex.position += delta;
+        for (auto &vertex : _ring_vertices) vertex.position += delta;
         if (_gradient) _gradient->translate(delta);
         sync_batches();
     }
@@ -1377,8 +1376,8 @@ namespace auik
         {
             const f32 s = amal::clamp((mouse.x - _layout.sv_rect.offset.x) / amal::max(_layout.sv_rect.size.x, 1e-5f),
                                       0.0f, 1.0f);
-            const f32 v = amal::clamp(1.0f - (mouse.y - _layout.sv_rect.offset.y) / amal::max(_layout.sv_rect.size.y, 1e-5f),
-                                      0.0f, 1.0f);
+            const f32 v = amal::clamp(
+                1.0f - (mouse.y - _layout.sv_rect.offset.y) / amal::max(_layout.sv_rect.size.y, 1e-5f), 0.0f, 1.0f);
             set_hsv(_hue_deg, s, v);
         }
         else return;
@@ -1445,8 +1444,7 @@ namespace auik
             stream.read(color).read(hue).read(radius);
 
             const f32 diameter = common.requested_size.x > 0.0f ? common.requested_size.x : common.requested_size.y;
-            auto *widget = acul::alloc<CircleColorPicker>(common.id, color, diameter,
-                                                          WidgetFlags(common.widget_flags), nullptr);
+            auto *widget = acul::alloc<CircleColorPicker>(common.id, color, diameter, WidgetFlags(common.widget_flags));
             widget->set_hue_radius(hue, radius);
             detail::apply_widget_common_data(widget, common);
             return widget;
@@ -1472,7 +1470,7 @@ namespace auik
             stream.read(color).read(hue).read(saturation).read(value);
 
             auto *widget = acul::alloc<GradientColorPicker>(common.id, color, common.requested_size,
-                                                            WidgetFlags(common.widget_flags), nullptr);
+                                                            WidgetFlags(common.widget_flags));
             widget->set_hsv(hue, saturation, value);
             detail::apply_widget_common_data(widget, common);
             return widget;
@@ -1498,8 +1496,7 @@ namespace auik
             stream.read(color).read(hue).read(saturation).read(value);
 
             const f32 size = common.requested_size.x > 0.0f ? common.requested_size.x : common.requested_size.y;
-            auto *widget = acul::alloc<SquareColorPicker>(common.id, color, size,
-                                                          WidgetFlags(common.widget_flags), nullptr);
+            auto *widget = acul::alloc<SquareColorPicker>(common.id, color, size, WidgetFlags(common.widget_flags));
             widget->set_hsv(hue, saturation, value);
             detail::apply_widget_common_data(widget, common);
             return widget;
@@ -1508,9 +1505,11 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::streams::Stream circle_color_picker{read_circle_color_picker, write_circle_color_picker};
-        AUIK_EXPORT const umbf::streams::Stream gradient_color_picker{read_gradient_color_picker, write_gradient_color_picker};
-        AUIK_EXPORT const umbf::streams::Stream square_color_picker{read_square_color_picker, write_square_color_picker};
+        AUIK_EXPORT const umbf::streams::Stream circle_color_picker{read_circle_color_picker,
+                                                                    write_circle_color_picker};
+        AUIK_EXPORT const umbf::streams::Stream gradient_color_picker{read_gradient_color_picker,
+                                                                      write_gradient_color_picker};
+        AUIK_EXPORT const umbf::streams::Stream square_color_picker{read_square_color_picker,
+                                                                    write_square_color_picker};
     } // namespace streams
 } // namespace auik
-

@@ -50,15 +50,6 @@ namespace auik::detail
         return StyleState::normal;
     }
 
-    inline void apply_table_cell_alignment(Widget *cell, HAlign halign, VAlign valign)
-    {
-        if (!cell) return;
-        auto *text = dynamic_cast<Text *>(cell);
-        if (!text) return;
-        text->set_horizontal_align(halign);
-        if (valign != VAlign::none) text->set_vertical_align(valign);
-    }
-
     inline f32 resolve_table_required_axis(f32 requested, bool fill, f32 content_required)
     {
         if (fill) return 0.0f;
@@ -202,10 +193,18 @@ namespace auik::detail
     }
 
     inline void draw_table_cell_visual(DrawCtx &ctx, DrawStream *stream, TableCellVisual &visual, const Style &style,
-                                       u16 clip_id, bool is_hit_allowed)
+                                       u16 clip_id, bool is_hit_allowed, bool apply_margin = false)
     {
         QuadsInstanceData data{};
         data.rect = visual.rect.bounds;
+        if (apply_margin)
+        {
+            const amal::vec4 margin = style.margin();
+            data.rect.offset.x += margin.x;
+            data.rect.offset.y += margin.y;
+            data.rect.size.x = amal::max(data.rect.size.x - margin.x - margin.z, 0.0f);
+            data.rect.size.y = amal::max(data.rect.size.y - margin.y - margin.w, 0.0f);
+        }
         data.z_order = visual.rect.depth;
         if (!(ctx.reason & DrawReasonBits::invalidate) && clip_id != 0xFFFFu)
         {
@@ -223,6 +222,26 @@ namespace auik::detail
         }
         const bool visible = fill_quads_instance_by_style(style, clip_id, data);
         emit_quads_instance(ctx, stream, visual.draw, data, visual.rect, visible, is_hit_allowed);
+    }
+
+    inline void apply_table_resize_border_visual_box(QuadsInstanceData &data, const Style &style)
+    {
+        const amal::vec4 margin = style.margin();
+        const bool vertical = data.rect.size.x <= data.rect.size.y;
+        if (vertical)
+        {
+            const f32 visual_w =
+                amal::max(data.rect.size.x - margin.x - margin.z, amal::max(style.border_thickness(), 1.0f));
+            data.rect.offset.x += margin.x;
+            data.rect.size.x = visual_w;
+        }
+        else
+        {
+            const f32 visual_h =
+                amal::max(data.rect.size.y - margin.y - margin.w, amal::max(style.border_thickness(), 1.0f));
+            data.rect.offset.y += margin.y;
+            data.rect.size.y = visual_h;
+        }
     }
 
     inline void draw_table_resize_border_visual(DrawCtx &ctx, DrawStream *stream, TableCellVisual &visual,
@@ -250,19 +269,7 @@ namespace auik::detail
             }
         }
         const bool visible = fill_quads_instance_by_style(style, clip_id, data);
-        const bool vertical = visual.rect.bounds.size.x <= visual.rect.bounds.size.y;
-        if (vertical)
-        {
-            const f32 visual_w = amal::max(style.border_thickness(), 1.0f);
-            data.rect.offset.x += data.rect.size.x * 0.5f - visual_w * 0.5f;
-            data.rect.size.x = visual_w;
-        }
-        else
-        {
-            const f32 visual_h = amal::max(style.border_thickness(), 1.0f);
-            data.rect.offset.y += data.rect.size.y * 0.5f - visual_h * 0.5f;
-            data.rect.size.y = visual_h;
-        }
+        apply_table_resize_border_visual_box(data, style);
         emit_quads_instance(ctx, stream, visual.draw, data, visual.rect, visible, is_hit_allowed);
     }
 

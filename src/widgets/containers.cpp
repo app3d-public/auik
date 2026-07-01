@@ -35,8 +35,9 @@ namespace auik
         const u32 id = axis == amal::axis::x ? AUIK_ID_SCROLLBAR_X : AUIK_ID_SCROLLBAR_Y;
         const u32 track_tag = axis == amal::axis::x ? AUIK_TAG_SCROLLBAR_TRACK_X : AUIK_TAG_SCROLLBAR_TRACK_Y;
         const u32 thumb_tag = axis == amal::axis::x ? AUIK_TAG_SCROLLBAR_THUMB_X : AUIK_TAG_SCROLLBAR_THUMB_Y;
-        scrollbar =
-            acul::alloc<detail::Scrollbar>(id, track_tag, thumb_tag, parent, axis, track_style_tag, thumb_style_tag);
+        scrollbar = acul::alloc<detail::Scrollbar>(id, track_tag, thumb_tag, parent, axis);
+        scrollbar->set_track_style_tag(track_style_tag);
+        scrollbar->set_thumb_style_tag(thumb_style_tag);
     }
 
     static inline u32 scrollbar_thumb_style_for_track(u32 track_style_tag)
@@ -49,6 +50,7 @@ namespace auik
     {
         static inline bool is_inline_layout(ChildLayoutFlags flags) { return flags & ChildLayoutFlagBits::linline; }
         static inline bool is_right_layout(ChildLayoutFlags flags) { return flags & ChildLayoutFlagBits::aright; }
+        static inline bool is_hcenter_layout(ChildLayoutFlags flags) { return flags & ChildLayoutFlagBits::hcenter; }
         static inline bool is_top_layout(ChildLayoutFlags flags) { return flags & ChildLayoutFlagBits::top; }
         static inline bool is_center_layout(ChildLayoutFlags flags) { return flags & ChildLayoutFlagBits::vcenter; }
         static inline bool is_bottom_layout(ChildLayoutFlags flags) { return flags & ChildLayoutFlagBits::bottom; }
@@ -60,22 +62,16 @@ namespace auik
         };
 
         static inline ResolvedChildLayoutSize resolve_child_layout_size(Widget *child, const amal::vec2 &fallback_size,
-                                                                        f32 available_width,
-                                                                        f32 fill_available_width)
+                                                                        f32 available_width, f32 fill_available_width)
         {
             if (!child) return {};
             const f32 safe_available = amal::max(available_width, 0.0f);
             const f32 safe_fill_available = amal::max(fill_available_width, 0.0f);
-            const amal::vec4 margin = child->layout_margin();
-            const f32 margin_width = amal::max(margin.x + margin.z, 0.0f);
-            const f32 margin_height = amal::max(margin.y + margin.w, 0.0f);
-            const f32 occupied_width = child->fill_width() ? amal::min(safe_fill_available, safe_available)
-                                                           : amal::min(amal::max(fallback_size.x, 0.0f),
-                                                                       safe_available);
-            const f32 layout_width = amal::max(occupied_width - margin_width, 0.0f);
+            const f32 occupied_width = child->fill_width()
+                                           ? amal::min(safe_fill_available, safe_available)
+                                           : amal::min(amal::max(fallback_size.x, 0.0f), safe_available);
             const f32 occupied_height = amal::max(fallback_size.y, 0.0f);
-            const f32 layout_height = amal::max(occupied_height - margin_height, 0.0f);
-            return {{layout_width, layout_height}, {occupied_width, occupied_height}};
+            return {{occupied_width, occupied_height}, {occupied_width, occupied_height}};
         }
 
         amal::vec2 compute_children_layout_required_size(const acul::vector<Widget *> &children,
@@ -125,6 +121,18 @@ namespace auik
 
                 if (row_height > 0.0f)
                 {
+                    const f32 gap_before = inline_spacing_x;
+                    if (!wrap_enabled || row_width + gap_before + req.x <= wrap_width)
+                    {
+                        row_width += gap_before + req.x;
+                        row_height = amal::max(row_height, req.y);
+                        max_width = amal::max(max_width, row_width);
+                        total_height += row_height;
+                        row_width = 0.0f;
+                        row_height = 0.0f;
+                        continue;
+                    }
+
                     max_width = amal::max(max_width, row_width);
                     total_height += row_height;
                     row_width = 0.0f;
@@ -194,7 +202,8 @@ namespace auik
                 auto *child = children[i];
                 if (!child || !child->is_visible()) continue;
                 const ChildLayoutFlags layout = i < layouts.size() ? layouts[i] : ChildLayoutFlagBits::none;
-                if (!is_inline_layout(layout) || is_right_layout(layout)) continue;
+                const bool terminal_child = i + 1u == row_end && !is_inline_layout(layout);
+                if ((!is_inline_layout(layout) && !terminal_child) || is_right_layout(layout)) continue;
                 const amal::vec2 req = child->required_size();
                 const auto resolved = resolve_child_layout_size(child, req, right_x - left_x, fill_available_width);
                 child->set_position({left_x, row_pos.y});
@@ -244,10 +253,20 @@ namespace auik
                     continue;
                 }
 
-                flush_inline_row(i, cursor, inline_row_active, inline_row_start);
+                if (inline_row_active)
+                {
+                    flush_inline_row(i + 1u, cursor, inline_row_active, inline_row_start);
+                    continue;
+                }
                 const amal::vec2 req = child->required_size();
                 const auto resolved = resolve_child_layout_size(child, req, available_width, fill_available_width);
-                child->set_position(cursor);
+                f32 child_x = cursor.x;
+                if (is_right_layout(layout))
+                    child_x = content_pos.x + amal::max(available_width - resolved.occupied_size.x, 0.0f);
+                else if (is_hcenter_layout(layout))
+                    child_x =
+                        content_pos.x + amal::floor(amal::max(available_width - resolved.occupied_size.x, 0.0f) * 0.5f);
+                child->set_position({child_x, cursor.y});
                 child->set_layout_size(resolved.layout_size);
                 child->update_layout(true);
                 cursor = {content_pos.x, cursor.y + child->required_size().y};
@@ -259,9 +278,7 @@ namespace auik
         void layout_child_widgets(Widget *layout_owner, const acul::vector<Widget *> &children,
                                   const acul::vector<ChildLayoutFlags> &layouts, const amal::rect &content_rect,
                                   f32 inline_spacing_x)
-        {
-            layout_child_widgets(layout_owner, children, layouts, content_rect, inline_spacing_x, content_rect.size.x);
-        }
+        { layout_child_widgets(layout_owner, children, layouts, content_rect, inline_spacing_x, content_rect.size.x); }
 
         static void update_child_layout_bounds(Widget *child, const amal::rect &bounds)
         {
@@ -273,9 +290,8 @@ namespace auik
 
         static void fast_update_inline_row(const acul::vector<Widget *> &children,
                                            const acul::vector<ChildLayoutFlags> &layouts, size_t row_start,
-                                           size_t row_end, const amal::rect &content_rect,
-                                           const amal::vec2 &row_pos, f32 inline_spacing_x, f32 fill_available_width,
-                                           f32 &row_height)
+                                           size_t row_end, const amal::rect &content_rect, const amal::vec2 &row_pos,
+                                           f32 inline_spacing_x, f32 fill_available_width, f32 &row_height)
         {
             const f32 available_width = content_rect.size.x;
             f32 left_x = row_pos.x;
@@ -302,7 +318,8 @@ namespace auik
                 auto *child = children[i];
                 if (!child || !child->is_visible()) continue;
                 const ChildLayoutFlags layout = i < layouts.size() ? layouts[i] : ChildLayoutFlagBits::none;
-                if (!is_inline_layout(layout) || is_right_layout(layout)) continue;
+                const bool terminal_child = i + 1u == row_end && !is_inline_layout(layout);
+                if ((!is_inline_layout(layout) && !terminal_child) || is_right_layout(layout)) continue;
                 const amal::vec2 req = child->required_size();
                 const auto resolved = resolve_child_layout_size(child, req, right_x - left_x, fill_available_width);
                 update_child_layout_bounds(child, {{left_x, row_pos.y}, resolved.layout_size});
@@ -350,10 +367,20 @@ namespace auik
                     continue;
                 }
 
-                flush_inline_row(i, cursor, inline_row_active, inline_row_start);
+                if (inline_row_active)
+                {
+                    flush_inline_row(i + 1u, cursor, inline_row_active, inline_row_start);
+                    continue;
+                }
                 const amal::vec2 req = child->required_size();
                 const auto resolved = resolve_child_layout_size(child, req, available_width, fill_available_width);
-                update_child_layout_bounds(child, {cursor, resolved.layout_size});
+                f32 child_x = cursor.x;
+                if (is_right_layout(layout))
+                    child_x = content_pos.x + amal::max(available_width - resolved.occupied_size.x, 0.0f);
+                else if (is_hcenter_layout(layout))
+                    child_x =
+                        content_pos.x + amal::floor(amal::max(available_width - resolved.occupied_size.x, 0.0f) * 0.5f);
+                update_child_layout_bounds(child, {{child_x, cursor.y}, resolved.layout_size});
                 cursor = {content_pos.x, cursor.y + req.y};
             }
 
@@ -362,11 +389,9 @@ namespace auik
     } // namespace detail
 
     static inline amal::vec4 sum_padding(const amal::vec4 &left, const amal::vec4 &right)
-    {
-        return {left.x + right.x, left.y + right.y, left.z + right.z, left.w + right.w};
-    }
+    { return {left.x + right.x, left.y + right.y, left.z + right.z, left.w + right.w}; }
 
-    f32 Block::resolved_inline_spacing() const { return 0.0f; }
+    f32 Block::resolved_inline_spacing() const { return amal::max(_inline_spacing, 0.0f); }
 
     void Block::clear_children()
     {
@@ -382,15 +407,17 @@ namespace auik
 
     void Block::add_child(Widget *child, ChildLayoutFlags layout) { add_child_with_flags(child, layout); }
 
-    bool Block::has_explicit_width() const
+    void Block::set_child_layout(size_t index, ChildLayoutFlags layout)
     {
-        return !is_size_fit(_explicit_size.x) || _size_key.x != 0u || _size_vec_key != 0u;
+        assert(index < _child_layouts.size() && "child index out of range");
+        _child_layouts[index] = layout;
     }
 
+    bool Block::has_explicit_width() const
+    { return !is_size_fit(_explicit_size.x) || _size_key.x != 0u || _size_vec_key != 0u; }
+
     bool Block::has_explicit_height() const
-    {
-        return !is_size_fit(_explicit_size.y) || _size_key.y != 0u || _size_vec_key != 0u;
-    }
+    { return !is_size_fit(_explicit_size.y) || _size_key.y != 0u || _size_vec_key != 0u; }
 
     f32 Block::resolved_explicit_width() const
     {
@@ -483,7 +510,7 @@ namespace auik
     {
         assert(child && "child is null");
         child->set_parent(this);
-        child->set_focus_parent(this);
+        child->set_focus_parent(parent() && id() == parent()->id() ? parent() : this);
         child->update_style();
         children.push_back(child);
         _child_layouts.push_back(layout);
@@ -513,9 +540,7 @@ namespace auik
     }
 
     void Block::layout_children(const amal::vec2 &content_pos, const amal::vec2 &content_size)
-    {
-        layout_children({content_pos, content_size});
-    }
+    { layout_children({content_pos, content_size}); }
 
     void Block::update_layout_min_size() { update_layout_min_size_with(zero_vec4(), zero_vec4()); }
 
@@ -547,7 +572,8 @@ namespace auik
         const amal::vec2 layout_origin = position();
         const amal::vec2 inner_required = {amal::max(required_size().x - margin.x - margin.z, 0.0f),
                                            amal::max(required_size().y - margin.y - margin.w, 0.0f)};
-        amal::vec2 inner_size = size();
+        amal::vec2 inner_size = {amal::max(size().x - margin.x - margin.z, 0.0f),
+                                 amal::max(size().y - margin.y - margin.w, 0.0f)};
         if (is_size_concrete(resolved_explicit_width())) inner_size.x = amal::max(resolved_explicit_width(), 0.0f);
         else if (inner_size.x <= 0.0f) inner_size.x = inner_required.x;
         if (is_size_concrete(resolved_explicit_height())) inner_size.y = amal::max(resolved_explicit_height(), 0.0f);
@@ -656,10 +682,9 @@ namespace auik
         Widget::on_detach();
     }
 
-    DrawBlock::DrawBlock(u32 id, WidgetFlags widget_flags, u32 tag_id, u32 style_tag_id)
+    DrawBlock::DrawBlock(u32 id, WidgetFlags widget_flags, u32 tag_id)
         : Block(id, widget_flags, tag_id), _bg_rect(detail::make_rect_data(id, tag_id))
     {
-        set_style_tag(style_tag_id);
     }
 
     DrawBlock::~DrawBlock()
@@ -746,9 +771,7 @@ namespace auik
     }
 
     void DrawBlock::set_scrollbar_style_tag(u32 track_tag_id)
-    {
-        set_scrollbar_style_tags(track_tag_id, scrollbar_thumb_style_for_track(track_tag_id));
-    }
+    { set_scrollbar_style_tags(track_tag_id, scrollbar_thumb_style_for_track(track_tag_id)); }
 
     void DrawBlock::set_scrollbar_style_tags(u32 track_tag_id, u32 thumb_tag_id)
     {
@@ -810,16 +833,13 @@ namespace auik
         const amal::vec2 content_pos = position() + amal::vec2{padding.x, padding.y};
         const bool clip_ignores_padding_x = _draw_flags & DrawBlockFlagBits::clip_ignores_padding_x;
         const bool clip_ignores_padding_y = _draw_flags & DrawBlockFlagBits::clip_ignores_padding_y;
-        const amal::vec4 frame_clip = get_clip_rect(clip_id());
-        const amal::vec4 visible_scroll_rect =
-            detail::intersect_rects(frame_clip, {position().x, position().y, size().x, size().y});
         const f32 bar_w = has_visible_scrollbar_y() && _scrollbar_y ? _scrollbar_y->get_min_track_thickness() : 0.0f;
         const f32 bar_h = has_visible_scrollbar_x() && _scrollbar_x ? _scrollbar_x->get_min_track_thickness() : 0.0f;
         const amal::vec2 clip_pos{clip_ignores_padding_x ? position().x : content_pos.x,
                                   clip_ignores_padding_y ? position().y : content_pos.y};
         const amal::vec2 clip_view_size{
-            clip_ignores_padding_x ? amal::max(visible_scroll_rect.z - bar_w, 0.0f) : _scroll_view_size.x,
-            clip_ignores_padding_y ? amal::max(visible_scroll_rect.w - bar_h, 0.0f) : _scroll_view_size.y};
+            clip_ignores_padding_x ? amal::max(size().x - bar_w, 0.0f) : _scroll_view_size.x,
+            clip_ignores_padding_y ? amal::max(size().y - bar_h, 0.0f) : _scroll_view_size.y};
         update_scroll_clip(clip_pos, clip_view_size);
     }
 
@@ -885,8 +905,8 @@ namespace auik
             const amal::vec2 clip_pos{clip_ignores_padding_x ? position().x : content_pos.x,
                                       clip_ignores_padding_y ? position().y : content_pos.y};
             const amal::vec2 clip_view_size{
-                clip_ignores_padding_x ? amal::max(visible_scroll_rect.z - bar_w, 0.0f) : _scroll_view_size.x,
-                clip_ignores_padding_y ? amal::max(visible_scroll_rect.w - bar_h, 0.0f) : _scroll_view_size.y};
+                clip_ignores_padding_x ? amal::max(size().x - bar_w, 0.0f) : _scroll_view_size.x,
+                clip_ignores_padding_y ? amal::max(size().y - bar_h, 0.0f) : _scroll_view_size.y};
             update_scroll_clip(clip_pos, clip_view_size);
             set_clip_id(parent() ? parent()->content_clip_id() : clip_id());
 
@@ -908,15 +928,14 @@ namespace auik
                 const f32 track_x = visible_scroll_rect.x + track_margin.x;
                 const f32 track_y =
                     visible_scroll_rect.y + amal::max(visible_scroll_rect.w - track_margin.w - track_h, 0.0f);
-                const f32 track_w =
-                    amal::max(visible_scroll_rect.z - bar_w - track_margin.x - track_margin.z, 0.0f);
+                const f32 track_w = amal::max(visible_scroll_rect.z - bar_w - track_margin.x - track_margin.z, 0.0f);
                 _scrollbar_x->configure({track_x, track_y}, {track_w, track_h}, _scroll_content_size.x,
                                         _scroll_view_size.x);
             }
 
-            const amal::vec2 layout_view_size{
-                need_scroll_x ? amal::max(_scroll_content_size.x, _scroll_view_size.x) : _scroll_view_size.x,
-                _scroll_view_size.y};
+            const amal::vec2 layout_view_size{need_scroll_x ? amal::max(_scroll_content_size.x, _scroll_view_size.x)
+                                                            : _scroll_view_size.x,
+                                              _scroll_view_size.y};
             detail::layout_child_widgets_fast_update(children, _child_layouts,
                                                      {content_pos - _content_offset, layout_view_size},
                                                      resolved_inline_spacing(), _scroll_view_size.x);
@@ -925,7 +944,8 @@ namespace auik
 
         const amal::vec2 inner_required = {amal::max(required_size().x - margin.x - margin.z, 0.0f),
                                            amal::max(required_size().y - margin.y - margin.w, 0.0f)};
-        amal::vec2 inner_size = size();
+        amal::vec2 inner_size = {amal::max(size().x - margin.x - margin.z, 0.0f),
+                                 amal::max(size().y - margin.y - margin.w, 0.0f)};
         if (is_size_concrete(resolved_explicit_width())) inner_size.x = amal::max(resolved_explicit_width(), 0.0f);
         else if (inner_size.x <= 0.0f) inner_size.x = inner_required.x;
         if (is_size_concrete(resolved_explicit_height())) inner_size.y = amal::max(resolved_explicit_height(), 0.0f);
@@ -977,10 +997,8 @@ namespace auik
         const amal::vec2 clip_pos{clip_ignores_padding_x ? position().x : content_pos.x,
                                   clip_ignores_padding_y ? position().y : content_pos.y};
         const amal::vec2 clip_view_size{
-            clip_ignores_padding_x ? amal::max(visible_scroll_rect.z - (need_scroll_y ? bar_w : 0.0f), 0.0f)
-                                   : _scroll_view_size.x,
-            clip_ignores_padding_y ? amal::max(visible_scroll_rect.w - (need_scroll_x ? bar_h : 0.0f), 0.0f)
-                                   : _scroll_view_size.y};
+            clip_ignores_padding_x ? amal::max(size().x - (need_scroll_y ? bar_w : 0.0f), 0.0f) : _scroll_view_size.x,
+            clip_ignores_padding_y ? amal::max(size().y - (need_scroll_x ? bar_h : 0.0f), 0.0f) : _scroll_view_size.y};
         update_scroll_clip(clip_pos, clip_view_size);
         set_clip_id(parent() ? parent()->content_clip_id() : clip_id());
 
@@ -993,9 +1011,9 @@ namespace auik
         if (_scrollbar_y) _scrollbar_y->set_scroll_offset(_content_offset.y);
 
         const amal::vec2 pre_layout_children_size = _scroll_content_size;
-        amal::vec2 layout_view_size{
-            need_scroll_x ? amal::max(_scroll_content_size.x, _scroll_view_size.x) : _scroll_view_size.x,
-            _scroll_view_size.y};
+        amal::vec2 layout_view_size{need_scroll_x ? amal::max(_scroll_content_size.x, _scroll_view_size.x)
+                                                  : _scroll_view_size.x,
+                                    _scroll_view_size.y};
         detail::layout_child_widgets(this, children, _child_layouts, {content_pos - _content_offset, layout_view_size},
                                      resolved_inline_spacing(), _scroll_view_size.x);
         const amal::vec2 laid_out_children_size = detail::compute_children_layout_required_size(
@@ -1029,9 +1047,9 @@ namespace auik
             _scroll_view_size = {amal::max(available_size.x - (need_scroll_y ? bar_w : 0.0f), 0.0f),
                                  amal::max(available_size.y - (need_scroll_x ? bar_h : 0.0f), 0.0f)};
             const amal::vec2 refined_clip_view_size{
-                clip_ignores_padding_x ? amal::max(visible_scroll_rect.z - (need_scroll_y ? bar_w : 0.0f), 0.0f)
+                clip_ignores_padding_x ? amal::max(size().x - (need_scroll_y ? bar_w : 0.0f), 0.0f)
                                        : _scroll_view_size.x,
-                clip_ignores_padding_y ? amal::max(visible_scroll_rect.w - (need_scroll_x ? bar_h : 0.0f), 0.0f)
+                clip_ignores_padding_y ? amal::max(size().y - (need_scroll_x ? bar_h : 0.0f), 0.0f)
                                        : _scroll_view_size.y};
             update_scroll_clip(clip_pos, refined_clip_view_size);
             if (_scrollbar_x) _scrollbar_x->set_metrics(_scroll_content_size.x, _scroll_view_size.x);
@@ -1039,9 +1057,9 @@ namespace auik
             const amal::vec2 refined_max_scroll{_scrollbar_x ? _scrollbar_x->max_scroll() : 0.0f,
                                                 _scrollbar_y ? _scrollbar_y->max_scroll() : 0.0f};
             _content_offset = amal::clamp(_content_offset, amal::vec2{0.0f}, refined_max_scroll);
-            layout_view_size = {
-                need_scroll_x ? amal::max(_scroll_content_size.x, _scroll_view_size.x) : _scroll_view_size.x,
-                _scroll_view_size.y};
+            layout_view_size = {need_scroll_x ? amal::max(_scroll_content_size.x, _scroll_view_size.x)
+                                              : _scroll_view_size.x,
+                                _scroll_view_size.y};
             detail::layout_child_widgets(this, children, _child_layouts,
                                          {content_pos - _content_offset, layout_view_size}, resolved_inline_spacing(),
                                          _scroll_view_size.x);
@@ -1120,11 +1138,12 @@ namespace auik
         _bg_rect.bounds.offset += delta;
         if (_scrollbar_x) _scrollbar_x->translate(delta);
         if (_scrollbar_y) _scrollbar_y->translate(delta);
-        if (_content_clip_id != 0xFFFFu)
+        if (_content_clip_rect_overridden)
         {
-            const auto clip = get_clip_rect(_content_clip_id);
-            update_clip_rect(_content_clip_id, {clip.x + delta.x, clip.y + delta.y, clip.z, clip.w});
+            _content_clip_rect_override.x += delta.x;
+            _content_clip_rect_override.y += delta.y;
         }
+        rebuild_scroll_clip_rect();
         for (auto *child : children)
         {
             if (!child) continue;
@@ -1313,11 +1332,12 @@ namespace auik
           _style({Theme::STYLE_ID_INVALID, style_tag_id}),
           _expanded(expanded)
     {
+        set_size({AUIK_SIZE_X_FILL, AUIK_SIZE_Y_FIT});
         add_event_flags(EventFlagBits::click);
         set_rect_tag_id(current_header_style_tag());
         _label = acul::alloc<Text>(AUIK_TAG_TEXT, label, amal::vec2{0.0f, 0.0f}, WidgetFlagBits::visible,
-                                   AUIK_STYLE_TAG_NO_PAD, detail::TextOverflowMode::ellipsis,
-                                   detail::TextVerticalAlign::center);
+                                   make_text_layout_flags(TextOverflowMode::ellipsis));
+        _label->set_style_tag(AUIK_STYLE_TAG_NO_PAD);
         _label->set_parent(this);
         _trigger = acul::alloc<detail::PopupTrigger>(_trigger_style_tag, AUIK_TAG_COLLAPSE_HEADER_TRIGGER,
                                                      AUIK_ICON_CHEVRON_RIGHT, AUIK_ICON_CHEVRON_DOWN, true,
@@ -1523,7 +1543,8 @@ namespace auik
         const amal::vec2 layout_origin = position();
         const amal::vec2 inner_required = {amal::max(required_size().x - margin.x - margin.z, 0.0f),
                                            amal::max(required_size().y - margin.y - margin.w, 0.0f)};
-        amal::vec2 inner_size = size();
+        amal::vec2 inner_size = {amal::max(size().x - margin.x - margin.z, 0.0f),
+                                 amal::max(size().y - margin.y - margin.w, 0.0f)};
         if (is_width_fixed() || inner_size.x <= 0.0f) inner_size.x = amal::max(inner_size.x, inner_required.x);
         inner_size.y = amal::max(inner_size.y, inner_required.y);
 
@@ -1535,8 +1556,9 @@ namespace auik
         const amal::vec2 trigger_required = _trigger ? _trigger->required_size() : amal::vec2{0.0f, 0.0f};
         const amal::vec2 label_required = _label ? _label->required_size() : amal::vec2{0.0f, 0.0f};
         const f32 header_h = padding.y + padding.w + amal::max(trigger_required.y, label_required.y);
-        _header_rect = detail::make_rect_data(id(), current_header_style_tag(), {position(), {size().x, header_h}},
-                                              clip_id(), next_depth(depth_range()));
+        _header_rect.id = make_element_id(id(), current_header_style_tag());
+        _header_rect.bounds = {position(), {size().x, header_h}};
+        _header_rect.clip_id = clip_id();
 
         const f32 content_y = position().y + padding.y;
         f32 cursor_x = position().x + padding.x;
@@ -1562,8 +1584,9 @@ namespace auik
             const amal::vec2 content_pos{position().x + content_margin.x, position().y + header_h + content_margin.y};
             const amal::vec2 content_size{amal::max(size().x - content_margin.x - content_margin.z, 0.0f),
                                           amal::max(size().y - header_h - content_margin.y - content_margin.w, 0.0f)};
-            _content_rect = detail::make_rect_data(id(), _content_style.tag_id, {content_pos, content_size}, clip_id(),
-                                                   next_depth(depth_range()));
+            _content_rect.id = make_element_id(id(), _content_style.tag_id);
+            _content_rect.bounds = {content_pos, content_size};
+            _content_rect.clip_id = clip_id();
             const amal::vec2 child_pos{content_pos.x + content_padding.x, content_pos.y + content_padding.y};
             const amal::vec2 child_size{amal::max(content_size.x - content_padding.x - content_padding.z, 0.0f),
                                         amal::max(content_size.y - content_padding.y - content_padding.w, 0.0f)};
@@ -1572,23 +1595,10 @@ namespace auik
     }
 
     void CollapseHeader::layout_children(const amal::rect &content_rect)
-    {
-        const auto &content_pos = content_rect.offset;
-        f32 cursor_y = content_pos.y;
-        for (auto *child : children)
-        {
-            if (!child) continue;
-            child->set_position({content_pos.x, cursor_y});
-            child->set_layout_size(child->required_size());
-            child->update_layout(true);
-            cursor_y += child->required_size().y;
-        }
-    }
+    { detail::layout_child_widgets(this, children, _child_layouts, content_rect, resolved_inline_spacing()); }
 
     void CollapseHeader::layout_children(const amal::vec2 &content_pos, const amal::vec2 &content_size)
-    {
-        layout_children({content_pos, content_size});
-    }
+    { layout_children({content_pos, content_size}); }
 
     void CollapseHeader::translate(const amal::vec2 &delta)
     {
@@ -1647,9 +1657,9 @@ namespace auik
             if (!child) continue;
             child->update_depth(content_range);
         }
-        _header_rect.depth = next_depth(header_bg_range);
+        _header_rect.depth = next_depth(detail::depth_background_range(header_bg_range));
         _header_rect.hit_depth = _header_rect.depth;
-        _content_rect.depth = next_depth(content_range);
+        _content_rect.depth = next_depth(detail::depth_background_range(content_range));
         _content_rect.hit_depth = _content_rect.depth;
     }
 
@@ -1803,9 +1813,7 @@ namespace auik
         }
 
         void write_block_size_data(acul::bin_stream &stream, const Block &block)
-        {
-            stream.write(block.explicit_size()).write(block.size_key()).write(block.size_vec_key());
-        }
+        { stream.write(block.explicit_size()).write(block.size_key()).write(block.size_vec_key()); }
 
         BlockSizeData read_block_size_data(acul::bin_stream &stream)
         {
@@ -1879,9 +1887,7 @@ namespace auik
         }
 
         void write_block(acul::bin_stream &stream, umbf::Block *block)
-        {
-            write_block_payload(stream, *static_cast<Block *>(block));
-        }
+        { write_block_payload(stream, *static_cast<Block *>(block)); }
 
         umbf::Block *read_block(acul::bin_stream &stream)
         {
@@ -1906,8 +1912,8 @@ namespace auik
         umbf::Block *read_draw_block(acul::bin_stream &stream)
         {
             const auto header = read_block_header_data(stream);
-            auto *widget = acul::alloc<DrawBlock>(header.common.id, WidgetFlags(header.common.widget_flags),
-                                                  AUIK_TAG_DRAW_BLOCK, 0u);
+            auto *widget =
+                acul::alloc<DrawBlock>(header.common.id, WidgetFlags(header.common.widget_flags), AUIK_TAG_DRAW_BLOCK);
             apply_block_header_data(widget, header);
             read_block_children(stream, widget);
 
@@ -1947,9 +1953,9 @@ namespace auik
         umbf::Block *read_collapse_header(acul::bin_stream &stream)
         {
             const auto header = read_block_header_data(stream);
-            auto *widget = acul::alloc<CollapseHeader>(header.common.id, acul::string{}, true,
-                                                       WidgetFlags(header.common.widget_flags),
-                                                       AUIK_STYLE_TAG_COLLAPSE_HEADER);
+            auto *widget =
+                acul::alloc<CollapseHeader>(header.common.id, acul::string{}, true,
+                                            WidgetFlags(header.common.widget_flags), AUIK_STYLE_TAG_COLLAPSE_HEADER);
             apply_block_header_data(widget, header);
             read_block_children(stream, widget);
 
@@ -1987,8 +1993,8 @@ namespace auik
             u32 style_tag = 0u;
             stream.read(style_tag);
 
-            auto *widget = acul::alloc<Dummy>(common.id, common.requested_size, WidgetFlags(common.widget_flags),
-                                              style_tag);
+            auto *widget = acul::alloc<Dummy>(common.id, common.requested_size, WidgetFlags(common.widget_flags));
+            widget->set_style_tag(style_tag);
             detail::apply_widget_common_data(widget, common);
             return widget;
         }

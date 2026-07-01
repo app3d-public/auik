@@ -19,9 +19,7 @@ namespace auik
 {
     class Window;
 
-    constexpr inline WidgetFlags get_default_menu_bar_flags() { return get_default_tab_bar_flags(); }
-
-    class MenuBar final : public TabBar
+    class MenuBar final : public Tabbar
     {
         friend class PopupMenu;
 
@@ -38,7 +36,7 @@ namespace auik
         using MenuGroupLayer = detail::MenuGroupLayer;
 
         AUIK_EXPORT MenuBar(u32 id, const acul::vector<StringView> &items = {}, amal::vec2 size = AUIK_SIZE_FIT,
-                            WidgetFlags widget_flags = get_default_menu_bar_flags(), Widget *parent = nullptr);
+                            WidgetFlags widget_flags = detail::get_tabbar_widget_flags());
         AUIK_EXPORT ~MenuBar() override;
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
@@ -187,9 +185,7 @@ namespace auik
     };
 
     inline MenuBar *make_menu_bar(u32 id, const acul::vector<StringView> &items = {})
-    {
-        return acul::alloc<MenuBar>(id, items);
-    }
+    { return acul::alloc<MenuBar>(id, items); }
 
     inline MenuBar *make_menu_bar(u32 id, std::initializer_list<const char *> items)
     {
@@ -201,7 +197,7 @@ namespace auik
 
     inline MenuBar *make_main_menu_bar(u32 id, const acul::vector<StringView> &items = {})
     {
-        auto *menu_bar = acul::alloc<MenuBar>(id, items);
+        auto *menu_bar = acul::alloc<MenuBar>(id, items, amal::vec2{AUIK_SIZE_X_FILL, AUIK_SIZE_Y_FIT});
         menu_bar->set_menu_style_tag(AUIK_STYLE_TAG_MAIN_MENU_BAR);
         menu_bar->set_menu_item_style_tag(AUIK_STYLE_TAG_MAIN_MENU_ITEM);
         menu_bar->set_popup_depth_mode(MenuBar::PopupDepthMode::root_overlay);
@@ -221,11 +217,10 @@ namespace auik
     public:
         using MenuGroup = MenuBar::MenuGroup;
 
-        AUIK_EXPORT PopupMenu(u32 id, const acul::vector<StringView> &items = {},
-                              WidgetFlags widget_flags = get_default_tab_bar_flags(), Widget *parent = nullptr,
-                              bool selected_enabled = false);
-        AUIK_EXPORT explicit PopupMenu(MenuBar *menu, WidgetFlags widget_flags = get_default_tab_bar_flags(),
-                                       Widget *parent = nullptr, bool selected_enabled = false);
+        AUIK_EXPORT PopupMenu(u32 id, const acul::vector<StringView> &items, WidgetFlags widget_flags,
+                              bool selected_enabled);
+        AUIK_EXPORT explicit PopupMenu(MenuBar *menu, WidgetFlags widget_flags = detail::get_tabbar_widget_flags(),
+                                       bool selected_enabled = false);
         AUIK_EXPORT ~PopupMenu() override;
 
         MenuBar::MenuItem *item(u32 element_id) { return _menu ? _menu->item(element_id) : nullptr; }
@@ -241,14 +236,10 @@ namespace auik
 
         MenuBar::MenuItem *add_suffix_item(u32 group_index, acul::string text,
                                            acul::unique_function<void(ClickEvent &)> callback = nullptr)
-        {
-            return _menu ? _menu->append_root_suffix_item(group_index, std::move(text), std::move(callback)) : nullptr;
-        }
+        { return _menu ? _menu->append_root_suffix_item(group_index, std::move(text), std::move(callback)) : nullptr; }
 
         u32 add_suffix_separator(u32 group_index)
-        {
-            return _menu ? _menu->append_root_suffix_separator(group_index) : 0u;
-        }
+        { return _menu ? _menu->append_root_suffix_separator(group_index) : 0u; }
 
         void erase_suffix_group(u32 group_index)
         {
@@ -362,7 +353,9 @@ namespace auik
 
     inline PopupMenu *make_popup_menu(u32 id, const acul::vector<StringView> &items = {}, bool selected_enabled = false)
     {
-        return acul::alloc<PopupMenu>(id, items, get_default_tab_bar_flags(), nullptr, selected_enabled);
+        constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
+                                             WidgetFlagBits::configurable | WidgetFlagBits::hittable;
+        return acul::alloc<PopupMenu>(id, items, widget_flags, selected_enabled);
     }
 
     class MenuProxy

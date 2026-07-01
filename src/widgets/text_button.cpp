@@ -58,7 +58,8 @@ namespace auik
         const amal::vec2 min_required = required_size();
         const amal::vec2 min_button = {amal::max(min_required.x - margin.x - margin.z, 0.0f),
                                        amal::max(min_required.y - margin.y - margin.w, 0.0f)};
-        amal::vec2 button_size = size();
+        amal::vec2 button_size = {amal::max(size().x - margin.x - margin.z, 0.0f),
+                                  amal::max(size().y - margin.y - margin.w, 0.0f)};
         if (fill_width() || is_width_fixed()) button_size.x = amal::max(button_size.x, min_button.x);
         else button_size.x = min_button.x;
 
@@ -76,8 +77,10 @@ namespace auik
         const amal::vec2 content_pos = {pos.x + padding.x, pos.y + padding.y};
         const amal::vec2 content_size = {amal::max(button_size.x - padding.x - padding.z, 0.0f),
                                          amal::max(button_size.y - padding.y - padding.w, 0.0f)};
-        _text->set_position(content_pos);
-        _text->set_layout_size(content_size);
+        const amal::vec2 text_size = _text->required_size();
+        _text->set_position({content_pos.x + amal::floor((content_size.x - text_size.x) * 0.5f),
+                             content_pos.y + amal::floor((content_size.y - text_size.y) * 0.5f)});
+        _text->set_layout_size(text_size);
         _text->update_layout(true);
     }
 

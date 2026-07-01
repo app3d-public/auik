@@ -6,35 +6,17 @@
 #include <auik/widgets/titlebar.hpp>
 #include "../core/session_stream_utils.hpp"
 #ifdef _WIN32
-    #include <windowsx.h>
-    #define AUIK_TITLEBAR_STATE    L"AUIK_TITLEBAR_STATE"
-    #define AUIK_ICON_CAP_MINIMIZE 0x7CB8CE8Du
-    #define AUIK_ICON_CAP_MAXIMIZE 0x28392EA5u
-    #define AUIK_ICON_CAP_RESTORE  0x2F89CAF9u
-    #define AUIK_ICON_CAP_CLOSE    0x6D0C422D
+#include <windowsx.h>
 #endif
 
 #define AUIK_TITLEBAR_ICON_ID        0x54CC3922
 #define AUIK_TITLEBAR_HEIGHT_DEFAULT 32.0f
+#ifdef _WIN32
+#define AUIK_TITLEBAR_STATE L"AUIK_TITLEBAR_STATE"
+#endif
 
 namespace auik
 {
-    struct TitlebarState
-    {
-        TitlebarCreateFlags flags;
-        f32 height = 0.0f;
-        i32 padding = 0;
-        acul::point2D<i32> frame;
-        amal::vec2 caption_button_size{};
-        bool caption_buttons[AUIK_WINDOW_CAPTION_BTN_COUNT]{};
-        ImageButton *caption_button_widgets[AUIK_WINDOW_CAPTION_BTN_COUNT]{};
-        f32 content_end_x = 0.0f;
-        f32 caption_buttons_width = 0.0f;
-        i32 hover_button = -1;
-        i32 active_button = -1;
-        void (*destroy)(TitlebarState *state) = nullptr;
-    };
-
     inline void destroy_titlebar_state(TitlebarState *state)
     {
         assert(state->destroy && "destroy function is null");
@@ -80,6 +62,29 @@ namespace auik
         return index < AUIK_WINDOW_CAPTION_BTN_COUNT ? ids[index] : 0u;
     }
 
+    static void refresh_caption_button_style(TitlebarState &state, i32 index)
+    {
+        if (index < 0 || index >= AUIK_WINDOW_CAPTION_BTN_COUNT) return;
+        auto *button = state.caption_button_widgets[index];
+        if (!button) return;
+        const bool active = state.active_button == index;
+        const bool hover = state.hover_button == index;
+        const StyleState next_state = active ? StyleState::active : (hover ? StyleState::hover : StyleState::normal);
+        if (!button->set_style_state(next_state)) return;
+
+        const StyleUpdateFlags flags = button->update_style();
+        if (flags & StyleUpdateFlagBits::layout)
+        {
+            if (state.titlebar) state.titlebar->update_layout(false);
+            if (state.titlebar) state.titlebar->update_draw_commands(DrawReasonBits::layout);
+        }
+        else button->update_draw_commands(get_draw_reason_from_style_update(flags));
+
+        auto &ctx = detail::get_context();
+        ctx.dirty_flags |= DirtyFlagBits::redraw;
+        detail::mark_host_refresh_request();
+    }
+
     static void update_titlebar_child_depths(const amal::vec2 &parent_depth_range,
                                              const acul::vector<Widget *> &children)
     {
@@ -103,7 +108,7 @@ namespace auik
     }
 
     Titlebar::Titlebar(u32 id, WidgetFlags widget_flags)
-        : Widget(id, widget_flags, EventFlagBits::none, nullptr, {}, AUIK_TAG_TITLEBAR)
+        : Widget(id, widget_flags, EventFlagBits::none, {}, AUIK_TAG_TITLEBAR)
     {
     }
 
@@ -179,7 +184,7 @@ namespace auik
                                                                          : AUIK_STYLE_TAG_WINDOW_CAPTION_BUTTON;
                 _caption_buttons[i] = acul::alloc<ImageButton>(
                     caption_button_widget_id(i), image, amal::vec2{0.0f, 0.0f}, amal::vec2{0.0f, 0.0f},
-                    WidgetFlagBits::visible, nullptr, style_tag);
+                    WidgetFlagBits::visible, style_tag);
                 _caption_buttons[i]->set_parent(this);
                 _caption_buttons[i]->set_focus_parent(this);
             }
@@ -187,6 +192,24 @@ namespace auik
             if (_state) _state->caption_button_widgets[i] = _caption_buttons[i];
         }
         update_titlebar_caption_button_depths(depth_range(), _caption_buttons);
+    }
+
+    void Titlebar::set_caption_hover_button(i32 index)
+    {
+        if (!_state || _state->hover_button == index) return;
+        const i32 prev = _state->hover_button;
+        _state->hover_button = index;
+        refresh_caption_button_style(*_state, prev);
+        refresh_caption_button_style(*_state, _state->hover_button);
+    }
+
+    void Titlebar::set_caption_active_button(i32 index)
+    {
+        if (!_state || _state->active_button == index) return;
+        const i32 prev = _state->active_button;
+        _state->active_button = index;
+        refresh_caption_button_style(*_state, prev);
+        refresh_caption_button_style(*_state, _state->active_button);
     }
 
     StyleUpdateFlags Titlebar::update_style()
@@ -465,93 +488,7 @@ namespace auik
     {
         HWND hwnd = nullptr;
         WNDPROC prev_proc = nullptr;
-        Titlebar *titlebar = nullptr;
     };
-
-    static void refresh_caption_button_style(Win32TitlebarState &state, i32 index)
-    {
-        if (index < 0 || index >= AUIK_WINDOW_CAPTION_BTN_COUNT) return;
-        auto *button = state.caption_button_widgets[index];
-        if (!button) return;
-        const bool active = state.active_button == index;
-        const bool hover = state.hover_button == index;
-        const StyleState next_state = active ? StyleState::active : (hover ? StyleState::hover : StyleState::normal);
-        if (!button->set_style_state(next_state)) return;
-
-        const StyleUpdateFlags flags = button->update_style();
-        if (flags & StyleUpdateFlagBits::layout)
-        {
-            if (state.titlebar) state.titlebar->update_layout(false);
-            if (state.titlebar) state.titlebar->update_draw_commands(DrawReasonBits::layout);
-        }
-        else button->update_draw_commands(get_draw_reason_from_style_update(flags));
-
-        auto &ctx = detail::get_context();
-        ctx.dirty_flags |= DirtyFlagBits::redraw;
-        detail::mark_host_refresh_request();
-    }
-
-    static void set_caption_hover(Win32TitlebarState &state, i32 index)
-    {
-        if (state.hover_button == index) return;
-        const i32 prev = state.hover_button;
-        state.hover_button = index;
-        refresh_caption_button_style(state, prev);
-        refresh_caption_button_style(state, state.hover_button);
-    }
-
-    static void set_caption_active(Win32TitlebarState &state, i32 index)
-    {
-        if (state.active_button == index) return;
-        const i32 prev = state.active_button;
-        state.active_button = index;
-        refresh_caption_button_style(state, prev);
-        refresh_caption_button_style(state, state.active_button);
-    }
-
-    static void add_frame_to_client_area(RECT *area, bool is_maximized, int multiplier, TitlebarState *state)
-    {
-        int border_x = (state->frame.x + state->padding) * multiplier;
-        int border_y = (state->frame.y + state->padding) * multiplier;
-        area->left -= border_x;
-        area->right += border_x;
-        area->bottom += border_y;
-
-        if (is_maximized) area->top -= border_y;
-    }
-
-    static LRESULT hit_test_resize_border(HWND hwnd, const TitlebarState &state, LPARAM lParam)
-    {
-        if (!(state.flags & TitlebarCreateFlagBits::resizable)) return HTCLIENT;
-        if ((state.flags & TitlebarCreateFlagBits::decorated) || IsZoomed(hwnd)) return HTCLIENT;
-        if (detail::get_context().window_ctx->host_state == HostWindowState::fullscreen) return HTCLIENT;
-
-        RECT rect{};
-        if (!GetWindowRect(hwnd, &rect)) return HTCLIENT;
-
-        const UINT dpi = GetDpiForWindow(hwnd);
-        const i32 frame_x = state.frame.x > 0 ? state.frame.x : GetSystemMetricsForDpi(SM_CXFRAME, dpi);
-        const i32 frame_y = state.frame.y > 0 ? state.frame.y : GetSystemMetricsForDpi(SM_CYFRAME, dpi);
-        const i32 padding = state.padding > 0 ? state.padding : GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi);
-        const i32 border_x = frame_x + padding;
-        const i32 border_y = frame_y + padding;
-
-        const POINT point{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
-        const bool left = point.x >= rect.left && point.x < rect.left + border_x;
-        const bool right = point.x < rect.right && point.x >= rect.right - border_x;
-        const bool top = point.y >= rect.top && point.y < rect.top + border_y;
-        const bool bottom = point.y < rect.bottom && point.y >= rect.bottom - border_y;
-
-        if (top && left) return HTTOPLEFT;
-        if (top && right) return HTTOPRIGHT;
-        if (bottom && left) return HTBOTTOMLEFT;
-        if (bottom && right) return HTBOTTOMRIGHT;
-        if (left) return HTLEFT;
-        if (right) return HTRIGHT;
-        if (top) return HTTOP;
-        if (bottom) return HTBOTTOM;
-        return HTCLIENT;
-    }
 
     static i32 hit_test_caption_button_index(const TitlebarState &state, const amal::ivec2 &pos, i32 client_width)
     {
@@ -604,59 +541,38 @@ namespace auik
         return true;
     }
 
-    static LRESULT CALLBACK window_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+    static LRESULT CALLBACK titlebar_window_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     {
         auto *state = reinterpret_cast<Win32TitlebarState *>(GetPropW(hwnd, AUIK_TITLEBAR_STATE));
         const WNDPROC prev_proc = state ? state->prev_proc : nullptr;
 
         switch (msg)
         {
-                // Handling this event allows us to extend client (paintable) area into the title bar region
-                // The information is partially coming from:
-                // https://docs.microsoft.com/en-us/windows/win32/dwm/customframe#extending-the-client-frame
-                // Most important paragraph is:
-                //   To remove the standard window frame, you must handle the WM_NCCALCSIZE message,
-                //   specifically when its wParam value is TRUE and the return value is 0.
-                //   By doing so, your application uses the entire window region as the client area,
-                //   removing the standard frame.
-            case WM_NCCALCSIZE:
-            {
-                if (!wParam || !state) break;
-                const UINT dpi = GetDpiForWindow(hwnd);
-                state->frame.x = GetSystemMetricsForDpi(SM_CXFRAME, dpi);
-                state->frame.y = GetSystemMetricsForDpi(SM_CYFRAME, dpi);
-                state->padding = GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi);
-                HostWindowState host_state = detail::get_context().window_ctx->host_state;
-                if ((state->flags & TitlebarCreateFlagBits::decorated) || host_state == HostWindowState::fullscreen)
-                    break;
-                NCCALCSIZE_PARAMS *params = (NCCALCSIZE_PARAMS *)lParam;
-                const bool maximized = IsZoomed(hwnd);
-                add_frame_to_client_area(params->rgrc, maximized, -1, state);
-                return 0;
-            }
             case WM_NCHITTEST:
             {
                 if (!state) break;
-                const LRESULT resize_hit = hit_test_resize_border(hwnd, *state, lParam);
-                if (resize_hit != HTCLIENT) return resize_hit;
+                const LRESULT prev_hit =
+                    prev_proc ? CallWindowProcW(prev_proc, hwnd, msg, wParam, lParam)
+                              : DefWindowProcW(hwnd, msg, wParam, lParam);
+                if (prev_hit != HTCLIENT) return prev_hit;
 
                 amal::ivec2 pos{};
                 i32 client_width = 0;
-                if (!get_client_hit_pos(hwnd, lParam, pos, client_width)) break;
+                if (!get_client_hit_pos(hwnd, lParam, pos, client_width)) return prev_hit;
                 const i32 button_index = hit_test_caption_button_index(*state, pos, client_width);
                 if (button_index >= 0)
                 {
-                    set_caption_hover(*state, button_index);
+                    if (state->titlebar) state->titlebar->set_caption_hover_button(button_index);
                     return caption_button_hit_code(button_index);
                 }
+
                 const LRESULT drag_hit = hit_test_titlebar_drag_area(*state, pos, client_width);
-                set_caption_hover(*state, -1);
-                if (drag_hit != HTCLIENT) return drag_hit;
-                break;
+                if (state->titlebar) state->titlebar->set_caption_hover_button(-1);
+                return drag_hit != HTCLIENT ? drag_hit : prev_hit;
             }
             case WM_NCMOUSEMOVE:
             {
-                if (!state) break;
+                if (!state || !state->titlebar) break;
                 TRACKMOUSEEVENT tme{};
                 tme.cbSize = sizeof(tme);
                 tme.dwFlags = TME_LEAVE | TME_NONCLIENT;
@@ -665,23 +581,24 @@ namespace auik
                 amal::ivec2 pos{};
                 i32 client_width = 0;
                 if (!get_client_hit_pos(hwnd, lParam, pos, client_width)) break;
-                set_caption_hover(*state, hit_test_caption_button_index(*state, pos, client_width));
+                state->titlebar->set_caption_hover_button(hit_test_caption_button_index(*state, pos, client_width));
                 return 0;
             }
             case WM_NCMOUSELEAVE:
             {
-                if (!state) break;
-                set_caption_hover(*state, -1);
-                if (state->active_button < 0) set_caption_active(*state, -1);
+                if (!state || !state->titlebar) break;
+                state->titlebar->set_caption_hover_button(-1);
+                if (state->active_button < 0) state->titlebar->set_caption_active_button(-1);
                 return 0;
             }
             case WM_MOUSEMOVE:
             {
-                if (!state || state->active_button < 0) break;
+                if (!state || !state->titlebar || state->active_button < 0) break;
                 RECT rect{};
                 if (!GetClientRect(hwnd, &rect)) break;
                 const amal::ivec2 pos{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
-                set_caption_hover(*state, hit_test_caption_button_index(*state, pos, rect.right - rect.left));
+                state->titlebar->set_caption_hover_button(
+                    hit_test_caption_button_index(*state, pos, rect.right - rect.left));
                 return 0;
             }
             case WM_NCLBUTTONDOWN:
@@ -710,8 +627,16 @@ namespace auik
                     }
                 }();
                 if (button_index < 0) break;
-                set_caption_hover(*state, button_index);
-                set_caption_active(*state, button_index);
+                if (state->titlebar)
+                {
+                    state->titlebar->set_caption_hover_button(button_index);
+                    state->titlebar->set_caption_active_button(button_index);
+                }
+                else
+                {
+                    state->hover_button = button_index;
+                    state->active_button = button_index;
+                }
                 SetCapture(hwnd);
                 return 0;
             }
@@ -719,7 +644,8 @@ namespace auik
             case WM_NCLBUTTONUP:
             {
                 const i32 active_button = state ? state->active_button : -1;
-                if (state) set_caption_active(*state, -1);
+                if (state && state->titlebar) state->titlebar->set_caption_active_button(-1);
+                else if (state) state->active_button = -1;
                 if (GetCapture() == hwnd) ReleaseCapture();
                 if (!state || active_button < 0) break;
 
@@ -737,7 +663,8 @@ namespace auik
                     client_width = rect.right - rect.left;
                 }
                 const i32 release_button = hit_test_caption_button_index(*state, pos, client_width);
-                set_caption_hover(*state, release_button);
+                if (state->titlebar) state->titlebar->set_caption_hover_button(release_button);
+                else state->hover_button = release_button;
                 if (release_button != active_button) return 0;
 
                 switch (active_button)
@@ -746,10 +673,8 @@ namespace auik
                         SendMessageW(hwnd, WM_SYSCOMMAND, SC_MINIMIZE, 0);
                         return 0;
                     case AUIK_WINDOW_CAPTION_BTN_MAX:
-                    {
                         SendMessageW(hwnd, WM_SYSCOMMAND, IsZoomed(hwnd) ? SC_RESTORE : SC_MAXIMIZE, 0);
                         return 0;
-                    }
                     case AUIK_WINDOW_CAPTION_BTN_CLOSE:
                         SendMessageW(hwnd, WM_SYSCOMMAND, SC_CLOSE, 0);
                         return 0;
@@ -817,16 +742,13 @@ namespace auik
         if (!state || state->prev_proc) return true;
         HWND hwnd = state->hwnd;
         if (!hwnd) return false;
-        state->prev_proc =
-            reinterpret_cast<WNDPROC>(SetWindowLongPtrW(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&window_proc)));
+        state->prev_proc = reinterpret_cast<WNDPROC>(
+            SetWindowLongPtrW(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&titlebar_window_proc)));
         if (!state->prev_proc) return false;
 
         SetPropW(hwnd, AUIK_TITLEBAR_STATE, state);
-        SetWindowPos(hwnd, NULL, 0, 0, 0, 0,
-                     SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
         return true;
     }
-
 #endif
 
     bool adjust_window_by_titlebar_settings(Titlebar *titlebar, TitlebarCreateFlags flags, const FontRegistry &fonts)
@@ -844,7 +766,6 @@ namespace auik
         auto *state = acul::alloc<Win32TitlebarState>();
         state->flags = flags;
         state->hwnd = hwnd;
-        state->titlebar = titlebar;
         state->destroy = &destroy_win32_titlebar_state;
         state->frame.x = GetSystemMetricsForDpi(SM_CXFRAME, dpi_value);
         state->frame.y = GetSystemMetricsForDpi(SM_CYFRAME, dpi_value);

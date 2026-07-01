@@ -8,22 +8,13 @@
 
 namespace auik
 {
-    constexpr inline WidgetFlags get_default_image_button_flags()
-    {
-        return get_default_widget_flags() | WidgetFlagBits::hittable;
-    }
-
     class ImageButton final : public Widget
     {
     public:
-        AUIK_EXPORT ImageButton(u32 id, TextureID texture_id, amal::vec2 image_size = {0.0f, 0.0f},
-                                amal::vec2 size = {0.0f, 0.0f}, amal::rect uv_rect = {{0.0f, 0.0f}, {1.0f, 1.0f}},
-                                WidgetFlags widget_flags = get_default_image_button_flags(), Widget *parent = nullptr,
-                                u32 style_tag = AUIK_STYLE_TAG_IMAGE_BUTTON);
-        AUIK_EXPORT ImageButton(u32 id, Image *image, amal::vec2 image_size = {0.0f, 0.0f},
-                                amal::vec2 size = {0.0f, 0.0f},
-                                WidgetFlags widget_flags = get_default_image_button_flags(), Widget *parent = nullptr,
-                                u32 style_tag = AUIK_STYLE_TAG_IMAGE_BUTTON);
+        AUIK_EXPORT ImageButton(u32 id, TextureID texture_id, amal::vec2 image_size, amal::vec2 size,
+                                amal::rect uv_rect, WidgetFlags widget_flags, u32 style_tag);
+        AUIK_EXPORT ImageButton(u32 id, Image *image, amal::vec2 image_size, amal::vec2 size,
+                                WidgetFlags widget_flags, u32 style_tag);
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
         AUIK_EXPORT void update_layout_min_size() override;
@@ -85,14 +76,18 @@ namespace auik
                                           amal::vec2 size = {0.0f, 0.0f},
                                           amal::rect uv_rect = {{0.0f, 0.0f}, {1.0f, 1.0f}})
     {
-        return acul::alloc<ImageButton>(id, texture_id, image_size, size, uv_rect, get_default_image_button_flags(),
-                                        nullptr);
+        constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
+                                             WidgetFlagBits::configurable | WidgetFlagBits::hittable;
+        return acul::alloc<ImageButton>(id, texture_id, image_size, size, uv_rect, widget_flags,
+                                        AUIK_STYLE_TAG_IMAGE_BUTTON);
     }
 
     inline ImageButton *make_image_button(u32 id, Image *image, amal::vec2 image_size = {0.0f, 0.0f},
                                           amal::vec2 size = {0.0f, 0.0f})
     {
-        return acul::alloc<ImageButton>(id, image, image_size, size, get_default_image_button_flags(), nullptr);
+        constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
+                                             WidgetFlagBits::configurable | WidgetFlagBits::hittable;
+        return acul::alloc<ImageButton>(id, image, image_size, size, widget_flags, AUIK_STYLE_TAG_IMAGE_BUTTON);
     }
 
     namespace streams

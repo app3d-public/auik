@@ -5,7 +5,7 @@
 namespace auik
 {
     RubberBand::RubberBand(u32 id, WidgetFlags widget_flags)
-        : Widget(id, widget_flags, EventFlagBits::drag, nullptr, {{0.0f, 0.0f}, {0.0f, 0.0f}}, AUIK_TAG_RUBBER_BAND)
+        : Widget(id, widget_flags, EventFlagBits::drag, {{0.0f, 0.0f}, {0.0f, 0.0f}}, AUIK_TAG_RUBBER_BAND)
     {
     }
 

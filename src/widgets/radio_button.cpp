@@ -6,7 +6,7 @@
 namespace auik
 {
     RadioButton::RadioButton(u32 id, bool value, WidgetFlags widget_flags)
-        : Widget(id, widget_flags, EventFlagBits::click, nullptr, {{0.0f, 0.0f}, {0.0f, 0.0f}}, AUIK_TAG_RADIO_BUTTON),
+        : Widget(id, widget_flags, EventFlagBits::click, {{0.0f, 0.0f}, {0.0f, 0.0f}}, AUIK_TAG_RADIO_BUTTON),
           _value(value),
           _indicator_rect(detail::make_rect_data(AUIK_TAG_RADIO_BUTTON_INDICATOR, AUIK_TAG_RADIO_BUTTON_INDICATOR))
     {
@@ -41,7 +41,8 @@ namespace auik
         const amal::vec4 margin = background_style.margin();
         const amal::vec2 background_size = resolve_background_size(background_style);
 
-        amal::vec2 min_size = size();
+        amal::vec2 min_size = {is_size_concrete(requested_size().x) ? requested_size().x : 0.0f,
+                               is_size_concrete(requested_size().y) ? requested_size().y : 0.0f};
         if (!is_width_fixed()) min_size.x = 0.0f;
 
         if (min_size.x <= 0.0f) min_size.x = background_size.x;
@@ -76,7 +77,8 @@ namespace auik
         const amal::vec2 min_required = {amal::max(required_size().x - margin.x - margin.z, 0.0f),
                                          amal::max(required_size().y - margin.y - margin.w, 0.0f)};
 
-        amal::vec2 widget_size = size();
+        amal::vec2 widget_size = {amal::max(size().x - margin.x - margin.z, 0.0f),
+                                  amal::max(size().y - margin.y - margin.w, 0.0f)};
         widget_size.x = amal::max(widget_size.x, min_required.x);
         widget_size.y = amal::max(widget_size.y, min_required.y);
 

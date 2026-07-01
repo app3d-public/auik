@@ -22,15 +22,6 @@
 namespace auik
 {
     class ModalQueue;
-
-    constexpr inline WidgetFlags get_default_modal_queue_flags()
-    {
-        return WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::hittable;
-    }
-
-    constexpr inline WindowFlags get_default_modal_window_flags() { return WindowFlagBits::movable; }
-    constexpr inline WidgetFlags get_default_modal_window_widget_flags() { return WidgetFlagBits::visible; }
-
     using ModalButton = acul::pair<acul::string, acul::unique_function<void()>>;
 
     struct ModalMessage
@@ -53,10 +44,8 @@ namespace auik
     class ModalWindow : public Window
     {
     public:
-        AUIK_EXPORT ModalWindow(u32 id, acul::string title = "", const amal::rect &bounds = {},
-                                WindowFlags window_flags = get_default_modal_window_flags(),
-                                WidgetFlags widget_flags = get_default_modal_window_widget_flags(),
-                                Widget *parent = nullptr);
+        AUIK_EXPORT ModalWindow(u32 id, acul::string title, const amal::rect &bounds, WindowFlags window_flags,
+                                WidgetFlags widget_flags);
 
         ModalQueue *queue() const { return _queue; }
         void set_on_close(acul::unique_function<void()> fn) { _on_close = std::move(fn); }
@@ -76,8 +65,7 @@ namespace auik
     class ModalQueue final : public Widget
     {
     public:
-        AUIK_EXPORT explicit ModalQueue(u32 id, WidgetFlags widget_flags = get_default_modal_queue_flags(),
-                                        Widget *parent = nullptr);
+        AUIK_EXPORT explicit ModalQueue(u32 id, WidgetFlags widget_flags);
         AUIK_EXPORT ~ModalQueue() override;
 
         AUIK_EXPORT void set_icon(Image *image);
@@ -147,11 +135,13 @@ namespace auik
     };
 
     inline ModalWindow *make_modal_window(u32 id, const acul::string &title = "", const amal::rect &bounds = {})
-    {
-        return acul::alloc<ModalWindow>(id, title, bounds);
-    }
+    { return acul::alloc<ModalWindow>(id, title, bounds, WindowFlagBits::movable, WidgetFlagBits::visible); }
 
-    inline ModalQueue *make_modal_queue(u32 id) { return acul::alloc<ModalQueue>(id); }
+    inline ModalQueue *make_modal_queue(u32 id)
+    {
+        return acul::alloc<ModalQueue>(id,
+                                       WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::hittable);
+    }
 
     namespace streams
     {

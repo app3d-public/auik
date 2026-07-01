@@ -16,47 +16,28 @@ namespace auik::detail
         u32 item_tag_id = AUIK_SELECTABLE_STYLE_NONE;
     };
 
-    constexpr inline SelectableStyleOptions
-    make_selectable_highlight_options(u32 tag_id = AUIK_STYLE_TAG_COMBO_BOX_ITEM_SELECTED)
-    {
-        return {tag_id, AUIK_SELECTABLE_STYLE_NONE};
-    }
+    constexpr inline SelectableStyleOptions make_selectable_highlight_options(u32 tag_id = AUIK_SELECTABLE_STYLE_NONE)
+    { return {tag_id, AUIK_SELECTABLE_STYLE_NONE}; }
 
     constexpr inline SelectableStyleOptions make_selectable_icon_options(u32 icon_id = AUIK_ICON_CHECKMARK)
-    {
-        return {AUIK_SELECTABLE_STYLE_NONE, icon_id};
-    }
+    { return {AUIK_SELECTABLE_STYLE_NONE, icon_id}; }
 
     constexpr inline SelectableStyleOptions
     make_selectable_multi_icon_options(u32 icon_id = AUIK_ICON_CHECKMARK,
                                        u32 item_tag_id = AUIK_STYLE_TAG_COMBO_BOX_ITEM_MULTI)
-    {
-        return {AUIK_SELECTABLE_STYLE_NONE, icon_id, item_tag_id};
-    }
+    { return {AUIK_SELECTABLE_STYLE_NONE, icon_id, item_tag_id}; }
 
     constexpr inline WidgetFlags get_selectable_item_flags()
-    {
-        return WidgetFlagBits::visible | WidgetFlagBits::hittable;
-    }
+    { return WidgetFlagBits::visible | WidgetFlagBits::hittable; }
 
     class Selectable : public Text
     {
     public:
-        Selectable(u32 id, u32 tag_id, u32 element_id, StringView text, amal::vec2 size, Widget *parent,
-                   u32 style_tag_id, WidgetFlags flags,
-                   u32 selected_style_tag_id = AUIK_STYLE_TAG_COMBO_BOX_ITEM_SELECTED,
-                   StyleState selected_style_state = StyleState::normal)
-            : Text(AUIK_TAG_TEXT, text, size, flags & ~WidgetFlagBits::attachable, style_tag_id),
-              _selected_style({Theme::STYLE_ID_INVALID, selected_style_tag_id}),
-              _selected_style_options_storage(make_selectable_highlight_options(selected_style_tag_id)),
-              _selected_style_options(&_selected_style_options_storage),
-              _base_style_tag_id(style_tag_id),
-              _selected_style_state(selected_style_state)
+        Selectable(ElementID id, StringView text, bool selected, amal::vec2 size, Widget *parent, WidgetFlags flags)
+            : Text(id.widget_id, text, size, flags), _selected(selected)
         {
             set_parent(parent);
-            _rect.id.tag_id = tag_id;
-            _rect.id.element_id = element_id;
-            set_vertical_align(TextVerticalAlign::center);
+            _rect.id = id;
         }
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
@@ -65,7 +46,6 @@ namespace auik::detail
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void reset_draw_records() override;
-        AUIK_EXPORT amal::vec4 layout_margin() const override;
         u32 get_depth_requirement() const override { return 3u; }
         AUIK_EXPORT void update_depth(const amal::vec2 &depth_range) override;
         AUIK_EXPORT void draw(DrawCtx &ctx) override;
@@ -87,7 +67,6 @@ namespace auik::detail
         void set_style_tag(u32 tag_id)
         {
             _base_style_tag_id = tag_id;
-            _rect.id.tag_id = tag_id;
             _style = {Theme::STYLE_ID_INVALID, active_item_style_tag()};
         }
         void set_selected_style_tag(u32 tag_id)
@@ -112,7 +91,6 @@ namespace auik::detail
         SelectableStyleOptions _selected_style_options_storage{};
         const SelectableStyleOptions *_selected_style_options = nullptr;
         u32 _base_style_tag_id = AUIK_SELECTABLE_STYLE_NONE;
-        StyleState _selected_style_state = StyleState::normal;
         TextureID _selected_icon_texture{};
         amal::rect _selected_icon_uv_rect{{0.0f, 0.0f}, {1.0f, 1.0f}};
         amal::vec2 _selected_icon_size{0.0f, 0.0f};
@@ -124,9 +102,7 @@ namespace auik::detail
         bool _selected = false;
 
         StyleID effective_layout_style_id() const
-        {
-            return _layout_style_id != Theme::STYLE_ID_INVALID ? _layout_style_id : _style.id;
-        }
+        { return _layout_style_id != Theme::STYLE_ID_INVALID ? _layout_style_id : _style.id; }
 
         u32 active_item_style_tag() const
         {
@@ -136,14 +112,10 @@ namespace auik::detail
         }
 
         bool selected_style_enabled() const
-        {
-            return _selected_style_options && _selected_style_options->tag_id != AUIK_SELECTABLE_STYLE_NONE;
-        }
+        { return _selected_style_options && _selected_style_options->tag_id != AUIK_SELECTABLE_STYLE_NONE; }
 
         bool selected_icon_enabled() const
-        {
-            return _selected_style_options && _selected_style_options->icon_id != AUIK_SELECTABLE_STYLE_NONE;
-        }
+        { return _selected_style_options && _selected_style_options->icon_id != AUIK_SELECTABLE_STYLE_NONE; }
         void ensure_selected_icon_resource();
         amal::vec2 selected_icon_size(const Style &style)
         {

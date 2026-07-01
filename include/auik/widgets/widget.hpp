@@ -24,6 +24,7 @@
 #define AUIK_SIZE_X_FIT             AUIK_SIZE_X_MIN_FIT_REQUIRE
 #define AUIK_SIZE_Y_FIT             AUIK_SIZE_Y_MIN_FIT_REQUIRE
 #define AUIK_SIZE_FIT               AUIK_SIZE_MIN_FIT_REQUIRE
+#define AUIK_SIZE_AUTO              AUIK_SIZE_FIT
 #define AUIK_POS_IGNORE             {AUIK_SIZE_X_FIT, AUIK_SIZE_Y_FIT}
 #define AUIK_UD_CUSTOM_DATA         0xFFFFu
 #define AUIK_UD_ROOT_DATA           0xFFFEu
@@ -91,7 +92,8 @@ namespace auik
             aright = 0x2,
             top = 0x4,
             vcenter = 0x8,
-            bottom = 0x10
+            bottom = 0x10,
+            hcenter = 0x20
         };
         using flag_bitmask = std::true_type;
     };
@@ -108,9 +110,9 @@ namespace auik
     inline ChildLayoutFlags make_layout_flags(ChildLayout layout = ChildLayout::block, HAlign halign = HAlign::left,
                                               VAlign valign = VAlign::none)
     {
-        assert(halign != HAlign::center && "Center child horizontal alignment is not supported");
         ChildLayoutFlags flags = ChildLayoutFlagBits::none;
         if (layout == ChildLayout::inline_) flags |= ChildLayoutFlagBits::linline;
+        if (halign == HAlign::center) flags |= ChildLayoutFlagBits::hcenter;
         if (halign == HAlign::right) flags |= ChildLayoutFlagBits::aright;
         if (valign == VAlign::top) flags |= ChildLayoutFlagBits::top;
         if (valign == VAlign::center) flags |= ChildLayoutFlagBits::vcenter;
@@ -154,8 +156,8 @@ namespace auik
 
     constexpr inline detail::StylePropertyFlags g_style_layout_mask =
         detail::StylePropertiesBits::padding | detail::StylePropertiesBits::text_size |
-        detail::StylePropertiesBits::border_thickness | detail::StylePropertiesBits::border_radius |
-        detail::StylePropertiesBits::font | detail::StylePropertiesBits::inline_spacing;
+        detail::StylePropertiesBits::border_thickness | detail::StylePropertiesBits::font |
+        detail::StylePropertiesBits::inline_spacing;
     constexpr inline detail::StylePropertyFlags g_style_parent_layout_mask = detail::StylePropertiesBits::margin;
 
     constexpr inline WidgetFlags get_default_widget_flags()
@@ -249,17 +251,20 @@ namespace auik
         EventFlags requested_event_flags = EventFlagBits::none;
         EventFlags event_flags = EventFlagBits::none;
 
-        Widget(u32 id, WidgetFlags flags, EventFlags event_flags = EventFlagBits::none, Widget *parent = nullptr,
-               amal::rect bounds = {}, u32 tag_id = 0)
+        Widget(u32 id, WidgetFlags flags, EventFlags event_flags = EventFlagBits::none, amal::rect bounds = {},
+               u32 tag_id = 0)
             : widget_flags(flags),
               requested_event_flags(event_flags),
               event_flags(resolve_event_flags(event_flags)),
               _synced_widget_flags(flags),
               _id(id),
-              _parent(parent),
+              _parent(nullptr),
               _requested_size(bounds.size),
               _viewport(get_main_viewport()),
-              _rect(detail::make_rect_data(id, tag_id, bounds))
+              _rect(detail::make_rect_data(id, tag_id,
+                                           amal::rect{bounds.offset,
+                                                      {is_size_concrete(bounds.size.x) ? bounds.size.x : 0.0f,
+                                                       is_size_concrete(bounds.size.y) ? bounds.size.y : 0.0f}}))
         { assert(_viewport && "main viewport must be set before creating widgets"); }
 
         AUIK_EXPORT virtual ~Widget();
@@ -363,7 +368,6 @@ namespace auik
         { _rect.bounds.size = {is_size_concrete(size.x) ? size.x : 0.0f, is_size_concrete(size.y) ? size.y : 0.0f}; }
         inline const amal::vec2 &required_size() const { return _required_size; }
         inline void set_required_size(const amal::vec2 &size) { _required_size = size; }
-        virtual amal::vec4 layout_margin() const { return {0.0f, 0.0f, 0.0f, 0.0f}; }
         inline amal::vec2 resolve_layout_size_from_required() const
         {
             amal::vec2 out = _rect.bounds.size;
@@ -533,6 +537,7 @@ namespace auik
         {
             auto &ctx = detail::get_context();
             ctx.id_map.emplace(id(), this);
+            if (is_disabled() && !post_effect()) apply_disabled_post_effect();
             if (const auto attach_cb = detail::get_default_widget_attach_cb()) attach_cb(this);
         }
         virtual void on_detach() { detail::get_context().id_map.erase(id()); }

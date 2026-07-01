@@ -4,15 +4,8 @@
 #include <auik/auik.hpp>
 #include <auik/pipelines.hpp>
 
-namespace auik::detail
+namespace auik
 {
-    bool is_utf8_trail(unsigned char ch);
-    int next_utf8_index(const acul::string &text, int idx);
-    int prev_utf8_index(const acul::string &text, int idx);
-    acul::string encode_utf8_codepoint(u32 char_code, TextFlags flags);
-    u32 decode_utf8_codepoint(const acul::string &text, size_t &idx);
-    acul::string filter_text_input(const acul::string &input, TextFlags flags, bool allow_newline);
-
     enum class TextOverflowMode : u8
     {
         clip,
@@ -31,35 +24,91 @@ namespace auik::detail
         // a parent container/window decide whether scrolling is needed.
         natural,
         // Measure the full natural text width, but treat the widget bounds as a viewport. The owner can move the text
-        // with an external x offset and clip it to the viewport; single-line TextBox uses this for horizontal caret scroll.
+        // with an external x offset and clip it to the viewport; single-line Textbox uses this for horizontal caret scroll.
         viewport,
         // Constrain layout to max_width/widget bounds. This is for fixed text, wrapping, and ellipsis/truncation.
         bounds
     };
 
-    using TextHorizontalAlign = auik::HAlign;
-    using TextVerticalAlign = auik::VAlign;
+    enum class TextAnchorY : u8
+    {
+        baseline,
+        middle,
+        ascent,
+        descent
+    };
+
+    struct TextLayoutFlagBits
+    {
+        enum enum_type
+        {
+            none = 0x0,
+            ellipsis = 0x1,
+            wrap_word = 0x2,
+            width_viewport = 0x4,
+            width_bounds = 0x8,
+            trim_trailing_spaces = 0x10
+        };
+
+        using flag_bitmask = std::true_type;
+    };
+
+    using TextLayoutFlags = acul::flags<TextLayoutFlagBits>;
+
+    constexpr inline TextLayoutFlags default_text_layout_flags()
+    { return TextLayoutFlagBits::ellipsis | TextLayoutFlagBits::width_bounds | TextLayoutFlagBits::trim_trailing_spaces; }
+
+    inline TextLayoutFlags make_text_layout_flags(TextOverflowMode overflow = TextOverflowMode::ellipsis,
+                                                  TextWrapMode wrap = TextWrapMode::none,
+                                                  TextLayoutWidthMode width_mode = TextLayoutWidthMode::bounds,
+                                                  bool trim_trailing_spaces = true)
+    {
+        TextLayoutFlags flags = TextLayoutFlagBits::none;
+        if (overflow == TextOverflowMode::ellipsis) flags |= TextLayoutFlagBits::ellipsis;
+        if (wrap == TextWrapMode::word) flags |= TextLayoutFlagBits::wrap_word;
+        if (width_mode == TextLayoutWidthMode::viewport) flags |= TextLayoutFlagBits::width_viewport;
+        else if (width_mode == TextLayoutWidthMode::bounds) flags |= TextLayoutFlagBits::width_bounds;
+        if (trim_trailing_spaces) flags |= TextLayoutFlagBits::trim_trailing_spaces;
+        return flags;
+    }
+
+    constexpr inline TextOverflowMode text_overflow_mode(TextLayoutFlags flags)
+    { return flags & TextLayoutFlagBits::ellipsis ? TextOverflowMode::ellipsis : TextOverflowMode::clip; }
+
+    constexpr inline TextWrapMode text_wrap_mode(TextLayoutFlags flags)
+    { return flags & TextLayoutFlagBits::wrap_word ? TextWrapMode::word : TextWrapMode::none; }
+
+    constexpr inline TextLayoutWidthMode text_width_mode(TextLayoutFlags flags)
+    {
+        if (flags & TextLayoutFlagBits::width_bounds) return TextLayoutWidthMode::bounds;
+        if (flags & TextLayoutFlagBits::width_viewport) return TextLayoutWidthMode::viewport;
+        return TextLayoutWidthMode::natural;
+    }
+} // namespace auik
+
+namespace auik::detail
+{
+    bool is_utf8_trail(unsigned char ch);
+    int next_utf8_index(const acul::string &text, int idx);
+    int prev_utf8_index(const acul::string &text, int idx);
+    acul::string encode_utf8_codepoint(u32 char_code, TextFlags flags);
+    u32 decode_utf8_codepoint(const acul::string &text, size_t &idx);
+    acul::string filter_text_input(const acul::string &input, TextFlags flags, bool allow_newline);
 
     struct TextLayoutConfig
     {
-        u32 size_px = 0;
         f32 max_width = 0.0f;
         u32 max_lines = 0;
-        TextOverflowMode overflow = TextOverflowMode::ellipsis;
-        TextWrapMode wrap = TextWrapMode::none;
-        TextLayoutWidthMode width_mode = TextLayoutWidthMode::bounds;
-        bool trim_trailing_spaces = true;
+        TextLayoutFlags flags = default_text_layout_flags();
     };
 
     struct TextRenderConfig
     {
-        amal::rect bounds{};
-        u32 tint_color = detail::pack_rgba8(255, 255, 255, 255);
+        amal::vec2 origin{0.0f, 0.0f};
+        amal::vec2 size{0.0f, 0.0f};
         f32 z_order = 0.0f;
         u16 clip_id = 0xFFFFu;
-        TextHorizontalAlign horizontal_align = TextHorizontalAlign::left;
-        TextVerticalAlign vertical_align = TextVerticalAlign::top;
-        bool fallback_question_mark = true;
+        TextAnchorY anchor_y = TextAnchorY::baseline;
     };
 
     struct ShapedGlyph
@@ -117,17 +166,19 @@ namespace auik::detail
         static f32 line_height(Font &font, u32 size_px);
     };
 
-    bool layout_single_line(Font &font, const acul::string &utf8_text, const TextLayoutConfig &config,
+    bool layout_single_line(Font &font, u32 size_px, const acul::string &utf8_text, const TextLayoutConfig &config,
                             TextLayoutResult &out);
-    bool layout_multiline(Font &font, const acul::string &utf8_text, const TextLayoutConfig &config,
+    bool layout_multiline(Font &font, u32 size_px, const acul::string &utf8_text, const TextLayoutConfig &config,
                           TextLayoutResult &out);
     bool build_text_instances_from_layout(Font &font, u32 size_px, const TextLayoutResult &layout,
-                                          const TextRenderConfig &render_config,
+                                          const TextRenderConfig &render_config, u32 tint_color,
                                           acul::vector<TexturesInstanceData> &out);
-    bool build_single_line_instances(Font &font, const acul::string &utf8_text, const TextLayoutConfig &layout_config,
-                                     const TextRenderConfig &render_config, acul::vector<TexturesInstanceData> &out,
+    bool build_single_line_instances(Font &font, u32 size_px, const acul::string &utf8_text,
+                                     const TextLayoutConfig &layout_config, const TextRenderConfig &render_config,
+                                     u32 tint_color, acul::vector<TexturesInstanceData> &out,
                                      TextLayoutResult *layout_result = nullptr);
-    bool build_multiline_instances(Font &font, const acul::string &utf8_text, const TextLayoutConfig &layout_config,
-                                   const TextRenderConfig &render_config, acul::vector<TexturesInstanceData> &out,
+    bool build_multiline_instances(Font &font, u32 size_px, const acul::string &utf8_text,
+                                   const TextLayoutConfig &layout_config, const TextRenderConfig &render_config,
+                                   u32 tint_color, acul::vector<TexturesInstanceData> &out,
                                    TextLayoutResult *layout_result = nullptr);
 } // namespace auik::detail

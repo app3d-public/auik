@@ -11,17 +11,11 @@
 
 namespace auik
 {
-    constexpr inline WidgetFlags get_default_switch_button_flags()
-    {
-        return get_default_widget_flags() | WidgetFlagBits::hittable;
-    }
-
     class SwitchButton final : public Widget
     {
     public:
-        AUIK_EXPORT SwitchButton(u32 id, bool value, WidgetFlags widget_flags = get_default_switch_button_flags());
-        AUIK_EXPORT SwitchButton(u32 id, ModelBinding *binding,
-                                 WidgetFlags widget_flags = get_default_switch_button_flags());
+        AUIK_EXPORT SwitchButton(u32 id, bool value, WidgetFlags widget_flags);
+        AUIK_EXPORT SwitchButton(u32 id, ModelBinding *binding, WidgetFlags widget_flags);
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
         AUIK_EXPORT void update_layout_min_size() override;
@@ -53,7 +47,8 @@ namespace auik
 
         amal::vec2 resolve_grab_size(const Style &grab_style) const;
         amal::vec2 resolve_track_size(const Style &track_style, const Style &grab_style) const;
-        u32 track_tag() const;
+        u32 track_rect_tag() const;
+        u32 track_style_tag() const;
         void sync_track_tag();
         void rebuild_grab_layout();
         bool has_draw_record() const;
@@ -61,7 +56,9 @@ namespace auik
 
     inline SwitchButton *make_switch_button(u32 id, bool value)
     {
-        return acul::alloc<SwitchButton>(id, value);
+        constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
+                                             WidgetFlagBits::configurable | WidgetFlagBits::hittable;
+        return acul::alloc<SwitchButton>(id, value, widget_flags);
     }
 
     namespace streams

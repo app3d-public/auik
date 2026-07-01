@@ -15,6 +15,11 @@ namespace auik::detail
         return {{left, top}, {amal::max(right - left, 0.0f), amal::max(bottom - top, 0.0f)}};
     }
 
+    inline amal::rect snap_rect_offset_to_pixel_grid(const amal::rect &rect)
+    {
+        return {{amal::round(rect.offset.x), amal::round(rect.offset.y)}, rect.size};
+    }
+
     inline amal::vec4 snap_rect_to_pixel_grid(const amal::vec4 &rect)
     {
         const f32 left = amal::floor(rect.x);

@@ -11,21 +11,17 @@
 #include <utility>
 #include "../core/session_stream_utils.hpp"
 
-
 namespace auik
 {
-    static u32 make_window_rubber_band_id(u32 window_id) { return window_id ^ AUIK_TAG_RUBBER_BAND; }
-    static u32 make_window_content_id(u32 window_id) { return window_id ^ AUIK_TAG_WINDOW_CONTENT; }
-
-    static constexpr detail::StylePropertyFlags AUIK_LAYOUT_STYLE_MASK =
+    static constexpr detail::StylePropertyFlags g_layout_style_mask =
         detail::StylePropertiesBits::padding | detail::StylePropertiesBits::margin |
         detail::StylePropertiesBits::text_size | detail::StylePropertiesBits::border_thickness |
         detail::StylePropertiesBits::border_radius | detail::StylePropertiesBits::inline_spacing;
 
     static inline bool has_layout_style_delta(const Style &normal, const Style &active)
     {
-        const auto normal_mask = normal.mask() & AUIK_LAYOUT_STYLE_MASK;
-        const auto active_mask = active.mask() & AUIK_LAYOUT_STYLE_MASK;
+        const auto normal_mask = normal.mask() & g_layout_style_mask;
+        const auto active_mask = active.mask() & g_layout_style_mask;
         return normal_mask != active_mask;
     }
 
@@ -80,27 +76,19 @@ namespace auik
     }
 
     static inline bool owns_window_menu_tree(const Window &window)
-    {
-        return window.get_menu() && !is_docked_window(window);
-    }
+    { return window.get_menu() && !is_docked_window(window); }
     static inline MenuBar *window_menu_bar(const Window &window)
     {
         auto *menu = window.get_menu();
         return menu && menu->is_menu_bar() ? menu->menu_bar() : nullptr;
     }
     static inline bool owns_classic_menu_bar_tree(const Window &window)
-    {
-        return owns_window_menu_tree(window) && window_menu_bar(window);
-    }
+    { return owns_window_menu_tree(window) && window_menu_bar(window); }
     static inline bool owns_popup_menu_tree(const Window &window)
-    {
-        return !is_docked_window(window) && window.header_popup_menu();
-    }
+    { return !is_docked_window(window) && window.header_popup_menu(); }
 
     static inline bool should_use_docked_window_style(const Window &window, u32 base_style_tag)
-    {
-        return is_docked_window(window) && base_style_tag == AUIK_STYLE_TAG_WINDOW;
-    }
+    { return is_docked_window(window) && base_style_tag == AUIK_STYLE_TAG_WINDOW; }
 
     static inline void get_window_resize_direction(const detail::RectData &rect, const amal::vec2 &mouse_pos,
                                                    int &resize_x, int &resize_y)
@@ -278,18 +266,18 @@ namespace auik
         explicit WindowHeader(Widget *parent, StringView text, bool hittable)
             : Widget(AUIK_TAG_WINDOW_HEADER,
                      WidgetFlagBits::visible | (hittable ? WidgetFlagBits::hittable : WidgetFlagBits::none),
-                     EventFlagBits::none, parent, {}, AUIK_TAG_WINDOW_HEADER),
+                     EventFlagBits::none, {}, AUIK_TAG_WINDOW_HEADER),
               _style({Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_WINDOW_HEADER}),
               _title_text(text.str ? text.str : ""),
               _title(acul::alloc<Text>(AUIK_TAG_WINDOW_HEADER, _title_text, amal::vec2{0.0f, 0.0f},
                                        WidgetFlagBits::visible))
         {
             assert(parent);
+            set_parent(parent);
+            _title->set_style_tag(AUIK_STYLE_TAG_NO_PAD);
             _title->set_parent(this);
             _rect.id.widget_id = parent->id();
             _rect.clip_id = parent->clip_id();
-            _title->set_horizontal_align(detail::TextHorizontalAlign::left);
-            _title->set_vertical_align(detail::TextVerticalAlign::center);
             if (text.is_translated) _title->set_translated_text_literal(text.str);
         }
         ~WindowHeader() override { acul::release(_title); }
@@ -377,8 +365,9 @@ namespace auik
                 title_size.x = amal::max(title_size.x - menu_size.x - spacing, 0.0f);
             }
             _title->update_layout_min_size();
-            _title->set_position(content_pos);
-            _title->set_layout_size(title_size);
+            const f32 title_h = _title->required_size().y;
+            _title->set_position({content_pos.x, content_pos.y + amal::floor((content_size.y - title_h) * 0.5f)});
+            _title->set_layout_size({title_size.x, title_h});
             _title->update_layout(true);
             _title->set_clip_id(clip_id());
         }
@@ -487,12 +476,11 @@ namespace auik
     }
 
     Window::Window(u32 id, StringView title, const amal::rect &bounds, WindowFlags in_window_flags,
-                   WidgetFlags in_widget_flags, Widget *parent)
-        : Widget(id, in_widget_flags, EventFlagBits::click | EventFlagBits::drag | EventFlagBits::focus, parent, bounds,
+                   WidgetFlags in_widget_flags)
+        : Widget(id, in_widget_flags, EventFlagBits::click | EventFlagBits::drag | EventFlagBits::focus, bounds,
                  AUIK_TAG_WINDOW),
-          _content_block(acul::alloc<DrawBlock>(make_window_content_id(id),
-                                                get_default_block_flags() | WidgetFlagBits::hittable,
-                                                AUIK_TAG_WINDOW_CONTENT, 0u)),
+          _content_block(
+              acul::alloc<DrawBlock>(id, WidgetFlagBits::visible | WidgetFlagBits::hittable, AUIK_TAG_WINDOW_CONTENT)),
           children(_content_block->children),
           window_flags(in_window_flags),
           _title(title.str ? title.str : "")
@@ -514,7 +502,7 @@ namespace auik
             _header = acul::alloc<WindowHeader>(this, title, window_flags & WindowFlagBits::movable);
         if (window_flags & WindowFlagBits::rubber_band)
         {
-            _rubber_band = acul::alloc<RubberBand>(make_window_rubber_band_id(id), WidgetFlagBits::none);
+            _rubber_band = acul::alloc<RubberBand>(id, WidgetFlagBits::none);
             _rubber_band->set_parent(this);
         }
     }
@@ -534,9 +522,7 @@ namespace auik
     }
 
     const Text *Window::title_text() const
-    {
-        return _header ? static_cast<const WindowHeader *>(_header)->title_text() : nullptr;
-    }
+    { return _header ? static_cast<const WindowHeader *>(_header)->title_text() : nullptr; }
 
     Window::~Window()
     {
@@ -634,7 +620,8 @@ namespace auik
         if (is_popup_menu()) return static_cast<PopupMenu *>(_menu.get_widget());
         if (!_default_header_menu)
         {
-            _default_header_menu = acul::alloc<PopupMenu>(id() ^ 0x5F4C4D25u, acul::vector<StringView>{});
+            _default_header_menu = acul::alloc<PopupMenu>(id() + AUIK_TAG_POPUP_MENU, acul::vector<StringView>{},
+                                                          detail::get_tabbar_widget_flags(), false);
         }
         _default_header_menu->set_parent(this);
         _default_header_menu->set_focus_parent(this);
@@ -700,9 +687,8 @@ namespace auik
         Widget::on_attach();
         if (_content_block)
         {
-            auto &map = detail::get_context().id_map;
-            map.emplace(_content_block->id(), _content_block);
-            _content_block->on_attach();
+            for (auto *child : _content_block->children)
+                if (child && (child->widget_flags & WidgetFlagBits::attachable)) child->on_attach();
         }
         if (auto *menu = window_menu_widget(*this); menu && (menu->widget_flags & WidgetFlagBits::attachable))
             menu->on_attach();
@@ -719,7 +705,6 @@ namespace auik
         if (!parent()) detail::teardown_root_window(this);
         remove_header_menu_suffix();
         sync_header_popup_menu();
-        auto &map = detail::get_context().id_map;
         if (auto *menu = window_menu_widget(*this); menu && (menu->widget_flags & WidgetFlagBits::attachable))
             menu->on_detach();
         if (_default_header_menu && owns_popup_menu_tree(*this) &&
@@ -727,8 +712,8 @@ namespace auik
             _default_header_menu->on_detach();
         if (_content_block)
         {
-            _content_block->on_detach();
-            map.erase(_content_block->id());
+            for (auto *child : _content_block->children)
+                if (child && (child->widget_flags & WidgetFlagBits::attachable)) child->on_detach();
         }
         Widget::on_detach();
     }
@@ -1059,7 +1044,8 @@ namespace auik
             fill_window_resize_hit_rect(id(), bounds(), _resize_hit_depth, clip_id(), _resize_hit_rect);
 
             auto *classic_menu = window_menu_bar(*this);
-            const bool layout_menu_bar = classic_menu && owns_classic_menu_bar_tree(*this) && classic_menu->is_visible();
+            const bool layout_menu_bar =
+                classic_menu && owns_classic_menu_bar_tree(*this) && classic_menu->is_visible();
             const f32 menu_height = layout_menu_bar ? classic_menu->required_size().y : 0.0f;
             const amal::vec2 children_min_size =
                 _content_block ? _content_block->required_size() : amal::vec2{0.0f, 0.0f};
@@ -1228,8 +1214,9 @@ namespace auik
         auto &ctx = detail::get_context();
         ctx.dirty_flags |= DirtyFlagBits::hit_rect_update;
 
-        const amal::vec4 old_clip_rect =
-            clip_id() != 0xFFFFu ? get_clip_rect(clip_id()) : amal::vec4{position().x, position().y, size().x, size().y};
+        const amal::vec4 old_clip_rect = clip_id() != 0xFFFFu
+                                             ? get_clip_rect(clip_id())
+                                             : amal::vec4{position().x, position().y, size().x, size().y};
         const amal::vec4 parent_bounds = get_window_clip_bounds(this);
         const amal::vec4 self_clip_rect =
             detail::intersect_rects({position().x, position().y, size().x, size().y}, parent_bounds);
@@ -1409,6 +1396,8 @@ namespace auik
             }
 
             if (new_pos == old_pos && new_size == old_size) return;
+            if (_resize_dir.x != 0) _auto_size.x = false;
+            if (_resize_dir.y != 0) _auto_size.y = false;
             set_position(new_pos);
             set_size(new_size);
             add_render_command<detail::DragEventTraits>(this, [this]() {
@@ -1607,7 +1596,7 @@ namespace auik
 
             auto *widget =
                 acul::alloc<Window>(common.id, StringView{title.text.c_str(), title.translated}, common.bounds,
-                                    WindowFlags(window_flags), WidgetFlags(common.widget_flags), nullptr);
+                                    WindowFlags(window_flags), WidgetFlags(common.widget_flags));
             widget->set_min_size(min_size);
             widget->set_window_style_tag(window_style_tag);
             if (auto *content = static_cast<DrawBlock *>(content_block))

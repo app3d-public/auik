@@ -2,8 +2,8 @@
 
 #include <acul/memory/alloc.hpp>
 #include <acul/string/string.hpp>
-#include <auik/detail/text.hpp>
 #include "../theme.hpp"
+#include "text.hpp"
 #include "widget.hpp"
 
 #define AUIK_TAG_TOOLTIP 0x1E1CB209u
@@ -28,23 +28,17 @@ namespace auik
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void rebuild_clip_rects() override;
         AUIK_EXPORT void draw(DrawCtx &ctx) override;
+        u32 get_depth_requirement() const override { return 2u; }
 
     private:
-        bool rebuild_text_buffers(const amal::vec2 &bounds_size);
         void reset_source_state();
 
         DrawDataID _bg;
         StyleSelector _style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_TOOLTIP};
+        EText _text;
         f32 _anchor_x = 0.0f;
         const acul::string *_text_source = nullptr;
         bool _dismissed_for_current_source = false;
-        detail::TextLayoutConfig _layout_config{};
-        detail::TextRenderConfig _render_config{};
-        detail::TextLayoutResult _layout_result{};
-        acul::vector<TexturesInstanceData> _instances;
-        acul::vector<DrawDataID> _draw_ids;
-        bool _instances_gpu_dirty = true;
-        u16 _applied_clip_id = 0xFFFFu;
     };
 
     inline Tooltip *make_tooltip(u32 id = AUIK_ID_TOOLTIP) { return acul::alloc<Tooltip>(id); }

@@ -520,8 +520,21 @@ namespace auik
             auto it = ctx.id_map.find(leaf_id);
             if (it == ctx.id_map.end()) return;
             Widget *node = it->second;
-            if (!node) return;
-            fn(node);
+            while (node)
+            {
+                fn(node);
+                node = node->focus_parent();
+            }
+        }
+
+        static inline bool is_focus_chain_widget(Context &ctx, const Widget *widget)
+        {
+            if (!widget || ctx.focus_id == 0u) return false;
+            auto it = ctx.id_map.find(ctx.focus_id);
+            if (it == ctx.id_map.end()) return false;
+            for (Widget *node = it->second; node; node = node->focus_parent())
+                if (node == widget) return true;
+            return false;
         }
 
         static inline void resolve_release_state(Widget *widget, u32 hovered_id)
@@ -529,7 +542,8 @@ namespace auik
             assert(widget && "widget cannot be null");
             // Focus visuals are managed in focus transition path (on_focus callbacks).
             // Do not overwrite focused widgets during mouse release.
-            if (detail::get_context().focus_id == widget->id() && has_widget_state_style(*widget, StyleState::focus))
+            auto &ctx = detail::get_context();
+            if (is_focus_chain_widget(ctx, widget) && has_widget_state_style(*widget, StyleState::focus))
                 widget->set_style_state(StyleState::focus);
             else if (widget->id() == hovered_id && has_widget_state_style(*widget, StyleState::hover))
                 widget->set_style_state(StyleState::hover);
@@ -667,7 +681,7 @@ namespace auik
                 const StyleState prev_style_state = it->second->style_state();
                 if (prev_active_id != next_active_id)
                     for_each_active_chain(ctx, prev_active_id, [&](Widget *w) {
-                        w->set_style_state(StyleState::normal);
+                        resolve_release_state(w, ctx.hover_id.widget_id);
                         enqueue_style_refresh<detail::ClickEventTraits>(w);
                     });
                 ctx.active_id = next_active_id;

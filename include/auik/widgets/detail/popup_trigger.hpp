@@ -48,7 +48,8 @@ namespace auik::detail
         AUIK_EXPORT bool has_draw_record() const;
 
     private:
-        void ensure_icon_resources();
+        bool ensure_icon_resources();
+        void update_icon_rect_from_slot();
 
         Widget *_update_target = nullptr;
         u32 _closed_icon = 0u;

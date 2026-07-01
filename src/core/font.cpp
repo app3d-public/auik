@@ -595,34 +595,67 @@ namespace auik
         return true;
     }
 
-    static bool load_font_icon_glyphs(const FontInfo &font_info, const FontIconGlyphLoader *loader)
+    static bool cache_font_icon_glyphs(Font &font, const FontIconGlyphLoader &loader)
+    {
+        if (loader.size == 0u || loader.codepoints.size() != loader.ids.size()) return false;
+
+        if (!font.load_glyphs(loader.size, loader.codepoints)) return false;
+
+        for (u32 i = 0; i < loader.codepoints.size(); ++i)
+        {
+            auto *glyph = font.find_glyph(loader.size, loader.codepoints[i]);
+            if (!glyph) return false;
+
+            const amal::vec2 display_size =
+                loader.display_size.x > 0.0f && loader.display_size.y > 0.0f
+                    ? loader.display_size
+                    : amal::vec2{static_cast<f32>(glyph->size.x), static_cast<f32>(glyph->size.y)};
+            auto *image = make_image(loader.ids[i], glyph->texture_id, display_size, glyph->uv_rect);
+            if (image)
+            {
+                image->set_coverage_mode(true);
+                cache_image(loader.ids[i], image);
+            }
+        }
+        return true;
+    }
+
+    static bool load_font_info_icon_glyphs(const FontInfo &font_info, const FontIconGlyphLoader *loader)
     {
         for (auto *node = loader; node; node = node->next)
         {
-            if (node->size == 0u || node->codepoints.size() != node->ids.size()) return false;
-
             Font font;
             if (!font.load(font_info.path)) return false;
             font.set_load_flags(node->load_flags);
             font.set_render_mode(node->render_mode);
-            if (!font.load_glyphs(node->size, node->codepoints)) return false;
-
-            for (u32 i = 0; i < node->codepoints.size(); ++i)
-            {
-                auto *glyph = font.find_glyph(node->size, node->codepoints[i]);
-                if (!glyph) return false;
-
-                auto *image =
-                    make_image(node->ids[i], glyph->texture_id,
-                               {static_cast<f32>(glyph->size.x), static_cast<f32>(glyph->size.y)}, glyph->uv_rect);
-                if (image)
-                {
-                    image->set_coverage_mode(true);
-                    cache_image(node->ids[i], image);
-                }
-            }
+            if (!cache_font_icon_glyphs(font, *node)) return false;
         }
         return true;
+    }
+
+    bool load_font_icons(Font *font, const FontIconGlyphLoader *loader)
+    {
+        if (!font || !font->is_loaded() || !loader) return false;
+        for (auto *node = loader; node; node = node->next)
+        {
+            const auto old_load_flags = font->load_flags();
+            const auto old_render_mode = font->render_mode();
+            font->set_load_flags(node->load_flags);
+            font->set_render_mode(node->render_mode);
+            const bool loaded = cache_font_icon_glyphs(*font, *node);
+            font->set_load_flags(old_load_flags);
+            font->set_render_mode(old_render_mode);
+            if (!loaded) return false;
+        }
+        return true;
+    }
+
+    bool load_font_icons(const FontRegistry &fonts, const acul::string &family, const FontIconGlyphLoader *loader)
+    {
+        if (!loader) return false;
+        FontInfo *font_info = get_font_info_by_family(fonts, family);
+        if (!font_info) return false;
+        return load_font_info_icon_glyphs(*font_info, loader);
     }
 
     bool load_material_icons(const FontRegistry &fonts, f32 dpi, const FontIconGlyphLoader *next)
@@ -636,7 +669,7 @@ namespace auik
             .ids = {AUIK_ICON_CHEVRON_RIGHT, AUIK_ICON_CHEVRON_DOWN, AUIK_ICON_CHEVRON_UP, AUIK_ICON_CHECKMARK,
                     AUIK_ICON_MENU, AUIK_ICON_CLOSE},
             .next = next};
-        return load_font_icon_glyphs(*font_info, &defaults);
+        return load_font_info_icon_glyphs(*font_info, &defaults);
     }
 
 #ifdef _WIN32
@@ -668,7 +701,7 @@ namespace auik
             .load_flags = FontLoadFlagBits::target_light | FontLoadFlagBits::no_bitmap,
             .render_mode = FontRenderMode::light,
             .next = &controls};
-        return load_font_icon_glyphs(*font_info, &menu);
+        return load_font_info_icon_glyphs(*font_info, &menu);
     }
 #endif
 } // namespace auik
