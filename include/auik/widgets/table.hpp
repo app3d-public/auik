@@ -193,7 +193,7 @@ namespace auik
             AUIK_EXPORT ConstColumnIterator end() const;
         };
 
-        AUIK_EXPORT explicit Table(u32 id, Rows rows, amal::vec2 size, WidgetFlags flags, u32 style_tag_id);
+        AUIK_EXPORT explicit Table(u32 id, Rows rows, amal::vec2 inline_size, WidgetFlags flags, u32 style_tag_id);
         AUIK_EXPORT ~Table() override;
 
         AUIK_EXPORT void clear();
@@ -328,11 +328,11 @@ namespace auik
         ModelBinding *_model_binding = nullptr;
     };
 
-    inline Table *make_table(u32 id, Table::Rows rows = {}, amal::vec2 size = AUIK_SIZE_FIT)
+    inline Table *make_table(u32 id, Table::Rows rows = {}, amal::vec2 inline_size = AUIK_SIZE_INHERIT)
     {
         constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
                                              WidgetFlagBits::configurable | WidgetFlagBits::hittable;
-        return acul::alloc<Table>(id, std::move(rows), size, widget_flags, AUIK_STYLE_TAG_TABLE);
+        return acul::alloc<Table>(id, std::move(rows), inline_size, widget_flags, AUIK_STYLE_TAG_TABLE);
     }
 
     inline Table::Cell make_table_cell(Widget *child = nullptr)

@@ -9,7 +9,7 @@ namespace auik::detail
         u32 id = 0u;
         u32 widget_flags = 0u;
         amal::rect bounds{};
-        amal::vec2 requested_size{};
+        amal::vec2 inline_size = AUIK_SIZE_INHERIT;
     };
 
     struct LocalizedStringData
@@ -36,7 +36,7 @@ namespace auik::detail
             .write(static_cast<u32>(widget.widget_flags))
             .write(widget.bounds().offset)
             .write(widget.bounds().size)
-            .write(widget.requested_size());
+            .write(widget.inline_size());
     }
 
     inline WidgetCommonData read_widget_common_data(acul::bin_stream &stream)
@@ -46,14 +46,14 @@ namespace auik::detail
             .read(out.widget_flags)
             .read(out.bounds.offset)
             .read(out.bounds.size)
-            .read(out.requested_size);
+            .read(out.inline_size);
         return out;
     }
 
     inline void apply_widget_common_data(Widget *widget, const WidgetCommonData &common)
     {
         widget->widget_flags = common.widget_flags;
-        widget->set_size(common.requested_size);
+        widget->set_size(common.inline_size);
         widget->set_position(common.bounds.offset);
         widget->set_layout_size(common.bounds.size);
     }

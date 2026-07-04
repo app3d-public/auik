@@ -606,11 +606,8 @@ namespace auik
             auto *glyph = font.find_glyph(loader.size, loader.codepoints[i]);
             if (!glyph) return false;
 
-            const amal::vec2 display_size =
-                loader.display_size.x > 0.0f && loader.display_size.y > 0.0f
-                    ? loader.display_size
-                    : amal::vec2{static_cast<f32>(glyph->size.x), static_cast<f32>(glyph->size.y)};
-            auto *image = make_image(loader.ids[i], glyph->texture_id, display_size, glyph->uv_rect);
+            const amal::vec2 image_size{static_cast<f32>(glyph->size.x), static_cast<f32>(glyph->size.y)};
+            auto *image = make_image(loader.ids[i], glyph->texture_id, image_size, glyph->uv_rect);
             if (image)
             {
                 image->set_coverage_mode(true);

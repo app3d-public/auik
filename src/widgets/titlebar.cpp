@@ -6,13 +6,13 @@
 #include <auik/widgets/titlebar.hpp>
 #include "../core/session_stream_utils.hpp"
 #ifdef _WIN32
-#include <windowsx.h>
+    #include <windowsx.h>
 #endif
 
 #define AUIK_TITLEBAR_ICON_ID        0x54CC3922
 #define AUIK_TITLEBAR_HEIGHT_DEFAULT 32.0f
 #ifdef _WIN32
-#define AUIK_TITLEBAR_STATE L"AUIK_TITLEBAR_STATE"
+    #define AUIK_TITLEBAR_STATE L"AUIK_TITLEBAR_STATE"
 #endif
 
 namespace auik
@@ -108,7 +108,7 @@ namespace auik
     }
 
     Titlebar::Titlebar(u32 id, WidgetFlags widget_flags)
-        : Widget(id, widget_flags, EventFlagBits::none, {}, AUIK_TAG_TITLEBAR)
+        : Widget(id, widget_flags, EventFlagBits::none, {{0.0f, 0.0f}, AUIK_SIZE_INHERIT}, AUIK_TAG_TITLEBAR)
     {
     }
 
@@ -182,9 +182,9 @@ namespace auik
             {
                 const u32 style_tag = i == AUIK_WINDOW_CAPTION_BTN_CLOSE ? AUIK_STYLE_TAG_WINDOW_CAPTION_CLOSE_BUTTON
                                                                          : AUIK_STYLE_TAG_WINDOW_CAPTION_BUTTON;
-                _caption_buttons[i] = acul::alloc<ImageButton>(
-                    caption_button_widget_id(i), image, amal::vec2{0.0f, 0.0f}, amal::vec2{0.0f, 0.0f},
-                    WidgetFlagBits::visible, style_tag);
+                _caption_buttons[i] =
+                    acul::alloc<ImageButton>(caption_button_widget_id(i), image, amal::vec2{0.0f, 0.0f},
+                                             amal::vec2{0.0f, 0.0f}, WidgetFlagBits::visible, style_tag);
                 _caption_buttons[i]->set_parent(this);
                 _caption_buttons[i]->set_focus_parent(this);
             }
@@ -270,16 +270,62 @@ namespace auik
         }
         const amal::vec4 icon_margin = get_theme()->get_style(_icon_style.id).margin();
 
-        amal::vec2 cursor = position();
-        f32 leading_region_end_x = position().x;
-        u32 visible_child_index = 0u;
+        struct ChildLayoutMeasure
+        {
+            Widget *child = nullptr;
+            amal::vec2 required{};
+            f32 width = 0.0f;
+            bool fill_width = false;
+        };
+
+        acul::vector<ChildLayoutMeasure> child_measures;
+        child_measures.reserve(_children.size());
+        f32 fixed_children_width = 0.0f;
+        f32 fill_children_min_width = 0.0f;
+        u32 fill_child_count = 0u;
         for (auto *child : _children)
         {
             if (!child) continue;
+            child->update_layout_min_size();
+            ChildLayoutMeasure measure{};
+            measure.child = child;
+            measure.required = child->required_size();
+            measure.fill_width = child->fill_width() && child != _icon;
+
+            if (child == _icon) fixed_children_width += icon_margin.x + measure.required.x + icon_margin.z;
+            else if (measure.fill_width)
+            {
+                fill_children_min_width += measure.required.x;
+                ++fill_child_count;
+            }
+            else fixed_children_width += measure.required.x;
+
+            child_measures.push_back(measure);
+        }
+
+        const f32 layout_right = position().x + amal::max(size().x - _caption_buttons_width, 0.0f);
+        const f32 available_children_width = amal::max(layout_right - position().x, 0.0f);
+        const f32 fill_children_width = amal::max(available_children_width - fixed_children_width, 0.0f);
+        const f32 fill_extra_width =
+            fill_child_count > 0u
+                ? amal::max(fill_children_width - fill_children_min_width, 0.0f) / static_cast<f32>(fill_child_count)
+                : 0.0f;
+        for (auto &measure : child_measures)
+        {
+            if (measure.fill_width) measure.width = measure.required.x + fill_extra_width;
+            else measure.width = measure.required.x;
+        }
+
+        amal::vec2 cursor = position();
+        f32 leading_region_end_x = position().x;
+        u32 visible_child_index = 0u;
+        for (const auto &measure : child_measures)
+        {
+            auto *child = measure.child;
+            if (!child) continue;
             if (child == _icon) cursor.x += icon_margin.x;
 
-            child->update_layout_min_size();
-            const amal::vec2 measured_required = child->required_size();
+            const amal::vec2 measured_required = measure.required;
 
             if (child == _icon)
             {
@@ -294,13 +340,17 @@ namespace auik
             }
             else
             {
+                const bool fill_child_height = child->fill_height();
+                const f32 child_h = fill_child_height ? size().y : measured_required.y;
                 const f32 outer_y =
-                    position().y + amal::round(amal::max((size().y - measured_required.y) * 0.5f, 0.0f));
+                    fill_child_height
+                        ? position().y
+                        : position().y + amal::round(amal::max((size().y - measured_required.y) * 0.5f, 0.0f));
                 const amal::vec2 outer_pos = {cursor.x, outer_y};
                 child->set_position(outer_pos);
-                child->set_layout_size(measured_required);
+                child->set_layout_size({measure.width, child_h});
                 child->update_layout(true);
-                cursor.x = outer_pos.x + measured_required.x;
+                cursor.x = outer_pos.x + amal::max(measure.width, child->size().x);
             }
             if (_leading_count > 0u && visible_child_index < _leading_count) leading_region_end_x = cursor.x;
             ++visible_child_index;
@@ -551,9 +601,8 @@ namespace auik
             case WM_NCHITTEST:
             {
                 if (!state) break;
-                const LRESULT prev_hit =
-                    prev_proc ? CallWindowProcW(prev_proc, hwnd, msg, wParam, lParam)
-                              : DefWindowProcW(hwnd, msg, wParam, lParam);
+                const LRESULT prev_hit = prev_proc ? CallWindowProcW(prev_proc, hwnd, msg, wParam, lParam)
+                                                   : DefWindowProcW(hwnd, msg, wParam, lParam);
                 if (prev_hit != HTCLIENT) return prev_hit;
 
                 amal::ivec2 pos{};

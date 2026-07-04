@@ -128,7 +128,7 @@ namespace auik
     {
         amal::vec2 position;
         f32 z_order = 0.0f;
-        f32 _unused = 0.0f;
+        f32 batch_id = 0.0f;
         u32 color = detail::pack_rgba8(255, 255, 255, 255);
         u32 clip_id = 0;
     };
@@ -147,6 +147,7 @@ namespace auik
         const VertexStreamIndex *indices = nullptr;
         u32 vertex_count = 0;
         u32 index_count = 0;
+        amal::vec2 offset{0.0f, 0.0f};
     };
 
     AUIK_EXPORT void create_vertex_stream(DrawStream &stream);
@@ -168,6 +169,28 @@ namespace auik
         update_data_in_stream(stream, draw_data_id, const_cast<VertexStreamBatchData *>(&data));
     }
 
+    inline void update_vertex_stream_batch_offset(DrawStream *stream, DrawDataID draw_data_id,
+                                                  const amal::vec2 &offset)
+    {
+        VertexStreamBatchData data{};
+        data.offset = offset;
+        update_vertex_stream_batch(stream, draw_data_id, data);
+    }
+
+    inline DrawDataID emit_vertex_stream_batch(DrawCtx &ctx, DrawStream *stream, DrawDataID &draw_id,
+                                               const VertexStreamBatchData &batch, const detail::RectData &rect,
+                                               bool emit_hit_rect, bool offset_only)
+    {
+        if (offset_only && !(ctx.reason & (DrawReasonBits::record | DrawReasonBits::invalidate)) &&
+            draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID)
+        {
+            VertexStreamBatchData data{};
+            data.offset = batch.offset;
+            return emit_context_draw(ctx, stream, draw_id, &data, rect, emit_hit_rect);
+        }
+        return emit_context_draw(ctx, stream, draw_id, &batch, rect, emit_hit_rect);
+    }
+
     inline void update_vertex_stream_batch_list(DrawStream *stream, const DrawDataID *draw_data_ids,
                                                 const VertexStreamBatchData *data, u32 count)
     {
@@ -178,7 +201,7 @@ namespace auik
     {
         amal::vec2 position;
         f32 z_order = 0.0f;
-        f32 _unused0 = 0.0f;
+        f32 batch_id = 0.0f;
         amal::vec2 uv;
         u32 clip_id = 0;
         u32 _unused1 = 0u;
@@ -203,6 +226,7 @@ namespace auik
         u32 index_count = 0;
         TextureID texture_id = AUIK_INVALID_TEXTURE_ID;
         u32 flags = 0u;
+        amal::vec2 offset{0.0f, 0.0f};
     };
 
     AUIK_EXPORT void create_textured_vertex_stream(DrawStream &stream);
@@ -222,6 +246,29 @@ namespace auik
                                                     const TexturedVertexStreamBatchData &data)
     {
         update_data_in_stream(stream, draw_data_id, const_cast<TexturedVertexStreamBatchData *>(&data));
+    }
+
+    inline void update_textured_vertex_stream_batch_offset(DrawStream *stream, DrawDataID draw_data_id,
+                                                           const amal::vec2 &offset)
+    {
+        TexturedVertexStreamBatchData data{};
+        data.offset = offset;
+        update_textured_vertex_stream_batch(stream, draw_data_id, data);
+    }
+
+    inline DrawDataID emit_textured_vertex_stream_batch(DrawCtx &ctx, DrawStream *stream, DrawDataID &draw_id,
+                                                        const TexturedVertexStreamBatchData &batch,
+                                                        const detail::RectData &rect, bool emit_hit_rect,
+                                                        bool offset_only)
+    {
+        if (offset_only && !(ctx.reason & (DrawReasonBits::record | DrawReasonBits::invalidate)) &&
+            draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID)
+        {
+            TexturedVertexStreamBatchData data{};
+            data.offset = batch.offset;
+            return emit_context_draw(ctx, stream, draw_id, &data, rect, emit_hit_rect);
+        }
+        return emit_context_draw(ctx, stream, draw_id, &batch, rect, emit_hit_rect);
     }
 
     inline void update_textured_vertex_stream_batch_list(DrawStream *stream, const DrawDataID *draw_data_ids,

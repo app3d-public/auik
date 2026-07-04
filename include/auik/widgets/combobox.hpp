@@ -30,7 +30,7 @@ namespace auik
     class Combobox final : public Widget
     {
     public:
-        AUIK_EXPORT Combobox(u32 id, const acul::vector<StringView> &items, u32 selected_index, amal::vec2 size,
+        AUIK_EXPORT Combobox(u32 id, const acul::vector<StringView> &items, u32 selected_index, amal::vec2 inline_size,
                              WidgetFlags widget_flags);
         AUIK_EXPORT ~Combobox() override;
 
@@ -96,7 +96,8 @@ namespace auik
     {
     public:
         AUIK_EXPORT MultipleCombobox(u32 id, const acul::vector<StringView> &items, StringView placeholder,
-                                     amal::vec2 size, WidgetFlags widget_flags);
+                                     amal::vec2 inline_size,
+                                     WidgetFlags widget_flags);
         AUIK_EXPORT ~MultipleCombobox() override;
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
@@ -158,8 +159,8 @@ namespace auik
     };
 
     inline Combobox *make_combobox(u32 id, const acul::vector<StringView> &items = {}, u32 selected_index = 0u,
-                                   amal::vec2 size = AUIK_SIZE_FIT)
-    { return acul::alloc<Combobox>(id, items, selected_index, size, detail::get_combobox_widget_flags()); }
+                                   amal::vec2 inline_size = AUIK_SIZE_INHERIT)
+    { return acul::alloc<Combobox>(id, items, selected_index, inline_size, detail::get_combobox_widget_flags()); }
 
     inline Model *make_combobox_value_model(ModelDB *db, ModelID model_id, const acul::vector<StringView> &items,
                                             u32 selected_index = 0u)
@@ -188,8 +189,9 @@ namespace auik
     { return make_model_binding(db, model_id); }
 
     inline MultipleCombobox *make_multiple_combobox(u32 id, const acul::vector<StringView> &items = {},
-                                                     StringView placeholder = {}, amal::vec2 size = AUIK_SIZE_FIT)
-    { return acul::alloc<MultipleCombobox>(id, items, placeholder, size, detail::get_combobox_widget_flags()); }
+                                                     StringView placeholder = {},
+                                                     amal::vec2 inline_size = AUIK_SIZE_INHERIT)
+    { return acul::alloc<MultipleCombobox>(id, items, placeholder, inline_size, detail::get_combobox_widget_flags()); }
 
     namespace streams
     {

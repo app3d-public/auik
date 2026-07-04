@@ -32,6 +32,13 @@ namespace auik::detail
             flags |= resolve_style_selector(_selected_style, id(), parent_id, current_state);
         _layout_style_id = _selected && selected_style_enabled() ? _selected_style.id : _style.id;
         const auto &style = get_theme()->get_style(_layout_style_id);
+        apply_style_layout(style);
+        if (const auto *text = style.text_settings())
+        {
+            set_anchor_y(text->anchor_y);
+            set_multiline(text->wrap == TextWrapMode::word);
+            set_overflow_mode(text->overflow);
+        }
         if (prev_layout_style != Theme::STYLE_ID_INVALID && prev_layout_style != _layout_style_id)
             flags |= make_style_update_flags(get_theme()->get_style(prev_layout_style), style);
         return flags;
@@ -159,6 +166,7 @@ namespace auik::detail
         DrawCtx text_ctx = ctx;
         text_ctx.is_hit_allowed = false;
         set_clip_id(bg_clip_id);
+        SelectableStyleScope text_scope(*this);
         Text::draw(text_ctx);
         draw_selected_icon(ctx);
     }

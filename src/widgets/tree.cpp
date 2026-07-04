@@ -99,14 +99,9 @@ namespace auik
         return false;
     }
 
-    Tree::Tree(u32 id, WidgetFlags flags, u32 style_tag_id)
-        : Tree(id, AUIK_SIZE_FIT, flags, style_tag_id)
-    {
-    }
-
-    Tree::Tree(u32 id, amal::vec2 size, WidgetFlags flags, u32 style_tag_id)
+    Tree::Tree(u32 id, amal::vec2 inline_size, WidgetFlags flags, u32 style_tag_id)
         : Widget(id, flags, EventFlagBits::click | EventFlagBits::hover | EventFlagBits::drag,
-                 {{0.0f, 0.0f}, size}, style_tag_id),
+                 {{0.0f, 0.0f}, inline_size}, style_tag_id),
           _style({Theme::STYLE_ID_INVALID, style_tag_id})
     {
         _default_column_settings.valign = VAlign::center;
@@ -385,10 +380,10 @@ namespace auik
         const f32 natural_width = content_w + padding.x + padding.z;
         const f32 natural_height = content_h + padding.y + padding.w;
         const f32 required_width =
-            supports_columns() ? detail::resolve_table_required_axis(requested_size().x, fill_width(), natural_width)
+            supports_columns() ? detail::resolve_table_required_axis(style_size().x, fill_width(), natural_width)
                                : natural_width;
         const f32 required_height =
-            supports_columns() ? detail::resolve_table_required_axis(requested_size().y, fill_height(), natural_height)
+            supports_columns() ? detail::resolve_table_required_axis(style_size().y, fill_height(), natural_height)
                                : natural_height;
 
         set_required_size({required_width + margin.x + margin.z, required_height + margin.y + margin.w});
@@ -611,7 +606,10 @@ namespace auik
         for (auto &visual : _arrow_visuals) visual.rect.bounds.offset += delta;
         for (auto &row : _cells)
             for (auto *cell : row)
-                if (cell) cell->translate(delta);
+                if (cell)
+                {
+                    cell->translate(delta);
+                }
         const amal::vec4 parent_clip = parent() ? parent()->get_content_clip_rect() : get_main_viewport_rect();
         if (parent() && clip_id() == parent()->content_clip_id()) set_clip_id(0xFFFFu);
         ensure_own_clip_rect(detail::intersect_rects(parent_clip, {position().x, position().y, size().x, size().y}));
@@ -1587,7 +1585,7 @@ namespace auik
             size_overrides.resize(override_count);
             if (!size_overrides.empty()) stream.read(size_overrides.data(), size_overrides.size());
 
-            auto *tree = acul::alloc<TableTree>(common.id, common.requested_size, WidgetFlags(common.widget_flags),
+            auto *tree = acul::alloc<TableTree>(common.id, common.inline_size, WidgetFlags(common.widget_flags),
                                                 style_tag);
             tree->set_cell_style_tag(cell_style_tag);
             tree->set_alternating_row_style_tag(alternating_row_style_tag);
@@ -1695,7 +1693,7 @@ namespace auik
                 .read(indent_width)
                 .read(tree_flags);
 
-            auto *tree = acul::alloc<Tree>(common.id, WidgetFlags(common.widget_flags), style_tag);
+            auto *tree = acul::alloc<Tree>(common.id, common.inline_size, WidgetFlags(common.widget_flags), style_tag);
             tree->set_cell_style_tag(cell_style_tag);
             tree->set_alternating_row_style_tag(alternating_row_style_tag);
             tree->set_line_style_tag(line_style_tag);

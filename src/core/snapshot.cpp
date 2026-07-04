@@ -170,6 +170,8 @@ namespace auik
         resolver.streams[AUIK_TAG_SNAPSHOT_TREE] = &streams::snapshot_tree;
         resolver.streams[AUIK_TAG_BLOCK] = &streams::block;
         resolver.streams[AUIK_TAG_DRAW_BLOCK] = &streams::draw_block;
+        resolver.streams[AUIK_TAG_WIDGET_STACK] = &streams::widget_stack;
+        resolver.streams[AUIK_TAG_WIDGET_REF] = &streams::widget_ref;
         resolver.streams[AUIK_TAG_COLLAPSE_HEADER] = &streams::collapse_header;
         resolver.streams[AUIK_TAG_DUMMY] = &streams::dummy;
         resolver.streams[AUIK_TAG_IMAGE] = &streams::image;
@@ -183,7 +185,7 @@ namespace auik
         resolver.streams[AUIK_TAG_CHECKBOX] = &streams::checkbox;
         resolver.streams[AUIK_TAG_RADIO_BUTTON] = &streams::radio_button;
         resolver.streams[AUIK_TAG_SWITCH_BUTTON] = &streams::switch_button;
-        resolver.streams[AUIK_TAG_TAB_BAR] = &streams::tab_bar;
+        resolver.streams[AUIK_TAG_TABBAR] = &streams::tab_bar;
         resolver.streams[AUIK_TAG_TABLE] = &streams::table;
         resolver.streams[AUIK_TAG_TREE] = &streams::tree;
         resolver.streams[AUIK_TAG_TABLE_TREE] = &streams::table_tree;

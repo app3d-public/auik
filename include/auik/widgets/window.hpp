@@ -74,7 +74,6 @@ namespace auik
         AUIK_EXPORT Widget *take_menu_widget();
         AUIK_EXPORT void set_menu_widget(Widget *menu);
         AUIK_EXPORT void override_content_clip_rect(const amal::vec4 &rect);
-        void set_min_size(const amal::vec2 &value) { _min_size = value; }
         const amal::vec2 &min_size() const { return _min_size; }
         void set_auto_size(bool width = true, bool height = true)
         {
@@ -182,7 +181,6 @@ namespace auik
         virtual void on_focus(bool focused) override;
         virtual void on_hover(HoverState state) override;
         virtual void on_click(MouseKey key, KeyPressState state, u32 click_count) override;
-        void add_child_with_flags(Widget *child, ChildLayoutFlags layout);
         u32 effective_window_style_tag() const;
         const Style &resolved_window_style() const;
         PopupMenu *ensure_header_popup_menu();

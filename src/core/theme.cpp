@@ -8,6 +8,13 @@ namespace auik
                                                             StylePropertiesBits::inline_spacing;
     constexpr StylePropertyFlags g_style_all_mask = acul::flag_traits<StylePropertiesBits>::all_flags;
     constexpr StylePropertyFlags g_style_non_inheritable_mask = g_style_all_mask & ~g_style_inheritable_mask;
+
+    struct ResolvedStyleDesc
+    {
+        const Style *style = nullptr;
+        StylePropertyFlags take = StylePropertiesBits::none;
+    };
+
     static inline void apply_desc_masked(Style &out, const Style &d, StylePropertyFlags take)
     {
         if (take & StylePropertiesBits::padding) out.padding(d.padding());
@@ -21,40 +28,53 @@ namespace auik
         if (take & StylePropertiesBits::text_size) out.text_size(d.text_size());
         if (take & StylePropertiesBits::font) out.font(d.font());
         if (take & StylePropertiesBits::inline_spacing) out.inline_spacing(d.inline_spacing());
+        if (take & StylePropertiesBits::width) out.width(d.width());
+        if (take & StylePropertiesBits::height) out.height(d.height());
+        if (take & StylePropertiesBits::min_width) out.min_width(d.min_width());
+        if (take & StylePropertiesBits::min_height) out.min_height(d.min_height());
+        if (take & StylePropertiesBits::extra)
+        {
+            for (const StyleExtra *extra = d.extra(); extra; extra = extra->next)
+            {
+                if (extra->id == AUIK_STYLE_EXTRA_ALIGN)
+                    out.align_extra(*static_cast<const StyleExtraAlign *>(extra->data));
+                else if (extra->id == AUIK_STYLE_EXTRA_TEXT)
+                    out.text_extra(*static_cast<const StyleExtraText *>(extra->data));
+            }
+        }
     }
 
     StyleID Theme::get_resolved_style(u32 type, u32 id, u32 parent, StyleState state)
     {
-        Style out{};
         detail::StylePropertyFlags need_inh = g_style_inheritable_mask;
         detail::StylePropertyFlags need_non_inh = g_style_non_inheritable_mask;
         const bool use_normal_fallback = state != StyleState::normal;
         size_t resolve_seed = 0;
+        ResolvedStyleDesc chain[8u]{};
+        u32 chain_count = 0u;
 
-        const auto apply_from_desc = [&](const Style *desc) {
+        const auto push_chain = [&](const Style *desc, StylePropertyFlags take) {
+            if (!desc || static_cast<u16>(take) == 0u) return;
+            assert(chain_count < 8u && "resolved style chain overflow");
+            chain[chain_count++] = {desc, take};
+        };
+
+        const auto collect_from_desc = [&](const Style *desc) {
             if (!desc) return;
 
             const auto take_non_inh = desc->mask() & need_non_inh;
-            if (static_cast<u16>(take_non_inh) != 0)
-            {
-                apply_desc_masked(out, *desc, take_non_inh);
-                need_non_inh &= ~take_non_inh;
-            }
-
             const auto take_inh = desc->mask() & need_inh;
-            if (static_cast<u16>(take_inh) != 0)
-            {
-                apply_desc_masked(out, *desc, take_inh);
-                need_inh &= ~take_inh;
-            }
+            push_chain(desc, take_non_inh | take_inh);
+            if (static_cast<u16>(take_non_inh) != 0) need_non_inh &= ~take_non_inh;
+            if (static_cast<u16>(take_inh) != 0) need_inh &= ~take_inh;
         };
 
-        const auto apply_inheritable_only_desc = [&](const Style *desc) {
+        const auto collect_inheritable_only_desc = [&](const Style *desc) {
             if (!desc) return;
             const auto take_inh = desc->mask() & need_inh;
             if (static_cast<u16>(take_inh) != 0)
             {
-                apply_desc_masked(out, *desc, take_inh);
+                push_chain(desc, take_inh);
                 need_inh &= ~take_inh;
             }
         };
@@ -62,7 +82,7 @@ namespace auik
         const auto get_desc = [&](u32 key, StyleState source_state) -> const Style * {
             const StyleID style_id = get(key, source_state);
             if (style_id == STYLE_ID_INVALID) return nullptr;
-            return &_style_options_pool[style_id];
+            return _style_options_pool[style_id];
         };
 
         const auto apply_from_key = [&](u32 key, bool inheritable_only, u8 source_id) {
@@ -72,8 +92,8 @@ namespace auik
                 if (!desc) return;
                 const auto prev_non_inh = need_non_inh;
                 const auto prev_inh = need_inh;
-                if (inheritable_only) apply_inheritable_only_desc(desc);
-                else apply_from_desc(desc);
+                if (inheritable_only) collect_inheritable_only_desc(desc);
+                else collect_from_desc(desc);
 
                 const auto used_non_inh = prev_non_inh & ~need_non_inh;
                 const auto used_inh = prev_inh & ~need_inh;
@@ -106,7 +126,9 @@ namespace auik
         if (it_cache != _resolved.end()) return it_cache->second;
 
         const StyleID resolved_id = static_cast<StyleID>(_resolved_pool.size());
-        _resolved_pool.push_back(out);
+        auto *resolved = acul::alloc<Style>();
+        for (u32 i = 0u; i < chain_count; ++i) apply_desc_masked(*resolved, *chain[i].style, chain[i].take);
+        _resolved_pool.push_back(resolved);
         _resolved.emplace(cache_key, resolved_id);
         return resolved_id;
     }
@@ -117,12 +139,12 @@ namespace auik
         auto it = _style_options.find(full_key);
         if (it != _style_options.end())
         {
-            _style_options_pool[it->second] = style;
+            *_style_options_pool[it->second] = style;
             clear_resolved_cache();
             return it->second;
         }
         const StyleID id = static_cast<StyleID>(_style_options_pool.size());
-        _style_options_pool.push_back(style);
+        _style_options_pool.push_back(acul::alloc<Style>(style));
         _style_options.emplace(full_key, id);
         clear_resolved_cache();
         return id;

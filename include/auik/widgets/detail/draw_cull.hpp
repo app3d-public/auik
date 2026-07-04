@@ -13,7 +13,7 @@ namespace auik::detail
             child->draw_local(child_ctx);
             return;
         }
-        if (ctx.reason & DrawReasonBits::record)
+        if (ctx.reason & (DrawReasonBits::record | DrawReasonBits::full_redraw))
         {
             child->reset_external_draw_cull_state();
             DrawCtx child_ctx = ctx;

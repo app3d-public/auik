@@ -122,6 +122,7 @@ function(compile_auik_style_ids INPUT_BASE)
     endif()
 
     _auik_collect_css_files(css_deps "${INPUT_BASE}" "")
+    _auik_parse_processed_style_ids(processed_ids_args processed_ids_deps)
 
     add_custom_command(
         OUTPUT "${output_csv}" "${output_header}"
@@ -130,8 +131,9 @@ function(compile_auik_style_ids INPUT_BASE)
             --ids-only
             --ids-output-csv "${output_csv}"
             --ids-header "${output_header}"
+            ${processed_ids_args}
             --sign-request "${sign_request_py}"
-        DEPENDS "${theme_compiler}" ${css_deps}
+        DEPENDS "${theme_compiler}" ${css_deps} ${processed_ids_deps}
         MAIN_DEPENDENCY "${INPUT_BASE}"
         COMMENT "Generate ${PROJECT_NAME} style ids"
         VERBATIM

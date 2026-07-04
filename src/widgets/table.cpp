@@ -1,6 +1,6 @@
 #include <auik/auik.hpp>
-#include <auik/detail/rect.hpp>
 #include <auik/detail/depth.hpp>
+#include <auik/detail/rect.hpp>
 #include <auik/pipelines.hpp>
 #include <auik/widgets/detail/draw_cull.hpp>
 #include <auik/widgets/table.hpp>
@@ -29,9 +29,15 @@ namespace auik
         u8 sizing = 2u;
         switch (settings.sizing)
         {
-            case TableColumnSizing::shrink: sizing = 0u; break;
-            case TableColumnSizing::fixed: sizing = 1u; break;
-            case TableColumnSizing::stretch: sizing = 2u; break;
+            case TableColumnSizing::shrink:
+                sizing = 0u;
+                break;
+            case TableColumnSizing::fixed:
+                sizing = 1u;
+                break;
+            case TableColumnSizing::stretch:
+                sizing = 2u;
+                break;
         }
         return {sizing, settings.value, settings.min_width};
     }
@@ -39,10 +45,10 @@ namespace auik
     static inline const Style &table_resolved_style(const StyleSelector &selector)
     {
         auto *theme = get_theme();
-        const StyleID style_id = selector.id != Theme::STYLE_ID_INVALID
-                                     ? selector.id
-                                     : theme->get_resolved_style(selector.tag_id, selector.tag_id, 0u,
-                                                                 StyleState::normal);
+        const StyleID style_id =
+            selector.id != Theme::STYLE_ID_INVALID
+                ? selector.id
+                : theme->get_resolved_style(selector.tag_id, selector.tag_id, 0u, StyleState::normal);
         return theme->get_style(style_id);
     }
 
@@ -194,14 +200,12 @@ namespace auik
         row.clear();
     }
 
-    Table::Table(u32 id, Rows rows, amal::vec2 size, WidgetFlags flags, u32 style_tag_id)
+    Table::Table(u32 id, Rows rows, amal::vec2 inline_size, WidgetFlags flags, u32 style_tag_id)
         : Widget(id, flags, EventFlagBits::click | EventFlagBits::hover | EventFlagBits::drag,
-                 {{0.0f, 0.0f}, size}, style_tag_id),
+                 {{0.0f, 0.0f}, inline_size}, style_tag_id),
           _rows(std::move(rows)),
           _style({Theme::STYLE_ID_INVALID, style_tag_id})
-    {
-        rebuild_cells();
-    }
+    { rebuild_cells(); }
 
     Table::~Table()
     {
@@ -297,9 +301,7 @@ namespace auik
     }
 
     void Table::set_cell(size_t row, size_t column, Widget *value)
-    {
-        set_cell(row, column, value ? make_table_cell(value) : nullptr);
-    }
+    { set_cell(row, column, value ? make_table_cell(value) : nullptr); }
 
     void Table::set_cell(size_t row, size_t column, Cell value)
     {
@@ -462,26 +464,18 @@ namespace auik
     }
 
     bool Table::CellRef::valid() const
-    {
-        return table && row_index < table->_rows.size() && column_index < table->_rows[row_index].size();
-    }
+    { return table && row_index < table->_rows.size() && column_index < table->_rows[row_index].size(); }
 
     Table::Cell Table::CellRef::value() const { return valid() ? table->_rows[row_index][column_index] : nullptr; }
 
     bool Table::ConstCellRef::valid() const
-    {
-        return table && row_index < table->_rows.size() && column_index < table->_rows[row_index].size();
-    }
+    { return table && row_index < table->_rows.size() && column_index < table->_rows[row_index].size(); }
 
     Table::ConstCell Table::ConstCellRef::value() const
-    {
-        return valid() ? table->_rows[row_index][column_index] : nullptr;
-    }
+    { return valid() ? table->_rows[row_index][column_index] : nullptr; }
 
     Table::Cell Table::Column::header() const
-    {
-        return table && column_index < table->_header.size() ? table->_header[column_index] : nullptr;
-    }
+    { return table && column_index < table->_header.size() ? table->_header[column_index] : nullptr; }
 
     Table::Cell Table::Column::cell(size_t row) const
     {
@@ -497,9 +491,7 @@ namespace auik
     }
 
     f32 Table::Column::width() const
-    {
-        return table && column_index < table->_column_count ? table->_layout_metrics[column_index].x.value : 0.0f;
-    }
+    { return table && column_index < table->_column_count ? table->_layout_metrics[column_index].x.value : 0.0f; }
 
     f32 *Table::Column::width_override() const
     {
@@ -512,9 +504,7 @@ namespace auik
     Table::CellIterator Table::Column::end() const { return {table, table ? table->_rows.size() : 0u, column_index}; }
 
     Table::ConstCell Table::ConstColumn::header() const
-    {
-        return table && column_index < table->_header.size() ? table->_header[column_index] : nullptr;
-    }
+    { return table && column_index < table->_header.size() ? table->_header[column_index] : nullptr; }
 
     Table::ConstCell Table::ConstColumn::cell(size_t row) const
     {
@@ -523,14 +513,10 @@ namespace auik
     }
 
     const TableColumnSettings *Table::ConstColumn::settings() const
-    {
-        return table ? &table->settings_for_column(column_index) : nullptr;
-    }
+    { return table ? &table->settings_for_column(column_index) : nullptr; }
 
     f32 Table::ConstColumn::width() const
-    {
-        return table && column_index < table->_column_count ? table->_layout_metrics[column_index].x.value : 0.0f;
-    }
+    { return table && column_index < table->_column_count ? table->_layout_metrics[column_index].x.value : 0.0f; }
 
     const f32 *Table::ConstColumn::width_override() const
     {
@@ -541,16 +527,12 @@ namespace auik
     }
 
     Table::ConstCellIterator Table::ConstColumn::end() const
-    {
-        return {table, table ? table->_rows.size() : 0u, column_index};
-    }
+    { return {table, table ? table->_rows.size() : 0u, column_index}; }
 
     Table::ColumnIterator Table::ColumnList::end() const { return {table, table ? table->resolve_column_count() : 0u}; }
 
     Table::ConstColumnIterator Table::ConstColumnList::end() const
-    {
-        return {table, table ? table->resolve_column_count() : 0u};
-    }
+    { return {table, table ? table->resolve_column_count() : 0u}; }
 
     void Table::move_rows_before(const acul::vector<size_t> &rows, size_t target_row)
     {
@@ -732,7 +714,8 @@ namespace auik
         out |= resolve_style_selector(_alternating_row_style, _alternating_row_style.tag_id, id(), StyleState::normal);
         out |= resolve_style_selector(_resize_border_style, _resize_border_style.tag_id, id(), StyleState::normal);
         const auto is_local_element_tag = [this](u32 tag_id) {
-            return tag_id == AUIK_TAG_TABLE_HEADER_CELL || tag_id == AUIK_TAG_TABLE_CELL || is_resize_border_tag(tag_id);
+            return tag_id == AUIK_TAG_TABLE_HEADER_CELL || tag_id == AUIK_TAG_TABLE_CELL ||
+                   is_resize_border_tag(tag_id);
         };
         if (is_local_element_tag(transition.prev_id.tag_id) || is_local_element_tag(transition.current_id.tag_id))
             out |= StyleUpdateFlagBits::redraw;
@@ -764,8 +747,8 @@ namespace auik
             _layout_metrics[column].x.min_value =
                 amal::max(_layout_metrics[column].x.min_value,
                           cell->required_size().x + header_cell_insets.x + header_cell_insets.z);
-            header_height = amal::max(header_height,
-                                      cell->required_size().y + header_cell_insets.y + header_cell_insets.w);
+            header_height =
+                amal::max(header_height, cell->required_size().y + header_cell_insets.y + header_cell_insets.w);
         }
 
         for (size_t row = 0; row < _rows.size(); ++row)
@@ -799,9 +782,9 @@ namespace auik
         for (size_t row = 0; row < _rows.size(); ++row) content_h += _layout_metrics[row].y.value;
 
         const f32 required_width =
-            detail::resolve_table_required_axis(requested_size().x, fill_width(), content_w + padding.x + padding.z);
+            detail::resolve_table_required_axis(style_size().x, fill_width(), content_w + padding.x + padding.z);
         const f32 required_height =
-            detail::resolve_table_required_axis(requested_size().y, fill_height(), content_h + padding.y + padding.w);
+            detail::resolve_table_required_axis(style_size().y, fill_height(), content_h + padding.y + padding.w);
 
         set_required_size({required_width + margin.x + margin.z, required_height + margin.y + margin.w});
     }
@@ -856,8 +839,8 @@ namespace auik
             const amal::vec4 header_cell_insets = header_cell_style.margin() + header_cell_style.padding();
             for (auto *cell : _header)
                 if (cell)
-                    header_h = amal::max(header_h,
-                                         cell->required_size().y + header_cell_insets.y + header_cell_insets.w);
+                    header_h =
+                        amal::max(header_h, cell->required_size().y + header_cell_insets.y + header_cell_insets.w);
 
             f32 cursor_x = inner_pos.x;
             for (size_t column = 0; column < _column_count; ++column)
@@ -876,10 +859,9 @@ namespace auik
                 if (column < _header_visuals.size())
                 {
                     auto &visual = _header_visuals[column];
-                    visual.rect = detail::make_rect_data(id(), AUIK_TAG_TABLE_HEADER_CELL,
-                                                         {{cursor_x, cursor_y}, {column_w, header_h}}, clip_id(),
-                                                         next_depth(detail::depth_work_range(depth_range())), 0u,
-                                                         static_cast<u32>(column));
+                    visual.rect = detail::make_rect_data(
+                        id(), AUIK_TAG_TABLE_HEADER_CELL, {{cursor_x, cursor_y}, {column_w, header_h}}, clip_id(),
+                        next_depth(detail::depth_work_range(depth_range())), 0u, static_cast<u32>(column));
                 }
                 cursor_x += column_w;
             }
@@ -892,10 +874,9 @@ namespace auik
             const f32 row_h = _layout_metrics[row].y.value;
             if (row < _alt_row_visuals.size())
             {
-                _alt_row_visuals[row].rect = detail::make_rect_data(id(), AUIK_STYLE_TAG_TABLE_ROW_ALT,
-                                                                    {{inner_pos.x, cursor_y}, {inner_size.x, row_h}},
-                                                                    clip_id(),
-                                                                    next_depth(detail::depth_work_range(depth_range())));
+                _alt_row_visuals[row].rect = detail::make_rect_data(
+                    id(), AUIK_STYLE_TAG_TABLE_ROW_ALT, {{inner_pos.x, cursor_y}, {inner_size.x, row_h}}, clip_id(),
+                    next_depth(detail::depth_work_range(depth_range())));
             }
 
             f32 cursor_x = inner_pos.x;
@@ -917,10 +898,9 @@ namespace auik
                 if (visual_index < _cell_visuals.size())
                 {
                     auto &visual = _cell_visuals[visual_index];
-                    visual.rect =
-                        detail::make_rect_data(id(), AUIK_TAG_TABLE_CELL, {{cursor_x, cursor_y}, {column_w, row_h}},
-                                               clip_id(), next_depth(detail::depth_work_range(depth_range())), 0u,
-                                               cell_element_id(row, column));
+                    visual.rect = detail::make_rect_data(
+                        id(), AUIK_TAG_TABLE_CELL, {{cursor_x, cursor_y}, {column_w, row_h}}, clip_id(),
+                        next_depth(detail::depth_work_range(depth_range())), 0u, cell_element_id(row, column));
                 }
                 cursor_x += column_w;
                 ++visual_index;
@@ -938,11 +918,10 @@ namespace auik
         const bool resize_border_visible = (resize_style.mask() & detail::g_style_visible_draw_mask) != 0u;
         const amal::vec4 resize_margin = resize_style.margin();
         const amal::vec4 resize_padding = resize_style.padding();
-        const f32 resize_w =
-            resize_border_visible
-                ? amal::max(resize_margin.x + resize_margin.z + resize_padding.x + resize_padding.z,
-                            resize_style.border_thickness())
-                : 0.0f;
+        const f32 resize_w = resize_border_visible
+                                 ? amal::max(resize_margin.x + resize_margin.z + resize_padding.x + resize_padding.z,
+                                             resize_style.border_thickness())
+                                 : 0.0f;
         if (resize_w > 0.0f)
         {
             f32 cursor_x = inner_pos.x;
@@ -958,11 +937,10 @@ namespace auik
             }
         }
 
-        const f32 resize_h =
-            resize_border_visible
-                ? amal::max(resize_margin.y + resize_margin.w + resize_padding.y + resize_padding.w,
-                            resize_style.border_thickness())
-                : 0.0f;
+        const f32 resize_h = resize_border_visible
+                                 ? amal::max(resize_margin.y + resize_margin.w + resize_padding.y + resize_padding.w,
+                                             resize_style.border_thickness())
+                                 : 0.0f;
         if (resize_h > 0.0f)
         {
             f32 row_cursor_y = inner_pos.y;
@@ -972,10 +950,10 @@ namespace auik
                 row_cursor_y += _layout_metrics[row].y.value;
                 if (row >= _resize_border_hit_visuals.size()) continue;
                 auto &visual = _resize_border_hit_visuals[row].y;
-                visual.rect = detail::make_rect_data(
-                    id(), AUIK_TAG_TABLE_RESIZE_BORDER_H,
-                    {{inner_pos.x, row_cursor_y - resize_h * 0.5f}, {inner_size.x, resize_h}}, clip_id(),
-                    depth_range().y, 0u, static_cast<u32>(row));
+                visual.rect =
+                    detail::make_rect_data(id(), AUIK_TAG_TABLE_RESIZE_BORDER_H,
+                                           {{inner_pos.x, row_cursor_y - resize_h * 0.5f}, {inner_size.x, resize_h}},
+                                           clip_id(), depth_range().y, 0u, static_cast<u32>(row));
             }
         }
         update_resize_indicator();
@@ -1117,7 +1095,7 @@ namespace auik
                                      [this, theme](size_t, const CellVisual &visual) {
                                          const StyleState state = resolve_element_state(visual.rect);
                                          return theme->get_resolved_style(_header_cell_style.tag_id,
-                                                                         AUIK_TAG_TABLE_HEADER_CELL, id(), state);
+                                                                          AUIK_TAG_TABLE_HEADER_CELL, id(), state);
                                      });
 
             draw_cell_visual_batches(ctx, quads_stream, _cell_visuals, theme, clip_id(), can_emit_hit(ctx),
@@ -1126,7 +1104,7 @@ namespace auik
                                          const size_t column = _column_count > 0u ? index % _column_count : 0u;
                                          const StyleState state = resolve_element_state(visual.rect);
                                          return theme->get_resolved_style(resolved_cell_style_tag(row, column),
-                                                                         AUIK_TAG_TABLE_CELL, parent_id, state);
+                                                                          AUIK_TAG_TABLE_CELL, parent_id, state);
                                      });
 
             if (!_resize_border_hit_visuals.empty())
@@ -1318,14 +1296,9 @@ namespace auik
     }
 
     u32 Table::cell_element_id(size_t row, size_t column) const
-    {
-        return static_cast<u32>(row * _column_count + column);
-    }
+    { return static_cast<u32>(row * _column_count + column); }
 
-    Table::Cell Table::header_block(size_t column) const
-    {
-        return column < _header.size() ? _header[column] : nullptr;
-    }
+    Table::Cell Table::header_block(size_t column) const { return column < _header.size() ? _header[column] : nullptr; }
 
     Table::Cell Table::cell_block(size_t row, size_t column) const
     {
@@ -1341,9 +1314,7 @@ namespace auik
     }
 
     const TableColumnSettings &Table::settings_for_column(size_t column) const
-    {
-        return column < _column_settings.size() ? _column_settings[column] : _default_column_settings;
-    }
+    { return column < _column_settings.size() ? _column_settings[column] : _default_column_settings; }
 
     void Table::update_column_widths(f32 inner_width)
     {
@@ -1474,9 +1445,7 @@ namespace auik
     }
 
     bool Table::is_resize_border_tag(u32 tag_id) const
-    {
-        return tag_id == AUIK_TAG_TABLE_RESIZE_BORDER_V || tag_id == AUIK_TAG_TABLE_RESIZE_BORDER_H;
-    }
+    { return tag_id == AUIK_TAG_TABLE_RESIZE_BORDER_V || tag_id == AUIK_TAG_TABLE_RESIZE_BORDER_H; }
 
     void Table::sync_cell_parents()
     {
@@ -1498,9 +1467,8 @@ namespace auik
     namespace
     {
         constexpr u32 g_persistent_table_flags = AUIK_TABLE_FLAG_ALTERNATING_ROWS | AUIK_TABLE_FLAG_COLUMN_RESIZABLE |
-                                                AUIK_TABLE_FLAG_ROW_RESIZABLE |
-                                                AUIK_TABLE_FLAG_COLUMN_SIZE_OVERRIDES |
-                                                AUIK_TABLE_FLAG_ROW_SIZE_OVERRIDES;
+                                                 AUIK_TABLE_FLAG_ROW_RESIZABLE | AUIK_TABLE_FLAG_COLUMN_SIZE_OVERRIDES |
+                                                 AUIK_TABLE_FLAG_ROW_SIZE_OVERRIDES;
 
         void write_column_settings(acul::bin_stream &stream, const TableColumnSettings &settings)
         {
@@ -1685,7 +1653,7 @@ namespace auik
                 cell_styles.push_back(entry);
             }
 
-            auto *table = acul::alloc<Table>(common.id, Table::Rows{}, common.requested_size,
+            auto *table = acul::alloc<Table>(common.id, Table::Rows{}, common.inline_size,
                                              WidgetFlags(common.widget_flags), style_tag);
             table->set_header_cell_style_tag(header_cell_style_tag);
             table->set_cell_style_tag(cell_style_tag);

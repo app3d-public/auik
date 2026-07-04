@@ -34,7 +34,7 @@ namespace auik
     AUIK_EXPORT void enable_dockspace_drag_zones(Window *window);
     AUIK_EXPORT void disable_dockspace_drag_zones(Window *window, const char *reason = nullptr);
 
-    struct DockspaceFlagBits
+    struct DockspaceResizeFlagBits
     {
         enum enum_type : u32
         {
@@ -43,10 +43,20 @@ namespace auik
             resize_helper_y = 0x4,
             visible_resize_helper_x = 0x8,
             visible_resize_helper_y = 0x10,
-            addable = 0x20,
-            tabpanel = 0x40,
             resize_helper = resize_helper_x | resize_helper_y,
             visible_resize_helper = visible_resize_helper_x | visible_resize_helper_y
+        };
+        using flag_bitmask = std::true_type;
+    };
+    using DockspaceResizeFlags = acul::flags<DockspaceResizeFlagBits>;
+
+    struct DockspaceFlagBits
+    {
+        enum enum_type : u32
+        {
+            none = 0x0,
+            docking = 0x1,
+            tabpanel = 0x2
         };
         using flag_bitmask = std::true_type;
     };
@@ -56,41 +66,25 @@ namespace auik
 
     struct DockNodeSettings
     {
-        amal::vec2 requested_size{AUIK_SIZE_X_FIT, AUIK_SIZE_Y_FILL};
+        u32 style_tag = AUIK_STYLE_TAG_DOCKSPACE_NODE;
         amal::vec2 size{0.0f, 0.0f};
         amal::vec2 min_size{80.0f, 80.0f};
-        DockspaceFlags flags = DockspaceFlagBits::resize_helper | DockspaceFlagBits::visible_resize_helper |
-                               DockspaceFlagBits::addable | DockspaceFlagBits::tabpanel;
+        DockspaceResizeFlags flags = DockspaceResizeFlagBits::resize_helper | DockspaceResizeFlagBits::visible_resize_helper;
         TabbarFlags tabbar_flags = TabbarFlagBits::none;
-        amal::vec2 tabbar_size = AUIK_SIZE_FIT;
-
-        DockNodeSettings &enable_tabpanel()
-        {
-            flags |= DockspaceFlagBits::tabpanel;
-            return *this;
-        }
-
-        DockNodeSettings &disable_tabpanel()
-        {
-            flags &= ~DockspaceFlagBits::tabpanel;
-            return *this;
-        }
     };
 
     inline DockNodeSettings make_dockspace_settings(
-        const amal::vec2 &requested_size = {AUIK_SIZE_X_FIT, AUIK_SIZE_Y_FILL}, const amal::vec2 &size = {0.0f, 0.0f},
+        u32 style_tag = AUIK_STYLE_TAG_DOCKSPACE_NODE, const amal::vec2 &size = {0.0f, 0.0f},
         const amal::vec2 &min_size = {80.0f, 80.0f},
-        DockspaceFlags flags = DockspaceFlagBits::resize_helper | DockspaceFlagBits::visible_resize_helper |
-                               DockspaceFlagBits::addable | DockspaceFlagBits::tabpanel,
-        TabbarFlags tabbar_flags = TabbarFlagBits::none, const amal::vec2 &tabbar_size = AUIK_SIZE_FIT)
+        DockspaceResizeFlags flags = DockspaceResizeFlagBits::resize_helper | DockspaceResizeFlagBits::visible_resize_helper,
+        TabbarFlags tabbar_flags = TabbarFlagBits::none)
     {
         DockNodeSettings settings{};
-        settings.requested_size = requested_size;
+        settings.style_tag = style_tag;
         settings.size = size;
         settings.min_size = min_size;
         settings.flags = flags;
         settings.tabbar_flags = tabbar_flags;
-        settings.tabbar_size = tabbar_size;
         return settings;
     }
 
@@ -112,6 +106,10 @@ namespace auik
         AUIK_EXPORT void set_node_settings(DockNodeID node, DockNodeSettings settings);
         AUIK_EXPORT void set_node_tabbar_flags(DockNodeID node, TabbarFlags flags);
         AUIK_EXPORT void set_new_node_settings(DockNodeSettings settings);
+        DockspaceFlags policy_flags() const { return _policy_flags; }
+        AUIK_EXPORT void set_policy_flags(DockspaceFlags flags);
+        AUIK_EXPORT void set_docking_enabled(bool enabled);
+        AUIK_EXPORT void set_tabpanel_enabled(bool enabled);
         AUIK_EXPORT void update_drag_zones();
         AUIK_EXPORT void add_window(DockNodeID node, Window *window);
         AUIK_EXPORT bool dock_drag_window_to_tab_panel(Window *window, DockNodeID node);
@@ -169,6 +167,8 @@ namespace auik
             amal::rect bounds{};
             amal::rect content_bounds{};
             amal::vec2 required_size{0.0f, 0.0f};
+            amal::vec2 style_size{AUIK_SIZE_X_FIT, AUIK_SIZE_Y_FILL};
+            amal::vec2 min_size{80.0f, 80.0f};
             size_t active_window_index = static_cast<size_t>(-1);
             bool record_active_window = false;
         };
@@ -191,6 +191,7 @@ namespace auik
 
         Node *get_node(DockNodeID node);
         const Node *get_node(DockNodeID node) const;
+        void update_node_style_cache(DockNodeID node_id, Node &node);
         DockNodeID create_node(DockNodeID parent, bool split, DockNodeSettings settings);
         void clear_node_windows(Node &node);
         void clear_node_chrome(Node &node);
@@ -218,7 +219,9 @@ namespace auik
         void handle_tabbar_changed(DockNodeID node_id);
         bool handle_tabbar_drag_escape(DockNodeID node_id, u32 element_id);
         size_t selected_window_index(const Node &node) const;
-        bool subtree_accepts_drop(DockNodeID node) const;
+        bool resize_helper_accepts_drop(const ResizeHelperVisual &helper) const;
+        bool docking_enabled() const { return _policy_flags & DockspaceFlagBits::docking; }
+        bool tabpanel_enabled() const { return _policy_flags & DockspaceFlagBits::tabpanel; }
         size_t begin_resize_helpers();
         amal::rect add_resize_helper(DockNodeID parent, size_t before_child, size_t after_child, amal::axis axis,
                                      const amal::rect &bounds, bool visible, bool interactive, bool drop_zone = false,
@@ -245,13 +248,13 @@ namespace auik
         amal::vec2 _tabbar_depth_range{0.0f, 0.0f};
         DockNodeID _open_menu_node = AUIK_DOCK_NODE_INVALID;
         bool _drag_zones_dirty = true;
+        DockspaceFlags _policy_flags{DockspaceFlagBits::docking | DockspaceFlagBits::tabpanel};
         StyleSelector _resize_helper_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_DOCKSPACE_RESIZE_HELPER};
         StyleSelector _resize_helper_drag_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_DOCKSPACE_RESIZE_HELPER_DRAG};
         StyleSelector _tab_panel_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_DOCK_NODE_TAB_PANEL};
         DockNodeSettings _new_node_settings =
-            make_dockspace_settings(AUIK_SIZE_FILL, {0.0f, 0.0f}, {80.0f, 80.0f},
-                                    DockspaceFlagBits::resize_helper | DockspaceFlagBits::visible_resize_helper |
-                                        DockspaceFlagBits::addable | DockspaceFlagBits::tabpanel,
+            make_dockspace_settings(AUIK_STYLE_TAG_DOCKSPACE_NODE, {0.0f, 0.0f}, {80.0f, 80.0f},
+                                    DockspaceResizeFlagBits::resize_helper | DockspaceResizeFlagBits::visible_resize_helper,
                                     TabbarFlagBits::none);
         MenuGroup _menu_group;
     };

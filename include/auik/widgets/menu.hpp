@@ -35,7 +35,8 @@ namespace auik
         using MenuGroup = detail::MenuGroup;
         using MenuGroupLayer = detail::MenuGroupLayer;
 
-        AUIK_EXPORT MenuBar(u32 id, const acul::vector<StringView> &items = {}, amal::vec2 size = AUIK_SIZE_FIT,
+        AUIK_EXPORT MenuBar(u32 id, const acul::vector<StringView> &items = {},
+                            amal::vec2 inline_size = AUIK_SIZE_INHERIT,
                             WidgetFlags widget_flags = detail::get_tabbar_widget_flags());
         AUIK_EXPORT ~MenuBar() override;
 
@@ -197,7 +198,7 @@ namespace auik
 
     inline MenuBar *make_main_menu_bar(u32 id, const acul::vector<StringView> &items = {})
     {
-        auto *menu_bar = acul::alloc<MenuBar>(id, items, amal::vec2{AUIK_SIZE_X_FILL, AUIK_SIZE_Y_FIT});
+        auto *menu_bar = acul::alloc<MenuBar>(id, items);
         menu_bar->set_menu_style_tag(AUIK_STYLE_TAG_MAIN_MENU_BAR);
         menu_bar->set_menu_item_style_tag(AUIK_STYLE_TAG_MAIN_MENU_ITEM);
         menu_bar->set_popup_depth_mode(MenuBar::PopupDepthMode::root_overlay);

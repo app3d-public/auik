@@ -84,9 +84,9 @@ namespace auik
         }
 
         template <typename T>
-        Draggable<T>::Draggable(u32 id, u32 tag_id, T value, T min_value, T max_value, f32 speed, amal::vec2 size,
-                                WidgetFlags flags)
-            : Textbox(id, "", size, flags, tag_id, drag_text_flags<T>()),
+        Draggable<T>::Draggable(u32 id, u32 tag_id, T value, T min_value, T max_value, f32 speed,
+                                amal::vec2 inline_size, WidgetFlags flags)
+            : Textbox(id, "", inline_size, flags, AUIK_STYLE_TAG_TEXTBOX, drag_text_flags<T>()),
               _value(value),
               _min_value(min_value),
               _max_value(max_value),
@@ -94,6 +94,7 @@ namespace auik
               _last_value(value),
               _presented_value(value)
         {
+            set_rect_tag_id(tag_id);
             set_drag_interaction_flag(_interaction_flags, drag_interaction_select_all_on_next_focus);
             sync_text_from_value();
         }
@@ -378,39 +379,52 @@ namespace auik
         template class Draggable<f64>;
     } // namespace detail
 
-    DragInt::DragInt(u32 id, int value, int min_value, int max_value, f32 speed, amal::vec2 size, WidgetFlags flags)
-        : Draggable(id, AUIK_TAG_DRAG_INT, value, min_value, max_value, speed, size, flags)
-    {
-    }
-
-    DragInt::DragInt(u32 id, ModelBinding *binding, int min_value, int max_value, f32 speed, amal::vec2 size,
+    DragInt::DragInt(u32 id, int value, int min_value, int max_value, f32 speed, amal::vec2 inline_size,
                      WidgetFlags flags)
-        : Draggable(id, AUIK_TAG_DRAG_INT, 0, min_value, max_value, speed, size, flags)
-    { set_model_binding(binding); }
-
-    DragFloat::DragFloat(u32 id, f32 value, f32 min_value, f32 max_value, f32 speed, amal::vec2 size, WidgetFlags flags)
-        : Draggable(id, AUIK_TAG_DRAG_FLOAT, value, min_value, max_value, speed, size, flags)
+        : Draggable(id, AUIK_TAG_DRAG_INT, value, min_value, max_value, speed, inline_size, flags)
     {
     }
 
-    DragFloat::DragFloat(u32 id, ModelBinding *binding, f32 min_value, f32 max_value, f32 speed, amal::vec2 size,
+    DragInt::DragInt(u32 id, ModelBinding *binding, int min_value, int max_value, f32 speed, amal::vec2 inline_size,
+                     WidgetFlags flags)
+        : Draggable(id, AUIK_TAG_DRAG_INT, 0, min_value, max_value, speed, inline_size, flags)
+    { set_model_binding(binding); }
+
+    DragFloat::DragFloat(u32 id, f32 value, f32 min_value, f32 max_value, f32 speed, amal::vec2 inline_size,
                          WidgetFlags flags)
-        : Draggable(id, AUIK_TAG_DRAG_FLOAT, 0, min_value, max_value, speed, size, flags)
-    { set_model_binding(binding); }
-
-    DragDouble::DragDouble(u32 id, f64 value, f64 min_value, f64 max_value, f32 speed, amal::vec2 size,
-                           WidgetFlags flags)
-        : Draggable(id, AUIK_TAG_DRAG_DOUBLE, value, min_value, max_value, speed, size, flags)
+        : Draggable(id, AUIK_TAG_DRAG_FLOAT, value, min_value, max_value, speed, inline_size, flags)
     {
     }
 
-    DragDouble::DragDouble(u32 id, ModelBinding *binding, f64 min_value, f64 max_value, f32 speed, amal::vec2 size,
+    DragFloat::DragFloat(u32 id, ModelBinding *binding, f32 min_value, f32 max_value, f32 speed,
+                         amal::vec2 inline_size,
+                         WidgetFlags flags)
+        : Draggable(id, AUIK_TAG_DRAG_FLOAT, 0, min_value, max_value, speed, inline_size, flags)
+    { set_model_binding(binding); }
+
+    DragDouble::DragDouble(u32 id, f64 value, f64 min_value, f64 max_value, f32 speed, amal::vec2 inline_size,
                            WidgetFlags flags)
-        : Draggable(id, AUIK_TAG_DRAG_DOUBLE, 0.0, min_value, max_value, speed, size, flags)
+        : Draggable(id, AUIK_TAG_DRAG_DOUBLE, value, min_value, max_value, speed, inline_size, flags)
+    {
+    }
+
+    DragDouble::DragDouble(u32 id, ModelBinding *binding, f64 min_value, f64 max_value, f32 speed,
+                           amal::vec2 inline_size,
+                           WidgetFlags flags)
+        : Draggable(id, AUIK_TAG_DRAG_DOUBLE, 0.0, min_value, max_value, speed, inline_size, flags)
     { set_model_binding(binding); }
 
     namespace
     {
+        template <typename T>
+        void apply_drag_common_data(detail::Draggable<T> *widget, const detail::WidgetCommonData &common,
+                                    u32 style_tag, u32 rect_tag)
+        {
+            widget->set_style_tag(style_tag);
+            widget->set_rect_tag_id(rect_tag);
+            detail::apply_widget_common_data(widget, common);
+        }
+
         void write_drag_int(acul::bin_stream &stream, umbf::Block *block)
         {
             auto *widget = static_cast<DragInt *>(block);
@@ -434,11 +448,10 @@ namespace auik
             u32 style_tag = AUIK_STYLE_TAG_TEXTBOX;
             stream.read(value).read(min_value).read(max_value).read(speed).read(text_flags).read(style_tag);
 
-            auto *widget = acul::alloc<DragInt>(common.id, value, min_value, max_value, speed, common.requested_size,
+            auto *widget = acul::alloc<DragInt>(common.id, value, min_value, max_value, speed, common.inline_size,
                                                 WidgetFlags(common.widget_flags));
-            widget->set_style_tag(style_tag);
             widget->text_flags = TextFlags(text_flags);
-            detail::apply_widget_common_data(widget, common);
+            apply_drag_common_data(widget, common, style_tag, AUIK_TAG_DRAG_INT);
             return widget;
         }
 
@@ -465,11 +478,10 @@ namespace auik
             u32 style_tag = AUIK_STYLE_TAG_TEXTBOX;
             stream.read(value).read(min_value).read(max_value).read(speed).read(text_flags).read(style_tag);
 
-            auto *widget = acul::alloc<DragFloat>(common.id, value, min_value, max_value, speed, common.requested_size,
+            auto *widget = acul::alloc<DragFloat>(common.id, value, min_value, max_value, speed, common.inline_size,
                                                   WidgetFlags(common.widget_flags));
-            widget->set_style_tag(style_tag);
             widget->text_flags = TextFlags(text_flags);
-            detail::apply_widget_common_data(widget, common);
+            apply_drag_common_data(widget, common, style_tag, AUIK_TAG_DRAG_FLOAT);
             return widget;
         }
 
@@ -496,11 +508,10 @@ namespace auik
             u32 style_tag = AUIK_STYLE_TAG_TEXTBOX;
             stream.read(value).read(min_value).read(max_value).read(speed).read(text_flags).read(style_tag);
 
-            auto *widget = acul::alloc<DragDouble>(common.id, value, min_value, max_value, speed, common.requested_size,
+            auto *widget = acul::alloc<DragDouble>(common.id, value, min_value, max_value, speed, common.inline_size,
                                                    WidgetFlags(common.widget_flags));
-            widget->set_style_tag(style_tag);
             widget->text_flags = TextFlags(text_flags);
-            detail::apply_widget_common_data(widget, common);
+            apply_drag_common_data(widget, common, style_tag, AUIK_TAG_DRAG_DOUBLE);
             return widget;
         }
     } // namespace

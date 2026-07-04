@@ -417,6 +417,81 @@ def resolve_border(tokens: list, variables: dict[str, str]) -> list[str]:
     return calls
 
 
+def single_ident(tokens: list) -> str | None:
+    words = split_words(tokens)
+    if len(words) != 1 or len(words[0]) != 1:
+        return None
+    token = words[0][0]
+    return token.value.lower() if token.type == "ident" else None
+
+
+def resolve_axis_size(tokens: list, variables: dict[str, str], axis: str) -> str:
+    ident = single_ident(tokens)
+    if ident == "min-content":
+        return "AUIK_SIZE_X_MIN_FIT" if axis == "x" else "AUIK_SIZE_Y_MIN_FIT"
+    if ident == "fit-content":
+        return "AUIK_SIZE_X_MIN_FIT_REQUIRE" if axis == "x" else "AUIK_SIZE_Y_MIN_FIT_REQUIRE"
+    if ident == "stretch":
+        return "AUIK_SIZE_X_FILL" if axis == "x" else "AUIK_SIZE_Y_FILL"
+    return resolve_value(tokens, variables)
+
+
+def align_flag_for_display(value: str) -> str:
+    if value == "block":
+        return "ChildLayoutFlagBits::block"
+    if value == "inline":
+        return "ChildLayoutFlagBits::linline"
+    raise ValueError(f"Unsupported display value '{value}'")
+
+
+def align_flag_for_text_align(value: str) -> str:
+    if value == "left":
+        return "ChildLayoutFlagBits::hleft"
+    if value == "center":
+        return "ChildLayoutFlagBits::hcenter"
+    if value == "right":
+        return "ChildLayoutFlagBits::aright"
+    raise ValueError(f"Unsupported text-align value '{value}'")
+
+
+def align_flag_for_vertical_align(value: str) -> str:
+    if value == "top":
+        return "ChildLayoutFlagBits::top"
+    if value == "middle":
+        return "ChildLayoutFlagBits::vcenter"
+    if value == "bottom":
+        return "ChildLayoutFlagBits::bottom"
+    raise ValueError(f"Unsupported layout vertical-align value '{value}'")
+
+
+def text_anchor_for_vertical_align(value: str) -> str:
+    if value == "baseline":
+        return "static_cast<TextAnchorY>(0u)"
+    if value == "text-middle":
+        return "static_cast<TextAnchorY>(1u)"
+    if value == "text-top":
+        return "static_cast<TextAnchorY>(2u)"
+    if value == "text-bottom":
+        return "static_cast<TextAnchorY>(3u)"
+    raise ValueError(f"Unsupported text vertical-align value '{value}'")
+
+
+def text_wrap_for_white_space(value: str) -> str:
+    if value == "nowrap":
+        return "static_cast<TextWrapMode>(0u)"
+    if value == "normal":
+        return "static_cast<TextWrapMode>(1u)"
+    raise ValueError(f"Unsupported white-space value '{value}'")
+
+
+def text_overflow_for_value(value: str) -> str:
+    if value == "ellipsis":
+        return "static_cast<TextOverflowMode>(1u)"
+    if value == "clip":
+        return "static_cast<TextOverflowMode>(0u)"
+    raise ValueError(f"Unsupported text-overflow value '{value}'")
+
+
 def declaration_calls(declaration: CssDeclaration, variables: dict[str, str]) -> list[str]:
     name = declaration.name
     tokens = declaration.tokens
@@ -438,6 +513,14 @@ def declaration_calls(declaration: CssDeclaration, variables: dict[str, str]) ->
         return [f"font({resolve_value(tokens, variables)})"]
     if name == "inline-spacing":
         return [f"inline_spacing({resolve_value(tokens, variables)})"]
+    if name == "width":
+        return [f"width({resolve_axis_size(tokens, variables, 'x')})"]
+    if name == "height":
+        return [f"height({resolve_axis_size(tokens, variables, 'y')})"]
+    if name == "min-width":
+        return [f"min_width({resolve_value(tokens, variables)})"]
+    if name == "min-height":
+        return [f"min_height({resolve_value(tokens, variables)})"]
     if name == "border-radius":
         return resolve_border_radius(tokens, variables)
     if name == "border":
@@ -490,6 +573,59 @@ def update_box_property(style_rule: dict, name: str, tokens: list, variables: di
     return True
 
 
+def update_extra_property(style_rule: dict, declaration: CssDeclaration) -> bool:
+    name = declaration.name
+    if name not in ("display", "text-align", "vertical-align", "white-space", "text-overflow"):
+        return False
+
+    value = single_ident(declaration.tokens)
+    if not value:
+        raise ValueError(f"{name} expects a single keyword")
+
+    extras = style_rule.setdefault("extras", {})
+    if name == "display":
+        align = extras.setdefault("align", {})
+        align["display"] = align_flag_for_display(value)
+    elif name == "text-align":
+        align = extras.setdefault("align", {})
+        align["h"] = align_flag_for_text_align(value)
+    elif name == "vertical-align":
+        if value in ("top", "middle", "bottom"):
+            align = extras.setdefault("align", {})
+            align["v"] = align_flag_for_vertical_align(value)
+        else:
+            text = extras.setdefault("text", {})
+            text["anchor"] = text_anchor_for_vertical_align(value)
+    elif name == "white-space":
+        text = extras.setdefault("text", {})
+        text["wrap"] = text_wrap_for_white_space(value)
+    elif name == "text-overflow":
+        text = extras.setdefault("text", {})
+        text["overflow"] = text_overflow_for_value(value)
+    return True
+
+
+def extra_calls(style_rule: dict) -> list[str]:
+    extras = style_rule.get("extras", {})
+    calls: list[str] = []
+    align = extras.get("align")
+    if align:
+        flags: list[str] = []
+        for key in ("display", "h", "v"):
+            value = align.get(key)
+            if value and value != "0u":
+                flags.append(value)
+        flag_expr = " | ".join(flags) if flags else "0u"
+        calls.append(f"align_extra(StyleExtraAlign{{static_cast<u32>({flag_expr})}})")
+    text = extras.get("text")
+    if text:
+        anchor = text.get("anchor", "static_cast<TextAnchorY>(0u)")
+        wrap = text.get("wrap", "static_cast<TextWrapMode>(0u)")
+        overflow = text.get("overflow", "static_cast<TextOverflowMode>(1u)")
+        calls.append(f"text_extra(StyleExtraText{{{anchor}, {wrap}, {overflow}}})")
+    return calls
+
+
 def build_defines(ids: dict[str, str], variable_names: set[str]) -> list[dict[str, str]]:
     defines = []
     for name, value in sorted(ids.items()):
@@ -531,11 +667,15 @@ def build_generated_model(tree: ThemeTree, ids: dict[str, str], header_ids: dict
                 {
                     "tag_macro": tag_macro(tag),
                     "properties": OrderedDict(),
+                    "extras": {},
+                    "source_declarations": rule.declarations,
                     "state": STYLE_STATES.get(state, ""),
                 },
             )
             for declaration in rule.declarations:
                 if update_box_property(style_rule, declaration.name, declaration.tokens, variables):
+                    continue
+                if update_extra_property(style_rule, declaration):
                     continue
                 calls = declaration_calls(declaration, variables)
                 if calls:
@@ -546,6 +686,7 @@ def build_generated_model(tree: ThemeTree, ids: dict[str, str], header_ids: dict
         calls: list[str] = []
         for property_calls in style_rule["properties"].values():
             calls.extend(property_calls)
+        calls.extend(extra_calls(style_rule))
         if not calls:
             continue
         style_rules.append(
@@ -701,8 +842,6 @@ def main() -> int:
     app_tree = collect_tree(app_css_files)
     tree = collect_tree(css_files)
 
-    base_csv_path = args.ids_output_csv.resolve() if args.ids_output_csv else input_base.parent / DEFAULT_IDS_CSV_NAME
-    base_ids = update_ids(base_csv_path, base_tree.tags | base_tree.variables, sign_request_path=sign_request_path)
     processed_ids = {}
     external_header_ids = {}
     include_headers = []
@@ -711,6 +850,15 @@ def main() -> int:
         include_headers.append(str(Path(header).resolve()).replace("\\", "/"))
     for ids_csv in args.ids_csv:
         external_header_ids.update(read_ids(ids_csv.resolve()))
+
+    base_csv_path = args.ids_output_csv.resolve() if args.ids_output_csv else input_base.parent / DEFAULT_IDS_CSV_NAME
+    base_names = base_tree.tags | base_tree.variables
+    if processed_ids or external_header_ids:
+        base_names = base_names - set(processed_ids) - set(external_header_ids)
+    if args.ids_only:
+        base_ids = update_ids(base_csv_path, base_names, sign_request_path=sign_request_path)
+    else:
+        base_ids = read_ids(base_csv_path)
 
     app_csv_path = None
     app_ids = {}

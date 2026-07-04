@@ -6,6 +6,64 @@
 
 namespace auik
 {
+    namespace
+    {
+        static bool is_limited_content_axis(f32 size) { return size >= 0.0f; }
+
+        static amal::vec2 fit_image_size(const amal::vec2 &image_size, const amal::vec2 &content_size)
+        {
+            if (image_size.x <= 0.0f || image_size.y <= 0.0f) return {0.0f, 0.0f};
+            f32 scale = 1.0f;
+            if (is_limited_content_axis(content_size.x))
+                scale = amal::min(scale, amal::max(content_size.x, 0.0f) / image_size.x);
+            if (is_limited_content_axis(content_size.y))
+                scale = amal::min(scale, amal::max(content_size.y, 0.0f) / image_size.y);
+            return {image_size.x * scale, image_size.y * scale};
+        }
+
+        static amal::vec2 resolve_image_button_content_size(const amal::vec2 &button_size, const amal::vec4 &padding)
+        {
+            return {button_size.x >= 0.0f ? amal::max(button_size.x - padding.x - padding.z, 0.0f) : -1.0f,
+                    button_size.y >= 0.0f ? amal::max(button_size.y - padding.y - padding.w, 0.0f) : -1.0f};
+        }
+
+        static amal::vec2 resolve_image_button_size(const amal::vec2 &style_size, const amal::vec2 &image_size,
+                                                    const amal::vec4 &padding)
+        {
+            amal::vec2 button_size = {is_size_concrete(style_size.x) ? style_size.x : -1.0f,
+                                      is_size_concrete(style_size.y) ? style_size.y : -1.0f};
+            const amal::vec2 fitted_image =
+                fit_image_size(image_size, resolve_image_button_content_size(button_size, padding));
+            if (button_size.x < 0.0f) button_size.x = fitted_image.x + padding.x + padding.z;
+            if (button_size.y < 0.0f) button_size.y = fitted_image.y + padding.y + padding.w;
+            return button_size;
+        }
+
+        static amal::vec2 align_rect_pos(const amal::vec2 &bounds_pos, const amal::vec2 &bounds_size,
+                                         const amal::vec2 &rect_size, ChildLayoutFlags layout)
+        {
+            amal::vec2 out = bounds_pos;
+            const amal::vec2 free_size = {amal::max(bounds_size.x - rect_size.x, 0.0f),
+                                          amal::max(bounds_size.y - rect_size.y, 0.0f)};
+            if (layout & ChildLayoutFlagBits::aright)
+                out.x += free_size.x;
+            else if (layout & ChildLayoutFlagBits::hcenter)
+                out.x += free_size.x * 0.5f;
+
+            if (layout & ChildLayoutFlagBits::bottom)
+                out.y += free_size.y;
+            else if (layout & ChildLayoutFlagBits::vcenter)
+                out.y += free_size.y * 0.5f;
+            return out;
+        }
+
+        static ChildLayoutFlags resolve_style_align_layout(const Style &style)
+        {
+            const auto *align = style.align_settings();
+            return align ? ChildLayoutFlags(align->flags) : default_child_layout_flags();
+        }
+    } // namespace
+
     ImageButton::ImageButton(u32 id, TextureID texture_id, amal::vec2 image_size, amal::vec2 size, amal::rect uv_rect,
                              WidgetFlags widget_flags, u32 style_tag)
         : Widget(id, widget_flags, EventFlagBits::click, {{0.0f, 0.0f}, size}, style_tag),
@@ -42,7 +100,9 @@ namespace auik
     StyleUpdateFlags ImageButton::update_style()
     {
         const u32 parent_id = parent() ? parent()->id() : 0u;
-        return resolve_style_selector(_style, id(), parent_id, style_state());
+        const auto flags = resolve_style_selector(_style, id(), parent_id, style_state());
+        apply_style_layout(get_theme()->get_style(_style.id));
+        return flags;
     }
 
     void ImageButton::update_layout_min_size()
@@ -50,27 +110,8 @@ namespace auik
         const auto &style = get_theme()->get_style(_style.id);
         const amal::vec4 margin = style.margin();
         const amal::vec4 padding = style.padding();
-        const amal::vec2 image_size = resolve_image_size();
-        const amal::vec2 content_required = {image_size.x + padding.x + padding.z,
-                                             image_size.y + padding.y + padding.w};
-
-        amal::vec2 min_size = {is_size_concrete(requested_size().x) ? requested_size().x : 0.0f,
-                               is_size_concrete(requested_size().y) ? requested_size().y : 0.0f};
-        if (fill_width()) min_size.x = content_required.x;
-        if (fill_height()) min_size.y = content_required.y;
-        if (is_width_fixed() && is_height_fixed() && min_size.x <= 0.0f && min_size.y <= 0.0f)
-        {
-            const f32 side = amal::max(content_required.x, content_required.y);
-            min_size = {side, side};
-        }
-        else if (!is_width_fixed()) min_size.x = 0.0f;
-
-        if (min_size.x <= 0.0f) min_size.x = content_required.x;
-        else min_size.x = amal::max(min_size.x, content_required.x);
-        if (min_size.y <= 0.0f) min_size.y = content_required.y;
-        else min_size.y = amal::max(min_size.y, content_required.y);
-
-        set_required_size({min_size.x + margin.x + margin.z, min_size.y + margin.y + margin.w});
+        const amal::vec2 button_size = resolve_image_button_size(style_size(), resolve_image_size(), padding);
+        set_required_size({button_size.x + margin.x + margin.z, button_size.y + margin.y + margin.w});
     }
 
     void ImageButton::update_layout(bool min_size_known)
@@ -86,21 +127,10 @@ namespace auik
 
         amal::vec2 widget_size = {amal::max(size().x - margin.x - margin.z, 0.0f),
                                   amal::max(size().y - margin.y - margin.w, 0.0f)};
-        if (fill_width())
-            widget_size.x = amal::max(widget_size.x, min_required.x);
-        else if (!is_width_fixed()) widget_size.x = min_required.x;
-        else
-            widget_size.x =
-                amal::max(is_size_concrete(requested_size().x) && requested_size().x > 0.0f ? requested_size().x
-                                                                                              : widget_size.x,
-                          min_required.x);
-        if (fill_height()) widget_size.y = amal::max(widget_size.y, min_required.y);
-        else if (!is_height_fixed()) widget_size.y = min_required.y;
-        else
-            widget_size.y =
-                amal::max(is_size_concrete(requested_size().y) && requested_size().y > 0.0f ? requested_size().y
-                                                                                              : widget_size.y,
-                          min_required.y);
+        if (fill_width() || is_width_fixed()) widget_size.x = amal::max(widget_size.x, min_required.x);
+        else widget_size.x = min_required.x;
+        if (fill_height() || is_height_fixed()) widget_size.y = amal::max(widget_size.y, min_required.y);
+        else widget_size.y = min_required.y;
 
         const amal::vec2 pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
         set_position(pos);
@@ -109,13 +139,14 @@ namespace auik
         assert(parent() && "ImageButton must have parent");
         set_clip_id(parent()->content_clip_id());
 
-        const amal::vec2 content_pos = {pos.x + padding.x, pos.y + padding.y};
-        const amal::vec2 content_size = {amal::max(widget_size.x - padding.x - padding.z, 0.0f),
-                                         amal::max(widget_size.y - padding.y - padding.w, 0.0f)};
-        const amal::vec2 image_size = resolve_image_size();
-        const amal::vec2 image_pos = {content_pos.x + amal::max((content_size.x - image_size.x) * 0.5f, 0.0f),
-                                      content_pos.y + amal::max((content_size.y - image_size.y) * 0.5f, 0.0f)};
-        _image_rect.bounds = {image_pos, image_size};
+        const amal::vec2 max_image_size = {amal::max(widget_size.x - padding.x - padding.z, 0.0f),
+                                           amal::max(widget_size.y - padding.y - padding.w, 0.0f)};
+        const amal::vec2 image_size = fit_image_size(resolve_image_size(), max_image_size);
+        const amal::vec2 padded_image_size = {image_size.x + padding.x + padding.z,
+                                              image_size.y + padding.y + padding.w};
+        const ChildLayoutFlags image_layout = resolve_style_align_layout(style);
+        const amal::vec2 padded_image_pos = align_rect_pos(pos, widget_size, padded_image_size, image_layout);
+        _image_rect.bounds = {{padded_image_pos.x + padding.x, padded_image_pos.y + padding.y}, image_size};
         _image_rect.bounds = detail::snap_rect_offset_to_pixel_grid(_image_rect.bounds);
         _image_rect.clip_id = clip_id();
         _image_rect.depth = next_depth(_content_depth_range);
@@ -222,7 +253,7 @@ namespace auik
             stream.read(image_size).read(coverage_mode).read(style_tag);
 
             auto *widget = acul::alloc<ImageButton>(common.id, AUIK_INVALID_TEXTURE_ID, image_size,
-                                                    common.requested_size, amal::rect{{0.0f, 0.0f}, {1.0f, 1.0f}},
+                                                    common.inline_size, amal::rect{{0.0f, 0.0f}, {1.0f, 1.0f}},
                                                     WidgetFlags(common.widget_flags), style_tag);
             widget->set_coverage_mode(coverage_mode);
             detail::apply_widget_common_data(widget, common);

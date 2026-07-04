@@ -10,13 +10,12 @@
 #include "image_button.hpp"
 #include "widget.hpp"
 
-#define AUIK_TAG_TAB_BAR           0xECA5E393u
-#define AUIK_TAG_TAB_BAR_ITEM      0x6F421EACu
-#define AUIK_TAG_TABBAR_POPUP_BTN  0x9041AD68u
-#define AUIK_TAG_TAB_BAR_OVERFLOW  AUIK_TAG_TABBAR_POPUP_BTN
-#define AUIK_TAG_TAB_BAR_POPUP     0x2E443728u
-#define AUIK_TAG_TAB_BAR_TAB_WIDTH 0xC72A3851u
-#define AUIK_TAG_CLOSE_BUTTON      0x5B258693u
+#define AUIK_TAG_TABBAR           0xECA5E393u
+#define AUIK_TAG_TABBAR_ITEM      0x6F421EACu
+#define AUIK_TAG_TABBAR_POPUP_BTN 0x9041AD68u
+#define AUIK_TAG_TABBAR_OVERFLOW  AUIK_TAG_TABBAR_POPUP_BTN
+#define AUIK_TAG_TABBAR_POPUP     0x2E443728u
+#define AUIK_TAG_CLOSE_BUTTON     0x5B258693u
 
 namespace auik
 {
@@ -50,12 +49,11 @@ namespace auik
     class Tabbar : public Widget
     {
     public:
-        AUIK_EXPORT Tabbar(u32 id, acul::vector<acul::string> items, TabbarFlags tab_flags, amal::vec2 size,
-                           WidgetFlags widget_flags, f32 tab_width, u32 tab_width_key, u32 item_style_tag,
-                           u32 selected_item_style_tag, u32 popup_item_style_tag);
-        AUIK_EXPORT Tabbar(u32 id, const acul::vector<StringView> &items, TabbarFlags tab_flags, amal::vec2 size,
-                           WidgetFlags widget_flags, f32 tab_width, u32 tab_width_key, u32 item_style_tag,
-                           u32 selected_item_style_tag, u32 popup_item_style_tag);
+        AUIK_EXPORT Tabbar(u32 id, TabbarFlags tab_flags, WidgetFlags widget_flags, amal::vec2 inline_size);
+        AUIK_EXPORT Tabbar(u32 id, acul::vector<acul::string> items, TabbarFlags tab_flags, WidgetFlags widget_flags,
+                           amal::vec2 inline_size);
+        AUIK_EXPORT Tabbar(u32 id, const acul::vector<StringView> &items, TabbarFlags tab_flags,
+                           WidgetFlags widget_flags, amal::vec2 inline_size);
         AUIK_EXPORT ~Tabbar() override;
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
@@ -86,6 +84,12 @@ namespace auik
         AUIK_EXPORT void set_items(acul::vector<acul::string> items);
         AUIK_EXPORT void set_items(const acul::vector<StringView> &items);
         AUIK_EXPORT void set_style_tag(u32 tag_id);
+        void set_item_style_tag(u32 tag_id) { _item_style_tag = tag_id; }
+        void set_selected_item_style_tag(u32 tag_id) { _selected_item_style_tag = tag_id; }
+        void set_popup_item_style_tag(u32 tag_id) { _popup_item_style_tag = tag_id; }
+        void set_close_button_style_tag(u32 tag_id) { _close_button_style_tag = tag_id; }
+        AUIK_EXPORT void update_item_tags();
+        AUIK_EXPORT void sync_tags();
         u32 style_tag() const { return _style.tag_id; }
         acul::vector<acul::string> item_texts() const
         {
@@ -111,7 +115,7 @@ namespace auik
         const value_type *data() const { return _tabs.data(); }
 
         TabbarFlags tab_flags() const { return _tab_flags; }
-        bool content_width_fit() const { return is_size_fit(requested_size().x); }
+        bool content_width_fit() const { return is_size_fit(style_size().x); }
         bool clipped() const { return !(_tab_flags & detail::get_tabbar_visual_mask()) && !content_width_fit(); }
         bool popup() const { return _tab_flags & TabbarFlagBits::popup; }
         bool scroll() const { return _tab_flags & TabbarFlagBits::scroll; }
@@ -134,13 +138,10 @@ namespace auik
         u32 item_style_tag() const { return _item_style_tag; }
         u32 selected_item_style_tag() const { return _selected_item_style_tag; }
         u32 popup_item_style_tag() const { return _popup_item_style_tag; }
-        f32 tab_width() const { return _tab_width; }
-        u32 tab_width_key() const { return _tab_width_key; }
-        AUIK_EXPORT void set_tab_width(f32 value);
-        AUIK_EXPORT void set_tab_width_key(u32 key);
+        u32 close_button_style_tag() const { return _close_button_style_tag; }
         f32 scroll_offset() const { return _scroll_offset; }
         void set_scroll_offset(f32 value) { _scroll_offset = amal::max(value, 0.0f); }
-        virtual u32 signature() const override { return AUIK_TAG_TAB_BAR; }
+        virtual u32 signature() const override { return AUIK_TAG_TABBAR; }
 
     protected:
         AUIK_EXPORT bool draw_transition_targets(DrawCtx &ctx);
@@ -180,7 +181,6 @@ namespace auik
         AUIK_EXPORT StyleUpdateFlags update_popup_item_style(u32 index,
                                                              const detail::WidgetStyleSelectorTransition &transition);
         AUIK_EXPORT void update_layout_from_current_bounds(bool min_size_known);
-        AUIK_EXPORT f32 resolve_tab_width() const;
         AUIK_EXPORT amal::vec2 resolve_tab_required_size(u32 index);
         AUIK_EXPORT void ensure_overflow_icon_resources();
         AUIK_EXPORT amal::vec2 measure_overflow_size();
@@ -207,26 +207,23 @@ namespace auik
         bool _open = false;
         f32 _scroll_offset = 0.0f;
         f32 _content_width = 0.0f;
-        f32 _tab_width = 0.0f;
-        f32 _resolved_tab_width = 0.0f;
-        u32 _tab_width_key = 0u;
-        u32 _item_style_tag = AUIK_STYLE_TAG_TAB_BAR_ITEM;
-        u32 _selected_item_style_tag = AUIK_STYLE_TAG_TAB_BAR_ITEM_SELECTED;
-        u32 _popup_item_style_tag = AUIK_STYLE_TAG_COMBO_BOX_ITEM;
+        u32 _item_style_tag = AUIK_STYLE_TAG_TABBAR_ITEM;
+        u32 _selected_item_style_tag = AUIK_STYLE_TAG_TABBAR_ITEM_SELECTED;
+        u32 _popup_item_style_tag = AUIK_STYLE_TAG_TABBAR_POPUP_ITEM;
+        u32 _close_button_style_tag = AUIK_STYLE_TAG_CLOSE_BUTTON;
         u16 _full_clip_id = 0xFFFFu;
         u16 _content_clip_id = 0xFFFFu;
-        StyleSelector _style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_GLOBAL};
+        StyleSelector _style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_TABBAR};
         ModelBinding *_model_binding = nullptr;
     };
 
     inline Tabbar *make_tabbar(u32 id, const acul::vector<StringView> &items,
-                               TabbarFlags tab_flags = TabbarFlagBits::none, amal::vec2 size = AUIK_SIZE_FIT,
-                               f32 tab_width = 0.0f, u32 tab_width_key = 0u)
-    {
-        return acul::alloc<Tabbar>(id, items, tab_flags, size, detail::get_tabbar_widget_flags(), tab_width,
-                                   tab_width_key, AUIK_STYLE_TAG_TAB_BAR_ITEM, AUIK_STYLE_TAG_TAB_BAR_ITEM_SELECTED,
-                                   AUIK_STYLE_TAG_COMBO_BOX_ITEM);
-    }
+                               TabbarFlags tab_flags = TabbarFlagBits::none, amal::vec2 inline_size = AUIK_SIZE_INHERIT)
+    { return acul::alloc<Tabbar>(id, items, tab_flags, detail::get_tabbar_widget_flags(), inline_size); }
+
+    inline Tabbar *make_tabbar(u32 id, TabbarFlags tab_flags = TabbarFlagBits::none,
+                               amal::vec2 inline_size = AUIK_SIZE_INHERIT)
+    { return acul::alloc<Tabbar>(id, tab_flags, detail::get_tabbar_widget_flags(), inline_size); }
 
     namespace streams
     {

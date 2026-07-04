@@ -9,13 +9,37 @@
 
 namespace auik
 {
+    class ColumnBlock : public Block
+    {
+    public:
+        explicit ColumnBlock(u32 owner_id)
+            : Block(owner_id, WidgetFlagBits::visible, AUIK_TAG_BLOCK)
+        {
+        }
+
+        u16 content_clip_id() const override { return clip_id(); }
+        amal::vec4 get_content_clip_rect() const override
+        {
+            if (clip_id() == 0xFFFFu) return parent() ? parent()->get_content_clip_rect() : get_main_viewport_rect();
+            return get_clip_rect(content_clip_id());
+        }
+        void rebuild_clip_rects() override
+        {
+            for (auto *child : children)
+            {
+                if (!child) continue;
+                child->rebuild_clip_rects();
+            }
+        }
+    };
+
     class Column : public Widget
     {
     public:
         using ColumnChildren = acul::vector<Widget *>;
         using ColumnItems = acul::vector<ColumnChildren>;
 
-        AUIK_EXPORT explicit Column(u32 id, ColumnItems columns, amal::vec2 size, WidgetFlags flags);
+        AUIK_EXPORT explicit Column(u32 id, ColumnItems columns, amal::vec2 inline_size, WidgetFlags flags);
         AUIK_EXPORT ~Column() override;
 
         AUIK_EXPORT void clear_columns();
@@ -62,27 +86,27 @@ namespace auik
         acul::vector<f32> _column_widths;
         StyleSelector _style;
         ModelBinding *_model_binding = nullptr;
+        bool _clip_rects_need_layout = true;
     };
 
-    inline Block *make_column_block(u32 owner_id)
-    { return acul::alloc<Block>(owner_id, WidgetFlagBits::visible, AUIK_TAG_BLOCK); }
+    inline Block *make_column_block(u32 owner_id) { return acul::alloc<ColumnBlock>(owner_id); }
 
     inline Block *make_column_block() { return make_column_block(AUIK_TAG_COLUMN); }
 
 
     inline Column *make_column(u32 id, Column::ColumnItems columns = {},
-                               amal::vec2 size = {AUIK_SIZE_X_FILL, AUIK_SIZE_Y_FIT})
+                               amal::vec2 inline_size = AUIK_SIZE_INHERIT)
     {
         constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
                                              WidgetFlagBits::configurable;
-        return acul::alloc<Column>(id, std::move(columns), size, widget_flags);
+        return acul::alloc<Column>(id, std::move(columns), inline_size, widget_flags);
     }
 
-    inline Column *make_column(u32 id, size_t column_count, amal::vec2 size = {AUIK_SIZE_X_FILL, AUIK_SIZE_Y_FIT})
+    inline Column *make_column(u32 id, size_t column_count, amal::vec2 inline_size = AUIK_SIZE_INHERIT)
     {
         Column::ColumnItems columns;
         columns.resize(column_count);
-        return make_column(id, std::move(columns), size);
+        return make_column(id, std::move(columns), inline_size);
     }
 
     namespace streams

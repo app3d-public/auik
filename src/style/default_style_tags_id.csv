@@ -28,6 +28,9 @@ dock-tabbar,0x6525D522
 dock-tabbar-menu,0x4986BB32
 docked-window,0x06FFC182
 dockspace-drop-zone,0x63C55107
+dockspace-node,0xBFDC4506
+dockspace-node-fit,0x61168F8D
+dockspace-node-fit-width,0xA0506791
 dockspace-resize-helper,0x5FD17F53
 dockspace-resize-helper-drag,0x25F62CA2
 global,0x3BE7F102
@@ -49,6 +52,7 @@ modal-message-area,0xC2803F64
 modal-title,0xCED96079
 modal-window,0x928407FE
 multiline-caret,0x6F32B234
+multiline-textbox,0x6D70C923
 no-pad,0xFFDEF9D5
 placeholder,0x10D00E62
 progress-bar,0xE89A0A98
@@ -67,10 +71,12 @@ slider-grab,0x4C03D5B0
 switch-button,0x3AEAF9C7
 switch-button-grab,0xE051D35B
 switch-button-on,0xBA1C062B
-tab-bar-item,0x6674443F
-tab-bar-item-selected,0x57286AF4
-tab-bar-popup,0x871537F0
+tabbar,0x2C676836
+tabbar-item,0x3A854A65
+tabbar-item-selected,0x90A353EA
+tabbar-popup,0xD01DA2C2
 tabbar-popup-button,0x78FCD090
+tabbar-popup-item,0xFC0B6E12
 table,0xB12BF9CD
 table-cell,0xF1187926
 table-header-cell,0x559C3B12
@@ -78,6 +84,7 @@ table-resize-border,0x0470DEAD
 table-row-alt,0xC24AB568
 table-tree-resize-border,0x56DEA60A
 text-button,0xB0CFEF4B
+text-button-title,0x1790FB8C
 text-drag-icon,0xF67AC9E8
 textbox,0xFD48AA2F
 titlebar,0x1B0FAC37

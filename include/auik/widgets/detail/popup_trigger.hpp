@@ -29,7 +29,7 @@ namespace auik::detail
         AUIK_EXPORT void set_icons(u32 closed_icon, u32 open_icon);
 
         AUIK_EXPORT StyleUpdateFlags update_style(u32 self_id, u32 parent_id, StyleState state);
-        AUIK_EXPORT void update_layout_min_size(amal::vec2 requested_size, bool fixed);
+        AUIK_EXPORT void update_layout_min_size(amal::vec2 style_size, bool fixed);
         AUIK_EXPORT void update_layout(const amal::rect &bounds, u16 clip_id);
         AUIK_EXPORT void translate(const amal::vec2 &delta);
         AUIK_EXPORT void rebuild_clip_rects(u16 clip_id);

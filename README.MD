@@ -24,8 +24,10 @@ Unlike traditional UI systems that generate a single vertex stream, Auik organiz
 Auik includes a CSS-inspired theme system. Themes can be created either through the native C++ API or through the CSS transpiler.
 
 ## Limitations
-Auik supports standard alpha blending but does not provide order-independent transparency (OIT).
+* Auik supports standard alpha blending but does not provide order-independent transparency (OIT).
 Transparent widgets rendered through different streams or pipelines may not preserve strict painter-order composition.
+
+* Auik assigns depth ranges to widgets and child layers, but visual painter order is not guaranteed across different draw streams or GPU pipelines inside the same widget subtree. Background and foreground children are intended for non-layout attachments and overlays, not for strict mixed-pipeline overlap composition.
 
 ## Building
 Auik is distributed as a CMake project and is intended to be integrated as a submodule.

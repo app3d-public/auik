@@ -9,7 +9,7 @@ namespace auik
 {
     namespace
     {
-        static inline amal::vec2 make_progress_bar_requested_size(f32 length, amal::axis axis)
+        static inline amal::vec2 make_progress_bar_style_size(f32 length, amal::axis axis)
         {
             return axis == amal::axis::y ? amal::vec2{0.0f, length} : amal::vec2{length, 0.0f};
         }
@@ -45,8 +45,8 @@ namespace auik
         {
             const amal::vec4 margin = style.margin();
             const amal::vec4 padding = style.padding();
-            amal::vec2 min_size = {is_size_concrete(widget.requested_size().x) ? widget.requested_size().x : 0.0f,
-                                   is_size_concrete(widget.requested_size().y) ? widget.requested_size().y : 0.0f};
+            amal::vec2 min_size = {is_size_concrete(widget.style_size().x) ? widget.style_size().x : 0.0f,
+                                   is_size_concrete(widget.style_size().y) ? widget.style_size().y : 0.0f};
             const f32 min_track_size =
                 amal::max(6.0f, style.border_radius() > 0.0f ? style.border_radius() * 2.0f : 0.0f);
             const f32 padded_cross = axis == amal::axis::y ? padding.x + padding.z : padding.y + padding.w;
@@ -77,7 +77,7 @@ namespace auik
     ProgressBar::ProgressBar(u32 id, f32 value, f32 min_value, f32 max_value, f32 size, amal::axis axis,
                              WidgetFlags widget_flags)
         : Widget(id, widget_flags, EventFlagBits::change,
-                 {{0.0f, 0.0f}, make_progress_bar_requested_size(size, axis)}, AUIK_STYLE_TAG_PROGRESS_BAR),
+                 {{0.0f, 0.0f}, make_progress_bar_style_size(size, axis)}, AUIK_STYLE_TAG_PROGRESS_BAR),
           _min_value(min_value),
           _max_value(max_value),
           _axis(axis)
@@ -362,7 +362,7 @@ namespace auik
             u32 active_style_tag = AUIK_STYLE_TAG_PROGRESS_BAR_ACTIVE;
             stream.read(value).read(min_value).read(max_value).read(axis).read(track_style_tag).read(active_style_tag);
 
-            const f32 size = amal::axis(axis) == amal::axis::y ? common.requested_size.y : common.requested_size.x;
+            const f32 size = amal::axis(axis) == amal::axis::y ? common.inline_size.y : common.inline_size.x;
             auto *widget = acul::alloc<ProgressBar>(common.id, value, min_value, max_value, size, amal::axis(axis),
                                                     WidgetFlags(common.widget_flags));
             widget->set_style_tags(track_style_tag, active_style_tag);

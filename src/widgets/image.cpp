@@ -8,8 +8,8 @@ namespace auik
 {
     void Image::update_layout_min_size()
     {
-        set_required_size({is_size_concrete(requested_size().x) ? requested_size().x : 0.0f,
-                           is_size_concrete(requested_size().y) ? requested_size().y : 0.0f});
+        set_required_size({is_size_concrete(style_size().x) ? style_size().x : 0.0f,
+                           is_size_concrete(style_size().y) ? style_size().y : 0.0f});
     }
 
     void Image::update_layout(bool min_size_known)
@@ -68,21 +68,39 @@ namespace auik
     StyleUpdateFlags CheckerImage::update_style()
     {
         const u32 parent_id = parent() ? parent()->id() : 0u;
-        return resolve_style_selector(_style, id(), parent_id, style_state());
+        const auto flags = resolve_style_selector(_style, id(), parent_id, style_state());
+        apply_style_layout(get_theme()->get_style(_style.id));
+        return flags;
     }
 
     void CheckerImage::update_layout_min_size()
     {
-        set_required_size({is_size_concrete(requested_size().x) ? requested_size().x : 0.0f,
-                           is_size_concrete(requested_size().y) ? requested_size().y : 0.0f});
+        if (_style.id == Theme::STYLE_ID_INVALID) update_style();
+        const auto &style = get_theme()->get_style(_style.id);
+        const amal::vec4 margin = style.margin();
+        const amal::vec4 padding = style.padding();
+        const amal::vec2 image_size = {is_size_concrete(style_size().x) ? style_size().x : 0.0f,
+                                       is_size_concrete(style_size().y) ? style_size().y : 0.0f};
+        set_required_size({image_size.x + margin.x + margin.z + padding.x + padding.z,
+                           image_size.y + margin.y + margin.w + padding.y + padding.w});
     }
 
     void CheckerImage::update_layout(bool min_size_known)
     {
         if (!min_size_known) update_layout_min_size();
         const amal::vec2 layout_origin = position();
-        set_position(layout_origin);
-        set_layout_size(required_size());
+        if (_style.id == Theme::STYLE_ID_INVALID) update_style();
+        const amal::vec4 margin = get_theme()->get_style(_style.id).margin();
+        const amal::vec2 min_size = {amal::max(required_size().x - margin.x - margin.z, 0.0f),
+                                     amal::max(required_size().y - margin.y - margin.w, 0.0f)};
+        amal::vec2 layout_size = {amal::max(size().x - margin.x - margin.z, 0.0f),
+                                  amal::max(size().y - margin.y - margin.w, 0.0f)};
+        if (fill_width() || is_width_fixed()) layout_size.x = amal::max(layout_size.x, min_size.x);
+        else layout_size.x = min_size.x;
+        if (fill_height() || is_height_fixed()) layout_size.y = amal::max(layout_size.y, min_size.y);
+        else layout_size.y = min_size.y;
+        set_position({layout_origin.x + margin.x, layout_origin.y + margin.y});
+        set_layout_size(layout_size);
         Widget::update_layout(true);
         assert(parent() && "CheckerImage must have parent");
         set_clip_id(parent()->content_clip_id());
@@ -131,7 +149,7 @@ namespace auik
             bool coverage_mode = false;
             stream.read(coverage_mode);
 
-            auto *widget = acul::alloc<Image>(common.id, AUIK_INVALID_TEXTURE_ID, common.requested_size,
+            auto *widget = acul::alloc<Image>(common.id, AUIK_INVALID_TEXTURE_ID, common.inline_size,
                                               amal::rect{{0.0f, 0.0f}, {1.0f, 1.0f}},
                                               WidgetFlags(common.widget_flags));
             widget->set_coverage_mode(coverage_mode);
@@ -152,7 +170,7 @@ namespace auik
             u32 style_tag = AUIK_STYLE_TAG_GRADIENT_SLIDER;
             stream.read(style_tag);
 
-            auto *widget = acul::alloc<CheckerImage>(common.id, common.requested_size, style_tag,
+            auto *widget = acul::alloc<CheckerImage>(common.id, common.inline_size, style_tag,
                                                      WidgetFlags(common.widget_flags));
             detail::apply_widget_common_data(widget, common);
             return widget;

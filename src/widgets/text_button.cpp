@@ -5,11 +5,37 @@
 
 namespace auik
 {
+    namespace
+    {
+        amal::vec2 resolve_text_button_title_position(const amal::vec2 &content_pos, const amal::vec2 &content_size,
+                                                      const amal::vec2 &text_size, ChildLayoutFlags layout)
+        {
+            amal::vec2 out = content_pos;
+            if (layout & ChildLayoutFlagBits::aright)
+                out.x += amal::floor(amal::max(content_size.x - text_size.x, 0.0f));
+            else if (layout & ChildLayoutFlagBits::hcenter)
+                out.x += amal::floor(amal::max(content_size.x - text_size.x, 0.0f) * 0.5f);
+
+            if (layout & ChildLayoutFlagBits::bottom)
+                out.y += amal::floor(amal::max(content_size.y - text_size.y, 0.0f));
+            else if (layout & ChildLayoutFlagBits::vcenter)
+                out.y += amal::floor(amal::max(content_size.y - text_size.y, 0.0f) * 0.5f);
+            return out;
+        }
+
+        ChildLayoutFlags resolve_style_align_layout(const Style &style)
+        {
+            const auto *align = style.align_settings();
+            return align ? ChildLayoutFlags(align->flags) : default_child_layout_flags();
+        }
+    } // namespace
+
     StyleUpdateFlags TextButton::update_style()
     {
         const u32 parent_id = parent() ? parent()->id() : 0u;
         const auto flags = resolve_style_selector(_style, id(), parent_id, style_state());
         const auto &style = get_theme()->get_style(_style.id);
+        apply_style_layout(style);
         _text->update_style();
         if (_resolved_text_color != style.text_color())
         {
@@ -29,8 +55,8 @@ namespace auik
         _text->update_layout_min_size();
         const amal::vec2 text_size = _text->required_size();
 
-        amal::vec2 min_size = {is_size_concrete(requested_size().x) ? requested_size().x : 0.0f,
-                               is_size_concrete(requested_size().y) ? requested_size().y : 0.0f};
+        amal::vec2 min_size = {is_size_concrete(style_size().x) ? style_size().x : 0.0f,
+                               is_size_concrete(style_size().y) ? style_size().y : 0.0f};
         const f32 content_min_width = text_size.x + padding.x + padding.z;
         const f32 content_min_height = amal::max(style.text_size(), text_size.y) + padding.y + padding.w;
         if (!is_width_fixed() || fill_width())
@@ -78,9 +104,10 @@ namespace auik
         const amal::vec2 content_size = {amal::max(button_size.x - padding.x - padding.z, 0.0f),
                                          amal::max(button_size.y - padding.y - padding.w, 0.0f)};
         const amal::vec2 text_size = _text->required_size();
-        _text->set_position({content_pos.x + amal::floor((content_size.x - text_size.x) * 0.5f),
-                             content_pos.y + amal::floor((content_size.y - text_size.y) * 0.5f)});
-        _text->set_layout_size(text_size);
+        const ChildLayoutFlags text_layout = resolve_style_align_layout(style);
+        const amal::vec2 text_bounds = {text_size.x, content_size.y};
+        _text->set_position(resolve_text_button_title_position(content_pos, content_size, text_bounds, text_layout));
+        _text->set_layout_size(text_bounds);
         _text->update_layout(true);
     }
 
@@ -155,10 +182,9 @@ namespace auik
             const auto text = detail::read_localized_string(stream);
             u32 style_tag = AUIK_STYLE_TAG_TEXT_BUTTON;
             stream.read(style_tag);
-            TextButton *text_button = acul::alloc<TextButton>(common.id, StringView{text.text.c_str(), text.translated},
-                                                              common.requested_size,
-                                                              WidgetFlags(common.widget_flags), EventFlagBits::none,
-                                                              style_tag);
+            TextButton *text_button =
+                acul::alloc<TextButton>(common.id, StringView{text.text.c_str(), text.translated}, common.inline_size,
+                                        WidgetFlags(common.widget_flags), EventFlagBits::none, style_tag);
             detail::apply_widget_common_data(text_button, common);
             return text_button;
         }

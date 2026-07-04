@@ -25,6 +25,19 @@ namespace auik
             return amal::max(size > 0.0f ? size : 120.0f, 1.0f);
         }
 
+        static inline f32 resolve_color_picker_inline_width(const Widget &widget)
+        {
+            const f32 width = widget.style_size().x;
+            if (is_size_concrete(width) && width > 0.0f) return width;
+            return resolve_color_picker_size();
+        }
+
+        static inline f32 resolve_color_picker_inline_axis(f32 value)
+        {
+            if (is_size_concrete(value) && value > 0.0f) return value;
+            return resolve_color_picker_size();
+        }
+
         static inline u32 calc_circle_auto_segment_count(f32 radius, f32 max_error = AUIK_CIRCLE_TESSELLATION_MAX_ERROR)
         {
             const f32 r = amal::max(radius, 1e-5f);
@@ -210,10 +223,10 @@ namespace auik
         }
     } // namespace detail
 
-    CircleColorPicker::CircleColorPicker(u32 id, const amal::vec4 &value, f32 diameter, WidgetFlags widget_flags)
-        : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::drag, {{0.0f, 0.0f}, {diameter, diameter}},
+    CircleColorPicker::CircleColorPicker(u32 id, const amal::vec4 &value, f32 inline_width, WidgetFlags widget_flags)
+        : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::drag,
+                 {{0.0f, 0.0f}, {inline_width, AUIK_SIZE_Y_INHERIT}},
                  AUIK_TAG_CIRCLE_COLOR_PICKER),
-          _preferred_side(diameter),
           _value(value)
     {
         _grab_hit_rect = detail::make_rect_data(id, AUIK_TAG_CIRCLE_COLOR_PICKER_GRAB);
@@ -309,8 +322,7 @@ namespace auik
     {
         const Style *picker_style = get_theme()->get_desc_style(AUIK_TAG_CIRCLE_COLOR_PICKER);
         const amal::vec4 margin = picker_style ? picker_style->margin() : amal::vec4{0.0f};
-        const f32 theme_side = detail::resolve_color_picker_size();
-        const f32 side = amal::max(_preferred_side > 0.0f ? _preferred_side : theme_side, 1.0f);
+        const f32 side = detail::resolve_color_picker_inline_width(*this);
         set_required_size({side + margin.x + margin.z, side + margin.y + margin.w});
     }
 
@@ -320,9 +332,13 @@ namespace auik
         const Style *picker_style = get_theme()->get_desc_style(AUIK_TAG_CIRCLE_COLOR_PICKER);
         const amal::vec4 margin = picker_style ? picker_style->margin() : amal::vec4{0.0f};
         const amal::vec2 layout_origin = position();
-        const f32 theme_side = detail::resolve_color_picker_size();
-        const f32 side = amal::max(_preferred_side > 0.0f ? _preferred_side : theme_side, 1.0f);
+        const f32 side = detail::resolve_color_picker_inline_width(*this);
         const amal::vec2 next_pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
+        const amal::vec2 old_pos = position();
+        const amal::vec2 old_size = size();
+        const bool can_translate_cache =
+            min_size_known && _cache_valid && old_size.x == side && old_size.y == side &&
+            (old_pos.x != next_pos.x || old_pos.y != next_pos.y);
 
         set_position(next_pos);
         set_layout_size({side, side});
@@ -331,7 +347,8 @@ namespace auik
         assert(parent() && "CircleColorPicker must have parent");
         set_clip_id(parent()->content_clip_id());
         _grab_hit_rect.clip_id = clip_id();
-        rebuild_cached_visuals();
+        if (can_translate_cache) translate_cached_visuals(next_pos - old_pos);
+        else rebuild_cached_visuals();
     }
 
     void CircleColorPicker::translate(const amal::vec2 &delta)
@@ -390,7 +407,9 @@ namespace auik
         if ((ctx.reason & DrawReasonBits::record) || wheel_visible ||
             _wheel_draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID)
         {
-            emit_context_draw(ctx, vertex_stream, _wheel_draw_id, &_wheel_batch, get_rect(), hit_pending);
+            emit_vertex_stream_batch(ctx, vertex_stream, _wheel_draw_id, _wheel_batch, get_rect(), hit_pending,
+                                     _wheel_offset_dirty);
+            _wheel_offset_dirty = false;
             hit_pending = false;
         }
         const bool grab_back_visible = _grab_back_visual.rect.size.x > 0.0f && _grab_back_visual.rect.size.y > 0.0f;
@@ -416,6 +435,8 @@ namespace auik
 
     void CircleColorPicker::rebuild_wheel_visual()
     {
+        _wheel_batch.offset = {0.0f, 0.0f};
+        _wheel_offset_dirty = false;
         _wheel_vertices.clear();
         _wheel_indices.clear();
         sync_batch();
@@ -586,8 +607,8 @@ namespace auik
         _grab_hit_rect.bounds.offset += delta;
         _grab_visual.rect.offset += delta;
         _grab_back_visual.rect.offset += delta;
-        for (auto &vertex : _wheel_vertices) vertex.position += delta;
-        sync_batch();
+        _wheel_batch.offset += delta;
+        _wheel_offset_dirty = true;
     }
 
     void CircleColorPicker::update_value_from_mouse()
@@ -635,11 +656,10 @@ namespace auik
         add_render_command<detail::DragEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
     }
 
-    GradientColorPicker::GradientColorPicker(u32 id, const amal::vec4 &value, const amal::vec2 &size,
+    GradientColorPicker::GradientColorPicker(u32 id, const amal::vec4 &value, const amal::vec2 &inline_size,
                                              WidgetFlags widget_flags)
-        : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::drag, {{0.0f, 0.0f}, size},
-                 AUIK_TAG_GRADIENT_COLOR_PICKER),
-          _preferred_size(size)
+        : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::drag, {{0.0f, 0.0f}, inline_size},
+                 AUIK_TAG_GRADIENT_COLOR_PICKER)
     {
         _grab_hit_rect = detail::make_rect_data(id, AUIK_TAG_GRADIENT_COLOR_PICKER_GRAB);
         _gradient_vertices.reserve(8);
@@ -672,9 +692,8 @@ namespace auik
     {
         const Style *picker_style = get_theme()->get_desc_style(AUIK_TAG_GRADIENT_COLOR_PICKER);
         const amal::vec4 margin = picker_style ? picker_style->margin() : amal::vec4{0.0f};
-        const f32 theme_side = detail::resolve_color_picker_size();
-        const f32 w = amal::max(_preferred_size.x > 0.0f ? _preferred_size.x : theme_side, 1.0f);
-        const f32 h = amal::max(_preferred_size.y > 0.0f ? _preferred_size.y : theme_side, 1.0f);
+        const f32 w = detail::resolve_color_picker_inline_axis(style_size().x);
+        const f32 h = detail::resolve_color_picker_inline_axis(style_size().y);
         set_required_size({w + margin.x + margin.z, h + margin.y + margin.w});
     }
 
@@ -687,6 +706,11 @@ namespace auik
         const amal::vec2 widget_size = {amal::max(required_size().x - margin.x - margin.z, 1.0f),
                                         amal::max(required_size().y - margin.y - margin.w, 1.0f)};
         const amal::vec2 next_pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
+        const amal::vec2 old_pos = position();
+        const amal::vec2 old_size = size();
+        const bool can_translate_cache =
+            min_size_known && _cache_valid && old_size.x == widget_size.x && old_size.y == widget_size.y &&
+            (old_pos.x != next_pos.x || old_pos.y != next_pos.y);
 
         set_position(next_pos);
         set_layout_size(widget_size);
@@ -694,8 +718,12 @@ namespace auik
         assert(parent() && "GradientColorPicker must have parent");
         set_clip_id(parent()->content_clip_id());
         _grab_hit_rect.clip_id = clip_id();
-        _gradient_rect = bounds();
-        rebuild_cached_visuals();
+        if (can_translate_cache) translate_cached_visuals(next_pos - old_pos);
+        else
+        {
+            _gradient_rect = bounds();
+            rebuild_cached_visuals();
+        }
     }
 
     void GradientColorPicker::translate(const amal::vec2 &delta)
@@ -755,7 +783,9 @@ namespace auik
         if ((ctx.reason & DrawReasonBits::record) || gradient_visible ||
             _gradient_draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID)
         {
-            emit_context_draw(ctx, vertex_stream, _gradient_draw_id, &_gradient_batch, get_rect(), hit_pending);
+            emit_vertex_stream_batch(ctx, vertex_stream, _gradient_draw_id, _gradient_batch, get_rect(), hit_pending,
+                                     _gradient_offset_dirty);
+            _gradient_offset_dirty = false;
             hit_pending = false;
         }
 
@@ -822,6 +852,8 @@ namespace auik
 
     void GradientColorPicker::rebuild_gradient_visual()
     {
+        _gradient_batch.offset = {0.0f, 0.0f};
+        _gradient_offset_dirty = false;
         _gradient_vertices.clear();
         _gradient_indices.clear();
         sync_batch();
@@ -960,8 +992,8 @@ namespace auik
         _grab_hit_rect.bounds.offset += delta;
         _grab_visual.rect.offset += delta;
         _grab_back_visual.rect.offset += delta;
-        for (auto &vertex : _gradient_vertices) vertex.position += delta;
-        sync_batch();
+        _gradient_batch.offset += delta;
+        _gradient_offset_dirty = true;
     }
 
     void GradientColorPicker::update_value_from_mouse()
@@ -1002,10 +1034,10 @@ namespace auik
         add_render_command<detail::DragEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
     }
 
-    SquareColorPicker::SquareColorPicker(u32 id, const amal::vec4 &value, f32 size, WidgetFlags widget_flags)
-        : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::drag, {{0.0f, 0.0f}, {size, size}},
-                 AUIK_TAG_SQUARE_COLOR_PICKER),
-          _preferred_side(size)
+    SquareColorPicker::SquareColorPicker(u32 id, const amal::vec4 &value, f32 inline_width, WidgetFlags widget_flags)
+        : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::drag,
+                 {{0.0f, 0.0f}, {inline_width, AUIK_SIZE_Y_INHERIT}},
+                 AUIK_TAG_SQUARE_COLOR_PICKER)
     {
         _ring_grab_hit_rect = detail::make_rect_data(id, AUIK_TAG_SQUARE_COLOR_PICKER_GRAB);
         _gradient = acul::alloc<GradientColorPicker>(id, value, amal::vec2{0.0f, 0.0f}, WidgetFlagBits::visible);
@@ -1043,8 +1075,7 @@ namespace auik
     {
         const Style *picker_style = get_theme()->get_desc_style(AUIK_TAG_SQUARE_COLOR_PICKER);
         const amal::vec4 margin = picker_style ? picker_style->margin() : amal::vec4{0.0f};
-        const f32 theme_side = detail::resolve_color_picker_size();
-        const f32 side = amal::max(_preferred_side > 0.0f ? _preferred_side : theme_side, 1.0f);
+        const f32 side = detail::resolve_color_picker_inline_width(*this);
         set_required_size({side + margin.x + margin.z, side + margin.y + margin.w});
     }
 
@@ -1054,9 +1085,13 @@ namespace auik
         const Style *picker_style = get_theme()->get_desc_style(AUIK_TAG_SQUARE_COLOR_PICKER);
         const amal::vec4 margin = picker_style ? picker_style->margin() : amal::vec4{0.0f};
         const amal::vec2 layout_origin = position();
-        const f32 theme_side = detail::resolve_color_picker_size();
-        const f32 side = amal::max(_preferred_side > 0.0f ? _preferred_side : theme_side, 1.0f);
+        const f32 side = detail::resolve_color_picker_inline_width(*this);
         const amal::vec2 next_pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
+        const amal::vec2 old_pos = position();
+        const amal::vec2 old_size = size();
+        const bool can_translate_cache =
+            min_size_known && _cache_valid && old_size.x == side && old_size.y == side &&
+            (old_pos.x != next_pos.x || old_pos.y != next_pos.y);
 
         set_position(next_pos);
         set_layout_size({side, side});
@@ -1065,7 +1100,8 @@ namespace auik
         assert(parent() && "SquareColorPicker must have parent");
         set_clip_id(parent()->content_clip_id());
         _ring_grab_hit_rect.clip_id = clip_id();
-        rebuild_cached_visuals();
+        if (can_translate_cache) translate_cached_visuals(next_pos - old_pos);
+        else rebuild_cached_visuals();
     }
 
     void SquareColorPicker::translate(const amal::vec2 &delta)
@@ -1131,7 +1167,9 @@ namespace auik
         if ((ctx.reason & DrawReasonBits::record) || ring_visible ||
             _ring_draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID)
         {
-            emit_context_draw(ctx, vertex_stream, _ring_draw_id, &_ring_batch, get_rect(), hit_pending);
+            emit_vertex_stream_batch(ctx, vertex_stream, _ring_draw_id, _ring_batch, get_rect(), hit_pending,
+                                     _ring_offset_dirty);
+            _ring_offset_dirty = false;
             hit_pending = false;
         }
         if (_gradient) _gradient->draw(ctx);
@@ -1225,6 +1263,8 @@ namespace auik
 
     void SquareColorPicker::rebuild_ring_visual()
     {
+        _ring_batch.offset = {0.0f, 0.0f};
+        _ring_offset_dirty = false;
         _ring_vertices.clear();
         _ring_indices.clear();
         sync_batches();
@@ -1339,9 +1379,9 @@ namespace auik
         _ring_grab_hit_rect.bounds.offset += delta;
         _ring_grab_visual.rect.offset += delta;
         _ring_grab_back_visual.rect.offset += delta;
-        for (auto &vertex : _ring_vertices) vertex.position += delta;
+        _ring_batch.offset += delta;
+        _ring_offset_dirty = true;
         if (_gradient) _gradient->translate(delta);
-        sync_batches();
     }
 
     SquareColorPicker::ActiveZone SquareColorPicker::pick_active_zone_from_mouse() const
@@ -1443,8 +1483,8 @@ namespace auik
             f32 radius = 0.0f;
             stream.read(color).read(hue).read(radius);
 
-            const f32 diameter = common.requested_size.x > 0.0f ? common.requested_size.x : common.requested_size.y;
-            auto *widget = acul::alloc<CircleColorPicker>(common.id, color, diameter, WidgetFlags(common.widget_flags));
+            auto *widget = acul::alloc<CircleColorPicker>(common.id, color, common.inline_size.x,
+                                                          WidgetFlags(common.widget_flags));
             widget->set_hue_radius(hue, radius);
             detail::apply_widget_common_data(widget, common);
             return widget;
@@ -1469,7 +1509,7 @@ namespace auik
             f32 value = 1.0f;
             stream.read(color).read(hue).read(saturation).read(value);
 
-            auto *widget = acul::alloc<GradientColorPicker>(common.id, color, common.requested_size,
+            auto *widget = acul::alloc<GradientColorPicker>(common.id, color, common.inline_size,
                                                             WidgetFlags(common.widget_flags));
             widget->set_hsv(hue, saturation, value);
             detail::apply_widget_common_data(widget, common);
@@ -1495,8 +1535,8 @@ namespace auik
             f32 value = 1.0f;
             stream.read(color).read(hue).read(saturation).read(value);
 
-            const f32 size = common.requested_size.x > 0.0f ? common.requested_size.x : common.requested_size.y;
-            auto *widget = acul::alloc<SquareColorPicker>(common.id, color, size, WidgetFlags(common.widget_flags));
+            auto *widget = acul::alloc<SquareColorPicker>(common.id, color, common.inline_size.x,
+                                                          WidgetFlags(common.widget_flags));
             widget->set_hsv(hue, saturation, value);
             detail::apply_widget_common_data(widget, common);
             return widget;

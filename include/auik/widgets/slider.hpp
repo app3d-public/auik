@@ -76,6 +76,13 @@ namespace auik
             bool has_layer(u8 layer) const { return (layer_mask & layer) != 0; }
             void set_layer(u8 layer) { layer_mask |= layer; }
             void clear_layer(u8 layer) { layer_mask &= static_cast<u8>(~layer); }
+
+            void translate(const amal::vec2 &delta)
+            {
+                background.rect.offset += delta;
+                fill.rect.offset += delta;
+                border.rect.offset += delta;
+            }
         };
 
         struct GradientTrackVisual
@@ -94,6 +101,12 @@ namespace auik
             {
                 data.clear();
                 valid = false;
+            }
+
+            void translate(const amal::vec2 &delta)
+            {
+                if (!valid) return;
+                data.translate(delta);
             }
         };
 
@@ -177,7 +190,6 @@ namespace auik
     class GradientSlider final : public Widget
     {
     public:
-        AUIK_EXPORT ~GradientSlider() override;
         AUIK_EXPORT GradientSlider(u32 id, f32 value, f32 min_value, f32 max_value,
                                    const acul::vector<amal::vec4> &colors, amal::axis axis, f32 size,
                                    WidgetFlags widget_flags);
@@ -404,14 +416,14 @@ namespace auik
     };
 
     inline Slider *make_slider(u32 id, f32 value, f32 min_value = 0.0f, f32 max_value = 1.0f,
-                               f32 size = AUIK_SIZE_X_FILL, amal::axis axis = amal::axis::x)
+                               f32 size = AUIK_SIZE_X_INHERIT, amal::axis axis = amal::axis::x)
     {
         return acul::alloc<Slider>(id, value, min_value, max_value, min_value, axis, size,
                                    detail::get_slider_widget_flags());
     }
 
     inline GradientSlider *make_gradient_slider(u32 id, f32 value, f32 min_value, f32 max_value,
-                                                const acul::vector<amal::vec4> &colors, f32 size = AUIK_SIZE_X_FILL,
+                                                const acul::vector<amal::vec4> &colors, f32 size = AUIK_SIZE_X_INHERIT,
                                                 amal::axis axis = amal::axis::x)
     {
         return acul::alloc<GradientSlider>(id, value, min_value, max_value, colors, axis, size,
@@ -419,14 +431,14 @@ namespace auik
     }
 
     inline Slider *make_slider_with_range(u32 id, f32 value, f32 range_start_value, f32 min_value = 0.0f,
-                                          f32 max_value = 1.0f, f32 size = AUIK_SIZE_X_FILL,
+                                          f32 max_value = 1.0f, f32 size = AUIK_SIZE_X_INHERIT,
                                           amal::axis axis = amal::axis::x)
     {
         return acul::alloc<Slider>(id, value, min_value, max_value, range_start_value, axis, size,
                                    detail::get_slider_widget_flags());
     }
 
-    inline GradientSlider *make_hsl_slider(u32 id, f32 value, f32 size = AUIK_SIZE_X_FILL,
+    inline GradientSlider *make_hsl_slider(u32 id, f32 value, f32 size = AUIK_SIZE_X_INHERIT,
                                            amal::axis axis = amal::axis::x)
     {
         acul::vector<amal::vec4> hsl_colors{
@@ -438,18 +450,18 @@ namespace auik
     }
 
     inline GradientSlider *make_hsl_slider(u32 id, f32 value, amal::axis axis)
-    { return make_hsl_slider(id, value, AUIK_SIZE_X_FILL, axis); }
+    { return make_hsl_slider(id, value, AUIK_SIZE_X_INHERIT, axis); }
 
     inline TransparencySlider *make_transparency_slider(u32 id, f32 value, const amal::vec4 &color,
                                                         f32 min_value = 0.0f, f32 max_value = 1.0f,
-                                                        f32 size = AUIK_SIZE_X_FILL, amal::axis axis = amal::axis::x)
+                                                        f32 size = AUIK_SIZE_X_INHERIT, amal::axis axis = amal::axis::x)
     {
         return acul::alloc<TransparencySlider>(id, value, min_value, max_value, size, color, axis,
                                                detail::get_slider_widget_flags());
     }
 
     inline RangeSlider *make_range_slider(u32 id, f32 from_value, f32 to_value, f32 min_value = 0.0f,
-                                          f32 max_value = 1.0f, f32 size = AUIK_SIZE_X_FILL,
+                                          f32 max_value = 1.0f, f32 size = AUIK_SIZE_X_INHERIT,
                                           amal::axis axis = amal::axis::x)
     {
         return acul::alloc<RangeSlider>(id, from_value, to_value, min_value, max_value, axis, size,
@@ -457,7 +469,7 @@ namespace auik
     }
 
     inline RangeSlider *make_range_slider(u32 id, ModelBinding *binding, f32 min_value = 0.0f, f32 max_value = 1.0f,
-                                          f32 size = AUIK_SIZE_X_FILL, amal::axis axis = amal::axis::x)
+                                          f32 size = AUIK_SIZE_X_INHERIT, amal::axis axis = amal::axis::x)
     {
         return acul::alloc<RangeSlider>(id, binding, min_value, max_value, axis, size,
                                         detail::get_slider_widget_flags());

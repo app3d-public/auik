@@ -9,9 +9,18 @@
 #define AUIK_TAG_DUMMY                   0xD5A4C970u
 #define AUIK_TAG_COLLAPSE_HEADER         0x565C9C5Eu
 #define AUIK_TAG_COLLAPSE_HEADER_TRIGGER 0x4ABB6689u
+#define AUIK_TAG_WIDGET_STACK            0xE9A58F31u
+#define AUIK_TAG_WIDGET_REF              0x7C5F435Au
 
 namespace auik
 {
+    enum class BlockChildLayer : u8
+    {
+        background,
+        work,
+        foreground
+    };
+
     namespace detail
     {
         amal::vec2 compute_children_layout_required_size(const acul::vector<Widget *> &children,
@@ -37,19 +46,17 @@ namespace auik
 
         AUIK_EXPORT void clear_children();
         AUIK_EXPORT void add_child(Widget *child, ChildLayoutFlags layout = default_child_layout_flags());
+        AUIK_EXPORT void add_child_to_background(Widget *child,
+                                                 ChildLayoutFlags layout = default_child_layout_flags());
+        AUIK_EXPORT void add_child_to_foreground(Widget *child,
+                                                 ChildLayoutFlags layout = default_child_layout_flags());
         AUIK_EXPORT void set_child_layout(size_t index, ChildLayoutFlags layout);
         AUIK_EXPORT void set_width(f32 value);
         AUIK_EXPORT void set_height(f32 value);
         AUIK_EXPORT void set_size(const amal::vec2 &value);
-        AUIK_EXPORT void set_kv_width(u32 key);
-        AUIK_EXPORT void set_kv_height(u32 key);
-        AUIK_EXPORT void set_kv_size(u32 key);
-        AUIK_EXPORT void set_kv_size(u32 width_key, u32 height_key);
         void set_inline_spacing(f32 value) { _inline_spacing = value; }
         const acul::vector<ChildLayoutFlags> &child_layouts() const { return _child_layouts; }
         amal::vec2 explicit_size() const { return _explicit_size; }
-        amal::uvec2 size_key() const { return _size_key; }
-        u32 size_vec_key() const { return _size_vec_key; }
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
         AUIK_EXPORT void update_layout_min_size() override;
@@ -58,6 +65,7 @@ namespace auik
         AUIK_EXPORT void reset_clip_rect_records() override;
         AUIK_EXPORT void rebuild_clip_rects() override;
         AUIK_EXPORT void reset_draw_records() override;
+        AUIK_EXPORT u32 get_depth_requirement() const override;
         AUIK_EXPORT void update_depth(const amal::vec2 &depth_range) override;
         AUIK_EXPORT void back_hit_depth() override;
         AUIK_EXPORT void restore_hit_depth() override;
@@ -76,17 +84,20 @@ namespace auik
         AUIK_EXPORT virtual void layout_children(const amal::vec2 &content_pos, const amal::vec2 &content_size);
         AUIK_EXPORT void update_layout_min_size_with(const amal::vec4 &margin, const amal::vec4 &padding);
         AUIK_EXPORT void update_layout_with(bool min_size_known, const amal::vec4 &margin, const amal::vec4 &padding);
-        AUIK_EXPORT void add_child_with_flags(Widget *child, ChildLayoutFlags layout);
         AUIK_EXPORT bool has_explicit_width() const;
         AUIK_EXPORT bool has_explicit_height() const;
         AUIK_EXPORT f32 resolved_explicit_width() const;
         AUIK_EXPORT f32 resolved_explicit_height() const;
+        AUIK_EXPORT ChildLayoutFlags resolve_child_layout(Widget *child, ChildLayoutFlags layout) const;
+        AUIK_EXPORT void refresh_child_layout(size_t index);
+        AUIK_EXPORT void refresh_child_layouts();
+        acul::vector<ChildLayoutFlags> _explicit_child_layouts;
         acul::vector<ChildLayoutFlags> _child_layouts;
+        acul::vector<BlockChildLayer> _child_layers;
 
     private:
+        AUIK_EXPORT void add_child_to_layer(Widget *child, ChildLayoutFlags layout, BlockChildLayer layer);
         amal::vec2 _explicit_size = AUIK_SIZE_FIT;
-        amal::uvec2 _size_key{0u, 0u};
-        u32 _size_vec_key = 0u;
         f32 _inline_spacing = 0.0f;
     };
 
@@ -119,6 +130,7 @@ namespace auik
         AUIK_EXPORT void reset_clip_rect_records() override;
         AUIK_EXPORT void rebuild_clip_rects() override;
         AUIK_EXPORT void reset_draw_records() override;
+        AUIK_EXPORT u32 get_depth_requirement() const override;
         AUIK_EXPORT void update_depth(const amal::vec2 &depth_range) override;
         AUIK_EXPORT void back_hit_depth() override;
         AUIK_EXPORT void restore_hit_depth() override;
@@ -139,7 +151,6 @@ namespace auik
         u32 scrollbar_track_style_tag() const { return _scrollbar_track_style_tag; }
         u32 scrollbar_thumb_style_tag() const { return _scrollbar_thumb_style_tag; }
         AUIK_EXPORT void override_content_clip_rect(const amal::vec4 &rect);
-        AUIK_EXPORT void clear_content_clip_rect_override();
         bool has_visible_scrollbar_x() const { return _scrollbar_x && _scrollbar_x->is_visible(); }
         bool has_visible_scrollbar_y() const { return _scrollbar_y && _scrollbar_y->is_visible(); }
         void reset_scroll_offset() { _content_offset = {0.0f, 0.0f}; }
@@ -182,6 +193,100 @@ namespace auik
         DrawBlockFlags _draw_flags = DrawBlockFlagBits::scrollbar_x | DrawBlockFlagBits::scrollbar_y;
         u32 _scrollbar_track_style_tag = AUIK_STYLE_TAG_SCROLLBAR_TRACK_INTERNAL;
         u32 _scrollbar_thumb_style_tag = AUIK_STYLE_TAG_SCROLLBAR_THUMB_INTERNAL;
+    };
+
+    class WidgetRef final : public Widget
+    {
+    public:
+        AUIK_EXPORT explicit WidgetRef(Widget *target = nullptr,
+                                       WidgetFlags widget_flags = WidgetFlagBits::visible |
+                                                                  WidgetFlagBits::configurable);
+        AUIK_EXPORT ~WidgetRef() override;
+
+        AUIK_EXPORT void set_target(Widget *target);
+        Widget *target() const { return _target; }
+        AUIK_EXPORT void set_ref_active(bool active);
+        bool ref_active() const { return _ref_active; }
+
+        AUIK_EXPORT StyleUpdateFlags update_style() override;
+        AUIK_EXPORT void update_layout_min_size() override;
+        AUIK_EXPORT void update_layout(bool min_size_known) override;
+        AUIK_EXPORT void translate(const amal::vec2 &delta) override;
+        AUIK_EXPORT void reset_clip_rect_records() override;
+        AUIK_EXPORT void rebuild_clip_rects() override;
+        AUIK_EXPORT void reset_draw_records() override;
+        AUIK_EXPORT u32 get_depth_requirement() const override;
+        AUIK_EXPORT void update_depth(const amal::vec2 &depth_range) override;
+        AUIK_EXPORT void back_hit_depth() override;
+        AUIK_EXPORT void restore_hit_depth() override;
+        AUIK_EXPORT void draw(DrawCtx &ctx) override;
+        u32 signature() const override { return AUIK_TAG_WIDGET_REF; }
+        AUIK_EXPORT amal::vec2 requested_size() const override;
+        u16 content_clip_id() const override { return clip_id(); }
+        amal::vec4 get_content_clip_rect() const override
+        { return clip_id() != 0xFFFFu ? get_clip_rect(clip_id()) : get_main_viewport_rect(); }
+
+    private:
+        void save_target_layout();
+        void restore_target_layout();
+        void apply_target_layout();
+
+        Widget *_target = nullptr;
+        Widget *_saved_parent = nullptr;
+        bool _ref_active = false;
+        bool _saved_layout_valid = false;
+        amal::vec2 _saved_position{0.0f, 0.0f};
+        amal::vec2 _saved_size{0.0f, 0.0f};
+    };
+
+    class WidgetStack final : public Widget
+    {
+    public:
+        AUIK_EXPORT explicit WidgetStack(WidgetFlags widget_flags = WidgetFlagBits::visible |
+                                                                    WidgetFlagBits::attachable |
+                                                                    WidgetFlagBits::configurable);
+        AUIK_EXPORT ~WidgetStack() override;
+
+        AUIK_EXPORT void clear_children();
+        AUIK_EXPORT void add_child(Widget *child);
+        AUIK_EXPORT void add_child_to_background(Widget *child);
+        AUIK_EXPORT void add_child_to_foreground(Widget *child);
+        AUIK_EXPORT void set_active_index(size_t index);
+        size_t active_index() const { return _active_index; }
+        Widget *active_child() const;
+        AUIK_EXPORT bool is_active_child(const Widget *child) const;
+        size_t child_count() const { return _children.size(); }
+        const acul::vector<Widget *> &children() const { return _children; }
+        const acul::vector<BlockChildLayer> &child_layers() const { return _child_layers; }
+
+        AUIK_EXPORT StyleUpdateFlags update_style() override;
+        AUIK_EXPORT void update_layout_min_size() override;
+        AUIK_EXPORT void update_layout(bool min_size_known) override;
+        AUIK_EXPORT void translate(const amal::vec2 &delta) override;
+        AUIK_EXPORT void reset_clip_rect_records() override;
+        AUIK_EXPORT void rebuild_clip_rects() override;
+        AUIK_EXPORT void reset_draw_records() override;
+        AUIK_EXPORT u32 get_depth_requirement() const override;
+        AUIK_EXPORT void update_depth(const amal::vec2 &depth_range) override;
+        AUIK_EXPORT void back_hit_depth() override;
+        AUIK_EXPORT void restore_hit_depth() override;
+        AUIK_EXPORT void draw(DrawCtx &ctx) override;
+        AUIK_EXPORT void on_attach() override;
+        AUIK_EXPORT void on_detach() override;
+        u32 signature() const override { return AUIK_TAG_WIDGET_STACK; }
+        AUIK_EXPORT amal::vec2 requested_size() const override;
+        u16 content_clip_id() const override { return parent() ? parent()->content_clip_id() : clip_id(); }
+        amal::vec4 get_content_clip_rect() const override
+        { return parent() ? parent()->get_content_clip_rect() : get_clip_rect(content_clip_id()); }
+
+    private:
+        void set_child_ref_active(Widget *child, bool active);
+        void add_layer_child(Widget *child, BlockChildLayer layer);
+        void update_layer_layout(BlockChildLayer layer);
+
+        acul::vector<Widget *> _children;
+        acul::vector<BlockChildLayer> _child_layers;
+        size_t _active_index = 0u;
     };
 
     class CollapseHeader final : public Block
@@ -282,6 +387,10 @@ namespace auik
     inline Dummy *make_dummy(amal::vec2 size = AUIK_SIZE_AUTO)
     { return acul::alloc<Dummy>(AUIK_TAG_DUMMY, size, WidgetFlagBits::visible); }
 
+    inline WidgetStack *make_widget_stack() { return acul::alloc<WidgetStack>(); }
+
+    inline WidgetRef *make_widget_ref(Widget *target = nullptr) { return acul::alloc<WidgetRef>(target); }
+
     inline CollapseHeader *make_collapse_header(u32 id, StringView label, bool expanded = true)
     {
         return acul::alloc<CollapseHeader>(
@@ -293,6 +402,8 @@ namespace auik
     {
         extern AUIK_EXPORT const umbf::streams::Stream block;
         extern AUIK_EXPORT const umbf::streams::Stream draw_block;
+        extern AUIK_EXPORT const umbf::streams::Stream widget_stack;
+        extern AUIK_EXPORT const umbf::streams::Stream widget_ref;
         extern AUIK_EXPORT const umbf::streams::Stream collapse_header;
         extern AUIK_EXPORT const umbf::streams::Stream dummy;
     } // namespace streams

@@ -313,7 +313,7 @@ namespace auik::detail
         return changed;
     }
 
-    void PopupTrigger::update_layout_min_size(amal::vec2 requested_size, bool fixed)
+    void PopupTrigger::update_layout_min_size(amal::vec2 style_size, bool fixed)
     {
         ensure_icon_resources();
         const auto &style = get_theme()->get_style(_style.id);
@@ -323,7 +323,7 @@ namespace auik::detail
         if (icon_size.x <= 0.0f || icon_size.y <= 0.0f) icon_size = {style.text_size(), style.text_size()};
         const amal::vec2 content_required = {icon_size.x + padding.x + padding.z, icon_size.y + padding.y + padding.w};
 
-        amal::vec2 min_size = requested_size;
+        amal::vec2 min_size = style_size;
         if (fixed && min_size.x <= 0.0f && min_size.y <= 0.0f)
         {
             const f32 side = amal::max(content_required.x, content_required.y);

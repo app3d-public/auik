@@ -6,10 +6,10 @@
 namespace auik
 {
     WLine::WLine(u32 id, amal::axis axis, WidgetFlags flags)
-        : Widget(id, flags, EventFlagBits::none, {}, AUIK_TAG_WLINE), _axis(axis)
+        : Widget(id, flags, EventFlagBits::none, {{0.0f, 0.0f}, AUIK_SIZE_INHERIT}, AUIK_TAG_WLINE), _axis(axis)
     {
-        set_size(_axis == amal::axis::x ? amal::vec2{AUIK_SIZE_X_FILL, AUIK_SIZE_Y_FIT}
-                                        : amal::vec2{AUIK_SIZE_X_FIT, AUIK_SIZE_Y_FILL});
+        set_requested_size(_axis == amal::axis::x ? amal::vec2{AUIK_SIZE_X_FILL, AUIK_SIZE_Y_FIT}
+                                                  : amal::vec2{AUIK_SIZE_X_FIT, AUIK_SIZE_Y_FILL});
     }
 
     void WLine::set_style_tag(u32 tag_id)
@@ -19,23 +19,45 @@ namespace auik
     }
 
     StyleUpdateFlags WLine::update_style()
-    { return resolve_style_selector(_style, id(), parent() ? parent()->id() : 0u, style_state()); }
+    {
+        const auto flags = resolve_style_selector(_style, id(), parent() ? parent()->id() : 0u, style_state());
+        apply_style_layout(get_theme()->get_style(_style.id));
+        return flags;
+    }
 
     void WLine::update_layout_min_size()
     {
         if (_style.id == Theme::STYLE_ID_INVALID) update_style();
-        const auto padding = get_theme()->get_style(_style.id).padding();
-        const f32 thickness =
-            _axis == amal::axis::x ? amal::max(padding.y + padding.w, 1.0f) : amal::max(padding.x + padding.z, 1.0f);
-        const f32 length = _axis == amal::axis::x ? (is_width_fixed() && !fill_width() ? requested_size().x : 0.0f)
-                                                  : (is_height_fixed() && !fill_height() ? requested_size().y : 0.0f);
-        set_required_size(_axis == amal::axis::x ? amal::vec2{length, thickness} : amal::vec2{thickness, length});
+        const auto &style = get_theme()->get_style(_style.id);
+        const auto margin = style.margin();
+        const auto padding = style.padding();
+        const bool has_fixed_cross = _axis == amal::axis::x ? is_height_fixed() : is_width_fixed();
+        const f32 style_thickness = _axis == amal::axis::x ? style_size().y : style_size().x;
+        const f32 padding_thickness = _axis == amal::axis::x ? padding.y + padding.w : padding.x + padding.z;
+        const f32 thickness = has_fixed_cross ? amal::max(style_thickness, 0.0f)
+                                              : amal::max(padding_thickness, 1.0f);
+        const f32 length = _axis == amal::axis::x ? (is_width_fixed() && !fill_width() ? style_size().x : 0.0f)
+                                                  : (is_height_fixed() && !fill_height() ? style_size().y : 0.0f);
+        const amal::vec2 line_size = _axis == amal::axis::x ? amal::vec2{length, thickness}
+                                                            : amal::vec2{thickness, length};
+        set_required_size({line_size.x + margin.x + margin.z, line_size.y + margin.y + margin.w});
     }
 
     void WLine::update_layout(bool min_size_known)
     {
         if (!min_size_known) update_layout_min_size();
-        set_layout_size(amal::max(size(), required_size()));
+        if (_style.id == Theme::STYLE_ID_INVALID) update_style();
+        const auto margin = get_theme()->get_style(_style.id).margin();
+        const amal::vec2 min_line_size = {amal::max(required_size().x - margin.x - margin.z, 0.0f),
+                                          amal::max(required_size().y - margin.y - margin.w, 0.0f)};
+        amal::vec2 line_size = {amal::max(size().x - margin.x - margin.z, 0.0f),
+                                amal::max(size().y - margin.y - margin.w, 0.0f)};
+        if (fill_width() || is_width_fixed()) line_size.x = amal::max(line_size.x, min_line_size.x);
+        else line_size.x = min_line_size.x;
+        if (fill_height() || is_height_fixed()) line_size.y = amal::max(line_size.y, min_line_size.y);
+        else line_size.y = min_line_size.y;
+        if (parent()) set_position(position() + amal::vec2{margin.x, margin.y});
+        set_layout_size(line_size);
         Widget::update_layout(true);
         if (parent()) set_clip_id(parent()->content_clip_id());
         else ensure_own_clip_rect({position().x, position().y, size().x, size().y});
@@ -74,7 +96,11 @@ namespace auik
     }
 
     StyleUpdateFlags WRect::update_style()
-    { return resolve_style_selector(_style, id(), parent() ? parent()->id() : 0u, style_state()); }
+    {
+        const auto flags = resolve_style_selector(_style, id(), parent() ? parent()->id() : 0u, style_state());
+        apply_style_layout(get_theme()->get_style(_style.id));
+        return flags;
+    }
 
     void WRect::update_layout_min_size()
     {
@@ -82,8 +108,9 @@ namespace auik
         const auto &style = get_theme()->get_style(_style.id);
         const auto margin = style.margin();
         const auto padding = style.padding();
-        set_required_size({size().x + margin.x + margin.z + padding.x + padding.z,
-                           size().y + margin.y + margin.w + padding.y + padding.w});
+        const f32 width = is_width_fixed() ? style_size().x : size().x + padding.x + padding.z;
+        const f32 height = is_height_fixed() ? style_size().y : size().y + padding.y + padding.w;
+        set_required_size({width + margin.x + margin.z, height + margin.y + margin.w});
     }
 
     void WRect::update_layout(bool min_size_known)
@@ -92,10 +119,16 @@ namespace auik
         if (_style.id == Theme::STYLE_ID_INVALID) update_style();
         const auto &style = get_theme()->get_style(_style.id);
         const auto margin = style.margin();
-        const auto padding = style.padding();
+        const amal::vec2 min_rect_size = {amal::max(required_size().x - margin.x - margin.z, 0.0f),
+                                          amal::max(required_size().y - margin.y - margin.w, 0.0f)};
+        amal::vec2 rect_size = {amal::max(size().x - margin.x - margin.z, 0.0f),
+                                amal::max(size().y - margin.y - margin.w, 0.0f)};
+        if (fill_width() || is_width_fixed()) rect_size.x = amal::max(rect_size.x, min_rect_size.x);
+        else rect_size.x = min_rect_size.x;
+        if (fill_height() || is_height_fixed()) rect_size.y = amal::max(rect_size.y, min_rect_size.y);
+        else rect_size.y = min_rect_size.y;
         if (parent()) set_position(position() + amal::vec2{margin.x, margin.y});
-        set_layout_size({amal::max(size().x, required_size().x - margin.x - margin.z - padding.x - padding.z),
-                         amal::max(size().y, required_size().y - margin.y - margin.w - padding.y - padding.w)});
+        set_layout_size(rect_size);
         Widget::update_layout(true);
         if (parent()) set_clip_id(parent()->content_clip_id());
         else ensure_own_clip_rect({position().x, position().y, size().x, size().y});

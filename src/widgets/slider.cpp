@@ -188,16 +188,19 @@ namespace auik
             visual.border_draw_id = {};
         }
 
-        static inline amal::vec2 make_slider_requested_size(f32 length, amal::axis axis)
-        { return axis == amal::axis::y ? amal::vec2{0.0f, length} : amal::vec2{length, 0.0f}; }
+        static inline amal::vec2 make_slider_style_size(f32 length, amal::axis axis)
+        {
+            return axis == amal::axis::y ? amal::vec2{AUIK_SIZE_X_MIN_FIT, length}
+                                         : amal::vec2{length, AUIK_SIZE_Y_MIN_FIT};
+        }
 
         static inline amal::vec2 resolve_slider_min_body_size(const Widget &widget, const Style &track_style,
                                                               amal::axis axis)
         {
             const amal::vec4 margin = track_style.margin();
             const amal::vec4 padding = track_style.padding();
-            amal::vec2 min_size = {is_size_concrete(widget.requested_size().x) ? widget.requested_size().x : 0.0f,
-                                   is_size_concrete(widget.requested_size().y) ? widget.requested_size().y : 0.0f};
+            amal::vec2 min_size = {is_size_concrete(widget.style_size().x) ? widget.style_size().x : 0.0f,
+                                   is_size_concrete(widget.style_size().y) ? widget.style_size().y : 0.0f};
 
             const f32 min_track_size =
                 amal::max(6.0f, track_style.border_radius() > 0.0f ? track_style.border_radius() * 2.0f : 0.0f);
@@ -280,7 +283,7 @@ namespace auik
     Slider::Slider(u32 id, f32 value, f32 min_value, f32 max_value, f32 range_start_value, amal::axis axis, f32 size,
                    WidgetFlags widget_flags)
         : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::drag,
-                 {{0.0f, 0.0f}, detail::make_slider_requested_size(size, axis)}, AUIK_STYLE_TAG_SLIDER),
+                 {{0.0f, 0.0f}, detail::make_slider_style_size(size, axis)}, AUIK_STYLE_TAG_SLIDER),
           _value(value),
           _range_start_value(range_start_value),
           _min_value(min_value),
@@ -310,6 +313,7 @@ namespace auik
         if (_track_style.id == Theme::STYLE_ID_INVALID)
             out |= detail::resolve_style_and_mark_redraw(_track_style, _track_style.tag_id, parent_id,
                                                          StyleState::normal, track_or_fill_changed);
+        apply_style_layout(get_theme()->get_style(_track_style.id));
         if (_fill_style.id == Theme::STYLE_ID_INVALID)
             out |= detail::resolve_style_and_mark_redraw(_fill_style, _fill_style.tag_id, parent_id, StyleState::active,
                                                          track_or_fill_changed);
@@ -400,8 +404,8 @@ namespace auik
         _track_rect.offset += delta;
         _grab_rect.offset += delta;
         _grab_hit_rect.bounds.offset += delta;
-        rebuild_track_visuals();
-        rebuild_grab_visual();
+        _track_visual.translate(delta);
+        _grab_visual.rect.offset += delta;
     }
 
     void Slider::rebuild_clip_rects()
@@ -686,7 +690,7 @@ namespace auik
                                    const acul::vector<amal::vec4> &colors, amal::axis axis, f32 size,
                                    WidgetFlags widget_flags)
         : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::drag,
-                 {{0.0f, 0.0f}, detail::make_slider_requested_size(size, axis)}, AUIK_STYLE_TAG_GRADIENT_SLIDER),
+                 {{0.0f, 0.0f}, detail::make_slider_style_size(size, axis)}, AUIK_STYLE_TAG_GRADIENT_SLIDER),
           _value(value),
           _min_value(min_value),
           _max_value(max_value),
@@ -705,8 +709,6 @@ namespace auik
                                    WidgetFlags widget_flags)
         : GradientSlider(id, 0.0f, min_value, max_value, colors, axis, size, widget_flags)
     { set_model_binding(binding); }
-
-    GradientSlider::~GradientSlider() {}
 
     StyleUpdateFlags GradientSlider::update_style()
     {
@@ -730,6 +732,7 @@ namespace auik
         };
 
         if (_track_style.id == Theme::STYLE_ID_INVALID) out |= resolve_track_state(StyleState::normal);
+        apply_style_layout(get_theme()->get_style(_track_style.id));
         if (_grab_style.id == Theme::STYLE_ID_INVALID) out |= resolve_grab_state(StyleState::normal);
 
         const auto transition = detail::get_widget_style_selector_transition(id());
@@ -784,6 +787,11 @@ namespace auik
         else slider_size.y = amal::max(slider_size.y, min_required.y - margin.y - margin.w);
 
         const amal::vec2 pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
+        const amal::vec2 old_pos = position();
+        const amal::vec2 old_size = size();
+        const bool can_translate_cache =
+            min_size_known && old_size.x == slider_size.x && old_size.y == slider_size.y &&
+            (old_pos.x != pos.x || old_pos.y != pos.y);
         set_position(pos);
         set_layout_size(slider_size);
         Widget::update_layout(true);
@@ -791,8 +799,23 @@ namespace auik
         set_clip_id(parent()->content_clip_id());
         _grab_hit_rect.clip_id = clip_id();
 
-        rebuild_track_visuals();
-        rebuild_grab_visual();
+        if (can_translate_cache)
+        {
+            const amal::vec2 delta = pos - old_pos;
+            detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
+            _track_rect.offset += delta;
+            _grab_rect.offset += delta;
+            _grab_hit_rect.bounds.offset += delta;
+            _track_visual.translate(delta);
+            _gradient_visual.translate(delta);
+            _grab_visual.rect.offset += delta;
+            _grab_back_visual.rect.offset += delta;
+        }
+        else
+        {
+            rebuild_track_visuals();
+            rebuild_grab_visual();
+        }
     }
 
     void GradientSlider::translate(const amal::vec2 &delta)
@@ -803,8 +826,10 @@ namespace auik
         _track_rect.offset += delta;
         _grab_rect.offset += delta;
         _grab_hit_rect.bounds.offset += delta;
-        rebuild_track_visuals();
-        rebuild_grab_visual();
+        _track_visual.translate(delta);
+        _gradient_visual.translate(delta);
+        _grab_visual.rect.offset += delta;
+        _grab_back_visual.rect.offset += delta;
     }
 
     void GradientSlider::rebuild_clip_rects()
@@ -871,8 +896,9 @@ namespace auik
         if (_gradient_visual.valid || ((ctx.reason & DrawReasonBits::invalidate) &&
                                        _gradient_visual.draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID))
         {
-            emit_context_draw(ctx, vertex_stream, _gradient_visual.draw_id, &_gradient_visual.data.batch,
-                              track_hit_rect, hit_pending);
+            emit_vertex_stream_batch(ctx, vertex_stream, _gradient_visual.draw_id, _gradient_visual.data.batch,
+                                     track_hit_rect, hit_pending, _gradient_visual.data.offset_dirty);
+            _gradient_visual.data.offset_dirty = false;
             hit_pending = false;
         }
         layer_hit = hit_pending;
@@ -1053,12 +1079,12 @@ namespace auik
     TransparencySlider::TransparencySlider(u32 id, f32 value, f32 min_value, f32 max_value, f32 size,
                                            const amal::vec4 &color, amal::axis axis, WidgetFlags widget_flags)
         : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::drag,
-                 {{0.0f, 0.0f}, detail::make_slider_requested_size(size, axis)}, AUIK_STYLE_TAG_GRADIENT_SLIDER),
+                 {{0.0f, 0.0f}, detail::make_slider_style_size(size, axis)}, AUIK_STYLE_TAG_GRADIENT_SLIDER),
           _value(value),
           _min_value(min_value),
           _max_value(max_value),
           _axis(axis),
-          _checker(acul::alloc<CheckerImage>(id, detail::make_slider_requested_size(size, axis),
+          _checker(acul::alloc<CheckerImage>(id, detail::make_slider_style_size(size, axis),
                                              AUIK_STYLE_TAG_GRADIENT_SLIDER, WidgetFlagBits::visible)),
           _color(color)
     {
@@ -1096,6 +1122,7 @@ namespace auik
         };
 
         if (_track_style.id == Theme::STYLE_ID_INVALID) out |= resolve_track_state(StyleState::normal);
+        apply_style_layout(get_theme()->get_style(_track_style.id));
         if (_grab_style.id == Theme::STYLE_ID_INVALID) out |= resolve_grab_state(StyleState::normal);
 
         const auto transition = detail::get_widget_style_selector_transition(id());
@@ -1183,8 +1210,8 @@ namespace auik
         const amal::vec4 margin = track_style.margin();
         const amal::vec4 padding = track_style.padding();
 
-        amal::vec2 min_size = {is_size_concrete(requested_size().x) ? requested_size().x : 0.0f,
-                               is_size_concrete(requested_size().y) ? requested_size().y : 0.0f};
+        amal::vec2 min_size = {is_size_concrete(style_size().x) ? style_size().x : 0.0f,
+                               is_size_concrete(style_size().y) ? style_size().y : 0.0f};
         const f32 min_track_h =
             amal::max(6.0f, track_style.border_radius() > 0.0f ? track_style.border_radius() * 2.0f : 0.0f);
         const f32 padded_h = padding.y + padding.w;
@@ -1232,6 +1259,11 @@ namespace auik
         else slider_size.y = amal::max(slider_size.y, min_required.y - margin.y - margin.w);
 
         const amal::vec2 pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
+        const amal::vec2 old_pos = position();
+        const amal::vec2 old_size = size();
+        const bool can_translate_cache =
+            min_size_known && old_size.x == slider_size.x && old_size.y == slider_size.y &&
+            (old_pos.x != pos.x || old_pos.y != pos.y);
         set_position(pos);
         set_layout_size(slider_size);
         Widget::update_layout(true);
@@ -1239,8 +1271,24 @@ namespace auik
         set_clip_id(parent()->content_clip_id());
         _grab_hit_rect.clip_id = clip_id();
 
-        rebuild_track_visuals();
-        rebuild_grab_visual();
+        if (can_translate_cache)
+        {
+            const amal::vec2 delta = pos - old_pos;
+            detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
+            _track_rect.offset += delta;
+            _grab_rect.offset += delta;
+            _grab_hit_rect.bounds.offset += delta;
+            if (_checker) _checker->translate(delta);
+            _track_visual.translate(delta);
+            _gradient_visual.translate(delta);
+            _grab_visual.rect.offset += delta;
+            _grab_back_visual.rect.offset += delta;
+        }
+        else
+        {
+            rebuild_track_visuals();
+            rebuild_grab_visual();
+        }
     }
 
     TransparencySlider::TransparencySlider(u32 id, ModelBinding *binding, f32 min_value, f32 max_value, f32 size,
@@ -1257,8 +1305,10 @@ namespace auik
         _grab_rect.offset += delta;
         _grab_hit_rect.bounds.offset += delta;
         if (_checker) _checker->translate(delta);
-        rebuild_track_visuals();
-        rebuild_grab_visual();
+        _track_visual.translate(delta);
+        _gradient_visual.translate(delta);
+        _grab_visual.rect.offset += delta;
+        _grab_back_visual.rect.offset += delta;
     }
 
     void TransparencySlider::rebuild_clip_rects()
@@ -1326,8 +1376,9 @@ namespace auik
         if (_gradient_visual.valid || ((ctx.reason & DrawReasonBits::invalidate) &&
                                        _gradient_visual.draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID))
         {
-            emit_context_draw(ctx, vertex_stream, _gradient_visual.draw_id, &_gradient_visual.data.batch,
-                              track_hit_rect, hit_pending);
+            emit_vertex_stream_batch(ctx, vertex_stream, _gradient_visual.draw_id, _gradient_visual.data.batch,
+                                     track_hit_rect, hit_pending, _gradient_visual.data.offset_dirty);
+            _gradient_visual.data.offset_dirty = false;
             hit_pending = false;
         }
         bool layer_hit = hit_pending;
@@ -1561,7 +1612,7 @@ namespace auik
     RangeSlider::RangeSlider(u32 id, f32 from_value, f32 to_value, f32 min_value, f32 max_value, amal::axis axis,
                              f32 size, WidgetFlags widget_flags)
         : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::drag,
-                 {{0.0f, 0.0f}, detail::make_slider_requested_size(size, axis)}, AUIK_STYLE_TAG_SLIDER),
+                 {{0.0f, 0.0f}, detail::make_slider_style_size(size, axis)}, AUIK_STYLE_TAG_SLIDER),
           _from_value(from_value),
           _to_value(to_value),
           _min_value(min_value),
@@ -1613,6 +1664,7 @@ namespace auik
         };
 
         if (_track_style.id == Theme::STYLE_ID_INVALID) out |= resolve_track_state(StyleState::normal);
+        apply_style_layout(get_theme()->get_style(_track_style.id));
         if (_fill_style.id == Theme::STYLE_ID_INVALID) out |= resolve_fill_state(StyleState::active);
         if (_from_grab_style.id == Theme::STYLE_ID_INVALID)
             out |= resolve_grab_state(_from_grab_style, StyleState::normal);
@@ -2163,7 +2215,7 @@ namespace auik
                 .read(fill_style_tag)
                 .read(grab_style_tag);
 
-            const f32 size = amal::axis(axis) == amal::axis::y ? common.requested_size.y : common.requested_size.x;
+            const f32 size = amal::axis(axis) == amal::axis::y ? common.inline_size.y : common.inline_size.x;
             auto *widget = acul::alloc<Slider>(common.id, value, min_value, max_value, range_start, amal::axis(axis),
                                                size, WidgetFlags(common.widget_flags));
             widget->set_style_tags(track_style_tag, fill_style_tag, grab_style_tag);
@@ -2212,7 +2264,7 @@ namespace auik
             colors.resize(color_count);
             if (color_count != 0u) stream.read(colors.data(), color_count);
 
-            const f32 size = amal::axis(axis) == amal::axis::y ? common.requested_size.y : common.requested_size.x;
+            const f32 size = amal::axis(axis) == amal::axis::y ? common.inline_size.y : common.inline_size.x;
             auto *widget = acul::alloc<GradientSlider>(common.id, value, min_value, max_value, colors, amal::axis(axis),
                                                        size, WidgetFlags(common.widget_flags));
             widget->set_style_tags(track_style_tag, grab_style_tag);
@@ -2255,7 +2307,7 @@ namespace auik
                 .read(track_style_tag)
                 .read(grab_style_tag);
 
-            const f32 size = amal::axis(axis) == amal::axis::y ? common.requested_size.y : common.requested_size.x;
+            const f32 size = amal::axis(axis) == amal::axis::y ? common.inline_size.y : common.inline_size.x;
             auto *widget = acul::alloc<TransparencySlider>(common.id, value, min_value, max_value, size, color,
                                                            amal::axis(axis), WidgetFlags(common.widget_flags));
             widget->set_style_tags(track_style_tag, grab_style_tag);
@@ -2304,7 +2356,7 @@ namespace auik
                 .read(from_grab_style_tag)
                 .read(to_grab_style_tag);
 
-            const f32 size = amal::axis(axis) == amal::axis::y ? common.requested_size.y : common.requested_size.x;
+            const f32 size = amal::axis(axis) == amal::axis::y ? common.inline_size.y : common.inline_size.x;
             auto *widget = acul::alloc<RangeSlider>(common.id, from_value, to_value, min_value, max_value,
                                                     amal::axis(axis), size, WidgetFlags(common.widget_flags));
             widget->set_style_tags(track_style_tag, fill_style_tag, from_grab_style_tag, to_grab_style_tag);

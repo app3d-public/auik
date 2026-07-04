@@ -29,7 +29,8 @@ namespace auik
     } // namespace
 
     Tooltip::Tooltip(u32 id)
-        : Widget(id, get_default_widget_flags(), EventFlagBits::none, {}, AUIK_TAG_TOOLTIP),
+        : Widget(id, get_default_widget_flags(), EventFlagBits::none, {{0.0f, 0.0f}, AUIK_SIZE_INHERIT},
+                 AUIK_TAG_TOOLTIP),
           _text(AUIK_TAG_ETEXT, StringView{""}, AUIK_SIZE_FIT, WidgetFlagBits::visible,
                 make_text_layout_flags(TextOverflowMode::ellipsis, TextWrapMode::none, TextLayoutWidthMode::bounds),
                 TextAnchorY::baseline)

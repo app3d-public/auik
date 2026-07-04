@@ -530,7 +530,6 @@ namespace auik
         acul::vector<u32> ids;
         FontLoadFlags load_flags = FontLoadFlagBits::none;
         FontRenderMode render_mode = FontRenderMode::normal;
-        amal::vec2 display_size{0.0f, 0.0f};
         const FontIconGlyphLoader *next = nullptr;
     };
 

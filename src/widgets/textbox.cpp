@@ -96,6 +96,16 @@ namespace auik
 
     static f32 snap_textbox_scroll_offset(f32 value) { return amal::round(value); }
 
+    static void apply_textbox_text_extras(Text &text, const Style &style)
+    {
+        if (const auto *text_extra = style.text_settings())
+        {
+            text.set_anchor_y(text_extra->anchor_y);
+            text.set_multiline(text_extra->wrap == TextWrapMode::word);
+            text.set_overflow_mode(text_extra->overflow);
+        }
+    }
+
     static void draw_text_drag_icon(DrawCtx &ctx, DrawDataID (&draw_ids)[AUIK_TEXTBOX_SELECTION_DRAG_DOT_COUNT],
                                     const amal::vec2 &drop_pos, f32 line_h, f32 z_order, u16 clip_id,
                                     const Style &style, bool visible)
@@ -149,9 +159,9 @@ namespace auik
         u8 flags = 0;
     };
 
-    Textbox::Textbox(u32 id, const acul::string &value, amal::vec2 size, WidgetFlags flags, u32 style_tag_id,
+    Textbox::Textbox(u32 id, const acul::string &value, amal::vec2 inline_size, WidgetFlags flags, u32 style_tag_id,
                      TextFlags text_flags, StringView placeholder, TextAnchorY text_anchor_y, TextWrapMode text_wrap)
-        : Widget(id, resolve_textbox_widget_flags(flags), resolve_textbox_event_flags(), {{0.0f, 0.0f}, size},
+        : Widget(id, resolve_textbox_widget_flags(flags), resolve_textbox_event_flags(), {{0.0f, 0.0f}, inline_size},
                  style_tag_id),
           _value(value),
           _text(AUIK_TAG_TEXT, make_textbox_presentation(value, text_flags), amal::vec2{0.0f, 0.0f},
@@ -199,6 +209,8 @@ namespace auik
     {
         const u32 parent_id = parent() ? parent()->id() : 0u;
         auto flags = resolve_style_selector(_style, id(), parent_id, style_state());
+        const auto &style = get_theme()->get_style(_style.id);
+        apply_style_layout(style);
         if (_edit)
         {
             flags |= resolve_style_selector(_edit->caret_style, id(), parent_id, StyleState::normal);
@@ -207,7 +219,12 @@ namespace auik
         }
         if (_scrollbar_y) flags |= _scrollbar_y->update_style();
         _text.update_style();
-        if (_placeholder) _placeholder->update_style();
+        apply_textbox_text_extras(_text, style);
+        if (_placeholder)
+        {
+            _placeholder->update_style();
+            apply_textbox_text_extras(*_placeholder, style);
+        }
         return flags;
     }
 
@@ -234,8 +251,8 @@ namespace auik
         f32 text_h = _text.required_size().y;
         if (_placeholder) text_h = amal::max(text_h, _placeholder->required_size().y);
 
-        amal::vec2 min_size = {is_width_fixed() ? requested_size().x : 0.0f,
-                               is_height_fixed() ? requested_size().y : 0.0f};
+        amal::vec2 min_size = {is_width_fixed() ? style_size().x : 0.0f,
+                               is_height_fixed() ? style_size().y : 0.0f};
         if (fill_width()) min_size.x = 160.0f;
         if (fill_height()) min_size.y = 0.0f;
         if (min_size.x <= 0.0f) min_size.x = 160.0f;
@@ -1427,12 +1444,8 @@ namespace auik
         const auto &line = layout.lines[line_index];
         const f32 line_y = line.glyph_count > 0 ? layout.glyphs[line.glyph_offset].pen.y - layout.ascender
                                                 : static_cast<f32>(line_index) * layout.line_height;
-        const amal::vec4 clip = get_clip_rect(text_content_clip_id());
-        const f32 visible_top = amal::max(clip.y - _content_pos.y, 0.0f);
-        const f32 visible_bottom = amal::min(clip.y + clip.w - _content_pos.y, _content_size.y);
-        const f32 visible_h = amal::max(visible_bottom - visible_top, 0.0f);
-        const f32 viewport_top = _content_scroll.y + visible_top;
-        const f32 viewport_bottom = _content_scroll.y + (visible_h > 0.0f ? visible_bottom : _content_size.y);
+        const f32 viewport_top = _content_scroll.y;
+        const f32 viewport_bottom = _content_scroll.y + _content_size.y;
         const f32 caret_top = align_y + line_y;
         const f32 caret_bottom = caret_top + line_h;
 
@@ -1679,10 +1692,10 @@ namespace auik
         return self ? detail::prev_utf8_index(self->value(), idx) : idx - 1;
     }
 
-    MultilineTextbox::MultilineTextbox(u32 id, const acul::string &value, amal::vec2 size, bool can_expand_to_content,
+    MultilineTextbox::MultilineTextbox(u32 id, const acul::string &value, amal::vec2 inline_size, bool can_expand_to_content,
                                        WidgetFlags flags, TextFlags text_flags, StringView placeholder)
-        : Textbox(id, value, size, flags, AUIK_TAG_TEXTBOX, text_flags, placeholder, TextAnchorY::ascent,
-                  TextWrapMode::word),
+        : Textbox(id, value, inline_size, flags, AUIK_STYLE_TAG_MULTILINE_TEXTBOX, text_flags, placeholder,
+                  TextAnchorY::ascent, TextWrapMode::word),
           _can_expand_to_content(can_expand_to_content)
     {
         set_rect_tag_id(AUIK_TAG_MULTILINE_TEXTBOX);
@@ -1755,7 +1768,7 @@ namespace auik
         {
             const auto data = read_textbox_payload(stream);
             auto *widget = acul::alloc<Textbox>(
-                data.common.id, data.value, data.common.requested_size, WidgetFlags(data.common.widget_flags),
+                data.common.id, data.value, data.common.inline_size, WidgetFlags(data.common.widget_flags),
                 data.style_tag, TextFlags(data.text_flags),
                 StringView{data.placeholder.c_str(), data.placeholder_translated}, data.text_anchor_y, data.text_wrap);
             detail::apply_widget_common_data(widget, data.common);
@@ -1775,7 +1788,7 @@ namespace auik
             bool can_expand_to_content = false;
             stream.read(can_expand_to_content);
             auto *widget = acul::alloc<MultilineTextbox>(
-                data.common.id, data.value, data.common.requested_size, can_expand_to_content,
+                data.common.id, data.value, data.common.inline_size, can_expand_to_content,
                 WidgetFlags(data.common.widget_flags), TextFlags(data.text_flags),
                 StringView{data.placeholder.c_str(), data.placeholder_translated});
             widget->set_style_tag(data.style_tag);

@@ -60,7 +60,7 @@ namespace auik
         return acul::alloc<WLine>(id, axis, widget_flags);
     }
 
-    inline WRect *make_w_rect(u32 id, const amal::rect &bounds = {})
+    inline WRect *make_w_rect(u32 id, const amal::rect &bounds = {{0.0f, 0.0f}, AUIK_SIZE_INHERIT})
     {
         constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
                                              WidgetFlagBits::configurable;

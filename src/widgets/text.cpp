@@ -149,12 +149,21 @@ namespace auik
     StyleUpdateFlags Text::update_style()
     {
         const u32 parent_id = parent() ? parent()->id() : 0u;
-        return resolve_style_selector(_style, id(), parent_id, style_state());
+        StyleUpdateFlags flags = resolve_style_selector(_style, id(), parent_id, style_state());
+        const auto &style = get_theme()->get_style(_style.id);
+        apply_style_layout(style);
+        if (const auto *text = style.text_settings())
+        {
+            set_anchor_y(text->anchor_y);
+            set_multiline(text->wrap == TextWrapMode::word);
+            set_overflow_mode(text->overflow);
+        }
+        return flags;
     }
 
     Text *Text::clone(u32 id) const
     {
-        auto *out = acul::alloc<Text>(id, source_text(), requested_size(), widget_flags, _layout_config.flags,
+        auto *out = acul::alloc<Text>(id, source_text(), style_size(), widget_flags, _layout_config.flags,
                                       _render_config.anchor_y);
         out->set_style_tag(_style.tag_id);
         out->text_flags = text_flags;
@@ -294,8 +303,8 @@ namespace auik
         const bool allow_empty_layout = multiline();
         if (!font || (!allow_empty_layout && _text.empty()) || font_size_px == 0)
         {
-            const amal::vec2 content_size = {is_width_fixed() && !fill_width() ? requested_size().x : 0.0f,
-                                             is_height_fixed() && !fill_height() ? requested_size().y : 0.0f};
+            const amal::vec2 content_size = {is_width_fixed() && !fill_width() ? style_size().x : 0.0f,
+                                             is_height_fixed() && !fill_height() ? style_size().y : 0.0f};
             set_required_size({content_size.x + padding.x + padding.z + margin.x + margin.z,
                                content_size.y + padding.y + padding.w + margin.y + margin.w});
             return;
@@ -312,8 +321,8 @@ namespace auik
         if (!is_ok)
         {
             _layout_result.clear();
-            const amal::vec2 content_size = {is_width_fixed() && !fill_width() ? requested_size().x : 0.0f,
-                                             is_height_fixed() && !fill_height() ? requested_size().y : 0.0f};
+            const amal::vec2 content_size = {is_width_fixed() && !fill_width() ? style_size().x : 0.0f,
+                                             is_height_fixed() && !fill_height() ? style_size().y : 0.0f};
             set_required_size({content_size.x + padding.x + padding.z + margin.x + margin.z,
                                content_size.y + padding.y + padding.w + margin.y + margin.w});
             return;
@@ -321,11 +330,11 @@ namespace auik
 
         amal::vec2 min_size = _layout_result.size;
         min_size.y = resolve_layout_height_for_widget(*this, _layout_result);
-        if (is_width_fixed() && !fill_width()) min_size.x = requested_size().x;
+        if (is_width_fixed() && !fill_width()) min_size.x = style_size().x;
         else if (is_size_concrete(size().x) && size().x > 0.0f && multiline())
             min_size.x = amal::max(min_size.x, size().x);
 
-        if (is_height_fixed() && !fill_height()) min_size.y = requested_size().y;
+        if (is_height_fixed() && !fill_height()) min_size.y = style_size().y;
 
         set_required_size({min_size.x + padding.x + padding.z + margin.x + margin.z,
                            min_size.y + padding.y + padding.w + margin.y + margin.w});
@@ -518,7 +527,8 @@ namespace auik
         const f32 current_z = get_z_order();
         const bool draw_state_changed =
             _applied_clip_id != current_clip || _applied_post_fx_chain != ctx.post_fx_chain || ctx.post_fx_chain;
-        const bool instances_changed = _instances_gpu_dirty;
+        const bool force_instance_update = ctx.reason & DrawReasonBits::full_redraw;
+        const bool instances_changed = _instances_gpu_dirty || force_instance_update;
         if (draw_state_changed || instances_changed)
         {
             for (auto &instance : _instances) instance.clip_id = current_clip;
@@ -595,7 +605,10 @@ namespace auik
         render_config.z_order = get_z_order();
         render_config.clip_id = clip_id();
 
-        if (!_layout_result.lines.empty())
+        const bool can_reuse_layout =
+            !_layout_result.lines.empty() &&
+            (!multiline() || text_width_mode(_layout_config.flags) != TextLayoutWidthMode::bounds);
+        if (can_reuse_layout)
         {
             render_config.origin =
                 resolve_text_widget_render_origin(*this, font, font_size_px, &_layout_result, &render_config.size);
@@ -788,13 +801,13 @@ namespace auik
         const f32 natural_h = resolve_layout_height_for_widget(*this, _layout_result);
 
         f32 required_w = 0.0f;
-        if (is_size_fit(requested_size().x)) required_w = natural_w;
-        else if (is_size_fill(requested_size().x)) required_w = 0.0f;
-        else if (is_size_concrete(requested_size().x) && requested_size().x > 0.0f) required_w = requested_size().x;
+        if (is_size_fit(style_size().x)) required_w = natural_w;
+        else if (is_size_fill(style_size().x)) required_w = 0.0f;
+        else if (is_size_concrete(style_size().x) && style_size().x > 0.0f) required_w = style_size().x;
 
         f32 required_h = natural_h;
-        if (is_size_fill(requested_size().y)) required_h = 0.0f;
-        else if (is_size_concrete(requested_size().y) && requested_size().y > 0.0f) required_h = requested_size().y;
+        if (is_size_fill(style_size().y)) required_h = 0.0f;
+        else if (is_size_concrete(style_size().y) && style_size().y > 0.0f) required_h = style_size().y;
 
         set_required_size({required_w + chrome_w, required_h + chrome_h});
     }
@@ -1400,7 +1413,7 @@ namespace auik
             const auto common = detail::read_widget_common_data(stream);
             const auto payload = read_text_payload(stream);
             auto *widget =
-                acul::alloc<Text>(common.id, payload.text, common.requested_size, WidgetFlags(common.widget_flags),
+                acul::alloc<Text>(common.id, payload.text, common.inline_size, WidgetFlags(common.widget_flags),
                                   TextLayoutFlags(payload.layout_flags), static_cast<TextAnchorY>(payload.anchor_y));
             widget->set_style_tag(payload.style_tag);
             detail::apply_widget_common_data(widget, common);
@@ -1414,7 +1427,7 @@ namespace auik
             const auto common = detail::read_widget_common_data(stream);
             const auto payload = read_text_payload(stream);
             auto *widget =
-                acul::alloc<EText>(common.id, payload.text, common.requested_size, WidgetFlags(common.widget_flags),
+                acul::alloc<EText>(common.id, payload.text, common.inline_size, WidgetFlags(common.widget_flags),
                                    TextLayoutFlags(payload.layout_flags), static_cast<TextAnchorY>(payload.anchor_y));
             widget->set_style_tag(payload.style_tag);
             detail::apply_widget_common_data(widget, common);

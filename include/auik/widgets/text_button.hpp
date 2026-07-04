@@ -11,15 +11,15 @@ namespace auik
     class TextButton : public Widget
     {
     public:
-        TextButton(u32 id, StringView text, amal::vec2 size, WidgetFlags widget_flags, EventFlags event_flags,
+        TextButton(u32 id, StringView text, amal::vec2 inline_size, WidgetFlags widget_flags, EventFlags event_flags,
                    u32 style_tag_id)
-            : Widget(id, widget_flags, event_flags, {{0.0f, 0.0f}, size}, style_tag_id),
+            : Widget(id, widget_flags, event_flags, {{0.0f, 0.0f}, inline_size}, style_tag_id),
               _style({Theme::STYLE_ID_INVALID, style_tag_id}),
               _text(acul::alloc<Text>(AUIK_TAG_TEXT, text, amal::vec2{0.0f, 0.0f}, WidgetFlagBits::visible,
-                                      default_text_layout_flags(), TextAnchorY::middle))
+                                      default_text_layout_flags()))
         {
             _text->set_parent(this);
-            _text->set_style_tag(AUIK_STYLE_TAG_NO_PAD);
+            _text->set_style_tag(AUIK_STYLE_TAG_TEXT_BUTTON_TITLE);
         }
         ~TextButton() override { acul::release(_text); }
 
@@ -57,11 +57,12 @@ namespace auik
         bool _text_draw_dirty = true;
     };
 
-    inline TextButton *make_text_button(u32 id, StringView text = "", amal::vec2 size = AUIK_SIZE_FIT)
+    inline TextButton *make_text_button(u32 id, StringView text = "", amal::vec2 inline_size = AUIK_SIZE_INHERIT)
     {
         constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
                                              WidgetFlagBits::configurable | WidgetFlagBits::hittable;
-        return acul::alloc<TextButton>(id, text, size, widget_flags, EventFlagBits::none, AUIK_STYLE_TAG_TEXT_BUTTON);
+        return acul::alloc<TextButton>(id, text, inline_size, widget_flags, EventFlagBits::none,
+                                       AUIK_STYLE_TAG_TEXT_BUTTON);
     }
 
     namespace streams

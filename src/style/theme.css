@@ -16,6 +16,8 @@
     font-size: calc(12.5px * var(--dpi));
     margin: 5px 0px;
     inline-spacing: 4px;
+    width: stretch;
+    height: fit-content;
 }
 
 .caret,
@@ -133,12 +135,35 @@
     background-color: rgba(72, 114, 255, 0.5);
 }
 
+.dockspace-node {
+    width: stretch;
+    height: stretch;
+    min-width: 80px;
+    min-height: 80px;
+}
+
+.dockspace-node-fit-width {
+    width: fit-content;
+    height: stretch;
+    min-width: 80px;
+    min-height: 80px;
+}
+
+.dockspace-node-fit {
+    width: fit-content;
+    height: fit-content;
+    min-width: 80px;
+    min-height: 80px;
+}
+
 .dock-node-tab-panel {
     margin: 0px;
     background-color: var(--color-surface-light);
 }
 
 .dock-tabbar {
+    width: stretch;
+    height: fit-content;
     margin: 0px;
     inline-spacing: 0px;
 }
@@ -193,6 +218,8 @@
 }
 
 .tree {
+    width: fit-content;
+    height: fit-content;
     margin: 0px;
 }
 
@@ -258,6 +285,8 @@
 }
 
 .window {
+    min-width: 160px;
+    min-height: 120px;
     padding: 10px 8px;
     background-color: var(--color-surface);
     border: 1px solid var(--color-border);
@@ -306,9 +335,17 @@
 }
 
 .text-button {
+    width: fit-content;
+    height: fit-content;
     padding: 4px 14px;
+    text-align: center;
     background-color: var(--color-surface-light);
     border-radius: 3px;
+}
+
+.text-button-title {
+    margin: 0px;
+    vertical-align: text-middle;
 }
 
 .text-button:hover {
@@ -375,6 +412,15 @@
 
 .textbox {
     padding: 4px 8px;
+    background-color: var(--color-surface-light);
+    border-radius: 4px;
+}
+
+.multiline-textbox {
+    padding: 4px 8px;
+    vertical-align: text-top;
+    white-space: normal;
+    text-overflow: clip;
     background-color: var(--color-surface-light);
     border-radius: 4px;
 }
@@ -507,26 +553,33 @@
     background-color: var(--color-accent-hover);
 }
 
-.tab-bar-item {
+.tabbar {
+    width: fit-content;
+    height: fit-content;
+}
+
+.tabbar-item {
     margin: 0px;
     padding: 4px 8px;
+    vertical-align: text-middle;
     background-color: var(--color-surface-light);
     border-radius: 3px;
 }
 
-.tab-bar-item:hover {
+.tabbar-item:hover {
     background-color: var(--color-hover);
 }
 
-.tab-bar-item-selected {
+.tabbar-item-selected {
     margin: 0px;
     padding: 4px 8px;
+    vertical-align: text-middle;
     background-color: var(--color-accent);
     border-radius: 3px;
 }
 
-.tab-bar-item-selected:hover,
-.tab-bar-item-selected:focus {
+.tabbar-item-selected:hover,
+.tabbar-item-selected:focus {
     background-color: var(--color-accent-hover);
 }
 
@@ -544,17 +597,36 @@
     background-color: var(--color-surface-light);
 }
 
-.tab-bar-popup {
+.tabbar-popup {
     margin: 0px;
     padding: 2px 0px;
     background-color: var(--color-active);
     border-radius: 4px;
 }
 
+.tabbar-popup-item {
+    margin: 2px 4px;
+    padding: 4px 8px;
+    border-radius: 3px;
+}
+
+.tabbar-popup-item:hover {
+    background-color: var(--color-hover);
+}
+
+.tabbar-popup-item:active,
+.tabbar-popup-item:focus {
+    background-color: var(--color-surface-light);
+}
+
 .close-button {
-    margin: 0px;
-    padding: 8px;
-    border-radius: 4px;
+    width: calc(20px * var(--dpi));
+    height: calc(20px * var(--dpi));
+    margin: 0px 2px;
+    padding: calc(2px * var(--dpi));
+    text-align: center;
+    vertical-align: middle;
+    border-radius: 12px;
 }
 
 .close-button:hover {
@@ -567,6 +639,8 @@
 
 .window-caption-button {
     margin: 0px;
+    text-align: center;
+    vertical-align: middle;
 }
 
 .window-caption-button:hover {
@@ -580,6 +654,8 @@
 .window-caption-close-button {
     margin: 0px;
     padding: 8px;
+    text-align: center;
+    vertical-align: middle;
     background-color: rgba(0, 0, 0, 0);
     border-radius: 0px;
 }
@@ -590,6 +666,8 @@
 }
 
 .window-menu-bar {
+    width: fit-content;
+    height: fit-content;
     margin: 0px;
     background-color: rgba(0, 0, 0, 0.15);
 }
@@ -600,7 +678,10 @@
 }
 
 .titlebar-menu-bar {
+    width: fit-content;
+    height: fit-content;
     margin: 0px 8px;
+    inline-spacing: 0px;
 }
 
 .menu-bar-item,
@@ -626,13 +707,14 @@
 }
 
 .titlebar-menu-item {
-    margin: 2px 2px;
+    margin: 0px;
     padding: 4px 8px;
+    vertical-align: text-middle;
     border-radius: 3px;
 }
 
 .titlebar-menu-item:hover {
-    background-color: rgba(255, 255, 255, 0.1);
+    background-color: var(--color-hover);
 }
 
 .titlebar-menu-item:active {

@@ -221,16 +221,14 @@ namespace auik
         return min_pos + local_pos;
     }
 
-    static inline amal::vec2 get_default_floating_min_size() { return {160.0f, 120.0f}; }
-
     static inline bool is_fit_axis(f32 value) { return is_size_fit(value); }
 
     static inline amal::vec2 resolve_root_window_size(const Window &window)
     {
         const amal::vec4 viewport = get_widget_viewport_rect(&window);
-        const amal::vec2 min_size = amal::max(window.min_size(), get_default_floating_min_size());
+        const amal::vec2 min_size = window.min_size();
         amal::vec2 next_size = window.size();
-        const amal::vec2 requested = window.requested_size();
+        const amal::vec2 requested = window.style_size();
         const amal::vec2 required = amal::max(window.required_size(), min_size);
         if (is_size_fill(requested.x)) next_size.x = viewport.z;
         else if (is_size_fit(requested.x) || next_size.x <= 0.0f) next_size.x = required.x;
@@ -541,9 +539,7 @@ namespace auik
         _content_block->reset_scroll_offset();
     }
 
-    void Window::add_child(Widget *child, ChildLayoutFlags layout) { add_child_with_flags(child, layout); }
-
-    void Window::add_child_with_flags(Widget *child, ChildLayoutFlags layout)
+    void Window::add_child(Widget *child, ChildLayoutFlags layout)
     {
         assert(child && "child is null");
         _content_block->add_child(child, layout);
@@ -911,7 +907,9 @@ namespace auik
         const u32 frame_style_tag = effective_window_style_tag();
         if (_window_style.tag_id != frame_style_tag) _window_style = {Theme::STYLE_ID_INVALID, frame_style_tag};
         out |= resolve_style_selector(_window_style, id(), 0u, style_state());
-        if (_content_block) _content_block->set_content_padding(resolved_window_style().padding());
+        const Style &window_style = resolved_window_style();
+        _min_size = {window_style.min_width(), window_style.min_height()};
+        if (_content_block) _content_block->set_content_padding(window_style.padding());
         if (_content_block) out |= _content_block->update_style();
         if (_menu) out |= _menu->update_style();
 
@@ -1214,20 +1212,10 @@ namespace auik
         auto &ctx = detail::get_context();
         ctx.dirty_flags |= DirtyFlagBits::hit_rect_update;
 
-        const amal::vec4 old_clip_rect = clip_id() != 0xFFFFu
-                                             ? get_clip_rect(clip_id())
-                                             : amal::vec4{position().x, position().y, size().x, size().y};
         const amal::vec4 parent_bounds = get_window_clip_bounds(this);
         const amal::vec4 self_clip_rect =
             detail::intersect_rects({position().x, position().y, size().x, size().y}, parent_bounds);
         if (clip_id() != 0xFFFFu) update_clip_rect(clip_id(), self_clip_rect);
-
-        const bool clip_size_changed = old_clip_rect.z != self_clip_rect.z || old_clip_rect.w != self_clip_rect.w;
-        if (clip_size_changed)
-        {
-            update_layout(true);
-            return;
-        }
 
         if (_header && !is_docked_window(*this)) _header->translate(applied_delta);
         if (auto *classic_menu = window_menu_bar(*this)) classic_menu->translate(applied_delta);
@@ -1520,13 +1508,10 @@ namespace auik
             common.id = src->id();
             common.widget_flags = src->widget_flags;
             common.bounds = src->bounds();
-            common.requested_size = src->requested_size();
+            common.inline_size = src->inline_size();
             detail::apply_widget_common_data(dst, common);
 
             dst->set_size(src->explicit_size());
-            if (src->size_vec_key() != 0u) dst->set_kv_size(src->size_vec_key());
-            else if (src->size_key().x != 0u || src->size_key().y != 0u)
-                dst->set_kv_size(src->size_key().x, src->size_key().y);
 
             dst->set_style_tag(src->style_tag());
             dst->set_draw_block_flags(src->draw_block_flags());
@@ -1575,7 +1560,6 @@ namespace auik
             detail::write_localized_string(stream, translated ? acul::string(literal ? literal : "") : widget->title(),
                                            translated);
             stream.write(static_cast<u32>(widget->window_flags))
-                .write(widget->min_size())
                 .write(widget->window_style_tag());
 
             stream.write(static_cast<umbf::Block *>(widget->content_block()));
@@ -1587,9 +1571,8 @@ namespace auik
             const auto common = detail::read_widget_common_data(stream);
             const auto title = detail::read_localized_string(stream);
             u32 window_flags = 0u;
-            amal::vec2 min_size{};
             u32 window_style_tag = AUIK_STYLE_TAG_WINDOW;
-            stream.read(window_flags).read(min_size).read(window_style_tag);
+            stream.read(window_flags).read(window_style_tag);
 
             umbf::Block *content_block = nullptr;
             stream.read(content_block);
@@ -1597,7 +1580,6 @@ namespace auik
             auto *widget =
                 acul::alloc<Window>(common.id, StringView{title.text.c_str(), title.translated}, common.bounds,
                                     WindowFlags(window_flags), WidgetFlags(common.widget_flags));
-            widget->set_min_size(min_size);
             widget->set_window_style_tag(window_style_tag);
             if (auto *content = static_cast<DrawBlock *>(content_block))
             {

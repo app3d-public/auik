@@ -39,7 +39,8 @@ namespace auik::detail
     {
     public:
         Scrollbar(u32 id, u32 track_tag_id, u32 thumb_tag_id, Widget *parent = nullptr, amal::axis axis = amal::axis::y)
-            : Widget(id, WidgetFlagBits::visible | WidgetFlagBits::hittable, EventFlagBits::none, {}, track_tag_id),
+            : Widget(id, WidgetFlagBits::visible | WidgetFlagBits::hittable, EventFlagBits::none,
+                     {{0.0f, 0.0f}, AUIK_SIZE_INHERIT}, track_tag_id),
               _track_style({Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_SCROLLBAR_TRACK}),
               _thumb_style({Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_SCROLLBAR_THUMB}),
               _thumb_rect(detail::make_rect_data(0, thumb_tag_id)),

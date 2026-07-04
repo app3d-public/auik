@@ -8,8 +8,8 @@
 
 namespace auik
 {
-    Column::Column(u32 id, ColumnItems columns, amal::vec2 size, WidgetFlags flags)
-        : Widget(id, flags, EventFlagBits::none, {{0.0f, 0.0f}, size}, AUIK_TAG_COLUMN),
+    Column::Column(u32 id, ColumnItems columns, amal::vec2 inline_size, WidgetFlags flags)
+        : Widget(id, flags, EventFlagBits::none, {{0.0f, 0.0f}, inline_size}, AUIK_TAG_COLUMN),
           _style({Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_COLUMN})
     { set_columns(std::move(columns)); }
 
@@ -190,13 +190,13 @@ namespace auik
                 max_column_width * static_cast<f32>(column_count) + spacing * static_cast<f32>(column_count - 1u);
 
         f32 required_width = 0.0f;
-        if (is_size_concrete(requested_size().x)) required_width = amal::max(requested_size().x, 0.0f);
+        if (is_size_concrete(style_size().x)) required_width = amal::max(style_size().x, 0.0f);
         else if (!fill_width()) required_width = content_required.x + padding.x + padding.z;
         if (required_width > 0.0f)
             required_width = amal::max(required_width, content_required.x + padding.x + padding.z);
 
         f32 required_height = 0.0f;
-        if (is_size_concrete(requested_size().y)) required_height = amal::max(requested_size().y, 0.0f);
+        if (is_size_concrete(style_size().y)) required_height = amal::max(style_size().y, 0.0f);
         else required_height = content_required.y + padding.y + padding.w;
 
         set_required_size({required_width + margin.x + margin.z, required_height + margin.y + margin.w});
@@ -218,7 +218,14 @@ namespace auik
 
         amal::vec2 outer_size = {amal::max(size().x - margin.x - margin.z, 0.0f),
                                  amal::max(size().y - margin.y - margin.w, 0.0f)};
-        if (!is_width_fixed()) outer_size.x = amal::max(outer_size.x, required_inner.x);
+        if (!is_width_fixed())
+        {
+            if (fill_width())
+            {
+                if (outer_size.x <= 0.0f) outer_size.x = required_inner.x;
+            }
+            else outer_size.x = amal::max(outer_size.x, required_inner.x);
+        }
         else if (outer_size.x <= 0.0f) outer_size.x = required_inner.x;
         if (outer_size.y <= 0.0f) outer_size.y = required_inner.y;
         if (!is_height_fixed()) { outer_size.y = amal::max(outer_size.y, required_inner.y); }
@@ -226,7 +233,10 @@ namespace auik
         set_position(outer_pos);
         set_layout_size(outer_size);
         Widget::update_layout(true);
-        update_column_clip_rects();
+        const amal::vec4 parent_clip = parent() ? parent()->get_content_clip_rect() : get_main_viewport_rect();
+        const amal::vec4 own_rect = {position().x, position().y, size().x, size().y};
+        if (parent() && clip_id() == parent()->content_clip_id()) set_clip_id(0xFFFFu);
+        ensure_own_clip_rect(detail::intersect_rects(parent_clip, own_rect));
 
         const amal::vec2 inner_pos = outer_pos + amal::vec2{padding.x, padding.y};
         const amal::vec2 inner_size = {amal::max(outer_size.x - padding.x - padding.z, 0.0f),
@@ -254,6 +264,15 @@ namespace auik
             slot->set_inline_spacing(spacing);
             slot->set_position({cursor_x, inner_pos.y});
             slot->set_layout_size({column_width, inner_size.y});
+            const amal::vec4 own_clip = get_clip_rect(clip_id());
+            const amal::vec4 slot_rect = {slot->position().x, slot->position().y, slot->size().x, slot->size().y};
+            if (slot->clip_id() == content_clip_id()) slot->set_clip_id(0xFFFFu);
+            slot->ensure_own_clip_rect(detail::intersect_rects(own_clip, slot_rect));
+            for (auto *child : slot->children)
+            {
+                if (!child) continue;
+                child->set_clip_id(slot->clip_id());
+            }
             slot->update_layout(true);
             cursor_x += column_width + spacing;
             ++width_index;
@@ -277,13 +296,14 @@ namespace auik
     void Column::reset_clip_rect_records()
     {
         Widget::reset_clip_rect_records();
+        _clip_rects_need_layout = true;
         for (auto *slot : _columns)
             if (slot) slot->reset_clip_rect_records();
     }
 
     void Column::rebuild_clip_rects()
     {
-        _rect.clip_id = 0xFFFFu;
+        if (_clip_rects_need_layout) return;
         update_column_clip_rects();
         for (auto *slot : _columns)
         {
@@ -406,6 +426,7 @@ namespace auik
                 child->rebuild_clip_rects();
             }
         }
+        _clip_rects_need_layout = false;
     }
 
     namespace
@@ -468,8 +489,9 @@ namespace auik
             u32 style_tag = AUIK_STYLE_TAG_COLUMN;
             stream.read(style_tag);
 
-            auto *column = acul::alloc<Column>(common.id, Column::ColumnItems{}, common.requested_size,
-                                               WidgetFlags(common.widget_flags));
+            auto *column =
+                acul::alloc<Column>(common.id, Column::ColumnItems{}, common.inline_size,
+                                    WidgetFlags(common.widget_flags));
             column->set_style_tag(style_tag);
             detail::apply_widget_common_data(column, common);
 

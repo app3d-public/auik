@@ -17,7 +17,7 @@ namespace auik
     public:
         TextFlags text_flags = TextFlagBits::none;
 
-        AUIK_EXPORT Textbox(u32 id, const acul::string &value, amal::vec2 size, WidgetFlags flags, u32 style_tag_id,
+        AUIK_EXPORT Textbox(u32 id, const acul::string &value, amal::vec2 inline_size, WidgetFlags flags, u32 style_tag_id,
                             TextFlags text_flags = TextFlagBits::none, StringView placeholder = {},
                             TextAnchorY text_anchor_y = TextAnchorY::middle,
                             TextWrapMode text_wrap = TextWrapMode::none);
@@ -245,7 +245,7 @@ namespace auik
     class MultilineTextbox final : public Textbox
     {
     public:
-        AUIK_EXPORT MultilineTextbox(u32 id, const acul::string &value, amal::vec2 size, bool can_expand_to_content,
+        AUIK_EXPORT MultilineTextbox(u32 id, const acul::string &value, amal::vec2 inline_size, bool can_expand_to_content,
                                      WidgetFlags flags, TextFlags text_flags = TextFlagBits::none,
                                      StringView placeholder = {});
 
@@ -265,9 +265,10 @@ namespace auik
     };
 
     inline Textbox *make_textbox(u32 id, const acul::string &value, const acul::string &placeholder = {},
-                                 TextFlags text_flags = TextFlagBits::none, amal::vec2 size = AUIK_SIZE_FIT)
+                                 TextFlags text_flags = TextFlagBits::none,
+                                 amal::vec2 inline_size = AUIK_SIZE_INHERIT)
     {
-        return acul::alloc<Textbox>(id, value, size,
+        return acul::alloc<Textbox>(id, value, inline_size,
                                     WidgetFlagBits::visible | WidgetFlagBits::attachable |
                                         WidgetFlagBits::configurable | WidgetFlagBits::hittable,
                                     AUIK_STYLE_TAG_TEXTBOX, text_flags, placeholder);
@@ -275,16 +276,16 @@ namespace auik
 
     inline Textbox *make_textbox(u32 id, const acul::string &value, f32 width,
                                  TextFlags text_flags = TextFlagBits::none, const acul::string &placeholder = {})
-    { return make_textbox(id, value, placeholder, text_flags, {width, AUIK_SIZE_Y_MIN_FIT}); }
+    { return make_textbox(id, value, placeholder, text_flags, {width, AUIK_SIZE_Y_INHERIT}); }
 
-    // Auto-width multiline input. height is the minimum/control height; when can_expand_to_content is true the widget
+    // Style-width multiline input. height is the minimum/control height; when can_expand_to_content is true the widget
     // grows vertically to fit text, otherwise overflowing text is clipped and can be scrolled internally.
     inline MultilineTextbox *make_multiline_textbox(u32 id, const acul::string &value, f32 height = 96.0f,
                                                     bool can_expand_to_content = false,
                                                     TextFlags text_flags = TextFlagBits::none,
                                                     const acul::string &placeholder = {})
     {
-        return acul::alloc<MultilineTextbox>(id, value, amal::vec2{0.0f, height}, can_expand_to_content,
+        return acul::alloc<MultilineTextbox>(id, value, amal::vec2{AUIK_SIZE_X_INHERIT, height}, can_expand_to_content,
                                              WidgetFlagBits::visible | WidgetFlagBits::attachable |
                                                  WidgetFlagBits::configurable,
                                              text_flags, placeholder);

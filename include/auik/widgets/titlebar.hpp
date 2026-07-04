@@ -25,15 +25,6 @@ namespace auik
 {
     class Titlebar;
 
-    inline bool is_titlebar_customizable()
-    {
-#ifdef _WIN32
-        return true;
-#else
-        return false;
-#endif
-    }
-
     // Flags for window creation, stored as u16 for memory efficiency.
     struct TitlebarCreateFlagBits
     {
@@ -141,7 +132,7 @@ namespace auik
         return acul::alloc<Titlebar>(id, widget_flags);
     }
 
-    inline MenuBar *make_titlebar_menu_bar(u32 id, const acul::vector<StringView> &items = {})
+    inline MenuBar *make_titlebar_menubar(u32 id, const acul::vector<StringView> &items = {})
     {
         auto *menu_bar = acul::alloc<MenuBar>(id, items);
         menu_bar->set_menu_style_tag(AUIK_STYLE_TAG_TITLEBAR_MENU_BAR);

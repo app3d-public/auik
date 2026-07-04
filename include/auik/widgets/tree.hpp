@@ -30,7 +30,7 @@ namespace auik
             bool expanded = true;
         };
 
-        AUIK_EXPORT explicit Tree(u32 id, WidgetFlags flags, u32 style_tag_id);
+        AUIK_EXPORT explicit Tree(u32 id, amal::vec2 inline_size, WidgetFlags flags, u32 style_tag_id);
         AUIK_EXPORT ~Tree() override;
 
         AUIK_EXPORT void clear();
@@ -85,7 +85,6 @@ namespace auik
 
     protected:
         using Row = acul::vector<Widget *>;
-        AUIK_EXPORT explicit Tree(u32 id, amal::vec2 size, WidgetFlags flags, u32 style_tag_id);
         virtual bool supports_columns() const { return false; }
         AUIK_EXPORT size_t add_node(Widget *label, Row cells, size_t parent);
         AUIK_EXPORT void set_default_column_settings(TableColumnSettings settings);
@@ -198,8 +197,8 @@ namespace auik
     public:
         using Row = acul::vector<Widget *>;
 
-        explicit TableTree(u32 id, amal::vec2 size, WidgetFlags flags, u32 style_tag_id)
-            : Tree(id, size, flags, style_tag_id)
+        explicit TableTree(u32 id, amal::vec2 inline_size, WidgetFlags flags, u32 style_tag_id)
+            : Tree(id, inline_size, flags, style_tag_id)
         {
         }
 
@@ -231,18 +230,18 @@ namespace auik
         virtual bool supports_columns() const override { return true; }
     };
 
-    inline Tree *make_tree(u32 id)
+    inline Tree *make_tree(u32 id, amal::vec2 inline_size = AUIK_SIZE_INHERIT)
     {
         constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
                                              WidgetFlagBits::configurable | WidgetFlagBits::hittable;
-        return acul::alloc<Tree>(id, widget_flags, AUIK_STYLE_TAG_TREE);
+        return acul::alloc<Tree>(id, inline_size, widget_flags, AUIK_STYLE_TAG_TREE);
     }
 
-    inline TableTree *make_table_tree(u32 id, amal::vec2 size = AUIK_SIZE_FIT)
+    inline TableTree *make_table_tree(u32 id, amal::vec2 inline_size = AUIK_SIZE_INHERIT)
     {
         constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
                                              WidgetFlagBits::configurable | WidgetFlagBits::hittable;
-        return acul::alloc<TableTree>(id, size, widget_flags, AUIK_STYLE_TAG_TREE);
+        return acul::alloc<TableTree>(id, inline_size, widget_flags, AUIK_STYLE_TAG_TREE);
     }
 
     template <class T>

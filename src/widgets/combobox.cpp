@@ -60,9 +60,9 @@ namespace auik
 
     } // namespace
 
-    Combobox::Combobox(u32 id, const acul::vector<StringView> &items, u32 selected_index, amal::vec2 size,
+    Combobox::Combobox(u32 id, const acul::vector<StringView> &items, u32 selected_index, amal::vec2 inline_size,
                        WidgetFlags widget_flags)
-        : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::focus, {{0.0f, 0.0f}, size},
+        : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::focus, {{0.0f, 0.0f}, inline_size},
                  AUIK_TAG_COMBO_BOX),
           _selected_index(selected_index)
     {
@@ -343,6 +343,7 @@ namespace auik
         const u32 parent_id = parent() ? parent()->id() : 0u;
         const StyleState control_state = get_combo_control_style_state(_open, style_state(), id());
         StyleUpdateFlags flags = resolve_style_selector(_style, id(), parent_id, control_state);
+        apply_style_layout(get_theme()->get_style(_style.id));
         if (_trigger)
         {
             _trigger->set_open(_open);
@@ -407,8 +408,8 @@ namespace auik
         const f32 control_width = padding.x + max_item_required.x + 6.0f + trigger_width + padding.z;
         const f32 popup_width = popup_padding.x + max_item_required.x + popup_padding.z;
         const f32 compact_width = amal::max(control_width, popup_width);
-        amal::vec2 min_size = {is_width_fixed() ? requested_size().x : 0.0f,
-                               is_height_fixed() ? requested_size().y : 0.0f};
+        amal::vec2 min_size = {is_width_fixed() ? style_size().x : 0.0f,
+                               is_height_fixed() ? style_size().y : 0.0f};
         if (fill_width()) min_size.x = compact_width;
         if (fill_height()) min_size.y = 0.0f;
         if (min_size.x <= 0.0f) min_size.x = is_width_fixed() ? 140.0f : compact_width;
@@ -743,8 +744,9 @@ namespace auik
     bool Combobox::has_draw_record() const { return _trigger && _trigger->has_draw_record(); }
 
     MultipleCombobox::MultipleCombobox(u32 id, const acul::vector<StringView> &items, StringView placeholder,
-                                       amal::vec2 size, WidgetFlags widget_flags)
-        : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::focus, {{0.0f, 0.0f}, size},
+                                       amal::vec2 inline_size,
+                                       WidgetFlags widget_flags)
+        : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::focus, {{0.0f, 0.0f}, inline_size},
                  AUIK_TAG_COMBO_BOX)
     {
         _trigger = acul::alloc<detail::PopupTrigger>(AUIK_STYLE_TAG_COMBO_BOX, AUIK_TAG_COMBO_BOX,
@@ -877,6 +879,7 @@ namespace auik
         const u32 parent_id = parent() ? parent()->id() : 0u;
         const StyleState control_state = get_combo_control_style_state(_open, style_state(), id());
         StyleUpdateFlags flags = resolve_style_selector(_style, id(), parent_id, control_state);
+        apply_style_layout(get_theme()->get_style(_style.id));
         if (_trigger)
         {
             _trigger->set_open(_open);
@@ -941,8 +944,8 @@ namespace auik
         const f32 control_width = padding.x + max_item_required.x + 6.0f + trigger_width + padding.z;
         const f32 popup_width = popup_padding.x + max_item_required.x + popup_padding.z;
         const f32 compact_width = amal::max(control_width, popup_width);
-        amal::vec2 min_size = {is_width_fixed() ? requested_size().x : 0.0f,
-                               is_height_fixed() ? requested_size().y : 0.0f};
+        amal::vec2 min_size = {is_width_fixed() ? style_size().x : 0.0f,
+                               is_height_fixed() ? style_size().y : 0.0f};
         if (fill_width()) min_size.x = compact_width;
         if (fill_height()) min_size.y = 0.0f;
         if (min_size.x <= 0.0f) min_size.x = is_width_fixed() ? 140.0f : compact_width;
@@ -1312,8 +1315,9 @@ namespace auik
             items.reserve(item_storage.size());
             for (u32 i = 0u; i < item_storage.size(); ++i)
                 items.push_back({item_storage[i].c_str(), item_translated[i]});
-            auto *widget = acul::alloc<Combobox>(common.id, items, selected_index, common.requested_size,
-                                                 WidgetFlags(common.widget_flags));
+            auto *widget =
+                acul::alloc<Combobox>(common.id, items, selected_index, common.inline_size,
+                                      WidgetFlags(common.widget_flags));
             widget->set_style_tag(style_tag);
             detail::apply_widget_common_data(widget, common);
             return widget;
@@ -1367,7 +1371,7 @@ namespace auik
                 items.push_back({item_storage[i].c_str(), item_translated[i]});
             auto *widget = acul::alloc<MultipleCombobox>(common.id, items,
                                                          StringView{placeholder.text.c_str(), placeholder.translated},
-                                                         common.requested_size, WidgetFlags(common.widget_flags));
+                                                         common.inline_size, WidgetFlags(common.widget_flags));
             widget->set_style_tag(style_tag);
             widget->set_selected_indices(selected_indices);
             detail::apply_widget_common_data(widget, common);

@@ -54,8 +54,8 @@ namespace auik
         const amal::vec4 margin = track_style.margin();
         const amal::vec2 track_size = resolve_track_size(track_style, grab_style);
 
-        amal::vec2 min_size = {is_size_concrete(requested_size().x) ? requested_size().x : 0.0f,
-                               is_size_concrete(requested_size().y) ? requested_size().y : 0.0f};
+        amal::vec2 min_size = {is_size_concrete(style_size().x) ? style_size().x : 0.0f,
+                               is_size_concrete(style_size().y) ? style_size().y : 0.0f};
         if (!is_width_fixed()) min_size.x = 0.0f;
 
         if (min_size.x <= 0.0f) min_size.x = track_size.x;

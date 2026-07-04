@@ -25,7 +25,8 @@ namespace auik
     {
     public:
         ModalControlsRow(u32 owner_id, Checkbox *checkbox, Text *label, acul::vector<TextButton *> buttons)
-            : Widget(AUIK_MODAL_CONTROLS_ID, MODAL_INTERNAL_WIDGET_FLAGS, EventFlagBits::none, {},
+            : Widget(AUIK_MODAL_CONTROLS_ID, MODAL_INTERNAL_WIDGET_FLAGS, EventFlagBits::none,
+                     {{0.0f, 0.0f}, AUIK_SIZE_INHERIT},
                      AUIK_STYLE_TAG_MODAL_CONTROLS_AREA),
               _owner_id(owner_id),
               _controls_style({Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_MODAL_CONTROLS_AREA}),
@@ -235,7 +236,8 @@ namespace auik
     }
 
     ModalQueue::ModalQueue(u32 id, WidgetFlags widget_flags)
-        : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::hover | EventFlagBits::drag, {},
+        : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::hover | EventFlagBits::drag,
+                 {{0.0f, 0.0f}, AUIK_SIZE_INHERIT},
                  AUIK_TAG_MODAL_BACKDROP)
     {
     }
@@ -380,7 +382,7 @@ namespace auik
             modal_size = refined_size;
         }
         modal->set_layout_size(modal_size);
-        modal->set_min_size({modal_size.x, 0.0f});
+        modal->set_size({modal_size.x, AUIK_SIZE_Y_FIT});
 
         const amal::vec2 manager_pos = position();
         const amal::vec2 manager_size = size();
@@ -612,7 +614,7 @@ namespace auik
         auto *modal = acul::alloc<ModalWindow>(AUIK_TAG_MODAL_WINDOW, message.header,
                                                amal::rect{{0.0f, 0.0f}, {modal_width, 0.0f}}, WindowFlagBits::movable,
                                                WidgetFlagBits::visible);
-        modal->set_min_size({modal_width, 0.0f});
+        modal->set_size({modal_width, AUIK_SIZE_Y_FIT});
 
         auto *theme = get_theme();
         const auto &modal_style =
@@ -686,9 +688,10 @@ namespace auik
         {
             const bool is_last_button = i + 1u == message.buttons.size();
             const u32 button_style = is_last_button ? AUIK_STYLE_TAG_TEXT_BUTTON : AUIK_STYLE_TAG_TRANSPARENT_BUTTON;
-            auto *button =
-                acul::alloc<TextButton>(AUIK_MODAL_BUTTON_ID, message.buttons[i].first, amal::vec2{0.0f, 0.0f},
-                                        MODAL_INTERNAL_HITTABLE_WIDGET_FLAGS, EventFlagBits::none, button_style);
+            auto *button = acul::alloc<TextButton>(AUIK_MODAL_BUTTON_ID, message.buttons[i].first,
+                                                   amal::vec2{AUIK_SIZE_X_INHERIT, AUIK_SIZE_Y_INHERIT},
+                                                   MODAL_INTERNAL_HITTABLE_WIDGET_FLAGS, EventFlagBits::none,
+                                                   button_style);
             buttons.push_back(button);
         }
         modal->add_child(acul::alloc<ModalControlsRow>(id(), batch_checkbox, batch_label, std::move(buttons)));

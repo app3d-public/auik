@@ -14,15 +14,40 @@
 #define AUIK_THEME_FONT_REGULAR 0
 #define AUIK_THEME_FONT_BOLD    1
 
+#define AUIK_SIZE_X_MIN_FIT         0x0
+#define AUIK_SIZE_Y_MIN_FIT         AUIK_SIZE_X_MIN_FIT
+#define AUIK_SIZE_MIN_FIT           {AUIK_SIZE_X_MIN_FIT, AUIK_SIZE_Y_MIN_FIT}
+#define AUIK_SIZE_X_MIN_FIT_REQUIRE 0xFFFF01p0f
+#define AUIK_SIZE_Y_MIN_FIT_REQUIRE AUIK_SIZE_X_MIN_FIT_REQUIRE
+#define AUIK_SIZE_MIN_FIT_REQUIRE   {AUIK_SIZE_X_MIN_FIT_REQUIRE, AUIK_SIZE_Y_MIN_FIT_REQUIRE}
+#define AUIK_SIZE_X_FILL            0xFFFF00p0f
+#define AUIK_SIZE_Y_FILL            AUIK_SIZE_X_FILL
+#define AUIK_SIZE_FILL              {AUIK_SIZE_X_FILL, AUIK_SIZE_Y_FILL}
+#define AUIK_SIZE_X_INHERIT         0xFFFF02p0f
+#define AUIK_SIZE_Y_INHERIT         AUIK_SIZE_X_INHERIT
+#define AUIK_SIZE_INHERIT           {AUIK_SIZE_X_INHERIT, AUIK_SIZE_Y_INHERIT}
+#define AUIK_SIZE_X_FIT             AUIK_SIZE_X_MIN_FIT_REQUIRE
+#define AUIK_SIZE_Y_FIT             AUIK_SIZE_Y_MIN_FIT_REQUIRE
+#define AUIK_SIZE_FIT               AUIK_SIZE_MIN_FIT_REQUIRE
+#define AUIK_SIZE_AUTO              AUIK_SIZE_FIT
+#define AUIK_POS_IGNORE             {AUIK_SIZE_X_FIT, AUIK_SIZE_Y_FIT}
+
+#define AUIK_STYLE_EXTRA_ALIGN 0x2E0F75C4u
+#define AUIK_STYLE_EXTRA_TEXT  0x7674E155u
+
 namespace auik
 {
     class Font;
+    enum class TextAnchorY : u8;
+    enum class TextOverflowMode : u8;
+    enum class TextWrapMode : u8;
 
     enum class HAlign : u8
     {
         left,
         center,
-        right
+        right,
+        none = 0xFFu
     };
 
     enum class VAlign : u8
@@ -66,7 +91,12 @@ namespace auik
                 corner_mask = 0x80,
                 text_size = 0x100,
                 font = 0x200,
-                inline_spacing = 0x400
+                inline_spacing = 0x400,
+                width = 0x800,
+                height = 0x1000,
+                min_width = 0x2000,
+                min_height = 0x4000,
+                extra = 0x8000
             };
 
             using flag_bitmask = std::true_type;
@@ -88,9 +118,81 @@ namespace auik
     };
     using StyleID = u32;
 
+    struct StyleExtra
+    {
+        u32 id = 0u;
+        void *data = nullptr;
+        StyleExtra *next = nullptr;
+    };
+
+    struct StyleExtraAlign
+    {
+        u32 flags = 0u;
+    };
+
+    struct StyleExtraText
+    {
+        TextAnchorY anchor_y = static_cast<TextAnchorY>(0u);
+        TextWrapMode wrap = static_cast<TextWrapMode>(0u);
+        TextOverflowMode overflow = static_cast<TextOverflowMode>(1u);
+    };
+
     class Style final
     {
     public:
+        Style() = default;
+        Style(const Style &other) { *this = other; }
+        Style(Style &&other) noexcept { *this = std::move(other); }
+
+        Style &operator=(const Style &other)
+        {
+            if (this == &other) return *this;
+            destroy_extra();
+            _padding = other._padding;
+            _margin = other._margin;
+            _background_color = other._background_color;
+            _text_color = other._text_color;
+            _border_color = other._border_color;
+            _border_radius = other._border_radius;
+            _border_thickness = other._border_thickness;
+            _text_size = other._text_size;
+            _inline_spacing = other._inline_spacing;
+            _size = other._size;
+            _min_width = other._min_width;
+            _min_height = other._min_height;
+            _font = other._font;
+            _corner_mask = other._corner_mask;
+            _mask = other._mask;
+            clone_extra(other);
+            _mask = other._mask;
+            return *this;
+        }
+
+        Style &operator=(Style &&other) noexcept
+        {
+            if (this == &other) return *this;
+            destroy_extra();
+            _padding = other._padding;
+            _margin = other._margin;
+            _background_color = other._background_color;
+            _text_color = other._text_color;
+            _border_color = other._border_color;
+            _border_radius = other._border_radius;
+            _border_thickness = other._border_thickness;
+            _text_size = other._text_size;
+            _inline_spacing = other._inline_spacing;
+            _size = other._size;
+            _min_width = other._min_width;
+            _min_height = other._min_height;
+            _font = other._font;
+            _corner_mask = other._corner_mask;
+            _extra = other._extra;
+            _mask = other._mask;
+            other._extra = nullptr;
+            other._mask &= ~detail::StylePropertyFlags(detail::StylePropertiesBits::extra);
+            return *this;
+        }
+
         [[nodiscard]] const amal::vec4 &padding() const { return _padding; }
         Style &padding(const amal::vec4 &value)
         {
@@ -171,6 +273,46 @@ namespace auik
             return *this;
         }
 
+        [[nodiscard]] f32 width() const { return _size.x; }
+        Style &width(f32 value)
+        {
+            _size.x = value;
+            _mask |= detail::StylePropertiesBits::width;
+            return *this;
+        }
+
+        [[nodiscard]] f32 height() const { return _size.y; }
+        Style &height(f32 value)
+        {
+            _size.y = value;
+            _mask |= detail::StylePropertiesBits::height;
+            return *this;
+        }
+
+        [[nodiscard]] const amal::vec2 &size() const { return _size; }
+        Style &size(const amal::vec2 &value)
+        {
+            _size = value;
+            _mask |= detail::StylePropertiesBits::width | detail::StylePropertiesBits::height;
+            return *this;
+        }
+
+        [[nodiscard]] f32 min_width() const { return _min_width; }
+        Style &min_width(f32 value)
+        {
+            _min_width = value;
+            _mask |= detail::StylePropertiesBits::min_width;
+            return *this;
+        }
+
+        [[nodiscard]] f32 min_height() const { return _min_height; }
+        Style &min_height(f32 value)
+        {
+            _min_height = value;
+            _mask |= detail::StylePropertiesBits::min_height;
+            return *this;
+        }
+
         [[nodiscard]] u32 border_color() const { return _border_color; }
         Style &border_color(const amal::vec4 &value)
         {
@@ -221,9 +363,109 @@ namespace auik
             return *this;
         }
 
+        [[nodiscard]] const StyleExtra *extra() const { return _extra; }
+
+        [[nodiscard]] const StyleExtra *extra(u32 id) const
+        {
+            for (auto *node = extra(); node; node = node->next)
+                if (node->id == id) return node;
+            return nullptr;
+        }
+
+        [[nodiscard]] const StyleExtraAlign *align_settings() const
+        {
+            const auto *node = extra(AUIK_STYLE_EXTRA_ALIGN);
+            return node ? static_cast<const StyleExtraAlign *>(node->data) : nullptr;
+        }
+
+        [[nodiscard]] const StyleExtraText *text_settings() const
+        {
+            const auto *node = extra(AUIK_STYLE_EXTRA_TEXT);
+            return node ? static_cast<const StyleExtraText *>(node->data) : nullptr;
+        }
+
+        Style &align_extra(const StyleExtraAlign &value)
+        {
+            auto *data = upsert_extra_data<StyleExtraAlign>(AUIK_STYLE_EXTRA_ALIGN);
+            *data = value;
+            _mask |= detail::StylePropertiesBits::extra;
+            return *this;
+        }
+
+        Style &text_extra(const StyleExtraText &value)
+        {
+            auto *data = upsert_extra_data<StyleExtraText>(AUIK_STYLE_EXTRA_TEXT);
+            *data = value;
+            _mask |= detail::StylePropertiesBits::extra;
+            return *this;
+        }
+
+        void destroy_extra()
+        {
+            StyleExtra *node = _extra;
+            while (node)
+            {
+                StyleExtra *next = node->next;
+                release_extra_data(*node);
+                acul::release(node);
+                node = next;
+            }
+            _extra = nullptr;
+            _mask &= ~detail::StylePropertyFlags(detail::StylePropertiesBits::extra);
+        }
+
         [[nodiscard]] detail::StylePropertyFlags mask() const { return _mask; }
 
     private:
+        StyleExtra *mutable_extra(u32 id)
+        {
+            for (StyleExtra *it = _extra; it; it = it->next)
+                if (it->id == id) return it;
+            return nullptr;
+        }
+
+        void append_extra_node(StyleExtra *node)
+        {
+            if (!_extra)
+            {
+                _extra = node;
+                return;
+            }
+            StyleExtra *tail = _extra;
+            while (tail->next) tail = tail->next;
+            tail->next = node;
+        }
+
+        template <typename T>
+        T *upsert_extra_data(u32 id)
+        {
+            if (auto *node = mutable_extra(id)) return static_cast<T *>(node->data);
+            auto *data = acul::alloc<T>(T{});
+            auto *node = acul::alloc<StyleExtra>(StyleExtra{id, data, nullptr});
+            append_extra_node(node);
+            return data;
+        }
+
+        static void release_extra_data(StyleExtra &node)
+        {
+            if (!node.data) return;
+            if (node.id == AUIK_STYLE_EXTRA_ALIGN)
+                acul::release(static_cast<StyleExtraAlign *>(node.data));
+            else if (node.id == AUIK_STYLE_EXTRA_TEXT)
+                acul::release(static_cast<StyleExtraText *>(node.data));
+        }
+
+        void clone_extra(const Style &other)
+        {
+            for (const StyleExtra *node = other.extra(); node; node = node->next)
+            {
+                if (node->id == AUIK_STYLE_EXTRA_ALIGN && node->data)
+                    align_extra(*static_cast<const StyleExtraAlign *>(node->data));
+                else if (node->id == AUIK_STYLE_EXTRA_TEXT && node->data)
+                    text_extra(*static_cast<const StyleExtraText *>(node->data));
+            }
+        }
+
         amal::vec4 _padding{0.0f};
         amal::vec4 _margin{0.0f};
         u32 _background_color{0};
@@ -233,8 +475,12 @@ namespace auik
         f32 _border_thickness{0.0f};
         f32 _text_size{12.5f};
         f32 _inline_spacing{0.0f};
+        amal::vec2 _size{AUIK_SIZE_X_FILL, AUIK_SIZE_Y_FIT};
+        f32 _min_width{0.0f};
+        f32 _min_height{0.0f};
         Font *_font{nullptr};
         u32 _corner_mask{0};
+        StyleExtra *_extra = nullptr;
         detail::StylePropertyFlags _mask{0};
     };
 
@@ -246,11 +492,10 @@ namespace auik
         static constexpr StyleID STYLE_ID_INVALID = static_cast<StyleID>(-1);
 
         Theme() = default;
+        ~Theme() { destroy(); }
 
         StyleID add_style(u32 key, const Style &style, StyleState state = StyleState::normal)
-        {
-            return add_desc(key, style, state);
-        }
+        { return add_desc(key, style, state); }
 
         StyleID get(u32 key, StyleState state = StyleState::normal) const
         {
@@ -263,14 +508,14 @@ namespace auik
             const StyleID id = get(key, state);
             if (id == STYLE_ID_INVALID) return nullptr;
             assert(id < _style_options_pool.size());
-            return &_style_options_pool[id];
+            return _style_options_pool[id];
         }
 
         const Style &get_style(StyleID id) const
         {
             assert(id != STYLE_ID_INVALID);
             assert(id < _resolved_pool.size());
-            return _resolved_pool[id];
+            return *_resolved_pool[id];
         }
 
         AUIK_EXPORT StyleID get_resolved_style(u32 type, u32 id, u32 parent, StyleState state = StyleState::normal);
@@ -298,11 +543,25 @@ namespace auik
     private:
         acul::hashmap<u64, StyleID> _style_options;
         acul::hashmap<u64, StyleID> _resolved;
-        acul::vector<Style> _style_options_pool;
-        acul::vector<Style> _resolved_pool;
+        acul::vector<Style *> _style_options_pool;
+        acul::vector<Style *> _resolved_pool;
         acul::hashmap<u32, acul::any> _var_store;
 
         AUIK_EXPORT StyleID add_desc(u32 key, const Style &style, StyleState state);
+
+        void destroy()
+        {
+            clear_resolved_cache();
+            for (Style *style : _style_options_pool)
+            {
+                if (!style) continue;
+                style->destroy_extra();
+                acul::release(style);
+            }
+            _style_options_pool.clear();
+            _style_options.clear();
+            _var_store.clear();
+        }
 
         static u64 make_theme_key(u32 key, StyleState state)
         {
@@ -314,6 +573,12 @@ namespace auik
 
         void clear_resolved_cache()
         {
+            for (Style *style : _resolved_pool)
+            {
+                if (!style) continue;
+                style->destroy_extra();
+                acul::release(style);
+            }
             _resolved.clear();
             _resolved_pool.clear();
         }

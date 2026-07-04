@@ -12,20 +12,6 @@
 #include "../theme.hpp"
 #include "../viewport.hpp"
 
-#define AUIK_SIZE_X_MIN_FIT         0x0
-#define AUIK_SIZE_Y_MIN_FIT         AUIK_SIZE_X_MIN_FIT
-#define AUIK_SIZE_MIN_FIT           {AUIK_SIZE_X_MIN_FIT, AUIK_SIZE_Y_MIN_FIT}
-#define AUIK_SIZE_X_MIN_FIT_REQUIRE 0xFFFF01p0f
-#define AUIK_SIZE_Y_MIN_FIT_REQUIRE AUIK_SIZE_X_MIN_FIT_REQUIRE
-#define AUIK_SIZE_MIN_FIT_REQUIRE   {AUIK_SIZE_X_MIN_FIT_REQUIRE, AUIK_SIZE_Y_MIN_FIT_REQUIRE}
-#define AUIK_SIZE_X_FILL            0xFFFF00p0f
-#define AUIK_SIZE_Y_FILL            AUIK_SIZE_X_FILL
-#define AUIK_SIZE_FILL              {AUIK_SIZE_X_FILL, AUIK_SIZE_Y_FILL}
-#define AUIK_SIZE_X_FIT             AUIK_SIZE_X_MIN_FIT_REQUIRE
-#define AUIK_SIZE_Y_FIT             AUIK_SIZE_Y_MIN_FIT_REQUIRE
-#define AUIK_SIZE_FIT               AUIK_SIZE_MIN_FIT_REQUIRE
-#define AUIK_SIZE_AUTO              AUIK_SIZE_FIT
-#define AUIK_POS_IGNORE             {AUIK_SIZE_X_FIT, AUIK_SIZE_Y_FIT}
 #define AUIK_UD_CUSTOM_DATA         0xFFFFu
 #define AUIK_UD_ROOT_DATA           0xFFFEu
 #define AUIK_UD_LOCALE_LITERAL      0xFFFCu
@@ -56,6 +42,7 @@ namespace auik
     constexpr inline bool is_size_min_fit(f32 value) { return value == AUIK_SIZE_X_MIN_FIT; }
     constexpr inline bool is_size_min_fit_require(f32 value) { return value == AUIK_SIZE_X_MIN_FIT_REQUIRE; }
     constexpr inline bool is_size_fill(f32 value) { return value == AUIK_SIZE_X_FILL; }
+    constexpr inline bool is_size_inherit(f32 value) { return value == AUIK_SIZE_X_INHERIT; }
     constexpr inline bool is_size_auto(f32 value) { return is_size_min_fit(value); }
     constexpr inline bool is_size_fit(f32 value) { return is_size_min_fit_require(value); }
     constexpr inline bool is_size_concrete(f32 value) { return value < AUIK_SIZE_X_FILL; }
@@ -85,7 +72,7 @@ namespace auik
 
     struct ChildLayoutFlagBits
     {
-        enum enum_type
+        enum enum_type : u32
         {
             none = 0x0,
             linline = 0x1,
@@ -93,7 +80,9 @@ namespace auik
             top = 0x4,
             vcenter = 0x8,
             bottom = 0x10,
-            hcenter = 0x20
+            hcenter = 0x20,
+            hleft = 0x40,
+            block = 0x80
         };
         using flag_bitmask = std::true_type;
     };
@@ -107,17 +96,40 @@ namespace auik
 
     constexpr inline ChildLayoutFlags default_child_layout_flags() { return ChildLayoutFlagBits::none; }
 
-    inline ChildLayoutFlags make_layout_flags(ChildLayout layout = ChildLayout::block, HAlign halign = HAlign::left,
+    inline ChildLayoutFlags make_layout_flags(ChildLayout layout = ChildLayout::block, HAlign halign = HAlign::none,
                                               VAlign valign = VAlign::none)
     {
         ChildLayoutFlags flags = ChildLayoutFlagBits::none;
+        if (layout == ChildLayout::block) flags |= ChildLayoutFlagBits::block;
         if (layout == ChildLayout::inline_) flags |= ChildLayoutFlagBits::linline;
+        if (halign == HAlign::left) flags |= ChildLayoutFlagBits::hleft;
         if (halign == HAlign::center) flags |= ChildLayoutFlagBits::hcenter;
         if (halign == HAlign::right) flags |= ChildLayoutFlagBits::aright;
         if (valign == VAlign::top) flags |= ChildLayoutFlagBits::top;
         if (valign == VAlign::center) flags |= ChildLayoutFlagBits::vcenter;
         else if (valign == VAlign::bottom) flags |= ChildLayoutFlagBits::bottom;
         return flags;
+    }
+
+    constexpr inline ChildLayoutFlags child_layout_display_mask()
+    { return ChildLayoutFlagBits::block | ChildLayoutFlagBits::linline; }
+
+    constexpr inline ChildLayoutFlags child_layout_halign_mask()
+    { return ChildLayoutFlagBits::hleft | ChildLayoutFlagBits::hcenter | ChildLayoutFlagBits::aright; }
+
+    constexpr inline ChildLayoutFlags child_layout_valign_mask()
+    { return ChildLayoutFlagBits::top | ChildLayoutFlagBits::vcenter | ChildLayoutFlagBits::bottom; }
+
+    inline ChildLayoutFlags merge_child_layout_flags(ChildLayoutFlags style, ChildLayoutFlags layout)
+    {
+        ChildLayoutFlags out = style;
+        if (layout & child_layout_display_mask())
+            out = (out & ~child_layout_display_mask()) | (layout & child_layout_display_mask());
+        if (layout & child_layout_halign_mask())
+            out = (out & ~child_layout_halign_mask()) | (layout & child_layout_halign_mask());
+        if (layout & child_layout_valign_mask())
+            out = (out & ~child_layout_valign_mask()) | (layout & child_layout_valign_mask());
+        return out;
     }
 
     struct StyleUpdateFlagBits
@@ -157,7 +169,9 @@ namespace auik
     constexpr inline detail::StylePropertyFlags g_style_layout_mask =
         detail::StylePropertiesBits::padding | detail::StylePropertiesBits::text_size |
         detail::StylePropertiesBits::border_thickness | detail::StylePropertiesBits::font |
-        detail::StylePropertiesBits::inline_spacing;
+        detail::StylePropertiesBits::inline_spacing | detail::StylePropertiesBits::width |
+        detail::StylePropertiesBits::height | detail::StylePropertiesBits::min_width |
+        detail::StylePropertiesBits::min_height | detail::StylePropertiesBits::extra;
     constexpr inline detail::StylePropertyFlags g_style_parent_layout_mask = detail::StylePropertiesBits::margin;
 
     constexpr inline WidgetFlags get_default_widget_flags()
@@ -251,7 +265,8 @@ namespace auik
         EventFlags requested_event_flags = EventFlagBits::none;
         EventFlags event_flags = EventFlagBits::none;
 
-        Widget(u32 id, WidgetFlags flags, EventFlags event_flags = EventFlagBits::none, amal::rect bounds = {},
+        Widget(u32 id, WidgetFlags flags, EventFlags event_flags = EventFlagBits::none,
+               amal::rect bounds = {{0.0f, 0.0f}, AUIK_SIZE_INHERIT},
                u32 tag_id = 0)
             : widget_flags(flags),
               requested_event_flags(event_flags),
@@ -259,7 +274,8 @@ namespace auik
               _synced_widget_flags(flags),
               _id(id),
               _parent(nullptr),
-              _requested_size(bounds.size),
+              _inline_size(bounds.size),
+              _requested_size(resolve_style_size_from_inline(bounds.size, {AUIK_SIZE_X_FILL, AUIK_SIZE_Y_FIT})),
               _viewport(get_main_viewport()),
               _rect(detail::make_rect_data(id, tag_id,
                                            amal::rect{bounds.offset,
@@ -350,10 +366,17 @@ namespace auik
         inline const amal::vec2 &position() const { return _rect.bounds.offset; }
         inline amal::vec2 &size() { return _rect.bounds.size; }
         inline const amal::vec2 &size() const { return _rect.bounds.size; }
-        inline const amal::vec2 &requested_size() const { return _requested_size; }
-        inline bool fill_width() const { return is_size_fill(_requested_size.x); }
-        inline bool fill_height() const { return is_size_fill(_requested_size.y); }
-        inline void set_position(const amal::vec2 &pos) { _rect.bounds.offset = pos; }
+        inline const amal::vec2 &inline_size() const { return _inline_size; }
+        virtual amal::vec2 requested_size() const { return _requested_size; }
+        virtual amal::vec2 style_size() const { return requested_size(); }
+        inline bool fill_width() const { return is_size_fill(requested_size().x); }
+        inline bool fill_height() const { return is_size_fill(requested_size().y); }
+        inline void set_position(const amal::vec2 &pos)
+        {
+            if (_rect.bounds.offset.x == pos.x && _rect.bounds.offset.y == pos.y) return;
+            _rect.bounds.offset = pos;
+            reset_external_draw_cull_state();
+        }
         virtual void translate(const amal::vec2 &delta)
         {
             set_position(position() + delta);
@@ -361,13 +384,31 @@ namespace auik
         }
         inline void set_size(const amal::vec2 &size)
         {
-            _requested_size = size;
-            _rect.bounds.size = {is_size_concrete(size.x) ? size.x : 0.0f, is_size_concrete(size.y) ? size.y : 0.0f};
+            _inline_size = size;
+            set_requested_size(resolve_style_size_from_inline(_inline_size, _requested_size));
         }
         inline void set_layout_size(const amal::vec2 &size)
-        { _rect.bounds.size = {is_size_concrete(size.x) ? size.x : 0.0f, is_size_concrete(size.y) ? size.y : 0.0f}; }
+        {
+            const amal::vec2 resolved = {is_size_concrete(size.x) ? size.x : 0.0f,
+                                         is_size_concrete(size.y) ? size.y : 0.0f};
+            if (_rect.bounds.size.x == resolved.x && _rect.bounds.size.y == resolved.y) return;
+            _rect.bounds.size = resolved;
+            reset_external_draw_cull_state();
+        }
         inline const amal::vec2 &required_size() const { return _required_size; }
-        inline void set_required_size(const amal::vec2 &size) { _required_size = size; }
+        virtual bool has_parent_style_child_layout() const { return false; }
+        virtual ChildLayoutFlags parent_style_child_layout() const { return ChildLayoutFlagBits::none; }
+        inline void set_required_size(const amal::vec2 &size)
+        { _required_size = {amal::max(size.x, 0.0f), amal::max(size.y, 0.0f)}; }
+        inline void apply_style_layout(const Style &style)
+        {
+            const auto mask = style.mask();
+            amal::vec2 next_style_size = _requested_size;
+            if (mask & detail::StylePropertiesBits::width) next_style_size.x = style.width();
+            if (mask & detail::StylePropertiesBits::height) next_style_size.y = style.height();
+            const amal::vec2 next_size = resolve_style_size_from_inline(_inline_size, next_style_size);
+            if (next_size != _requested_size) set_requested_size(next_size);
+        }
         inline amal::vec2 resolve_layout_size_from_required() const
         {
             amal::vec2 out = _rect.bounds.size;
@@ -375,8 +416,8 @@ namespace auik
             if ((!is_height_fixed() && !fill_height()) || out.y <= 0.0f) out.y = _required_size.y;
             return out;
         }
-        inline bool is_width_fixed() const { return is_size_static_layout(_requested_size.x); }
-        inline bool is_height_fixed() const { return is_size_static_layout(_requested_size.y); }
+        inline bool is_width_fixed() const { return is_size_static_layout(requested_size().x); }
+        inline bool is_height_fixed() const { return is_size_static_layout(requested_size().y); }
         inline bool is_fixed() const { return is_width_fixed() && is_height_fixed(); }
         inline bool is_hittable() const { return widget_flags & WidgetFlagBits::hittable; }
         inline bool can_emit_hit(const DrawCtx &ctx) const { return is_hittable() && ctx.is_hit_allowed; }
@@ -753,12 +794,26 @@ namespace auik
 
         virtual void on_disabled_changed(bool disabled) { (void)disabled; }
 
+        static inline amal::vec2 resolve_style_size_from_inline(const amal::vec2 &inline_size,
+                                                                const amal::vec2 &style_size)
+        {
+            return {is_size_inherit(inline_size.x) ? style_size.x : inline_size.x,
+                    is_size_inherit(inline_size.y) ? style_size.y : inline_size.y};
+        }
+
+        inline void set_requested_size(const amal::vec2 &size)
+        {
+            _requested_size = size;
+            set_layout_size(size);
+        }
+
         u32 _id;
         Widget *_parent = nullptr;
         Widget *_focus_parent = nullptr;
         amal::vec2 _depth_range{0.0f, 1.0f};
         amal::vec2 _root_viewport_origin{0.0f, 0.0f};
-        amal::vec2 _requested_size{0.0f, 0.0f};
+        amal::vec2 _inline_size = AUIK_SIZE_INHERIT;
+        amal::vec2 _requested_size{AUIK_SIZE_X_FILL, AUIK_SIZE_Y_FIT};
         Viewport *_viewport = nullptr;
         detail::RectData _rect{};
         amal::vec2 _required_size{0.0f, 0.0f};
@@ -882,6 +937,35 @@ namespace auik
         return target;
     }
 
+    inline bool style_extra_equal(const Style &left, const Style &right)
+    {
+        const StyleExtra *left_node = left.extra();
+        const StyleExtra *right_node = right.extra();
+        while (left_node || right_node)
+        {
+            if (!left_node || !right_node) return false;
+            if (left_node->id != right_node->id) return false;
+            if (left_node->id == AUIK_STYLE_EXTRA_ALIGN)
+            {
+                auto *left_align = static_cast<const StyleExtraAlign *>(left_node->data);
+                auto *right_align = static_cast<const StyleExtraAlign *>(right_node->data);
+                if (!left_align || !right_align || left_align->flags != right_align->flags) return false;
+            }
+            else if (left_node->id == AUIK_STYLE_EXTRA_TEXT)
+            {
+                auto *left_text = static_cast<const StyleExtraText *>(left_node->data);
+                auto *right_text = static_cast<const StyleExtraText *>(right_node->data);
+                if (!left_text || !right_text || left_text->anchor_y != right_text->anchor_y ||
+                    left_text->wrap != right_text->wrap || left_text->overflow != right_text->overflow)
+                    return false;
+            }
+            else if (left_node->data != right_node->data) return false;
+            left_node = left_node->next;
+            right_node = right_node->next;
+        }
+        return true;
+    }
+
     inline bool apply_hover_style_state(Widget &widget, HoverState state)
     {
         if (widget.style_state() == StyleState::active || widget.style_state() == StyleState::focus) return false;
@@ -923,6 +1007,17 @@ namespace auik
         if ((union_mask & detail::StylePropertiesBits::inline_spacing) &&
             prev_style.inline_spacing() != next_style.inline_spacing())
             changed |= detail::StylePropertiesBits::inline_spacing;
+        if ((union_mask & detail::StylePropertiesBits::width) && prev_style.width() != next_style.width())
+            changed |= detail::StylePropertiesBits::width;
+        if ((union_mask & detail::StylePropertiesBits::height) && prev_style.height() != next_style.height())
+            changed |= detail::StylePropertiesBits::height;
+        if ((union_mask & detail::StylePropertiesBits::min_width) && prev_style.min_width() != next_style.min_width())
+            changed |= detail::StylePropertiesBits::min_width;
+        if ((union_mask & detail::StylePropertiesBits::min_height) &&
+            prev_style.min_height() != next_style.min_height())
+            changed |= detail::StylePropertiesBits::min_height;
+        if ((union_mask & detail::StylePropertiesBits::extra) && !style_extra_equal(prev_style, next_style))
+            changed |= detail::StylePropertiesBits::extra;
 
         if (changed == detail::StylePropertiesBits::none) return StyleUpdateFlagBits::none;
         StyleUpdateFlags out = StyleUpdateFlagBits::redraw;

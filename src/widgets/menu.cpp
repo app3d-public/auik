@@ -434,13 +434,14 @@ namespace auik
         bool _draw_recorded = false;
     };
 
-    MenuBar::MenuBar(u32 id, const acul::vector<StringView> &items, amal::vec2 size, WidgetFlags widget_flags)
-        : Tabbar(id, acul::vector<StringView>{}, TabbarFlagBits::none, size, widget_flags, 0.0f, 0u,
-                 AUIK_STYLE_TAG_MENU_BAR_ITEM, AUIK_STYLE_TAG_MENU_BAR_ITEM, AUIK_STYLE_TAG_COMBO_BOX_ITEM),
-          _menu_base(this, AUIK_STYLE_TAG_MENU_BAR_ITEM, AUIK_STYLE_TAG_MENU_BAR_ITEM)
+    MenuBar::MenuBar(u32 id, const acul::vector<StringView> &items, amal::vec2 inline_size, WidgetFlags widget_flags)
+        : Tabbar(id, acul::vector<StringView>{}, TabbarFlagBits::none, widget_flags, inline_size),
+        _menu_base(this, AUIK_STYLE_TAG_MENU_BAR_ITEM, AUIK_STYLE_TAG_MENU_BAR_ITEM)
     {
         add_event_flags(EventFlagBits::focus);
         set_style_tag(AUIK_STYLE_TAG_WINDOW_MENU_BAR);
+        set_item_style_tag(AUIK_STYLE_TAG_MENU_BAR_ITEM);
+        set_selected_item_style_tag(AUIK_STYLE_TAG_MENU_BAR_ITEM);
         _menu_style = {Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_WINDOW_MENU_BAR};
         add_items(items);
     }
@@ -464,14 +465,11 @@ namespace auik
     void MenuBar::set_menu_item_style_tag(u32 tag_id)
     {
         if (_item_style_tag == tag_id) return;
-        _item_style_tag = tag_id;
         _menu_base.set_item_style_tags(tag_id, tag_id);
-        for (auto *tab : _tabs)
-        {
-            if (!tab) continue;
-            tab->set_style_tag(tag_id);
-            tab->set_selected_style_tag(tag_id);
-        }
+        set_item_style_tag(tag_id);
+        set_selected_item_style_tag(tag_id);
+        update_item_tags();
+        sync_tags();
     }
 
     void MenuBar::set_popup_depth_mode(PopupDepthMode mode)
@@ -1578,7 +1576,8 @@ namespace auik
 
     PopupMenu::PopupMenu(u32 id, const acul::vector<StringView> &items, WidgetFlags widget_flags,
                          bool selected_enabled)
-        : Widget(id, widget_flags | WidgetFlagBits::hittable, EventFlagBits::click | EventFlagBits::focus, {},
+        : Widget(id, widget_flags | WidgetFlagBits::hittable, EventFlagBits::click | EventFlagBits::focus,
+                 {{0.0f, 0.0f}, AUIK_SIZE_INHERIT},
                  AUIK_TAG_POPUP_MENU),
           _button(AUIK_STYLE_TAG_DOCK_TABBAR_MENU, AUIK_TAG_POPUP_MENU_BUTTON, AUIK_ICON_MENU, AUIK_ICON_MENU, false),
           _menu(acul::alloc<MenuBar>(id + AUIK_TAG_MENU_POPUP, items))
@@ -1595,7 +1594,8 @@ namespace auik
 
     PopupMenu::PopupMenu(MenuBar *menu, WidgetFlags widget_flags, bool selected_enabled)
         : Widget(menu ? (menu->id() + AUIK_TAG_MENU_POPUP) : AUIK_TAG_POPUP_MENU,
-                 widget_flags | WidgetFlagBits::hittable, EventFlagBits::click | EventFlagBits::focus, {},
+                 widget_flags | WidgetFlagBits::hittable, EventFlagBits::click | EventFlagBits::focus,
+                 {{0.0f, 0.0f}, AUIK_SIZE_INHERIT},
                  AUIK_TAG_POPUP_MENU),
           _button(AUIK_STYLE_TAG_DOCK_TABBAR_MENU, AUIK_TAG_POPUP_MENU_BUTTON, AUIK_ICON_MENU, AUIK_ICON_MENU, false),
           _menu(menu ? menu : acul::alloc<MenuBar>(AUIK_TAG_MENU_POPUP, acul::vector<StringView>{}))
@@ -1873,7 +1873,7 @@ namespace auik
             auto items = read_menu_items(stream);
 
             auto *menu =
-                acul::alloc<MenuBar>(common.id, acul::vector<StringView>{}, common.requested_size,
+                acul::alloc<MenuBar>(common.id, acul::vector<StringView>{}, common.inline_size,
                                      WidgetFlags(common.widget_flags));
             menu->set_menu_style_tag(menu_style_tag);
             menu->set_menu_item_style_tag(menu_item_style_tag);

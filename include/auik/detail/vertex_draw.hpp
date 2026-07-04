@@ -9,12 +9,14 @@ namespace auik::detail
         acul::vector<VertexStreamVertex> vertices;
         acul::vector<VertexStreamIndex> indices;
         VertexStreamBatchData batch{};
+        bool offset_dirty = false;
 
         void clear()
         {
             vertices.clear();
             indices.clear();
             batch = {};
+            offset_dirty = false;
         }
 
         void sync_batch()
@@ -23,6 +25,13 @@ namespace auik::detail
             batch.indices = indices.empty() ? nullptr : indices.data();
             batch.vertex_count = static_cast<u32>(vertices.size());
             batch.index_count = static_cast<u32>(indices.size());
+        }
+
+        void translate(const amal::vec2 &delta)
+        {
+            if (delta.x == 0.0f && delta.y == 0.0f) return;
+            batch.offset += delta;
+            offset_dirty = true;
         }
     };
 

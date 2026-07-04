@@ -28,7 +28,7 @@ namespace auik
     }
 
     Separator::Separator(amal::axis axis, WidgetFlags widget_flags, u32 style_tag)
-        : Widget(AUIK_TAG_SEPARATOR, widget_flags, EventFlagBits::none, {}, style_tag),
+        : Widget(AUIK_TAG_SEPARATOR, widget_flags, EventFlagBits::none, {{0.0f, 0.0f}, AUIK_SIZE_INHERIT}, style_tag),
           _axis(axis),
           _style({Theme::STYLE_ID_INVALID, style_tag})
     {
