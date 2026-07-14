@@ -150,7 +150,7 @@ namespace auik
         data.rect = bounds();
         data.z_order = get_z_order();
         const bool visible = fill_quads_instance_by_style(get_theme()->get_style(_style.id), clip_id(), data);
-        emit_quads_instance(ctx, quads_stream, _draw, data, get_rect(), visible, false);
+        emit_quads_instance(ctx, quads_stream, _draw, data, get_rect(), visible, can_emit_hit(ctx));
     }
 
     namespace

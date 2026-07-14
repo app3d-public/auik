@@ -20,13 +20,15 @@ namespace auik::detail
 
     MenuItem::MenuItem(MenuBase *owner, u32 element_id, StringView text, Widget *parent, u32 style_tag_id,
                        u32 selected_style_tag_id)
-        : Selectable(make_element_id(owner ? owner->owner_widget_id() : 0u, style_tag_id, element_id), text, false,
-                     amal::vec2{0.0f, 0.0f}, parent, get_selectable_item_flags()),
+        : Widget(owner ? owner->owner_widget_id() : 0u, WidgetFlagBits::visible, EventFlagBits::none,
+                 {{0.0f, 0.0f}, {0.0f, 0.0f}}, style_tag_id),
           _owner(owner)
     {
-        set_style_tag(style_tag_id);
-        set_selected_style_tag(selected_style_tag_id);
+        (void)selected_style_tag_id;
+        get_rect().id = make_element_id(owner ? owner->owner_widget_id() : 0u, style_tag_id, element_id);
+        set_parent(parent);
         set_focus_parent(owner ? owner->owner_widget() : nullptr);
+        set_source_text(text);
     }
 
     MenuItem::~MenuItem()
@@ -38,7 +40,21 @@ namespace auik::detail
     MenuItem &MenuItem::set_shortcut(acul::string shortcut)
     {
         _shortcut = std::move(shortcut);
+        _shortcut_translated = false;
         return *this;
+    }
+
+    MenuItem &MenuItem::set_shortcut(StringView shortcut)
+    {
+        _shortcut = shortcut.str ? shortcut.str : "";
+        _shortcut_translated = shortcut.is_translated;
+        return *this;
+    }
+
+    void MenuItem::set_source_text(StringView text)
+    {
+        _text = text.str ? text.str : "";
+        _translated = text.is_translated;
     }
 
     MenuGroupLayer *MenuItem::add_group_layer(u32 group_count)
@@ -115,7 +131,6 @@ namespace auik::detail
     {
         const u32 element_id = _next_element_id++;
         auto *item = acul::alloc<MenuItem>(this, element_id, text, parent, _item_style_tag, _selected_item_style_tag);
-        item->update_style();
         _owned_items.push_back(item);
         return item;
     }
@@ -163,8 +178,7 @@ namespace auik::detail
         for (auto *item : _owned_items)
         {
             if (!item) continue;
-            item->set_style_tag(item_style_tag);
-            item->set_selected_style_tag(selected_item_style_tag);
+            item->set_rect_tag_id(item_style_tag);
         }
     }
 

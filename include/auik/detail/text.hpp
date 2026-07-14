@@ -30,14 +30,6 @@ namespace auik
         bounds
     };
 
-    enum class TextAnchorY : u8
-    {
-        baseline,
-        middle,
-        ascent,
-        descent
-    };
-
     struct TextLayoutFlagBits
     {
         enum enum_type
@@ -108,7 +100,6 @@ namespace auik::detail
         amal::vec2 size{0.0f, 0.0f};
         f32 z_order = 0.0f;
         u16 clip_id = 0xFFFFu;
-        TextAnchorY anchor_y = TextAnchorY::baseline;
     };
 
     struct ShapedGlyph

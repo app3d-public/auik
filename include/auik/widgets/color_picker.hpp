@@ -17,8 +17,7 @@ namespace auik
     class CircleColorPicker final : public Widget
     {
     public:
-        AUIK_EXPORT CircleColorPicker(u32 id, const amal::vec4 &value, f32 inline_width,
-                                      WidgetFlags widget_flags);
+        AUIK_EXPORT CircleColorPicker(u32 id, const amal::vec4 &value, f32 inline_width, WidgetFlags widget_flags);
         AUIK_EXPORT StyleUpdateFlags update_style() override;
         AUIK_EXPORT void update_layout_min_size() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
@@ -78,8 +77,7 @@ namespace auik
         static amal::vec2 resolve_grab_size(const Style &grab_style);
     };
 
-    inline CircleColorPicker *make_circle_color_picker(u32 id,
-                                                       const amal::vec4 &value = {1.0f, 1.0f, 1.0f, 1.0f},
+    inline CircleColorPicker *make_circle_color_picker(u32 id, const amal::vec4 &value = {1.0f, 1.0f, 1.0f, 1.0f},
                                                        f32 inline_width = AUIK_SIZE_X_INHERIT)
     {
         constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
@@ -149,8 +147,7 @@ namespace auik
         static amal::vec2 resolve_grab_size(const Style &grab_style);
     };
 
-    inline GradientColorPicker *make_gradient_color_picker(u32 id,
-                                                           const amal::vec4 &value = {1.0f, 0.0f, 0.0f, 1.0f},
+    inline GradientColorPicker *make_gradient_color_picker(u32 id, const amal::vec4 &value = {1.0f, 0.0f, 0.0f, 1.0f},
                                                            const amal::vec2 &inline_size = AUIK_SIZE_INHERIT)
     {
         constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
@@ -161,8 +158,7 @@ namespace auik
     class SquareColorPicker final : public Widget
     {
     public:
-        AUIK_EXPORT SquareColorPicker(u32 id, const amal::vec4 &value, f32 inline_width,
-                                      WidgetFlags widget_flags);
+        AUIK_EXPORT SquareColorPicker(u32 id, const amal::vec4 &value, f32 inline_width, WidgetFlags widget_flags);
         AUIK_EXPORT ~SquareColorPicker() override;
         AUIK_EXPORT StyleUpdateFlags update_style() override;
         AUIK_EXPORT void update_layout_min_size() override;
@@ -233,8 +229,7 @@ namespace auik
         static amal::vec2 resolve_grab_size(const Style &grab_style);
     };
 
-    inline SquareColorPicker *make_square_color_picker(u32 id,
-                                                       const amal::vec4 &value = {1.0f, 1.0f, 1.0f, 1.0f},
+    inline SquareColorPicker *make_square_color_picker(u32 id, const amal::vec4 &value = {1.0f, 1.0f, 1.0f, 1.0f},
                                                        f32 inline_width = AUIK_SIZE_X_INHERIT)
     {
         constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |

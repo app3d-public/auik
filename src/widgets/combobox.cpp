@@ -73,7 +73,6 @@ namespace auik
         _label = acul::alloc<Text>(AUIK_TAG_TEXT, "", amal::vec2{0.0f, 0.0f}, WidgetFlagBits::visible);
         _label->set_style_tag(AUIK_STYLE_TAG_NO_PAD);
         _label->set_parent(this);
-        _label->set_anchor_y(TextAnchorY::middle);
 
         _popup = acul::alloc<Window>(AUIK_TAG_COMBO_BOX_POPUP, "", amal::rect{{0.0f, 0.0f}, {0.0f, 0.0f}},
                                      WindowFlagBits::scrollable, WidgetFlagBits::hittable);
@@ -756,7 +755,6 @@ namespace auik
         _label = acul::alloc<Text>(AUIK_TAG_TEXT, "", amal::vec2{0.0f, 0.0f}, WidgetFlagBits::visible);
         _label->set_style_tag(AUIK_STYLE_TAG_NO_PAD);
         _label->set_parent(this);
-        _label->set_anchor_y(TextAnchorY::middle);
 
         _popup = acul::alloc<Window>(AUIK_TAG_COMBO_BOX_POPUP, "", amal::rect{{0.0f, 0.0f}, {0.0f, 0.0f}},
                                      WindowFlagBits::scrollable, WidgetFlagBits::hittable);

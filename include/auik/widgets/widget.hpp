@@ -12,10 +12,10 @@
 #include "../theme.hpp"
 #include "../viewport.hpp"
 
-#define AUIK_UD_CUSTOM_DATA         0xFFFFu
-#define AUIK_UD_ROOT_DATA           0xFFFEu
-#define AUIK_UD_LOCALE_LITERAL      0xFFFCu
-#define AUIK_WIDGET_SIGN_IGNORE     0xA087D252u
+#define AUIK_UD_CUSTOM_DATA     0xFFFFu
+#define AUIK_UD_ROOT_DATA       0xFFFEu
+#define AUIK_UD_LOCALE_LITERAL  0xFFFCu
+#define AUIK_WIDGET_SIGN_IGNORE 0xA087D252u
 
 namespace auik
 {
@@ -31,6 +31,7 @@ namespace auik
     };
 
     constexpr inline StringView tr(const char *literal) { return {literal, true}; }
+    AUIK_EXPORT void rebuild_root_widget_depths();
     inline acul::string translate_string(const StringView &value)
     {
         const auto locale_cb = detail::get_default_string_locale_cb();
@@ -82,7 +83,8 @@ namespace auik
             bottom = 0x10,
             hcenter = 0x20,
             hleft = 0x40,
-            block = 0x80
+            block = 0x80,
+            absolute = 0x100
         };
         using flag_bitmask = std::true_type;
     };
@@ -266,8 +268,7 @@ namespace auik
         EventFlags event_flags = EventFlagBits::none;
 
         Widget(u32 id, WidgetFlags flags, EventFlags event_flags = EventFlagBits::none,
-               amal::rect bounds = {{0.0f, 0.0f}, AUIK_SIZE_INHERIT},
-               u32 tag_id = 0)
+               amal::rect bounds = {{0.0f, 0.0f}, AUIK_SIZE_INHERIT}, u32 tag_id = 0)
             : widget_flags(flags),
               requested_event_flags(event_flags),
               event_flags(resolve_event_flags(event_flags)),
@@ -376,6 +377,7 @@ namespace auik
             if (_rect.bounds.offset.x == pos.x && _rect.bounds.offset.y == pos.y) return;
             _rect.bounds.offset = pos;
             reset_external_draw_cull_state();
+            detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
         }
         virtual void translate(const amal::vec2 &delta)
         {
@@ -394,10 +396,9 @@ namespace auik
             if (_rect.bounds.size.x == resolved.x && _rect.bounds.size.y == resolved.y) return;
             _rect.bounds.size = resolved;
             reset_external_draw_cull_state();
+            detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
         }
         inline const amal::vec2 &required_size() const { return _required_size; }
-        virtual bool has_parent_style_child_layout() const { return false; }
-        virtual ChildLayoutFlags parent_style_child_layout() const { return ChildLayoutFlagBits::none; }
         inline void set_required_size(const amal::vec2 &size)
         { _required_size = {amal::max(size.x, 0.0f), amal::max(size.y, 0.0f)}; }
         inline void apply_style_layout(const Style &style)
@@ -451,7 +452,8 @@ namespace auik
         inline void set_read_only() { set_widget_flag(WidgetFlagBits::read_only); }
         inline void set_mutable() { unset_widget_flag(WidgetFlagBits::read_only); }
         inline void set_disabled() { set_widget_flag(WidgetFlagBits::disabled); }
-        inline void unset_disbled() { unset_widget_flag(WidgetFlagBits::disabled); }
+        inline void unset_disabled() { unset_widget_flag(WidgetFlagBits::disabled); }
+        inline void unset_disbled() { unset_disabled(); }
         inline void set_configurable() { set_widget_flag(WidgetFlagBits::configurable); }
         inline void unset_configurable() { unset_widget_flag(WidgetFlagBits::configurable); }
         inline Viewport *viewport() const { return _viewport; }
@@ -507,6 +509,7 @@ namespace auik
 
         void draw_local(DrawCtx &owner_ctx)
         {
+            if (!is_visible() && !(owner_ctx.reason & DrawReasonBits::invalidate)) return;
             DrawCtx local_ctx(owner_ctx);
             if (is_disabled()) local_ctx.is_hit_allowed = false;
             if (_post_fx_chain)
@@ -533,6 +536,8 @@ namespace auik
         AUIK_EXPORT virtual void back_hit_depth();
         AUIK_EXPORT virtual void restore_hit_depth();
         virtual StyleUpdateFlags update_style() = 0;
+        // A container may suppress event-driven style updates for a child that it does not currently draw.
+        virtual bool accepts_child_style_update(const Widget *) const { return true; }
         virtual void draw(DrawCtx &) = 0;
 
         // Controls whether a mouse press on this hit target replaces ctx.focus_id.
@@ -581,7 +586,12 @@ namespace auik
             if (is_disabled() && !post_effect()) apply_disabled_post_effect();
             if (const auto attach_cb = detail::get_default_widget_attach_cb()) attach_cb(this);
         }
-        virtual void on_detach() { detail::get_context().id_map.erase(id()); }
+        virtual void on_detach()
+        {
+            auto &map = detail::get_context().id_map;
+            auto it = map.find(id());
+            if (it != map.end() && it->second == this) map.erase(it);
+        }
         virtual void on_scroll(const amal::vec2 &delta) {}
         virtual void on_focus(bool focused) {}
         virtual void on_hover(HoverState state) {}
@@ -739,6 +749,8 @@ namespace auik
 
             if (visible_changed || disabled_changed || read_only_changed || hittable_changed)
                 detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
+            if (visible_changed && !(detail::get_context().dirty_flags & DirtyFlagBits::destroying))
+                rebuild_root_widget_depths();
             const bool disabled_post_missing = is_disabled() && !_disabled_post_fx;
             if (disabled_changed || disabled_post_missing)
             {
@@ -777,7 +789,11 @@ namespace auik
                         if (belongs_to_widget(ctx.active_id)) ctx.active_id = 0u;
                         if (element_belongs_to_widget(ctx.hover_id)) ctx.hover_id = {};
                         if (element_belongs_to_widget(ctx.io.clicked_id)) ctx.io.clicked_id = {};
-                        if (element_belongs_to_widget(ctx.io.drag_id)) ctx.io.drag_id = {};
+                        if (element_belongs_to_widget(ctx.io.drag_id))
+                        {
+                            ctx.io.drag_id = {};
+                            ctx.io.drag_key_flags = {};
+                        }
                     }
                     widget->reset_external_draw_cull_state();
                     if (widget->is_visible()) widget->update_draw_commands(DrawReasonBits::external);
@@ -949,14 +965,16 @@ namespace auik
             {
                 auto *left_align = static_cast<const StyleExtraAlign *>(left_node->data);
                 auto *right_align = static_cast<const StyleExtraAlign *>(right_node->data);
-                if (!left_align || !right_align || left_align->flags != right_align->flags) return false;
+                if (!left_align || !right_align || left_align->flags != right_align->flags ||
+                    left_align->position != right_align->position)
+                    return false;
             }
             else if (left_node->id == AUIK_STYLE_EXTRA_TEXT)
             {
                 auto *left_text = static_cast<const StyleExtraText *>(left_node->data);
                 auto *right_text = static_cast<const StyleExtraText *>(right_node->data);
-                if (!left_text || !right_text || left_text->anchor_y != right_text->anchor_y ||
-                    left_text->wrap != right_text->wrap || left_text->overflow != right_text->overflow)
+                if (!left_text || !right_text || left_text->wrap != right_text->wrap ||
+                    left_text->overflow != right_text->overflow)
                     return false;
             }
             else if (left_node->data != right_node->data) return false;

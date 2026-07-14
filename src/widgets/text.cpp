@@ -82,31 +82,6 @@ namespace auik
         return out;
     }
 
-    static f32 resolve_metrics_height(const detail::TextLayoutResult &layout)
-    {
-        const f32 metrics_height = amal::max(layout.ascender - layout.descender, 0.0f);
-        if (layout.lines.size() <= 1 && metrics_height > 0.0f) return metrics_height;
-        return layout.size.y;
-    }
-
-    static f32 resolve_text_anchor_y_offset(TextAnchorY anchor, const detail::TextLayoutResult &layout,
-                                            const amal::vec2 &bounds_size)
-    {
-        const f32 metrics_height = resolve_metrics_height(layout);
-        switch (anchor)
-        {
-            case TextAnchorY::baseline:
-                return -layout.ascender;
-            case TextAnchorY::middle:
-                return (bounds_size.y - metrics_height) * 0.5f;
-            case TextAnchorY::descent:
-                return bounds_size.y - metrics_height;
-            case TextAnchorY::ascent:
-            default:
-                return 0.0f;
-        }
-    }
-
     static f32 resolve_layout_height_for_widget(const Text &widget, const detail::TextLayoutResult &layout)
     {
         if (!widget.tight_content_height()) return layout.size.y;
@@ -114,29 +89,39 @@ namespace auik
         const auto visual_bounds = resolve_visual_y_bounds(layout);
         if (visual_bounds.valid) return amal::max(visual_bounds.max - visual_bounds.min, 0.0f);
 
-        return resolve_metrics_height(layout);
+        const f32 metrics_height = amal::max(layout.ascender - layout.descender, 0.0f);
+        if (layout.lines.size() <= 1 && metrics_height > 0.0f) return metrics_height;
+        return layout.size.y;
     }
 
-    static amal::vec2 resolve_text_widget_render_origin(const Text &widget, Font *font, u32 font_size_px,
+    static f32 resolve_text_align_y_offset(const Style &style, const detail::TextLayoutResult &layout,
+                                           const amal::vec2 &bounds_size)
+    {
+        const auto *align = style.align_settings();
+        if (!align) return 0.0f;
+
+        const f32 metrics_height = amal::max(layout.ascender - layout.descender, 0.0f);
+        const f32 layout_h = layout.lines.size() <= 1 && metrics_height > 0.0f ? metrics_height : layout.size.y;
+        const ChildLayoutFlags flags{align->flags};
+        if (flags & ChildLayoutFlagBits::vcenter) return amal::max((bounds_size.y - layout_h) * 0.5f, 0.0f);
+        if (flags & ChildLayoutFlagBits::bottom) return amal::max(bounds_size.y - layout_h, 0.0f);
+        return 0.0f;
+    }
+
+    static amal::vec2 resolve_text_widget_render_origin(const Text &widget, const Style &style, Font *font, u32 font_size_px,
                                                         const detail::TextLayoutResult *layout = nullptr,
                                                         const amal::vec2 *bounds_size = nullptr)
     {
+        (void)font;
+        (void)font_size_px;
+        (void)bounds_size;
         amal::vec2 origin = widget.position();
-        if (layout && bounds_size && widget.tight_content_height())
+        if (layout && widget.tight_content_height())
         {
             const auto visual_bounds = resolve_visual_y_bounds(*layout);
-            if (visual_bounds.valid)
-            {
-                origin.y -= visual_bounds.min + resolve_text_anchor_y_offset(widget.anchor_y(), *layout, *bounds_size);
-                return origin;
-            }
+            if (visual_bounds.valid) origin.y -= visual_bounds.min;
         }
-        if (widget.anchor_y() == TextAnchorY::baseline)
-        {
-            const f32 ascender =
-                layout ? layout->ascender : (font ? detail::TextFontAccess::ascender(*font, font_size_px) : 0.0f);
-            origin.y += ascender;
-        }
+        if (layout && bounds_size) origin.y += resolve_text_align_y_offset(style, *layout, *bounds_size);
         return origin;
     }
 
@@ -154,7 +139,6 @@ namespace auik
         apply_style_layout(style);
         if (const auto *text = style.text_settings())
         {
-            set_anchor_y(text->anchor_y);
             set_multiline(text->wrap == TextWrapMode::word);
             set_overflow_mode(text->overflow);
         }
@@ -163,12 +147,24 @@ namespace auik
 
     Text *Text::clone(u32 id) const
     {
-        auto *out = acul::alloc<Text>(id, source_text(), style_size(), widget_flags, _layout_config.flags,
-                                      _render_config.anchor_y);
+        auto *out = acul::alloc<Text>(id, source_text(), style_size(), widget_flags, _layout_config.flags);
         out->set_style_tag(_style.tag_id);
         out->text_flags = text_flags;
         out->set_max_lines(_layout_config.max_lines);
         out->set_tight_content_height(_tight_content_height);
+        struct RefUserData
+        {
+            u32 tag = 0u;
+            void *handle = nullptr;
+        };
+        acul::vector<RefUserData> refs;
+        for (auto *node = user_data_head(); node; node = node->pNext)
+        {
+            if (node->destroy || !node->handle || node->tag_id == AUIK_UD_LOCALE_LITERAL) continue;
+            refs.push_back({node->tag_id, node->handle});
+        }
+        for (size_t i = refs.size(); i > 0u; --i)
+            out->emplace_user_data_ref_head(refs[i - 1u].tag, refs[i - 1u].handle);
         return out;
     }
 
@@ -375,7 +371,7 @@ namespace auik
             auto render_config = _render_config;
             render_config.size = inner_size;
             render_config.origin =
-                resolve_text_widget_render_origin(*this, font, font_size_px, &_layout_result, &render_config.size);
+                resolve_text_widget_render_origin(*this, style, font, font_size_px, &_layout_result, &render_config.size);
             render_config.z_order = get_z_order();
             render_config.clip_id = clip_id();
             if (font && detail::build_text_instances_from_layout(*font, font_size_px, _layout_result, render_config,
@@ -611,12 +607,12 @@ namespace auik
         if (can_reuse_layout)
         {
             render_config.origin =
-                resolve_text_widget_render_origin(*this, font, font_size_px, &_layout_result, &render_config.size);
+                resolve_text_widget_render_origin(*this, style, font, font_size_px, &_layout_result, &render_config.size);
             return detail::build_text_instances_from_layout(*font, font_size_px, _layout_result, render_config,
                                                             tint_color, _instances);
         }
 
-        render_config.origin = resolve_text_widget_render_origin(*this, font, font_size_px);
+        render_config.origin = resolve_text_widget_render_origin(*this, style, font, font_size_px);
 
         return multiline()
                    ? detail::build_multiline_instances(*font, font_size_px, _text, _layout_config, render_config,
@@ -731,9 +727,8 @@ namespace auik
         u8 flags = 0;
     };
 
-    EText::EText(u32 id, acul::string text, amal::vec2 max_size, WidgetFlags flags, TextLayoutFlags layout_flags,
-                 TextAnchorY anchor_y)
-        : Text(id, std::move(text), max_size, flags, layout_flags, anchor_y),
+    EText::EText(u32 id, acul::string text, amal::vec2 max_size, WidgetFlags flags, TextLayoutFlags layout_flags)
+        : Text(id, std::move(text), max_size, flags, layout_flags),
           _edit((flags & WidgetFlagBits::hittable) ? acul::alloc<ETextEditData>() : nullptr)
     {
         set_rect_tag_id(AUIK_TAG_ETEXT);
@@ -750,9 +745,8 @@ namespace auik
         }
     }
 
-    EText::EText(u32 id, StringView text, amal::vec2 max_size, WidgetFlags flags, TextLayoutFlags layout_flags,
-                 TextAnchorY anchor_y)
-        : EText(id, acul::string(text.str ? text.str : ""), max_size, flags, layout_flags, anchor_y)
+    EText::EText(u32 id, StringView text, amal::vec2 max_size, WidgetFlags flags, TextLayoutFlags layout_flags)
+        : EText(id, acul::string(text.str ? text.str : ""), max_size, flags, layout_flags)
     {
         if (text.is_translated) set_translated_text_literal(text.str);
     }
@@ -1362,7 +1356,6 @@ namespace auik
             stream.write(static_cast<u32>(widget.text_flags))
                 .write(widget.style_tag())
                 .write(static_cast<u32>(widget.layout_flags()))
-                .write(static_cast<u32>(widget.anchor_y()))
                 .write(widget.max_lines())
                 .write(widget.tight_content_height());
         }
@@ -1374,7 +1367,6 @@ namespace auik
             u32 text_flags = 0u;
             u32 style_tag = AUIK_STYLE_TAG_NO_PAD;
             u32 layout_flags = static_cast<u32>(default_text_layout_flags());
-            u32 anchor_y = static_cast<u32>(TextAnchorY::baseline);
             u32 max_lines = 0u;
             bool tight_content_height = false;
         };
@@ -1388,7 +1380,6 @@ namespace auik
             stream.read(out.text_flags)
                 .read(out.style_tag)
                 .read(out.layout_flags)
-                .read(out.anchor_y)
                 .read(out.max_lines)
                 .read(out.tight_content_height);
             return out;
@@ -1414,7 +1405,7 @@ namespace auik
             const auto payload = read_text_payload(stream);
             auto *widget =
                 acul::alloc<Text>(common.id, payload.text, common.inline_size, WidgetFlags(common.widget_flags),
-                                  TextLayoutFlags(payload.layout_flags), static_cast<TextAnchorY>(payload.anchor_y));
+                                  TextLayoutFlags(payload.layout_flags));
             widget->set_style_tag(payload.style_tag);
             detail::apply_widget_common_data(widget, common);
             if (payload.translated) widget->set_translated_text_literal(payload.text.c_str());
@@ -1428,7 +1419,7 @@ namespace auik
             const auto payload = read_text_payload(stream);
             auto *widget =
                 acul::alloc<EText>(common.id, payload.text, common.inline_size, WidgetFlags(common.widget_flags),
-                                   TextLayoutFlags(payload.layout_flags), static_cast<TextAnchorY>(payload.anchor_y));
+                                   TextLayoutFlags(payload.layout_flags));
             widget->set_style_tag(payload.style_tag);
             detail::apply_widget_common_data(widget, common);
             if (payload.translated) widget->set_translated_text_literal(payload.text.c_str());

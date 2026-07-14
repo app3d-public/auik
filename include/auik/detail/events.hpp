@@ -107,7 +107,7 @@ namespace auik::detail
     AUIK_EXPORT void on_mouse_click_event(MouseKey key, KeyPressState state);
     AUIK_EXPORT void on_key_event(Key key, KeyPressState state, KeyMode mods);
     AUIK_EXPORT void on_char_event(u32 char_code);
-    void deregister_widget_shortcuts(u32 widget_id);
+    AUIK_EXPORT void deregister_widget_shortcuts(u32 widget_id);
     AUIK_EXPORT void flush_frame_changes();
     AUIK_EXPORT void reset_event_state();
     AUIK_EXPORT void on_hover_id_updated(const ElementID &prev_hover_id, const ElementID &hover_id);

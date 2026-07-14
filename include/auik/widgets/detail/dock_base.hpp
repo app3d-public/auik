@@ -298,6 +298,7 @@ namespace auik::detail
             const f32 fill_size =
                 fill_count > 0u ? amal::max(main_available - fixed_total, 0.0f) / static_cast<f32>(fill_count) : 0.0f;
             f32 cursor = dock_axis_size(bounds.offset, node->axis);
+            const f32 end = cursor + main_available;
 
             for (size_t i = 0; i < node->children.size(); ++i)
             {
@@ -311,6 +312,7 @@ namespace auik::detail
                 else if (is_size_concrete(style_main)) child_main = style_main;
                 else child_main = dock_axis_size(child->required_size, node->axis);
                 child_main = amal::max(child_main, min_main);
+                child_main = amal::min(child_main, amal::max(end - cursor, 0.0f));
 
                 amal::rect child_bounds = bounds;
                 set_dock_axis_offset(child_bounds.offset, node->axis, cursor);

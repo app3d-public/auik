@@ -35,7 +35,6 @@ namespace auik::detail
         apply_style_layout(style);
         if (const auto *text = style.text_settings())
         {
-            set_anchor_y(text->anchor_y);
             set_multiline(text->wrap == TextWrapMode::word);
             set_overflow_mode(text->overflow);
         }

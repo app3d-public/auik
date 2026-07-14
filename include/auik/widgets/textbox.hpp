@@ -19,7 +19,6 @@ namespace auik
 
         AUIK_EXPORT Textbox(u32 id, const acul::string &value, amal::vec2 inline_size, WidgetFlags flags, u32 style_tag_id,
                             TextFlags text_flags = TextFlagBits::none, StringView placeholder = {},
-                            TextAnchorY text_anchor_y = TextAnchorY::middle,
                             TextWrapMode text_wrap = TextWrapMode::none);
         AUIK_EXPORT ~Textbox() override;
 
@@ -73,7 +72,6 @@ namespace auik
             set_rect_tag_id(tag_id);
         }
         u32 style_tag() const { return _style.tag_id; }
-        TextAnchorY text_anchor_y() const { return _text.anchor_y(); }
         TextWrapMode text_wrap() const { return _text.multiline() ? TextWrapMode::word : TextWrapMode::none; }
 
     protected:

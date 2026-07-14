@@ -47,7 +47,9 @@ namespace auik
     }
 
     static inline u32 depth_requirement_of(Widget *widget)
-    { return widget ? amal::max(widget->get_depth_requirement(), 1u) : 0u; }
+    {
+        return widget ? amal::max(widget->get_depth_requirement(), 1u) : 0u;
+    }
 
     namespace detail
     {
@@ -57,6 +59,21 @@ namespace auik
         static inline bool is_top_layout(ChildLayoutFlags flags) { return flags & ChildLayoutFlagBits::top; }
         static inline bool is_center_layout(ChildLayoutFlags flags) { return flags & ChildLayoutFlagBits::vcenter; }
         static inline bool is_bottom_layout(ChildLayoutFlags flags) { return flags & ChildLayoutFlagBits::bottom; }
+        static const StyleExtraAlign *resolve_child_align(const Widget *child)
+        {
+            auto *theme = get_theme();
+            if (!child || !theme) return nullptr;
+            const u32 parent_id = child->parent() ? child->parent()->id() : 0u;
+            const StyleID style_id =
+                theme->get_resolved_style(child->get_rect().id.tag_id, child->id(), parent_id, child->style_state());
+            return theme->get_style(style_id).align_settings();
+        }
+
+        static bool is_absolute_layout(const Widget *child)
+        {
+            const auto *align = resolve_child_align(child);
+            return align && (ChildLayoutFlags(align->flags) & ChildLayoutFlagBits::absolute);
+        }
 
         struct ResolvedChildLayoutSize
         {
@@ -75,8 +92,7 @@ namespace auik
             const f32 occupied_width = child->fill_width()
                                            ? amal::min(safe_fill_available, safe_available)
                                            : amal::min(amal::max(fallback_size.x, 0.0f), safe_available);
-            const f32 occupied_height =
-                child->fill_height() ? safe_available_height : amal::max(fallback_size.y, 0.0f);
+            const f32 occupied_height = child->fill_height() ? safe_available_height : amal::max(fallback_size.y, 0.0f);
             return {{occupied_width, occupied_height}, {occupied_width, occupied_height}};
         }
 
@@ -96,10 +112,11 @@ namespace auik
                 if (!child->is_visible()) continue;
                 if (refresh_min_size) child->update_layout_min_size();
                 const ChildLayoutFlags layout = i < layouts.size() ? layouts[i] : ChildLayoutFlagBits::none;
+                if (is_absolute_layout(child)) continue;
                 const amal::vec2 req = child->required_size();
                 if (is_inline_layout(layout))
                 {
-                    const f32 gap_before = row_height > 0.0f ? inline_spacing_x : 0.0f;
+                    const f32 gap_before = row_width > 0.0f ? inline_spacing_x : 0.0f;
                     if (wrap_enabled && row_height > 0.0f && row_width + gap_before + req.x > wrap_width)
                     {
                         max_width = amal::max(max_width, row_width);
@@ -167,7 +184,7 @@ namespace auik
                 if (!row_child->is_visible()) continue;
                 const ChildLayoutFlags layout = row_i < layouts.size() ? layouts[row_i] : ChildLayoutFlagBits::none;
                 if (!is_top_layout(layout) && !is_center_layout(layout) && !is_bottom_layout(layout)) continue;
-                const f32 child_h = amal::max(row_child->required_size().y, 0.0f);
+                const f32 child_h = amal::max(amal::max(row_child->required_size().y, row_child->size().y), 0.0f);
                 f32 delta_y = 0.0f;
                 if (is_center_layout(layout)) delta_y = amal::floor((row_height - child_h) * 0.5f);
                 else if (is_bottom_layout(layout)) delta_y = amal::max(row_height - child_h, 0.0f);
@@ -193,6 +210,7 @@ namespace auik
                 auto *child = children[index];
                 if (!child || !child->is_visible()) continue;
                 const ChildLayoutFlags layout = index < layouts.size() ? layouts[index] : ChildLayoutFlagBits::none;
+                if (is_absolute_layout(child)) continue;
                 const bool terminal_child = index + 1u == row_end && !is_inline_layout(layout);
                 if ((!is_inline_layout(layout) && !terminal_child) || !is_right_layout(layout)) continue;
                 const amal::vec2 req = child->required_size();
@@ -211,6 +229,7 @@ namespace auik
                 auto *child = children[i];
                 if (!child || !child->is_visible()) continue;
                 const ChildLayoutFlags layout = i < layouts.size() ? layouts[i] : ChildLayoutFlagBits::none;
+                if (is_absolute_layout(child)) continue;
                 const bool terminal_child = i + 1u == row_end && !is_inline_layout(layout);
                 if ((!is_inline_layout(layout) && !terminal_child) || is_right_layout(layout)) continue;
                 const amal::vec2 req = child->required_size();
@@ -224,6 +243,18 @@ namespace auik
             }
 
             align_inline_row_vertical(children, layouts, row_start, row_end, row_height);
+        }
+
+        static void layout_absolute_child(Widget *child, const amal::rect &content_rect)
+        {
+            const StyleExtraAlign *align = resolve_child_align(child);
+            const amal::vec2 req = child->required_size();
+            const auto resolved =
+                resolve_child_layout_size(child, req, content_rect.size.x, content_rect.size.y, content_rect.size.x);
+            const amal::vec2 position = align ? amal::vec2{align->position.x, align->position.y} : amal::vec2{};
+            child->set_position(content_rect.offset + position);
+            child->set_layout_size(resolved.layout_size);
+            child->update_layout(true);
         }
 
         void layout_child_widgets(Widget *layout_owner, const acul::vector<Widget *> &children,
@@ -253,6 +284,11 @@ namespace auik
                 if (!child) continue;
                 if (!child->is_visible()) continue;
                 const ChildLayoutFlags layout = i < layouts.size() ? layouts[i] : ChildLayoutFlagBits::none;
+                if (is_absolute_layout(child))
+                {
+                    layout_absolute_child(child, content_rect);
+                    continue;
+                }
                 if (is_inline_layout(layout))
                 {
                     if (!inline_row_active)
@@ -273,15 +309,21 @@ namespace auik
                 const auto resolved =
                     resolve_child_layout_size(child, req, available_width, available_height, fill_available_width);
                 f32 child_x = cursor.x;
+                f32 child_y = cursor.y;
                 if (is_right_layout(layout))
                     child_x = content_pos.x + amal::max(available_width - resolved.occupied_size.x, 0.0f);
                 else if (is_hcenter_layout(layout))
                     child_x =
                         content_pos.x + amal::floor(amal::max(available_width - resolved.occupied_size.x, 0.0f) * 0.5f);
-                child->set_position({child_x, cursor.y});
+                if (is_center_layout(layout))
+                    child_y =
+                        cursor.y + amal::floor(amal::max(available_height - resolved.occupied_size.y, 0.0f) * 0.5f);
+                else if (is_bottom_layout(layout))
+                    child_y = cursor.y + amal::max(available_height - resolved.occupied_size.y, 0.0f);
+                child->set_position({child_x, child_y});
                 child->set_layout_size(resolved.layout_size);
                 child->update_layout(true);
-                cursor = {content_pos.x, cursor.y + child->required_size().y};
+                cursor = {content_pos.x, child_y + child->required_size().y};
             }
 
             flush_inline_row(children.size(), cursor, inline_row_active, inline_row_start);
@@ -290,7 +332,9 @@ namespace auik
         void layout_child_widgets(Widget *layout_owner, const acul::vector<Widget *> &children,
                                   const acul::vector<ChildLayoutFlags> &layouts, const amal::rect &content_rect,
                                   f32 inline_spacing_x)
-        { layout_child_widgets(layout_owner, children, layouts, content_rect, inline_spacing_x, content_rect.size.x); }
+        {
+            layout_child_widgets(layout_owner, children, layouts, content_rect, inline_spacing_x, content_rect.size.x);
+        }
 
         static void update_child_layout_bounds(Widget *child, const amal::rect &bounds)
         {
@@ -317,6 +361,7 @@ namespace auik
                 auto *child = children[index];
                 if (!child || !child->is_visible()) continue;
                 const ChildLayoutFlags layout = index < layouts.size() ? layouts[index] : ChildLayoutFlagBits::none;
+                if (is_absolute_layout(child)) continue;
                 const bool terminal_child = index + 1u == row_end && !is_inline_layout(layout);
                 if ((!is_inline_layout(layout) && !terminal_child) || !is_right_layout(layout)) continue;
                 const amal::vec2 req = child->required_size();
@@ -333,6 +378,7 @@ namespace auik
                 auto *child = children[i];
                 if (!child || !child->is_visible()) continue;
                 const ChildLayoutFlags layout = i < layouts.size() ? layouts[i] : ChildLayoutFlagBits::none;
+                if (is_absolute_layout(child)) continue;
                 const bool terminal_child = i + 1u == row_end && !is_inline_layout(layout);
                 if ((!is_inline_layout(layout) && !terminal_child) || is_right_layout(layout)) continue;
                 const amal::vec2 req = child->required_size();
@@ -373,6 +419,11 @@ namespace auik
                 if (!child) continue;
                 if (!child->is_visible()) continue;
                 const ChildLayoutFlags layout = i < layouts.size() ? layouts[i] : ChildLayoutFlagBits::none;
+                if (is_absolute_layout(child))
+                {
+                    layout_absolute_child(child, content_rect);
+                    continue;
+                }
                 if (is_inline_layout(layout))
                 {
                     if (!inline_row_active)
@@ -393,13 +444,19 @@ namespace auik
                 const auto resolved =
                     resolve_child_layout_size(child, req, available_width, available_height, fill_available_width);
                 f32 child_x = cursor.x;
+                f32 child_y = cursor.y;
                 if (is_right_layout(layout))
                     child_x = content_pos.x + amal::max(available_width - resolved.occupied_size.x, 0.0f);
                 else if (is_hcenter_layout(layout))
                     child_x =
                         content_pos.x + amal::floor(amal::max(available_width - resolved.occupied_size.x, 0.0f) * 0.5f);
-                update_child_layout_bounds(child, {{child_x, cursor.y}, resolved.layout_size});
-                cursor = {content_pos.x, cursor.y + req.y};
+                if (is_center_layout(layout))
+                    child_y =
+                        cursor.y + amal::floor(amal::max(available_height - resolved.occupied_size.y, 0.0f) * 0.5f);
+                else if (is_bottom_layout(layout))
+                    child_y = cursor.y + amal::max(available_height - resolved.occupied_size.y, 0.0f);
+                update_child_layout_bounds(child, {{child_x, child_y}, resolved.layout_size});
+                cursor = {content_pos.x, child_y + req.y};
             }
 
             flush_inline_row(children.size(), cursor, inline_row_active, inline_row_start);
@@ -465,7 +522,9 @@ namespace auik
     } // namespace detail
 
     static inline amal::vec4 sum_padding(const amal::vec4 &left, const amal::vec4 &right)
-    { return {left.x + right.x, left.y + right.y, left.z + right.z, left.w + right.w}; }
+    {
+        return {left.x + right.x, left.y + right.y, left.z + right.z, left.w + right.w};
+    }
 
     f32 Block::resolved_inline_spacing() const { return amal::max(_inline_spacing, 0.0f); }
 
@@ -483,13 +542,20 @@ namespace auik
         _child_layers.clear();
     }
 
-    void Block::add_child(Widget *child, ChildLayoutFlags layout) { add_child_to_layer(child, layout, BlockChildLayer::work); }
+    void Block::add_child(Widget *child, ChildLayoutFlags layout)
+    {
+        add_child_to_layer(child, layout, BlockChildLayer::work);
+    }
 
     void Block::add_child_to_background(Widget *child, ChildLayoutFlags layout)
-    { add_child_to_layer(child, layout, BlockChildLayer::background); }
+    {
+        add_child_to_layer(child, layout, BlockChildLayer::background);
+    }
 
     void Block::add_child_to_foreground(Widget *child, ChildLayoutFlags layout)
-    { add_child_to_layer(child, layout, BlockChildLayer::foreground); }
+    {
+        add_child_to_layer(child, layout, BlockChildLayer::foreground);
+    }
 
     void Block::add_child_to_layer(Widget *child, ChildLayoutFlags layout, BlockChildLayer layer)
     {
@@ -499,7 +565,7 @@ namespace auik
         child->update_style();
         children.push_back(child);
         _explicit_child_layouts.push_back(layout);
-        _child_layouts.push_back(resolve_child_layout(child, layout));
+        _child_layouts.push_back(layout);
         _child_layers.push_back(layer);
     }
 
@@ -511,29 +577,19 @@ namespace auik
         refresh_child_layout(index);
     }
 
-    bool Block::has_explicit_width() const
-    { return !is_size_fit(_explicit_size.x); }
+    bool Block::has_explicit_width() const { return !is_size_fit(_explicit_size.x); }
 
-    bool Block::has_explicit_height() const
-    { return !is_size_fit(_explicit_size.y); }
+    bool Block::has_explicit_height() const { return !is_size_fit(_explicit_size.y); }
 
-    f32 Block::resolved_explicit_width() const
-    { return _explicit_size.x; }
+    f32 Block::resolved_explicit_width() const { return _explicit_size.x; }
 
-    f32 Block::resolved_explicit_height() const
-    { return _explicit_size.y; }
-
-    ChildLayoutFlags Block::resolve_child_layout(Widget *child, ChildLayoutFlags layout) const
-    {
-        if (!child || !child->has_parent_style_child_layout()) return layout;
-        return merge_child_layout_flags(child->parent_style_child_layout(), layout);
-    }
+    f32 Block::resolved_explicit_height() const { return _explicit_size.y; }
 
     void Block::refresh_child_layout(size_t index)
     {
         if (index >= children.size() || index >= _explicit_child_layouts.size() || index >= _child_layouts.size())
             return;
-        _child_layouts[index] = resolve_child_layout(children[index], _explicit_child_layouts[index]);
+        _child_layouts[index] = _explicit_child_layouts[index];
     }
 
     void Block::refresh_child_layouts()
@@ -566,7 +622,7 @@ namespace auik
         for (size_t child_i = 0u; child_i < children.size(); ++child_i)
         {
             auto *child = children[child_i];
-            if (!child) continue;
+            if (!child || !child->is_visible()) continue;
             out |= child->update_style();
             refresh_child_layout(child_i);
         }
@@ -575,9 +631,8 @@ namespace auik
 
     amal::vec2 Block::compute_content_min_size()
     {
-        return detail::compute_layer_children_required_size(children, _child_layouts, _child_layers,
-                                                            BlockChildLayer::work, resolved_inline_spacing(), 0.0f,
-                                                            true);
+        return detail::compute_layer_children_required_size(
+            children, _child_layouts, _child_layers, BlockChildLayer::work, resolved_inline_spacing(), 0.0f, true);
     }
 
     void Block::layout_children(const amal::rect &content_rect)
@@ -589,9 +644,6 @@ namespace auik
         detail::layout_layer_children(this, children, _child_layouts, _child_layers, BlockChildLayer::foreground,
                                       content_rect, resolved_inline_spacing(), content_rect.size.x);
     }
-
-    void Block::layout_children(const amal::vec2 &content_pos, const amal::vec2 &content_size)
-    { layout_children({content_pos, content_size}); }
 
     void Block::update_layout_min_size() { update_layout_min_size_with(zero_vec4(), zero_vec4()); }
 
@@ -647,7 +699,7 @@ namespace auik
         const amal::vec2 content_pos = position() + amal::vec2{padding.x, padding.y};
         const amal::vec2 content_size = {amal::max(size().x - padding.x - padding.z, 0.0f),
                                          amal::max(size().y - padding.y - padding.w, 0.0f)};
-        layout_children(content_pos, content_size);
+        layout_children({content_pos, content_size});
     }
 
     void Block::translate(const amal::vec2 &delta)
@@ -676,7 +728,7 @@ namespace auik
         set_clip_id(content_clip_id());
         for (auto *child : children)
         {
-            if (!child) continue;
+            if (!child || !child->is_visible()) continue;
             child->rebuild_clip_rects();
         }
     }
@@ -701,7 +753,7 @@ namespace auik
                 const BlockChildLayer child_layer = i < _child_layers.size() ? _child_layers[i] : BlockChildLayer::work;
                 if (child_layer != layer) continue;
                 auto *child = children[i];
-                if (!child) continue;
+                if (!child || !child->is_visible()) continue;
                 requirement += amal::max(child->get_depth_requirement(), 1u);
             }
         };
@@ -720,7 +772,7 @@ namespace auik
             for (size_t i = 0u; i < children.size(); ++i)
             {
                 auto *child = children[i];
-                if (!child) continue;
+                if (!child || !child->is_visible()) continue;
                 const BlockChildLayer child_layer = i < _child_layers.size() ? _child_layers[i] : BlockChildLayer::work;
                 if (child_layer != layer) continue;
                 child->update_depth(cursor.next(depth_requirement_of(child)));
@@ -753,7 +805,7 @@ namespace auik
             for (size_t i = 0u; i < children.size(); ++i)
             {
                 auto *child = children[i];
-                if (!child) continue;
+                if (!child || (!child->is_visible() && !(ctx.reason & DrawReasonBits::invalidate))) continue;
                 const BlockChildLayer child_layer = i < _child_layers.size() ? _child_layers[i] : BlockChildLayer::work;
                 if (child_layer != layer) continue;
                 detail::draw_child_in_clip(child, ctx, content_clip);
@@ -866,8 +918,16 @@ namespace auik
         return style ? amal::max(style->inline_spacing(), 0.0f) : 0.0f;
     }
 
+    void DrawBlock::sync_draw_bounds()
+    {
+        _bg_rect.bounds = bounds();
+        _bg_rect.clip_id = clip_id();
+    }
+
     void DrawBlock::set_scrollbar_style_tag(u32 track_tag_id)
-    { set_scrollbar_style_tags(track_tag_id, scrollbar_thumb_style_for_track(track_tag_id)); }
+    {
+        set_scrollbar_style_tags(track_tag_id, scrollbar_thumb_style_for_track(track_tag_id));
+    }
 
     void DrawBlock::set_scrollbar_style_tags(u32 track_tag_id, u32 thumb_tag_id)
     {
@@ -921,13 +981,19 @@ namespace auik
         const amal::vec2 content_pos = position() + amal::vec2{padding.x, padding.y};
         const bool clip_ignores_padding_x = _draw_flags & DrawBlockFlagBits::clip_ignores_padding_x;
         const bool clip_ignores_padding_y = _draw_flags & DrawBlockFlagBits::clip_ignores_padding_y;
+        const bool scroll_x_enabled = _draw_flags & DrawBlockFlagBits::scrollbar_x;
+        const bool scroll_y_enabled = _draw_flags & DrawBlockFlagBits::scrollbar_y;
         const f32 bar_w = has_visible_scrollbar_y() && _scrollbar_y ? _scrollbar_y->get_min_track_thickness() : 0.0f;
         const f32 bar_h = has_visible_scrollbar_x() && _scrollbar_x ? _scrollbar_x->get_min_track_thickness() : 0.0f;
         const amal::vec2 clip_pos{clip_ignores_padding_x ? position().x : content_pos.x,
                                   clip_ignores_padding_y ? position().y : content_pos.y};
         const amal::vec2 clip_view_size{
-            clip_ignores_padding_x ? amal::max(size().x - bar_w, 0.0f) : _scroll_view_size.x,
-            clip_ignores_padding_y ? amal::max(size().y - bar_h, 0.0f) : _scroll_view_size.y};
+            clip_ignores_padding_x
+                ? amal::max(size().x - bar_w, 0.0f)
+                : (scroll_x_enabled ? _scroll_view_size.x : amal::max(size().x - padding.x - padding.z, 0.0f)),
+            clip_ignores_padding_y
+                ? amal::max(size().y - bar_h, 0.0f)
+                : (scroll_y_enabled ? _scroll_view_size.y : amal::max(size().y - padding.y - padding.w, 0.0f))};
         update_scroll_clip(clip_pos, clip_view_size);
     }
 
@@ -1122,9 +1188,9 @@ namespace auik
                                       _scroll_view_size.x);
         detail::layout_layer_children(this, children, _child_layouts, _child_layers, BlockChildLayer::foreground,
                                       {content_pos, _scroll_view_size}, resolved_inline_spacing(), _scroll_view_size.x);
-        const amal::vec2 laid_out_children_size = detail::compute_layer_children_required_size(
-            children, _child_layouts, _child_layers, BlockChildLayer::work, resolved_inline_spacing(),
-            layout_view_size.x, false);
+        const amal::vec2 laid_out_children_size =
+            detail::compute_layer_children_required_size(children, _child_layouts, _child_layers, BlockChildLayer::work,
+                                                         resolved_inline_spacing(), layout_view_size.x, false);
         const amal::vec2 laid_out_scroll_content_size =
             with_scroll_trailing_padding(laid_out_children_size, need_scroll_x, need_scroll_y);
         if (laid_out_scroll_content_size != pre_layout_children_size)
@@ -1147,8 +1213,8 @@ namespace auik
                                               BlockChildLayer::foreground, {content_pos, _scroll_view_size},
                                               resolved_inline_spacing(), viewport_w);
                 children_layout_size = detail::compute_layer_children_required_size(
-                    children, _child_layouts, _child_layers, BlockChildLayer::work, resolved_inline_spacing(),
-                    layout_w, false);
+                    children, _child_layouts, _child_layers, BlockChildLayer::work, resolved_inline_spacing(), layout_w,
+                    false);
                 const bool next_y = scroll_y_enabled && children_layout_size.y > viewport_h;
                 const bool next_x = scroll_x_enabled && children_layout_size.x > viewport_w;
                 if (next_y == refined_need_y && next_x == refined_need_x) break;
@@ -1290,7 +1356,7 @@ namespace auik
         if (_scrollbar_y) _scrollbar_y->rebuild_clip_rects();
         for (auto *child : children)
         {
-            if (!child) continue;
+            if (!child || !child->is_visible()) continue;
             child->rebuild_clip_rects();
         }
     }
@@ -1306,8 +1372,8 @@ namespace auik
     u32 DrawBlock::get_depth_requirement() const
     {
         u32 requirement = Block::get_depth_requirement();
-        if (_scrollbar_x) requirement += _scrollbar_x->get_depth_requirement();
-        if (_scrollbar_y) requirement += _scrollbar_y->get_depth_requirement();
+        if (_scrollbar_x && _scrollbar_x->is_visible()) requirement += _scrollbar_x->get_depth_requirement();
+        if (_scrollbar_y && _scrollbar_y->is_visible()) requirement += _scrollbar_y->get_depth_requirement();
         return requirement;
     }
 
@@ -1322,7 +1388,7 @@ namespace auik
             for (size_t i = 0u; i < children.size(); ++i)
             {
                 auto *child = children[i];
-                if (!child) continue;
+                if (!child || !child->is_visible()) continue;
                 const BlockChildLayer child_layer = i < _child_layers.size() ? _child_layers[i] : BlockChildLayer::work;
                 if (child_layer != layer) continue;
                 child->update_depth(cursor.next(depth_requirement_of(child)));
@@ -1331,8 +1397,10 @@ namespace auik
         update_layer(BlockChildLayer::background);
         update_layer(BlockChildLayer::work);
         update_layer(BlockChildLayer::foreground);
-        if (_scrollbar_x) _scrollbar_x->update_depth(cursor.next(_scrollbar_x->get_depth_requirement()));
-        if (_scrollbar_y) _scrollbar_y->update_depth(cursor.next(_scrollbar_y->get_depth_requirement()));
+        if (_scrollbar_x && _scrollbar_x->is_visible())
+            _scrollbar_x->update_depth(cursor.next(_scrollbar_x->get_depth_requirement()));
+        if (_scrollbar_y && _scrollbar_y->is_visible())
+            _scrollbar_y->update_depth(cursor.next(_scrollbar_y->get_depth_requirement()));
     }
 
     void DrawBlock::back_hit_depth()
@@ -1351,6 +1419,7 @@ namespace auik
 
     void DrawBlock::draw(DrawCtx &ctx)
     {
+        if (!is_visible() && !(ctx.reason & DrawReasonBits::invalidate)) return;
         if (draw_style())
         {
             auto *quads_stream = get_primary_quads_stream();
@@ -1487,7 +1556,9 @@ namespace auik
     }
 
     u32 WidgetRef::get_depth_requirement() const
-    { return 1u + (_target && _ref_active ? amal::max(_target->get_depth_requirement(), 1u) : 0u); }
+    {
+        return 1u + (_target && _ref_active ? amal::max(_target->get_depth_requirement(), 1u) : 0u);
+    }
 
     void WidgetRef::update_depth(const amal::vec2 &depth_range)
     {
@@ -1517,7 +1588,10 @@ namespace auik
         detail::draw_child_in_clip(_target, ctx, {position().x, position().y, size().x, size().y});
     }
 
-    amal::vec2 WidgetRef::requested_size() const { return _target ? _target->requested_size() : Widget::requested_size(); }
+    amal::vec2 WidgetRef::requested_size() const
+    {
+        return _target ? _target->requested_size() : Widget::requested_size();
+    }
 
     WidgetStack::WidgetStack(WidgetFlags widget_flags)
         : Widget(AUIK_TAG_WIDGET_STACK, widget_flags, EventFlagBits::none, {{0.0f, 0.0f}, AUIK_SIZE_INHERIT},
@@ -1580,6 +1654,17 @@ namespace auik
 
     bool WidgetStack::is_active_child(const Widget *child) const { return child && active_child() == child; }
 
+    bool WidgetStack::accepts_child_style_update(const Widget *child) const
+    {
+        for (size_t i = 0u; i < _children.size(); ++i)
+        {
+            if (_children[i] != child) continue;
+            const auto layer = i < _child_layers.size() ? _child_layers[i] : BlockChildLayer::work;
+            return layer != BlockChildLayer::work || is_active_child(child);
+        }
+        return true;
+    }
+
     void WidgetStack::set_active_index(size_t index)
     {
         size_t work_count = 0u;
@@ -1602,7 +1687,7 @@ namespace auik
     {
         StyleUpdateFlags out = StyleUpdateFlagBits::none;
         for (auto *child : _children)
-            if (child) out |= child->update_style();
+            if (child && child->is_visible()) out |= child->update_style();
         return out;
     }
 
@@ -1617,7 +1702,7 @@ namespace auik
         for (size_t i = 0u; i < _children.size(); ++i)
         {
             auto *child = _children[i];
-            if (!child) continue;
+            if (!child || !child->is_visible()) continue;
             const auto layer = i < _child_layers.size() ? _child_layers[i] : BlockChildLayer::work;
             if (layer == BlockChildLayer::work) continue;
             child->update_layout_min_size();
@@ -1629,7 +1714,7 @@ namespace auik
         for (size_t i = 0u; i < _children.size(); ++i)
         {
             auto *child = _children[i];
-            if (!child) continue;
+            if (!child || !child->is_visible()) continue;
             const auto child_layer = i < _child_layers.size() ? _child_layers[i] : BlockChildLayer::work;
             if (child_layer != layer) continue;
             child->set_position(position());
@@ -1689,7 +1774,7 @@ namespace auik
         for (size_t i = 0u; i < _children.size(); ++i)
         {
             auto *child = _children[i];
-            if (!child) continue;
+            if (!child || !child->is_visible()) continue;
             const auto layer = i < _child_layers.size() ? _child_layers[i] : BlockChildLayer::work;
             if (layer == BlockChildLayer::background) child->rebuild_clip_rects();
         }
@@ -1697,7 +1782,7 @@ namespace auik
         for (size_t i = 0u; i < _children.size(); ++i)
         {
             auto *child = _children[i];
-            if (!child) continue;
+            if (!child || !child->is_visible()) continue;
             const auto layer = i < _child_layers.size() ? _child_layers[i] : BlockChildLayer::work;
             if (layer == BlockChildLayer::foreground) child->rebuild_clip_rects();
         }
@@ -1726,7 +1811,7 @@ namespace auik
                 const auto child_layer = i < _child_layers.size() ? _child_layers[i] : BlockChildLayer::work;
                 if (child_layer != layer) continue;
                 auto *child = _children[i];
-                if (!child) continue;
+                if (!child || !child->is_visible()) continue;
                 if (layer == BlockChildLayer::work && child != active_child()) continue;
                 requirement += amal::max(child->get_depth_requirement(), 1u);
             }
@@ -1746,7 +1831,7 @@ namespace auik
             for (size_t i = 0u; i < _children.size(); ++i)
             {
                 auto *child = _children[i];
-                if (!child) continue;
+                if (!child || !child->is_visible()) continue;
                 const auto child_layer = i < _child_layers.size() ? _child_layers[i] : BlockChildLayer::work;
                 if (child_layer != layer) continue;
                 if (layer == BlockChildLayer::work && child != active_child()) continue;
@@ -1793,7 +1878,7 @@ namespace auik
             for (size_t i = 0u; i < _children.size(); ++i)
             {
                 auto *child = _children[i];
-                if (!child) continue;
+                if (!child || (!child->is_visible() && !(ctx.reason & DrawReasonBits::invalidate))) continue;
                 const auto child_layer = i < _child_layers.size() ? _child_layers[i] : BlockChildLayer::work;
                 if (child_layer != layer) continue;
                 if (layer == BlockChildLayer::work && child != active_child()) continue;
@@ -1801,8 +1886,7 @@ namespace auik
             }
         };
         draw_layer(BlockChildLayer::background);
-        if (auto *child = active_child())
-            detail::draw_child_in_clip(child, ctx, get_content_clip_rect());
+        if (auto *child = active_child()) detail::draw_child_in_clip(child, ctx, get_content_clip_rect());
         draw_layer(BlockChildLayer::foreground);
     }
 
@@ -2062,7 +2146,7 @@ namespace auik
         if (_expanded)
         {
             for (auto *child : children)
-                if (child) out |= child->update_style();
+                if (child && child->is_visible()) out |= child->update_style();
         }
         return out;
     }
@@ -2073,7 +2157,7 @@ namespace auik
         if (!_expanded) return required;
         for (auto *child : children)
         {
-            if (!child) continue;
+            if (!child || !child->is_visible()) continue;
             child->update_layout_min_size();
             const auto child_required = child->required_size();
             required.x = amal::max(required.x, child_required.x);
@@ -2190,10 +2274,9 @@ namespace auik
     }
 
     void CollapseHeader::layout_children(const amal::rect &content_rect)
-    { detail::layout_child_widgets(this, children, _child_layouts, content_rect, resolved_inline_spacing()); }
-
-    void CollapseHeader::layout_children(const amal::vec2 &content_pos, const amal::vec2 &content_size)
-    { layout_children({content_pos, content_size}); }
+    {
+        detail::layout_child_widgets(this, children, _child_layouts, content_rect, resolved_inline_spacing());
+    }
 
     void CollapseHeader::translate(const amal::vec2 &delta)
     {
@@ -2206,7 +2289,7 @@ namespace auik
         if (_expanded)
         {
             for (auto *child : children)
-                if (child) child->translate(delta);
+                if (child && child->is_visible()) child->translate(delta);
         }
     }
 
@@ -2224,7 +2307,7 @@ namespace auik
         if (_expanded)
         {
             for (auto *child : children)
-                if (child) child->rebuild_clip_rects();
+                if (child && child->is_visible()) child->rebuild_clip_rects();
         }
     }
 
@@ -2245,11 +2328,17 @@ namespace auik
         const amal::vec2 content_range = cursor.next(1u);
         const amal::vec2 header_bg_range = cursor.next(1u);
         const amal::vec2 header_content_range = cursor.next(1u);
-        if (_trigger) { _trigger->update_depth(header_content_range); }
-        if (_label) { _label->update_depth(header_content_range); }
+        if (_trigger)
+        {
+            _trigger->update_depth(header_content_range);
+        }
+        if (_label)
+        {
+            _label->update_depth(header_content_range);
+        }
         for (auto *child : children)
         {
-            if (!child) continue;
+            if (!child || !child->is_visible()) continue;
             child->update_depth(content_range);
         }
         _header_rect.depth = next_depth(detail::depth_background_range(header_bg_range));
@@ -2305,7 +2394,7 @@ namespace auik
             const amal::vec4 content_clip = get_content_clip_rect();
             for (auto *child : children)
             {
-                if (!child) continue;
+                if (!child || (!child->is_visible() && !(ctx.reason & DrawReasonBits::invalidate))) continue;
                 detail::draw_child_in_clip(child, ctx, content_clip);
             }
         }
@@ -2423,7 +2512,9 @@ namespace auik
         }
 
         void write_block_size_data(acul::bin_stream &stream, const Block &block)
-        { stream.write(block.explicit_size()); }
+        {
+            stream.write(block.explicit_size());
+        }
 
         BlockSizeData read_block_size_data(acul::bin_stream &stream)
         {
@@ -2432,8 +2523,7 @@ namespace auik
             return out;
         }
 
-        void apply_block_size_data(Block *block, const BlockSizeData &size)
-        { block->set_size(size.explicit_size); }
+        void apply_block_size_data(Block *block, const BlockSizeData &size) { block->set_size(size.explicit_size); }
 
         void write_block_children(acul::bin_stream &stream, const Block &block)
         {
@@ -2493,8 +2583,7 @@ namespace auik
 
         static u32 serializable_widget_ref_flags(WidgetFlags flags)
         {
-            return static_cast<u32>(flags) &
-                   static_cast<u32>(WidgetFlagBits::visible | WidgetFlagBits::configurable);
+            return static_cast<u32>(flags) & static_cast<u32>(WidgetFlagBits::visible | WidgetFlagBits::configurable);
         }
 
         void write_widget_ref_common_data(acul::bin_stream &stream, const WidgetRef &widget)
@@ -2507,10 +2596,14 @@ namespace auik
         }
 
         void sanitize_widget_ref_common_data(detail::WidgetCommonData &common)
-        { common.widget_flags = serializable_widget_ref_flags(WidgetFlags(common.widget_flags)); }
+        {
+            common.widget_flags = serializable_widget_ref_flags(WidgetFlags(common.widget_flags));
+        }
 
         void write_block(acul::bin_stream &stream, umbf::Block *block)
-        { write_block_payload(stream, *static_cast<Block *>(block)); }
+        {
+            write_block_payload(stream, *static_cast<Block *>(block));
+        }
 
         umbf::Block *read_block(acul::bin_stream &stream)
         {
@@ -2559,7 +2652,9 @@ namespace auik
         }
 
         void write_widget_ref(acul::bin_stream &stream, umbf::Block *block)
-        { write_widget_ref_common_data(stream, *static_cast<WidgetRef *>(block)); }
+        {
+            write_widget_ref_common_data(stream, *static_cast<WidgetRef *>(block));
+        }
 
         umbf::Block *read_widget_ref(acul::bin_stream &stream)
         {
@@ -2636,16 +2731,16 @@ namespace auik
                 auto *child = static_cast<Widget *>(children[child_i]);
                 switch (child_i < layers.size() ? layers[child_i] : BlockChildLayer::work)
                 {
-                case BlockChildLayer::background:
-                    widget->add_child_to_background(child);
-                    break;
-                case BlockChildLayer::foreground:
-                    widget->add_child_to_foreground(child);
-                    break;
-                case BlockChildLayer::work:
-                default:
-                    widget->add_child(child);
-                    break;
+                    case BlockChildLayer::background:
+                        widget->add_child_to_background(child);
+                        break;
+                    case BlockChildLayer::foreground:
+                        widget->add_child_to_foreground(child);
+                        break;
+                    case BlockChildLayer::work:
+                    default:
+                        widget->add_child(child);
+                        break;
                 }
             }
             widget->set_active_index(static_cast<size_t>(active_index));

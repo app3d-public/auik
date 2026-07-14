@@ -135,25 +135,36 @@ namespace auik
         db->synced = true;
     }
 
+    AUIK_EXPORT void ModelDB::clear()
+    {
+        for (auto *binding : _bindings)
+        {
+            if (!binding) continue;
+            detach_model_binding(*binding);
+            acul::release(binding);
+        }
+        _bindings.clear();
+        for (auto &entry : pipelines)
+            if (entry.second.destroy) entry.second.destroy(entry.second.pipeline);
+        pipelines.clear();
+
+        for (auto &entry : models)
+            if (entry.second.destroy) entry.second.destroy(&entry.second.model);
+        models.clear();
+
+        _pipeline_allocation_pool.clear();
+        _pipeline_cache_pool.clear();
+        _pipeline_cache_entries.clear();
+        _pipeline_allocation_input_stride = 0u;
+        _pipeline_allocation_count = 0u;
+        _pipeline_cache_pool_used = 0u;
+        _pipeline_cache_scope_depth = 0u;
+        synced = false;
+    }
+
     AUIK_EXPORT void clear_model_db(ModelDB *db)
     {
-        if (!db) return;
-        for (auto &entry : db->pipelines)
-            if (entry.second.destroy) entry.second.destroy(entry.second.pipeline);
-        db->pipelines.clear();
-
-        for (auto &entry : db->models)
-            if (entry.second.destroy) entry.second.destroy(&entry.second.model);
-        db->models.clear();
-
-        db->_pipeline_allocation_pool.clear();
-        db->_pipeline_cache_pool.clear();
-        db->_pipeline_cache_entries.clear();
-        db->_pipeline_allocation_input_stride = 0u;
-        db->_pipeline_allocation_count = 0u;
-        db->_pipeline_cache_pool_used = 0u;
-        db->_pipeline_cache_scope_depth = 0u;
-        db->synced = false;
+        if (db) db->clear();
     }
 
     AUIK_EXPORT bool model_pipeline_cache_active(const ModelDB *db)
@@ -524,6 +535,42 @@ namespace auik
         if (!binding.db || !binding.db->synced) return;
         detach_model_binding_fields(binding);
         if (auto *model = find_model(binding.db, binding.model_id)) erase_model_binding_ptr(model->bindings, &binding);
+    }
+
+    AUIK_EXPORT bool ModelDB::register_binding(ModelBinding *binding)
+    {
+        if (!binding || binding->db || !find_model(this, binding->model_id)) return false;
+        for (auto *registered : _bindings)
+            if (registered == binding) return false;
+
+        if (!synced) sync_model_db(this);
+        if (binding->default_access.record_id == AUIK_MODEL_RECORD_ID_INVALID &&
+            binding->default_access.field_id != AUIK_MODEL_FIELD_ID_INVALID)
+            binding->default_access.record_id = first_model_record_id(this, binding->model_id);
+
+        binding->db = this;
+        _bindings.push_back(binding);
+        attach_model_binding(*binding);
+
+        if (binding->default_access.field_id != AUIK_MODEL_FIELD_ID_INVALID)
+            dispatch_model_binding_field(*binding, binding->default_access.record_id,
+                                         binding->default_access.field_id);
+        return true;
+    }
+
+    AUIK_EXPORT bool ModelDB::unregister_binding(ModelBinding *binding)
+    {
+        if (!binding || binding->db != this) return false;
+        for (size_t index = 0; index < _bindings.size(); ++index)
+        {
+            if (_bindings[index] != binding) continue;
+            detach_model_binding(*binding);
+            binding->db = nullptr;
+            _bindings.erase(_bindings.begin() + index);
+            acul::release(binding);
+            return true;
+        }
+        return false;
     }
 
     AUIK_EXPORT void rebuild_model_binding_records(ModelBinding &binding)

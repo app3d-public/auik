@@ -172,6 +172,7 @@ namespace auik
     AUIK_EXPORT void emit_context_draw_batch(DrawCtx &ctx, DrawStream *stream, DrawDataID *draw_ids, const void *data,
                                             u32 count, const detail::RectData *rects = nullptr,
                                             bool emit_hit_rects = false);
+    AUIK_EXPORT void invalidate_render_draw(DrawStream *stream, DrawDataID &draw_id);
 
     inline void update_hit_rect(u32 &hit_id, const detail::RectData &rect, bool force_update)
     {

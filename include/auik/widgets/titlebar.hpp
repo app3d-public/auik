@@ -128,7 +128,7 @@ namespace auik
     inline Titlebar *make_titlebar(u32 id = AUIK_TAG_TITLEBAR)
     {
         constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
-                                             WidgetFlagBits::configurable;
+                                             WidgetFlagBits::configurable | WidgetFlagBits::hittable;
         return acul::alloc<Titlebar>(id, widget_flags);
     }
 

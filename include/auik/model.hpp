@@ -138,6 +138,10 @@ namespace auik
         void release() override { acul::release(this); }
     };
 
+    template <class T, class... Args>
+    inline ModelValueField<T> *make_model_field(ModelFieldID field_id, Args &&...args)
+    { return acul::alloc<ModelValueField<T>>(field_id, T(std::forward<Args>(args)...)); }
+
     struct ModelRecord
     {
         using field_container = acul::vector<ModelField *>;
@@ -316,9 +320,6 @@ namespace auik
         return field;
     }
 
-    inline ModelField *add_model_field(ModelRecord &record, ModelField &field)
-    { return add_model_field(record, &field); }
-
     AUIK_EXPORT void release_model_record_fields(ModelRecord &record);
 
     template <class T = acul::string>
@@ -378,9 +379,6 @@ namespace auik
     using PFN_destroy_model = void (*)(Model *);
     using PFN_destroy_model_pipeline = void (*)(ModelPipelineNode *);
 
-    struct ModelDB;
-    AUIK_EXPORT void clear_model_db(ModelDB *db);
-
     struct ModelDB
     {
         struct ModelEntry
@@ -399,6 +397,7 @@ namespace auik
 
         using model_container = acul::hashmap<ModelID, ModelEntry>;
         using pipeline_container = acul::hashmap<u64, PipelineEntry>;
+        using binding_container = acul::vector<ModelBinding *>;
         using model_iterator = model_container::iterator;
         using const_model_iterator = model_container::const_iterator;
         using pipeline_iterator = pipeline_container::iterator;
@@ -415,7 +414,17 @@ namespace auik
         u32 _pipeline_cache_scope_depth = 0u;
         bool synced = false;
 
-        ~ModelDB() { clear_model_db(this); }
+        ~ModelDB() { clear(); }
+
+        AUIK_EXPORT void clear();
+        // Takes ownership of binding and activates it for this database.
+        AUIK_EXPORT bool register_binding(ModelBinding *binding);
+        AUIK_EXPORT bool unregister_binding(ModelBinding *binding);
+
+    private:
+        binding_container _bindings;
+
+    public:
 
         model_iterator models_begin() { return models.begin(); }
         model_iterator models_end() { return models.end(); }
@@ -496,8 +505,8 @@ namespace auik
         model.make_record_id_cb = make_generated_model_record_id;
 
         ModelRecord record{};
-        auto *field = acul::alloc<ModelValueField<T>>(field_id, std::move(value));
-        add_model_field(record, *field);
+        auto *field = make_model_field<T>(field_id, std::move(value));
+        add_model_field(record, field);
         model.add_record(std::move(record));
 
         if (!register_model(db, model_id, std::move(model), destroy_model_fields))
@@ -635,29 +644,27 @@ namespace auik
                set_model_field_access_value<T>(binding.db, binding.model_id, access, std::forward<U>(value));
     }
 
-    inline ModelBinding make_model_binding(ModelDB *db, ModelID model_id)
+    inline ModelBinding *make_model_binding(ModelID model_id)
     {
-        ModelBinding binding{};
-        binding.db = db;
-        binding.model_id = model_id;
-        binding.access_field = default_access_model_binding_field;
+        auto *binding = acul::alloc<ModelBinding>();
+        binding->model_id = model_id;
+        binding->access_field = default_access_model_binding_field;
         return binding;
     }
 
-    inline ModelBinding make_model_binding(ModelDB *db, ModelID model_id, ModelRecordID record_id,
-                                           ModelFieldID field_id, ModelPipelineNode *pipeline = nullptr)
+    inline ModelBinding *make_model_binding(ModelID model_id, ModelRecordID record_id, ModelFieldID field_id,
+                                            ModelPipelineNode *pipeline = nullptr)
     {
-        ModelBinding binding = make_model_binding(db, model_id);
-        binding.default_access = {record_id, field_id, pipeline};
+        auto *binding = make_model_binding(model_id);
+        binding->default_access = {record_id, field_id, pipeline};
         return binding;
     }
 
-    inline ModelBinding make_value_model_binding(ModelDB *db, ModelID model_id, ModelFieldID field_id = 1u,
-                                                 ModelRecordID record_id = AUIK_MODEL_RECORD_ID_INVALID,
-                                                 ModelPipelineNode *pipeline = nullptr)
+    inline ModelBinding *make_value_model_binding(ModelID model_id, ModelFieldID field_id = 1u,
+                                                  ModelRecordID record_id = AUIK_MODEL_RECORD_ID_INVALID,
+                                                  ModelPipelineNode *pipeline = nullptr)
     {
-        if (record_id == AUIK_MODEL_RECORD_ID_INVALID) record_id = first_model_record_id(db, model_id);
-        return make_model_binding(db, model_id, record_id, field_id, pipeline);
+        return make_model_binding(model_id, record_id, field_id, pipeline);
     }
 
     AUIK_EXPORT void attach_model_binding(ModelBinding &binding);

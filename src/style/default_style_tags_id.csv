@@ -72,6 +72,7 @@ switch-button,0x3AEAF9C7
 switch-button-grab,0xE051D35B
 switch-button-on,0xBA1C062B
 tabbar,0x2C676836
+tabbar-change-icon,0xD9453085
 tabbar-item,0x3A854A65
 tabbar-item-selected,0x90A353EA
 tabbar-popup,0xD01DA2C2
@@ -84,7 +85,6 @@ table-resize-border,0x0470DEAD
 table-row-alt,0xC24AB568
 table-tree-resize-border,0x56DEA60A
 text-button,0xB0CFEF4B
-text-button-title,0x1790FB8C
 text-drag-icon,0xF67AC9E8
 textbox,0xFD48AA2F
 titlebar,0x1B0FAC37

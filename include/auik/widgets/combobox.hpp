@@ -174,10 +174,9 @@ namespace auik
         for (u32 i = 0; i < items.size(); ++i)
         {
             ModelRecord record{};
-            add_model_field(record, *acul::alloc<ModelValueField<acul::string>>(
-                                        AUIK_COMBO_BOX_TEXT_FIELD, acul::string{items[i].str ? items[i].str : ""}));
-            add_model_field(record,
-                            *acul::alloc<ModelValueField<bool>>(AUIK_COMBO_BOX_SELECTED_FIELD, i == selected_index));
+            add_model_field(record, make_model_field<acul::string>(
+                                        AUIK_COMBO_BOX_TEXT_FIELD, items[i].str ? items[i].str : ""));
+            add_model_field(record, make_model_field<bool>(AUIK_COMBO_BOX_SELECTED_FIELD, i == selected_index));
             model.add_record(std::move(record));
         }
 
@@ -185,8 +184,8 @@ namespace auik
         return find_model(db, model_id);
     }
 
-    inline ModelBinding make_combobox_value_model_binding(ModelDB *db, ModelID model_id)
-    { return make_model_binding(db, model_id); }
+    inline ModelBinding *make_combobox_value_model_binding(ModelID model_id)
+    { return make_model_binding(model_id); }
 
     inline MultipleCombobox *make_multiple_combobox(u32 id, const acul::vector<StringView> &items = {},
                                                      StringView placeholder = {},

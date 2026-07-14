@@ -1071,6 +1071,7 @@ namespace auik
             }
             if (classic_menu)
             {
+                classic_menu->set_popup_parent(classic_menu);
                 classic_menu->set_clip_id(clip_id());
                 classic_menu->set_position({position().x, menu_top_y});
                 classic_menu->set_layout_size(layout_menu_bar ? amal::vec2{size().x, menu_layout_height}
@@ -1091,15 +1092,18 @@ namespace auik
                 _content_block->update_layout(true);
             }
 
-            const bool is_scrollbar_y_visible = _content_block && _content_block->has_visible_scrollbar_y();
-            const bool is_scrollbar_x_visible = _content_block && _content_block->has_visible_scrollbar_x();
-            const bool needs_scroll_events = is_scrollbar_y_visible || is_scrollbar_x_visible;
-            const bool needs_hover_events = needs_scroll_events || ((window_flags & WindowFlagBits::resizable) &&
-                                                                    !(window_flags & WindowFlagBits::docked));
-            if (needs_scroll_events) add_event_flags(EventFlagBits::scroll);
-            else remove_event_flags(EventFlagBits::scroll);
-            if (needs_hover_events) add_event_flags(EventFlagBits::hover);
-            else remove_event_flags(EventFlagBits::hover);
+            if (window_flags & WindowFlagBits::scrollable)
+            {
+                const bool is_scrollbar_y_visible = _content_block && _content_block->has_visible_scrollbar_y();
+                const bool is_scrollbar_x_visible = _content_block && _content_block->has_visible_scrollbar_x();
+                const bool needs_scroll_events = is_scrollbar_y_visible || is_scrollbar_x_visible;
+                const bool needs_hover_events = needs_scroll_events || ((window_flags & WindowFlagBits::resizable) &&
+                                                                        !(window_flags & WindowFlagBits::docked));
+                if (needs_scroll_events) add_event_flags(EventFlagBits::scroll);
+                else remove_event_flags(EventFlagBits::scroll);
+                if (needs_hover_events) add_event_flags(EventFlagBits::hover);
+                else remove_event_flags(EventFlagBits::hover);
+            }
 
             sync_rubber_band();
             return;
@@ -1153,6 +1157,7 @@ namespace auik
         {
             if (classic_menu)
             {
+                classic_menu->set_popup_parent(classic_menu);
                 classic_menu->set_clip_id(clip_id());
                 classic_menu->set_position({position().x, menu_top_y});
                 classic_menu->set_layout_size(layout_menu_bar ? amal::vec2{size().x, menu_layout_height}
@@ -1176,22 +1181,24 @@ namespace auik
             _content_block->update_layout(false);
         }
 
-        const bool is_scrollbar_y_visible = _content_block && _content_block->has_visible_scrollbar_y();
-        const bool is_scrollbar_x_visible = _content_block && _content_block->has_visible_scrollbar_x();
-        const bool needs_scroll_events = is_scrollbar_y_visible || is_scrollbar_x_visible;
-        const bool needs_hover_events = needs_scroll_events || ((window_flags & WindowFlagBits::resizable) &&
-                                                                !(window_flags & WindowFlagBits::docked));
-        if (needs_scroll_events) add_event_flags(EventFlagBits::scroll);
-        else remove_event_flags(EventFlagBits::scroll);
-        if (needs_hover_events) add_event_flags(EventFlagBits::hover);
-        else remove_event_flags(EventFlagBits::hover);
-        if (was_scrollbar_y_visible != is_scrollbar_y_visible || was_scrollbar_x_visible != is_scrollbar_x_visible)
+        if (window_flags & WindowFlagBits::scrollable)
         {
-            auto &ctx = detail::get_context();
-            ctx.dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
-            detail::mark_host_refresh_request();
+            const bool is_scrollbar_y_visible = _content_block && _content_block->has_visible_scrollbar_y();
+            const bool is_scrollbar_x_visible = _content_block && _content_block->has_visible_scrollbar_x();
+            const bool needs_scroll_events = is_scrollbar_y_visible || is_scrollbar_x_visible;
+            const bool needs_hover_events = needs_scroll_events || ((window_flags & WindowFlagBits::resizable) &&
+                                                                    !(window_flags & WindowFlagBits::docked));
+            if (needs_scroll_events) add_event_flags(EventFlagBits::scroll);
+            else remove_event_flags(EventFlagBits::scroll);
+            if (needs_hover_events) add_event_flags(EventFlagBits::hover);
+            else remove_event_flags(EventFlagBits::hover);
+            if (was_scrollbar_y_visible != is_scrollbar_y_visible || was_scrollbar_x_visible != is_scrollbar_x_visible)
+            {
+                auto &ctx = detail::get_context();
+                ctx.dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
+                detail::mark_host_refresh_request();
+            }
         }
-
         sync_rubber_band();
     }
 
@@ -1288,8 +1295,7 @@ namespace auik
         if (!_rubber_band) return;
         if (_move_drag_active || _resize_dir.x != 0 || _resize_dir.y != 0) return;
         if (ctx.hover_id.widget_id != id() || ctx.hover_id.tag_id != AUIK_TAG_WINDOW) return;
-        ctx.io.drag_id = make_element_id(id(), AUIK_TAG_RUBBER_BAND);
-        _rubber_band->dispatch_drag({0.0f, 0.0f}, KeyPressState::press);
+        ctx.io.clicked_id = make_element_id(id(), AUIK_TAG_RUBBER_BAND);
     }
 
     void Window::on_drag(const amal::vec2 &delta, KeyPressState state)
@@ -1304,6 +1310,7 @@ namespace auik
 
         if (state == KeyPressState::release)
         {
+            const bool was_resizing = _resize_dir.x != 0 || _resize_dir.y != 0;
             if (auto *dock_ctx = detail::g_context ? detail::g_context->dockspace_context : nullptr;
                 dock_ctx && dock_ctx->drag_window == this)
             {
@@ -1321,6 +1328,13 @@ namespace auik
             }
             else detail::set_window_cursor(detail::CursorID::arrow, ctx.window_ctx);
             _resize_dir = {0, 0};
+            if (was_resizing)
+            {
+                update_layout(false);
+                update_draw_commands(DrawReasonBits::layout);
+                ctx.dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
+                detail::mark_host_refresh_request();
+            }
             return;
         }
 
@@ -1388,9 +1402,10 @@ namespace auik
             if (_resize_dir.y != 0) _auto_size.y = false;
             set_position(new_pos);
             set_size(new_size);
+            detail::mark_fast_update_dirty();
             add_render_command<detail::DragEventTraits>(this, [this]() {
                 update_layout(true);
-                redraw_all_commands();
+                update_draw_commands(DrawReasonBits::layout);
             });
             ctx.dirty_flags |= DirtyFlagBits::redraw;
             return;
@@ -1559,8 +1574,7 @@ namespace auik
             const char *literal = translated ? title_text->translated_text_literal() : nullptr;
             detail::write_localized_string(stream, translated ? acul::string(literal ? literal : "") : widget->title(),
                                            translated);
-            stream.write(static_cast<u32>(widget->window_flags))
-                .write(widget->window_style_tag());
+            stream.write(static_cast<u32>(widget->window_flags)).write(widget->window_style_tag());
 
             stream.write(static_cast<umbf::Block *>(widget->content_block()));
             write_window_menu(stream, *widget);

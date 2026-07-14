@@ -116,6 +116,7 @@ namespace auik
         ctx.hover_id = {};
         ctx.io.clicked_id = {};
         ctx.io.drag_id = {};
+        ctx.io.drag_key_flags = {};
         ctx.dirty_flags |=
             DirtyFlagBits::layout | DirtyFlagBits::locale | DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
 

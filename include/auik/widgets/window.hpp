@@ -176,11 +176,11 @@ namespace auik
         void sync_rubber_band();
         void redraw_decorations(DrawReasonFlags reason = DrawReasonBits::none);
 
-        virtual void on_scroll(const amal::vec2 &delta) override;
-        virtual void on_drag(const amal::vec2 &delta, KeyPressState state) override;
-        virtual void on_focus(bool focused) override;
-        virtual void on_hover(HoverState state) override;
-        virtual void on_click(MouseKey key, KeyPressState state, u32 click_count) override;
+        AUIK_EXPORT virtual void on_scroll(const amal::vec2 &delta) override;
+        AUIK_EXPORT virtual void on_drag(const amal::vec2 &delta, KeyPressState state) override;
+        AUIK_EXPORT virtual void on_focus(bool focused) override;
+        AUIK_EXPORT virtual void on_hover(HoverState state) override;
+        AUIK_EXPORT virtual void on_click(MouseKey key, KeyPressState state, u32 click_count) override;
         u32 effective_window_style_tag() const;
         const Style &resolved_window_style() const;
         PopupMenu *ensure_header_popup_menu();

@@ -147,11 +147,12 @@ namespace auik
             u32 click_streak = 0;
             ElementID clicked_id{};
             ElementID drag_id{};
+            MouseKeyFlags drag_key_flags{};
             bool mouse_down = false;
             acul::hashmap<u64, acul::unique_function<void()>> shortcuts;
             acul::hashmap<u32, acul::vector<u64>> widget_shortcuts;
             acul::hashset<Key> active_keys;
-            acul::hashset<MouseKey> active_mouse_buttons;
+            MouseKeyFlags active_mouse_buttons{};
             KeyMode active_mods = KeyModeBits::enum_type(0);
         };
 

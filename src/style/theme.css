@@ -343,11 +343,6 @@
     border-radius: 3px;
 }
 
-.text-button-title {
-    margin: 0px;
-    vertical-align: text-middle;
-}
-
 .text-button:hover {
     background-color: var(--color-hover);
 }
@@ -418,7 +413,7 @@
 
 .multiline-textbox {
     padding: 4px 8px;
-    vertical-align: text-top;
+    vertical-align: top;
     white-space: normal;
     text-overflow: clip;
     background-color: var(--color-surface-light);
@@ -513,14 +508,15 @@
 
 .combo-box-item {
     margin: 2px 4px;
-    padding: 4px 8px;
+    padding: 3px 8px;
     border-radius: 3px;
 }
 
 .combo-box-item-multi {
     margin: 2px 4px;
-    padding: 2px 26px 2px 6px;
+    padding: 3px 26px 3px 6px;
     border-radius: 3px;
+    vertical-align: middle;
 }
 
 .combo-box-item:hover {
@@ -561,7 +557,7 @@
 .tabbar-item {
     margin: 0px;
     padding: 4px 8px;
-    vertical-align: text-middle;
+    vertical-align: middle;
     background-color: var(--color-surface-light);
     border-radius: 3px;
 }
@@ -573,7 +569,7 @@
 .tabbar-item-selected {
     margin: 0px;
     padding: 4px 8px;
-    vertical-align: text-middle;
+    vertical-align: middle;
     background-color: var(--color-accent);
     border-radius: 3px;
 }
@@ -581,6 +577,15 @@
 .tabbar-item-selected:hover,
 .tabbar-item-selected:focus {
     background-color: var(--color-accent-hover);
+}
+
+.tabbar-change-icon {
+    width: 14px;
+    height: 14px;
+    margin: 0px 8px 0px 8px;
+    padding: 3px;
+    background-color: rgb(190, 190, 190);
+    border-radius: calc(4px * var(--dpi));
 }
 
 .tabbar-popup-button {
@@ -709,7 +714,7 @@
 .titlebar-menu-item {
     margin: 0px;
     padding: 4px 8px;
-    vertical-align: text-middle;
+    vertical-align: middle;
     border-radius: 3px;
 }
 
@@ -732,7 +737,7 @@
 
 .menu-popup {
     padding: 2px 0px;
-    background-color: var(--color-active);
+    background-color: rgb(25, 25, 25);
     border-radius: 0px 0px 4px 4px;
 }
 

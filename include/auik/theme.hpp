@@ -38,7 +38,6 @@
 namespace auik
 {
     class Font;
-    enum class TextAnchorY : u8;
     enum class TextOverflowMode : u8;
     enum class TextWrapMode : u8;
 
@@ -128,11 +127,11 @@ namespace auik
     struct StyleExtraAlign
     {
         u32 flags = 0u;
+        amal::vec4 position{0.0f};
     };
 
     struct StyleExtraText
     {
-        TextAnchorY anchor_y = static_cast<TextAnchorY>(0u);
         TextWrapMode wrap = static_cast<TextWrapMode>(0u);
         TextOverflowMode overflow = static_cast<TextOverflowMode>(1u);
     };

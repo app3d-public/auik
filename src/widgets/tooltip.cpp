@@ -32,8 +32,7 @@ namespace auik
         : Widget(id, get_default_widget_flags(), EventFlagBits::none, {{0.0f, 0.0f}, AUIK_SIZE_INHERIT},
                  AUIK_TAG_TOOLTIP),
           _text(AUIK_TAG_ETEXT, StringView{""}, AUIK_SIZE_FIT, WidgetFlagBits::visible,
-                make_text_layout_flags(TextOverflowMode::ellipsis, TextWrapMode::none, TextLayoutWidthMode::bounds),
-                TextAnchorY::baseline)
+                make_text_layout_flags(TextOverflowMode::ellipsis, TextWrapMode::none, TextLayoutWidthMode::bounds))
     {
         _text.set_parent(this);
         _text.set_style_tag(AUIK_STYLE_TAG_TOOLTIP);

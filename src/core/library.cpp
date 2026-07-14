@@ -345,6 +345,14 @@ namespace auik
             }
         }
 
+        // DrawDataID values index a stream, so they become stale as soon as that stream is cleared.
+        // Reset the complete root tree before recording new payload into the empty streams.
+        static void reset_all_draw_records(detail::Context &ctx)
+        {
+            for (Widget *widget : ctx.widget_tree)
+                if (widget) widget->reset_draw_records();
+        }
+
         static void destroy_cached_images(detail::Context &ctx)
         {
             acul::vector<Image *> owned_images;
@@ -517,6 +525,7 @@ namespace auik
         io.click_streak = 0;
         io.clicked_id = {};
         io.drag_id = {};
+        io.drag_key_flags = {};
         io.mouse_down = false;
         auto &frame_cache = ctx.frame_cache;
         frame_cache.changes = detail::FrameChangesBits::none;
@@ -638,6 +647,7 @@ namespace auik
                "record_layout_commands() started with stale current-frame hit rect cache");
         ctx.dirty_flags |= DirtyFlagBits::hit_rect_draw;
         reset_clip_rect_records();
+        reset_all_draw_records(ctx);
         clear_all_streams(ctx);
         update_all_viewports_layout();
         rebuild_clip_rect_records();
@@ -751,6 +761,7 @@ namespace auik
         assert(detail::is_hit_rects_frame_synced(ctx.frame_id) &&
                "redraw_all_commands() started with stale current-frame hit rect cache");
         clear_hit_rects();
+        reset_all_draw_records(ctx);
         clear_all_streams(ctx);
         for (Widget *widget : ctx.widget_tree)
             widget->update_draw_commands(DrawReasonBits::full_redraw | DrawReasonBits::record);
@@ -865,7 +876,11 @@ namespace auik
             if (ctx.hover_id && ctx.id_map.find(ctx.hover_id.widget_id) == ctx.id_map.end()) ctx.hover_id = {};
             if (ctx.io.clicked_id && ctx.id_map.find(ctx.io.clicked_id.widget_id) == ctx.id_map.end())
                 ctx.io.clicked_id = {};
-            if (ctx.io.drag_id && ctx.id_map.find(ctx.io.drag_id.widget_id) == ctx.id_map.end()) ctx.io.drag_id = {};
+            if (ctx.io.drag_id && ctx.id_map.find(ctx.io.drag_id.widget_id) == ctx.id_map.end())
+            {
+                ctx.io.drag_id = {};
+                ctx.io.drag_key_flags = {};
+            }
             rebuild_root_widget_depths();
             detail::mark_host_refresh_request();
             return true;

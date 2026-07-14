@@ -18,29 +18,26 @@ namespace auik
         TextFlags text_flags = TextFlagBits::none;
 
         Text(u32 id, acul::string text, amal::vec2 max_size, WidgetFlags flags,
-             TextLayoutFlags layout_flags = default_text_layout_flags(), TextAnchorY anchor_y = TextAnchorY::baseline)
+             TextLayoutFlags layout_flags = default_text_layout_flags())
             : Widget(id, flags, EventFlagBits::none, {{0.0f}, max_size}, AUIK_TAG_TEXT),
               _text(std::move(text)),
               _style({Theme::STYLE_ID_INVALID, Theme::STYLE_ID_INVALID})
-        {
-            _layout_config.flags = layout_flags;
-            _render_config.anchor_y = anchor_y;
-        }
+        { _layout_config.flags = layout_flags; }
         Text(u32 id, StringView text, amal::vec2 max_size, WidgetFlags flags,
-             TextLayoutFlags layout_flags = default_text_layout_flags(), TextAnchorY anchor_y = TextAnchorY::baseline)
-            : Text(id, acul::string(text.str ? text.str : ""), max_size, flags, layout_flags, anchor_y)
+             TextLayoutFlags layout_flags = default_text_layout_flags())
+            : Text(id, acul::string(text.str ? text.str : ""), max_size, flags, layout_flags)
         {
             if (text.is_translated) set_translated_text_literal(text.str);
         }
         Text(u32 id, const char *text, amal::vec2 max_size, WidgetFlags flags,
-             TextLayoutFlags layout_flags = default_text_layout_flags(), TextAnchorY anchor_y = TextAnchorY::baseline)
-            : Text(id, StringView{text}, max_size, flags, layout_flags, anchor_y)
+             TextLayoutFlags layout_flags = default_text_layout_flags())
+            : Text(id, StringView{text}, max_size, flags, layout_flags)
         {
         }
         
         Text(u32 id, ModelBinding *binding, amal::vec2 max_size, WidgetFlags flags,
-             TextLayoutFlags layout_flags = default_text_layout_flags(), TextAnchorY anchor_y = TextAnchorY::baseline)
-            : Text(id, acul::string{}, max_size, flags, layout_flags, anchor_y)
+             TextLayoutFlags layout_flags = default_text_layout_flags())
+            : Text(id, acul::string{}, max_size, flags, layout_flags)
         { set_model_binding(binding); }
         AUIK_EXPORT StyleUpdateFlags update_style() override;
         AUIK_EXPORT void update_layout_min_size() override;
@@ -125,13 +122,6 @@ namespace auik
             else if (value == TextLayoutWidthMode::bounds) _layout_config.flags |= TextLayoutFlagBits::width_bounds;
         }
 
-        TextAnchorY anchor_y() const { return _render_config.anchor_y; }
-        void set_anchor_y(TextAnchorY value)
-        {
-            if (_render_config.anchor_y == value) return;
-            _render_config.anchor_y = value;
-        }
-
         u32 max_lines() const { return _layout_config.max_lines; }
         void set_max_lines(u32 value)
         {
@@ -185,9 +175,9 @@ namespace auik
     {
     public:
         AUIK_EXPORT EText(u32 id, acul::string text, amal::vec2 max_size, WidgetFlags flags,
-                          TextLayoutFlags layout_flags, TextAnchorY anchor_y);
-        AUIK_EXPORT EText(u32 id, StringView text, amal::vec2 max_size, WidgetFlags flags, TextLayoutFlags layout_flags,
-                          TextAnchorY anchor_y);
+                          TextLayoutFlags layout_flags);
+        AUIK_EXPORT EText(u32 id, StringView text, amal::vec2 max_size, WidgetFlags flags,
+                          TextLayoutFlags layout_flags);
         AUIK_EXPORT ~EText() override;
 
         AUIK_EXPORT void sync_widget_flags() override;
@@ -242,12 +232,11 @@ namespace auik
     };
 
     inline Text *make_text(u32 id, StringView text = "", amal::vec2 max_size = AUIK_SIZE_FIT,
-                           TextLayoutFlags layout_flags = default_text_layout_flags(),
-                           TextAnchorY anchor_y = TextAnchorY::baseline)
+                           TextLayoutFlags layout_flags = default_text_layout_flags())
     {
         constexpr WidgetFlags flags =
             WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::configurable;
-        auto *out = acul::alloc<Text>(id, text, max_size, flags, layout_flags, anchor_y);
+        auto *out = acul::alloc<Text>(id, text, max_size, flags, layout_flags);
         return out;
     }
 
@@ -263,7 +252,7 @@ namespace auik
         constexpr WidgetFlags flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
                                       WidgetFlagBits::configurable | WidgetFlagBits::hittable |
                                       WidgetFlagBits::read_only;
-        auto *out = acul::alloc<EText>(id, text, max_size, flags, default_text_layout_flags(), TextAnchorY::baseline);
+        auto *out = acul::alloc<EText>(id, text, max_size, flags, default_text_layout_flags());
         if (text.is_translated) out->set_translated_text_literal(text.str);
         return out;
     }

@@ -464,18 +464,6 @@ def align_flag_for_vertical_align(value: str) -> str:
     raise ValueError(f"Unsupported layout vertical-align value '{value}'")
 
 
-def text_anchor_for_vertical_align(value: str) -> str:
-    if value == "baseline":
-        return "static_cast<TextAnchorY>(0u)"
-    if value == "text-middle":
-        return "static_cast<TextAnchorY>(1u)"
-    if value == "text-top":
-        return "static_cast<TextAnchorY>(2u)"
-    if value == "text-bottom":
-        return "static_cast<TextAnchorY>(3u)"
-    raise ValueError(f"Unsupported text vertical-align value '{value}'")
-
-
 def text_wrap_for_white_space(value: str) -> str:
     if value == "nowrap":
         return "static_cast<TextWrapMode>(0u)"
@@ -573,35 +561,54 @@ def update_box_property(style_rule: dict, name: str, tokens: list, variables: di
     return True
 
 
-def update_extra_property(style_rule: dict, declaration: CssDeclaration) -> bool:
+def update_extra_property(style_rule: dict, declaration: CssDeclaration, variables: dict[str, str]) -> bool:
     name = declaration.name
-    if name not in ("display", "text-align", "vertical-align", "white-space", "text-overflow"):
+    if name not in ("display", "position", "text-align", "vertical-align", "white-space", "text-overflow",
+                    "left", "top", "right", "bottom"):
         return False
 
-    value = single_ident(declaration.tokens)
-    if not value:
-        raise ValueError(f"{name} expects a single keyword")
-
     extras = style_rule.setdefault("extras", {})
-    if name == "display":
+    if name == "position":
+        value = single_ident(declaration.tokens)
+        if value != "absolute":
+            raise ValueError(f"{name} supports only 'absolute'")
+        align = extras.setdefault("align", {})
+        align["absolute"] = True
+    elif name == "display":
+        value = single_ident(declaration.tokens)
+        if not value:
+            raise ValueError(f"{name} expects a single keyword")
         align = extras.setdefault("align", {})
         align["display"] = align_flag_for_display(value)
     elif name == "text-align":
+        value = single_ident(declaration.tokens)
+        if not value:
+            raise ValueError(f"{name} expects a single keyword")
         align = extras.setdefault("align", {})
         align["h"] = align_flag_for_text_align(value)
     elif name == "vertical-align":
-        if value in ("top", "middle", "bottom"):
-            align = extras.setdefault("align", {})
-            align["v"] = align_flag_for_vertical_align(value)
-        else:
-            text = extras.setdefault("text", {})
-            text["anchor"] = text_anchor_for_vertical_align(value)
+        value = single_ident(declaration.tokens)
+        if not value:
+            raise ValueError(f"{name} expects a single keyword")
+        align = extras.setdefault("align", {})
+        align["v"] = align_flag_for_vertical_align(value)
     elif name == "white-space":
+        value = single_ident(declaration.tokens)
+        if not value:
+            raise ValueError(f"{name} expects a single keyword")
         text = extras.setdefault("text", {})
         text["wrap"] = text_wrap_for_white_space(value)
     elif name == "text-overflow":
+        value = single_ident(declaration.tokens)
+        if not value:
+            raise ValueError(f"{name} expects a single keyword")
         text = extras.setdefault("text", {})
         text["overflow"] = text_overflow_for_value(value)
+    elif name in ("left", "top", "right", "bottom"):
+        align = extras.setdefault("align", {})
+        align["absolute"] = True
+        position = align.setdefault("position", {})
+        position[name] = resolve_value(declaration.tokens, variables)
     return True
 
 
@@ -615,14 +622,27 @@ def extra_calls(style_rule: dict) -> list[str]:
             value = align.get(key)
             if value and value != "0u":
                 flags.append(value)
+        if align.get("absolute"):
+            flags.append("ChildLayoutFlagBits::absolute")
         flag_expr = " | ".join(flags) if flags else "0u"
-        calls.append(f"align_extra(StyleExtraAlign{{static_cast<u32>({flag_expr})}})")
+        position = align.get("position", {})
+        position_values = {
+            "left": position.get("left", "0.0f"),
+            "top": position.get("top", "0.0f"),
+            "right": position.get("right", "0.0f"),
+            "bottom": position.get("bottom", "0.0f"),
+        }
+        calls.append(
+            "align_extra(StyleExtraAlign{"
+            f"static_cast<u32>({flag_expr}), "
+            f"amal::vec4{{{position_values['left']}, {position_values['top']}, "
+            f"{position_values['right']}, {position_values['bottom']}" + "}})"
+        )
     text = extras.get("text")
     if text:
-        anchor = text.get("anchor", "static_cast<TextAnchorY>(0u)")
         wrap = text.get("wrap", "static_cast<TextWrapMode>(0u)")
         overflow = text.get("overflow", "static_cast<TextOverflowMode>(1u)")
-        calls.append(f"text_extra(StyleExtraText{{{anchor}, {wrap}, {overflow}}})")
+        calls.append(f"text_extra(StyleExtraText{{{wrap}, {overflow}}})")
     return calls
 
 
@@ -675,7 +695,7 @@ def build_generated_model(tree: ThemeTree, ids: dict[str, str], header_ids: dict
             for declaration in rule.declarations:
                 if update_box_property(style_rule, declaration.name, declaration.tokens, variables):
                     continue
-                if update_extra_property(style_rule, declaration):
+                if update_extra_property(style_rule, declaration, variables):
                     continue
                 calls = declaration_calls(declaration, variables)
                 if calls:

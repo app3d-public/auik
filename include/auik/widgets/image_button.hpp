@@ -13,8 +13,8 @@ namespace auik
     public:
         AUIK_EXPORT ImageButton(u32 id, TextureID texture_id, amal::vec2 image_size, amal::vec2 size,
                                 amal::rect uv_rect, WidgetFlags widget_flags, u32 style_tag);
-        AUIK_EXPORT ImageButton(u32 id, Image *image, amal::vec2 image_size, amal::vec2 size,
-                                WidgetFlags widget_flags, u32 style_tag);
+        AUIK_EXPORT ImageButton(u32 id, Image *image, amal::vec2 image_size, amal::vec2 size, WidgetFlags widget_flags,
+                                u32 style_tag);
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
         AUIK_EXPORT void update_layout_min_size() override;
@@ -83,7 +83,7 @@ namespace auik
     }
 
     inline ImageButton *make_image_button(u32 id, Image *image, amal::vec2 image_size = {0.0f, 0.0f},
-                                          amal::vec2 size = {0.0f, 0.0f})
+                                          amal::vec2 size = AUIK_SIZE_INHERIT)
     {
         constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
                                              WidgetFlagBits::configurable | WidgetFlagBits::hittable;

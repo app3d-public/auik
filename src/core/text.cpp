@@ -315,31 +315,6 @@ namespace auik
                 out.size.y = amal::max(out.size.y, line_y + out.line_height);
             }
 
-            static f32 resolve_metrics_height(const TextLayoutResult &layout)
-            {
-                const f32 metrics_height = amal::max(layout.ascender - layout.descender, 0.0f);
-                if (layout.lines.size() <= 1 && metrics_height > 0.0f) return metrics_height;
-                return layout.size.y;
-            }
-
-            static f32 resolve_anchor_y_offset(TextAnchorY anchor, const TextLayoutResult &layout,
-                                               const amal::vec2 &bounds_size)
-            {
-                const f32 metrics_height = resolve_metrics_height(layout);
-                switch (anchor)
-                {
-                    case TextAnchorY::baseline:
-                        return -layout.ascender;
-                    case TextAnchorY::middle:
-                        return (bounds_size.y - metrics_height) * 0.5f;
-                    case TextAnchorY::descent:
-                        return bounds_size.y - metrics_height;
-                    case TextAnchorY::ascent:
-                    default:
-                        return 0.0f;
-                }
-            }
-
             static bool append_instances_from_layout(Font &font, u32 size_px, const TextLayoutResult &layout,
                                                      const TextRenderConfig &render_config, u32 tint_color,
                                                      acul::vector<TexturesInstanceData> &out)
@@ -347,8 +322,7 @@ namespace auik
                 out.clear();
 
                 const f32 base_x = render_config.origin.x;
-                const f32 base_y = render_config.origin.y + resolve_anchor_y_offset(render_config.anchor_y, layout,
-                                                                                    render_config.size);
+                const f32 base_y = render_config.origin.y;
 
                 for (const auto &line : layout.lines)
                 {

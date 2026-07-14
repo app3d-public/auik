@@ -159,7 +159,6 @@ namespace auik
             acul::vector<Window *> windows;
             acul::vector<amal::rect> undocked_bounds;
             acul::vector<acul::string> tab_titles;
-            acul::vector<u32> tab_element_ids;
             Tabbar *tabbar = nullptr;
             DockMenu *menu = nullptr;
             detail::RectData tab_panel_rect{};
@@ -216,7 +215,7 @@ namespace auik
         bool sync_active_windows(DockNodeID node, bool record_pass);
         void sync_node_tabbar(DockNodeID node_id, Node &node);
         bool fit_node_to_required_width(DockNodeID node, bool allow_shrink);
-        void handle_tabbar_changed(DockNodeID node_id);
+        void handle_tabbar_changed(DockNodeID node_id, TabbarChangeReason reason);
         bool handle_tabbar_drag_escape(DockNodeID node_id, u32 element_id);
         size_t selected_window_index(const Node &node) const;
         bool resize_helper_accepts_drop(const ResizeHelperVisual &helper) const;
@@ -234,7 +233,7 @@ namespace auik
         void draw_node(DrawCtx &ctx, DockNodeID node);
         ResizeHelperVisual *resize_helper_from_element(u32 element_id);
         const ResizeHelperVisual *resize_helper_from_element(u32 element_id) const;
-        void update_own_layout(bool record = false);
+        void update_layout_sync(bool force_record = false, bool min_size_known = false);
 
         acul::vector<Node> _nodes;
         acul::vector<ResizeHelperVisual> _resize_helpers;

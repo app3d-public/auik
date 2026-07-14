@@ -79,19 +79,15 @@ namespace auik
         return out;
     }
 
-    static f32 resolve_textbox_anchor_y_offset(TextAnchorY anchor, f32 content_h, f32 layout_h)
+    static f32 resolve_textbox_align_y_offset(const Style &style, f32 content_h, f32 layout_h)
     {
-        switch (anchor)
-        {
-            case TextAnchorY::middle:
-                return amal::max((content_h - layout_h) * 0.5f, 0.0f);
-            case TextAnchorY::descent:
-                return amal::max(content_h - layout_h, 0.0f);
-            case TextAnchorY::baseline:
-            case TextAnchorY::ascent:
-            default:
-                return 0.0f;
-        }
+        const auto *align = style.align_settings();
+        if (!align) return 0.0f;
+
+        const ChildLayoutFlags flags{align->flags};
+        if (flags & ChildLayoutFlagBits::vcenter) return amal::max((content_h - layout_h) * 0.5f, 0.0f);
+        if (flags & ChildLayoutFlagBits::bottom) return amal::max(content_h - layout_h, 0.0f);
+        return 0.0f;
     }
 
     static f32 snap_textbox_scroll_offset(f32 value) { return amal::round(value); }
@@ -100,7 +96,6 @@ namespace auik
     {
         if (const auto *text_extra = style.text_settings())
         {
-            text.set_anchor_y(text_extra->anchor_y);
             text.set_multiline(text_extra->wrap == TextWrapMode::word);
             text.set_overflow_mode(text_extra->overflow);
         }
@@ -160,7 +155,7 @@ namespace auik
     };
 
     Textbox::Textbox(u32 id, const acul::string &value, amal::vec2 inline_size, WidgetFlags flags, u32 style_tag_id,
-                     TextFlags text_flags, StringView placeholder, TextAnchorY text_anchor_y, TextWrapMode text_wrap)
+                     TextFlags text_flags, StringView placeholder, TextWrapMode text_wrap)
         : Widget(id, resolve_textbox_widget_flags(flags), resolve_textbox_event_flags(), {{0.0f, 0.0f}, inline_size},
                  style_tag_id),
           _value(value),
@@ -168,13 +163,12 @@ namespace auik
                 WidgetFlagBits::visible,
                 make_text_layout_flags(TextOverflowMode::clip, text_wrap,
                                        text_wrap != TextWrapMode::none ? TextLayoutWidthMode::bounds
-                                                                       : TextLayoutWidthMode::viewport),
-                text_anchor_y),
+                                                                       : TextLayoutWidthMode::viewport)),
           _placeholder(
               (!placeholder.str || placeholder.str[0] == '\0')
                   ? nullptr
                   : acul::alloc<Text>(AUIK_TAG_TEXT, placeholder, amal::vec2{0.0f, 0.0f}, WidgetFlagBits::visible,
-                                      make_text_layout_flags(TextOverflowMode::clip, text_wrap), text_anchor_y)),
+                                      make_text_layout_flags(TextOverflowMode::clip, text_wrap))),
           _edit(acul::alloc<TextboxEditData>())
     {
         _text.set_parent(this);
@@ -1130,7 +1124,6 @@ namespace auik
             _placeholder->set_style_tag(AUIK_STYLE_TAG_PLACEHOLDER);
             _placeholder->set_parent(this);
             _placeholder->set_overflow_mode(TextOverflowMode::clip);
-            _placeholder->set_anchor_y(TextAnchorY::middle);
         }
     }
 
@@ -1348,7 +1341,7 @@ namespace auik
         const f32 caret_h = amal::min(style.text_size(), _content_size.y);
         line_h = amal::max(line_h, caret_h);
         const f32 layout_h = accepts_newline() ? amal::max(layout.size.y, line_h) : _content_size.y;
-        const f32 align_y = resolve_textbox_anchor_y_offset(_text.anchor_y(), _content_size.y, layout_h);
+        const f32 align_y = resolve_textbox_align_y_offset(style, _content_size.y, layout_h);
 
         f32 line_y = amal::max((layout_h - caret_h) * 0.5f, 0.0f);
         if (accepts_newline())
@@ -1371,7 +1364,7 @@ namespace auik
         const f32 line_h = amal::max(layout.line_height, style.text_size());
         const f32 selection_h = accepts_newline() ? amal::min(style.text_size(), line_h) : line_h;
         const f32 layout_h = layout.lines.size() <= 1 ? (accepts_newline() ? line_h : metrics_h) : layout.size.y;
-        const f32 align_y = resolve_textbox_anchor_y_offset(_text.anchor_y(), _content_size.y, layout_h);
+        const f32 align_y = resolve_textbox_align_y_offset(style, _content_size.y, layout_h);
         if (layout.lines.empty())
             return {{_content_pos.x + x0 - _content_scroll.x,
                      _content_pos.y + align_y + amal::max((line_h - selection_h) * 0.5f, 0.0f) - _content_scroll.y},
@@ -1439,7 +1432,7 @@ namespace auik
         const f32 metrics_h = amal::max(layout.ascender - layout.descender, style.text_size());
         const f32 line_h = amal::max(layout.line_height, style.text_size());
         const f32 layout_h = layout.lines.size() <= 1 ? metrics_h : layout.size.y;
-        const f32 align_y = resolve_textbox_anchor_y_offset(_text.anchor_y(), _content_size.y, layout_h);
+        const f32 align_y = resolve_textbox_align_y_offset(style, _content_size.y, layout_h);
 
         const auto &line = layout.lines[line_index];
         const f32 line_y = line.glyph_count > 0 ? layout.glyphs[line.glyph_offset].pen.y - layout.ascender
@@ -1695,7 +1688,7 @@ namespace auik
     MultilineTextbox::MultilineTextbox(u32 id, const acul::string &value, amal::vec2 inline_size, bool can_expand_to_content,
                                        WidgetFlags flags, TextFlags text_flags, StringView placeholder)
         : Textbox(id, value, inline_size, flags, AUIK_STYLE_TAG_MULTILINE_TEXTBOX, text_flags, placeholder,
-                  TextAnchorY::ascent, TextWrapMode::word),
+                  TextWrapMode::word),
           _can_expand_to_content(can_expand_to_content)
     {
         set_rect_tag_id(AUIK_TAG_MULTILINE_TEXTBOX);
@@ -1721,7 +1714,6 @@ namespace auik
             bool placeholder_translated = false;
             u32 text_flags = 0u;
             u32 style_tag = AUIK_STYLE_TAG_TEXTBOX;
-            TextAnchorY text_anchor_y = TextAnchorY::middle;
             TextWrapMode text_wrap = TextWrapMode::none;
         };
 
@@ -1738,7 +1730,6 @@ namespace auik
                                            placeholder_translated);
             stream.write(static_cast<u32>(widget->text_flags))
                 .write(widget->style_tag())
-                .write(static_cast<u32>(widget->text_anchor_y()))
                 .write(static_cast<u32>(widget->text_wrap()));
         }
 
@@ -1746,14 +1737,12 @@ namespace auik
         {
             TextboxData out{};
             out.common = detail::read_widget_common_data(stream);
-            u32 text_anchor_y = static_cast<u32>(out.text_anchor_y);
             u32 text_wrap = static_cast<u32>(out.text_wrap);
             stream.read(out.value);
             auto placeholder = detail::read_localized_string(stream);
             out.placeholder = std::move(placeholder.text);
             out.placeholder_translated = placeholder.translated;
-            stream.read(out.text_flags).read(out.style_tag).read(text_anchor_y).read(text_wrap);
-            out.text_anchor_y = static_cast<TextAnchorY>(text_anchor_y);
+            stream.read(out.text_flags).read(out.style_tag).read(text_wrap);
             out.text_wrap = static_cast<TextWrapMode>(text_wrap);
             return out;
         }
@@ -1770,7 +1759,7 @@ namespace auik
             auto *widget = acul::alloc<Textbox>(
                 data.common.id, data.value, data.common.inline_size, WidgetFlags(data.common.widget_flags),
                 data.style_tag, TextFlags(data.text_flags),
-                StringView{data.placeholder.c_str(), data.placeholder_translated}, data.text_anchor_y, data.text_wrap);
+                StringView{data.placeholder.c_str(), data.placeholder_translated}, data.text_wrap);
             detail::apply_widget_common_data(widget, data.common);
             return widget;
         }

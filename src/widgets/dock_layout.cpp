@@ -57,7 +57,7 @@ namespace auik
     {
         StyleUpdateFlags flags = StyleUpdateFlagBits::none;
         for (Item &item : _dock.items())
-            if (item.widget) flags |= item.widget->update_style();
+            if (item.widget && item.widget->is_visible()) flags |= item.widget->update_style();
         return flags;
     }
 
@@ -91,7 +91,7 @@ namespace auik
     {
         set_clip_id(parent() ? parent()->content_clip_id() : clip_id());
         for (Item &item : _dock.items())
-            if (item.widget) item.widget->rebuild_clip_rects();
+            if (item.widget && item.widget->is_visible()) item.widget->rebuild_clip_rects();
     }
 
     void DockLayout::reset_draw_records()
@@ -104,7 +104,8 @@ namespace auik
     {
         u32 requirement = 1u;
         for (const Item &item : _dock.items())
-            if (item.widget) requirement += amal::max(item.widget->get_depth_requirement(), 1u);
+            if (item.widget && item.widget->is_visible())
+                requirement += amal::max(item.widget->get_depth_requirement(), 1u);
         return requirement;
     }
 
@@ -114,13 +115,16 @@ namespace auik
         DepthCursor cursor(this->depth_range(), get_depth_requirement());
         cursor.next(1u);
         for (Item &item : _dock.items())
-            if (item.widget) item.widget->update_depth(cursor.next(amal::max(item.widget->get_depth_requirement(), 1u)));
+            if (item.widget && item.widget->is_visible())
+                item.widget->update_depth(cursor.next(amal::max(item.widget->get_depth_requirement(), 1u)));
     }
 
     void DockLayout::draw(DrawCtx &ctx)
     {
+        if (!is_visible() && !(ctx.reason & DrawReasonBits::invalidate)) return;
         for (Item &item : _dock.items())
-            if (item.widget) item.widget->draw_local(ctx);
+            if (item.widget && (item.widget->is_visible() || (ctx.reason & DrawReasonBits::invalidate)))
+                item.widget->draw_local(ctx);
     }
 
     void DockLayout::on_attach()

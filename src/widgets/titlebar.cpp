@@ -3,6 +3,7 @@
 #include <auik/detail/platform.hpp>
 #include <auik/pipelines.hpp>
 #include <auik/widgets/image.hpp>
+#include <auik/widgets/menu.hpp>
 #include <auik/widgets/titlebar.hpp>
 #include "../core/session_stream_utils.hpp"
 #ifdef _WIN32
@@ -99,13 +100,16 @@ namespace auik
     static void update_titlebar_caption_button_depths(const amal::vec2 &parent_depth_range,
                                                       ImageButton *const (&buttons)[AUIK_WINDOW_CAPTION_BTN_COUNT])
     {
-        const amal::vec2 work_range = detail::depth_work_range(parent_depth_range);
+        const amal::vec2 work_range = detail::depth_foreground_range(parent_depth_range);
         for (auto *button : buttons)
         {
             if (!button) continue;
             button->update_depth(work_range);
         }
     }
+
+    static inline f32 snap_titlebar_size_from(f32 offset, f32 size)
+    { return amal::max(amal::round(offset + size) - offset, 0.0f); }
 
     Titlebar::Titlebar(u32 id, WidgetFlags widget_flags)
         : Widget(id, widget_flags, EventFlagBits::none, {{0.0f, 0.0f}, AUIK_SIZE_INHERIT}, AUIK_TAG_TITLEBAR)
@@ -127,6 +131,7 @@ namespace auik
         assert(child && "titlebar child is null");
         child->set_parent(this);
         child->set_focus_parent(this);
+        if (child->signature() == AUIK_TAG_MENU_BAR) static_cast<MenuBar *>(child)->set_popup_parent(this);
         _children.push_back(child);
         if (child->widget_flags & WidgetFlagBits::attachable) child->on_attach();
     }
@@ -318,6 +323,7 @@ namespace auik
 
         amal::vec2 cursor = position();
         f32 leading_region_end_x = position().x;
+        f32 content_end_x = position().x;
         u32 visible_child_index = 0u;
         for (const auto &measure : child_measures)
         {
@@ -329,28 +335,34 @@ namespace auik
 
             if (child == _icon)
             {
+                const f32 child_w = snap_titlebar_size_from(cursor.x, child->required_size().x);
                 child->set_position(cursor);
-                child->set_layout_size(child->required_size());
+                child->set_layout_size({child_w, child->required_size().y});
                 child->update_layout(true);
 
                 const f32 centered_y = position().y + amal::round(amal::max((size().y - child->size().y) * 0.5f, 0.0f));
                 const amal::vec2 icon_pos = child->position();
                 child->translate({0.0f, centered_y - icon_pos.y});
                 cursor.x = child->position().x + child->size().x + icon_margin.z;
+                content_end_x = amal::max(content_end_x, cursor.x);
             }
             else
             {
                 const bool fill_child_height = child->fill_height();
+                const bool fill_child_width = measure.fill_width;
                 const f32 child_h = fill_child_height ? size().y : measured_required.y;
                 const f32 outer_y =
                     fill_child_height
                         ? position().y
                         : position().y + amal::round(amal::max((size().y - measured_required.y) * 0.5f, 0.0f));
                 const amal::vec2 outer_pos = {cursor.x, outer_y};
+                const f32 child_w = snap_titlebar_size_from(outer_pos.x, measure.width);
                 child->set_position(outer_pos);
-                child->set_layout_size({measure.width, child_h});
+                child->set_layout_size({child_w, child_h});
                 child->update_layout(true);
-                cursor.x = outer_pos.x + amal::max(measure.width, child->size().x);
+                cursor.x = outer_pos.x + amal::max(child_w, child->size().x);
+                const f32 interactive_end_x = fill_child_width ? outer_pos.x + measured_required.x : cursor.x;
+                content_end_x = amal::max(content_end_x, interactive_end_x);
             }
             if (_leading_count > 0u && visible_child_index < _leading_count) leading_region_end_x = cursor.x;
             ++visible_child_index;
@@ -367,7 +379,7 @@ namespace auik
         else _leading_region_rect = {};
         if (_state)
         {
-            _state->content_end_x = amal::max(cursor.x - position().x, 0.0f);
+            _state->content_end_x = amal::max(content_end_x - position().x, 0.0f);
             _state->caption_buttons_width = _caption_buttons_width;
         }
     }
@@ -449,7 +461,7 @@ namespace auik
         bg_data.rect = bounds();
         bg_data.z_order = titlebar_bg_z;
         const bool bg_visible = fill_quads_instance_by_style(theme->get_style(_style.id), clip_id(), bg_data);
-        emit_quads_instance(ctx, quads_stream, _bg, bg_data, get_rect(), bg_visible, false);
+        emit_quads_instance(ctx, quads_stream, _bg, bg_data, get_rect(), bg_visible, can_emit_hit(ctx));
 
         if (_leading_count > 0u && _leading_region_rect.size.x > 0.0f && _leading_region_rect.size.y > 0.0f)
         {

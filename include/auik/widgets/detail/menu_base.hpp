@@ -8,25 +8,40 @@ namespace auik::detail
     class MenuGroupLayer;
     class MenuGroup;
 
-    class MenuItem : public Selectable
+    class MenuItem : public Widget
     {
     public:
         AUIK_EXPORT MenuItem(MenuBase *owner, u32 element_id, StringView text, Widget *parent, u32 style_tag_id,
                              u32 selected_style_tag_id);
         AUIK_EXPORT ~MenuItem() override;
 
+        MenuItem &set_shortcut(const char *shortcut) { return set_shortcut(StringView{shortcut}); }
         AUIK_EXPORT MenuItem &set_shortcut(acul::string shortcut);
+        AUIK_EXPORT MenuItem &set_shortcut(StringView shortcut);
         const acul::string &shortcut() const { return _shortcut; }
+        StringView shortcut_source() const { return {_shortcut.c_str(), _shortcut_translated}; }
+        StringView source_text() const { return {_text.c_str(), _translated}; }
+        bool selected() const { return _selected; }
+        void set_selected(bool value) { _selected = value; }
         AUIK_EXPORT MenuGroupLayer *add_group_layer(u32 group_count = 1u);
         MenuGroupLayer *group_layer() const { return _group_layer; }
         bool has_group_layer() const;
         u32 element_id() const { return get_rect().id.element_id; }
+        void set_element_id(u32 element_id) { get_rect().id.element_id = element_id; }
         MenuBase *owner() const { return _owner; }
+        StyleUpdateFlags update_style() override { return StyleUpdateFlagBits::none; }
+        void draw(DrawCtx &) override {}
 
     private:
+        void set_source_text(StringView text);
+
         MenuBase *_owner = nullptr;
         MenuGroupLayer *_group_layer = nullptr;
+        acul::string _text;
         acul::string _shortcut;
+        bool _translated = false;
+        bool _shortcut_translated = false;
+        bool _selected = false;
     };
 
     class MenuGroup

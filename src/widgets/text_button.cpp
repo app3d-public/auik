@@ -105,7 +105,7 @@ namespace auik
                                          amal::max(button_size.y - padding.y - padding.w, 0.0f)};
         const amal::vec2 text_size = _text->required_size();
         const ChildLayoutFlags text_layout = resolve_style_align_layout(style);
-        const amal::vec2 text_bounds = {text_size.x, content_size.y};
+        const amal::vec2 text_bounds = {amal::min(text_size.x, content_size.x), text_size.y};
         _text->set_position(resolve_text_button_title_position(content_pos, content_size, text_bounds, text_layout));
         _text->set_layout_size(text_bounds);
         _text->update_layout(true);

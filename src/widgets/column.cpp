@@ -152,7 +152,7 @@ namespace auik
         StyleUpdateFlags out = resolve_style_selector(_style, id(), parent_id, style_state());
         for (auto *slot : _columns)
         {
-            if (!slot) continue;
+            if (!slot || !slot->is_visible()) continue;
             out |= slot->update_style();
         }
         return out;
@@ -173,7 +173,7 @@ namespace auik
         bool has_column = false;
         for (auto *slot : _columns)
         {
-            if (!slot) continue;
+            if (!slot || !slot->is_visible()) continue;
             slot->set_inline_spacing(spacing);
             slot->update_layout_min_size();
             const amal::vec2 slot_required = slot->required_size();
@@ -244,7 +244,7 @@ namespace auik
         size_t visible_column_count = 0;
         for (auto *slot : _columns)
         {
-            if (!slot) continue;
+            if (!slot || !slot->is_visible()) continue;
             ++visible_column_count;
         }
         const f32 total_spacing =
@@ -257,7 +257,7 @@ namespace auik
         size_t width_index = 0;
         for (auto *slot : _columns)
         {
-            if (!slot) continue;
+            if (!slot || !slot->is_visible()) continue;
             const f32 column_width = is_width_fixed()
                                          ? (width_index < _column_widths.size() ? _column_widths[width_index] : 0.0f)
                                          : stretch_column_width;
@@ -307,7 +307,7 @@ namespace auik
         update_column_clip_rects();
         for (auto *slot : _columns)
         {
-            if (!slot) continue;
+            if (!slot || !slot->is_visible()) continue;
             slot->rebuild_clip_rects();
         }
     }
@@ -326,7 +326,7 @@ namespace auik
         Widget::update_depth(depth_range);
         for (auto *slot : _columns)
         {
-            if (!slot) continue;
+            if (!slot || !slot->is_visible()) continue;
             slot->update_depth(this->depth_range());
         }
     }
@@ -347,11 +347,11 @@ namespace auik
 
     void Column::draw(DrawCtx &ctx)
     {
-        if (!(widget_flags & WidgetFlagBits::visible)) return;
+        if (!is_visible() && !(ctx.reason & DrawReasonBits::invalidate)) return;
         const amal::vec4 content_clip = get_content_clip_rect();
         for (auto *slot : _columns)
         {
-            if (!slot) continue;
+            if (!slot || (!slot->is_visible() && !(ctx.reason & DrawReasonBits::invalidate))) continue;
             DrawCtx slot_ctx = ctx;
             detail::draw_child_in_clip(slot, slot_ctx, content_clip);
         }

@@ -111,8 +111,8 @@ namespace auik
         chain->post_effect = effect;
         chain->id = effect->push_instance ? effect->push_instance(effect, this, instance_data)
                                           : AUIK_INVALID_POST_EFFECT_DATA_ID;
-        chain->post_data = post_data ? post_data
-                                     : (chain->id != AUIK_INVALID_POST_EFFECT_DATA_ID ? &chain->id : nullptr);
+        chain->post_data =
+            post_data ? post_data : (chain->id != AUIK_INVALID_POST_EFFECT_DATA_ID ? &chain->id : nullptr);
         chain->next = nullptr;
 
         if (!_post_fx_chain)
@@ -168,6 +168,16 @@ namespace auik
 
     namespace detail
     {
+        static bool accepts_style_update(Widget *widget)
+        {
+            for (auto *child = widget; child && child->parent(); child = child->parent())
+            {
+                auto *parent = child->parent();
+                if (!parent->accepts_child_style_update(child)) return false;
+            }
+            return true;
+        }
+
         template <class Traits>
         static void enqueue_style_refresh(Widget *widget)
         {
@@ -179,6 +189,7 @@ namespace auik
                 auto it = ctx.id_map.find(widget_id);
                 if (it == ctx.id_map.end() || it->second != expected_widget) return;
                 Widget *widget = it->second;
+                if (!accepts_style_update(widget)) return;
                 const auto style_flags = widget->update_style();
                 if (style_flags == StyleUpdateFlagBits::none) return;
                 if (style_flags & StyleUpdateFlagBits::parent_layout)
@@ -199,6 +210,15 @@ namespace auik
                 }
             });
             detail::mark_host_refresh_request();
+        }
+
+        template <class Traits>
+        static void enqueue_style_refresh_by_id(Context &ctx, u32 widget_id)
+        {
+            if (!widget_id) return;
+            auto it = ctx.id_map.find(widget_id);
+            if (it == ctx.id_map.end()) return;
+            enqueue_style_refresh<Traits>(it->second);
         }
 
         static inline StyleState resolve_focus_visual_state(Widget *widget)
@@ -240,11 +260,11 @@ namespace auik
                 Widget *prev_widget = accepts_drag_hover(prev_hover);
                 Widget *widget = accepts_drag_hover(hover);
                 const bool drag_widget_changed = prev_widget != widget;
-                const bool drag_selector_changed =
-                    widget ? detail::set_style_selector(hover, StyleState::hover)
-                           : (prev_widget && detail::get_style_selector_id() == prev_hover
-                                  ? detail::set_style_selector({}, StyleState::normal)
-                                  : false);
+                const bool drag_selector_changed = widget
+                                                       ? detail::set_style_selector(hover, StyleState::hover)
+                                                       : (prev_widget && detail::get_style_selector_id() == prev_hover
+                                                              ? detail::set_style_selector({}, StyleState::normal)
+                                                              : false);
 
                 if (drag_widget_changed)
                 {
@@ -268,20 +288,12 @@ namespace auik
                 {
                     dispatch_hover(prev_widget_id, HoverState::leave);
                     dispatch_hover(widget_id, HoverState::enter);
-                    if (selector_changed)
-                    {
-                        auto prev_it = ctx.id_map.find(prev_widget_id);
-                        if (prev_it != ctx.id_map.end())
-                            enqueue_style_refresh<detail::HoverEventTraits>(prev_it->second);
-                        auto it = ctx.id_map.find(widget_id);
-                        if (it != ctx.id_map.end() && widget_id != prev_widget_id)
-                            enqueue_style_refresh<detail::HoverEventTraits>(it->second);
-                    }
                 }
-                else if (selector_changed)
+                if (selector_changed)
                 {
-                    auto it = ctx.id_map.find(widget_id);
-                    if (it != ctx.id_map.end()) enqueue_style_refresh<detail::HoverEventTraits>(it->second);
+                    enqueue_style_refresh_by_id<detail::HoverEventTraits>(ctx, prev_widget_id);
+                    if (widget_id != prev_widget_id)
+                        enqueue_style_refresh_by_id<detail::HoverEventTraits>(ctx, widget_id);
                 }
                 if (!widget_changed && hover) dispatch_hover(widget_id, HoverState::active);
                 if (prev_hover != hover || selector_changed) mark_host_refresh_request();
@@ -291,10 +303,15 @@ namespace auik
         static inline Widget *resolve_input_root(Context &ctx)
         {
             Widget *target = nullptr;
+            if (ctx.io.active_mouse_buttons)
+            {
+                auto it = ctx.id_map.find(ctx.hover_id.widget_id);
+                if (it != ctx.id_map.end()) target = it->second;
+            }
             if (ctx.focus_id != 0)
             {
                 auto it = ctx.id_map.find(ctx.focus_id);
-                if (it != ctx.id_map.end()) target = it->second;
+                if (!target && it != ctx.id_map.end()) target = it->second;
             }
             if (!target && ctx.active_id != 0)
             {
@@ -340,7 +357,7 @@ namespace auik
         {
             const auto &io = ctx.io;
             const KeyMode mods = build_active_shortcut_mods(io);
-            if (!mods && io.active_keys.empty() && io.active_mouse_buttons.empty()) return false;
+            if (!mods && io.active_keys.empty() && !io.active_mouse_buttons) return false;
 
             Widget *node = resolve_input_root(ctx);
             while (node)
@@ -387,6 +404,7 @@ namespace auik
             io.mouse_down = false;
             io.clicked_id = {};
             io.drag_id = {};
+            io.drag_key_flags = {};
             frame_cache.changes = FrameChangesBits::none;
             frame_cache.drag_widget_id = 0;
             frame_cache.drag_delta = {0.0f, 0.0f};
@@ -394,7 +412,7 @@ namespace auik
             frame_cache.char_code = 0;
             frame_cache.char_repeat_count = 0;
             io.active_keys.clear();
-            io.active_mouse_buttons.clear();
+            io.active_mouse_buttons = {};
             io.active_mods = KeyMode{};
             ctx.active_id = 0;
             ctx.hover_id = {};
@@ -419,9 +437,7 @@ namespace auik
                     assert(widget && "widget is null");
                     if (widget->has_event_handler(EventFlagBits::hover)) widget->dispatch_hover(HoverState::leave);
                     if (apply_hover_style_state(*widget, HoverState::leave))
-                    {
                         enqueue_style_refresh<detail::HoverEventTraits>(widget);
-                    }
                 }
             }
             set_window_cursor(CursorID::arrow, ctx.window_ctx);
@@ -431,8 +447,8 @@ namespace auik
         {
             auto &ctx = get_context();
             auto &io = ctx.io;
-            auto &frame_cache = ctx.frame_cache;
-            if (!io.mouse_down || !io.drag_id) return;
+            if (!io.mouse_down || !io.clicked_id) return;
+            if (!io.active_mouse_buttons) return;
 
             amal::vec2 drag_delta = delta != amal::vec2{0.0f} ? delta : io.mouse_pos - io.last_drag_pos;
             if (drag_delta == amal::vec2{0.0f}) return;
@@ -440,9 +456,15 @@ namespace auik
             if (io.mouse_pos != io.last_drag_pos) io.last_drag_pos = io.mouse_pos;
             else io.last_drag_pos += drag_delta;
 
-            frame_cache.drag_widget_id = io.drag_id.widget_id;
-            frame_cache.drag_delta += drag_delta;
-            frame_cache.changes |= FrameChangesBits::drag_delta;
+            const bool begin_drag = !io.drag_id;
+            if (begin_drag)
+            {
+                io.drag_id = io.clicked_id;
+                io.drag_key_flags = io.active_mouse_buttons;
+            }
+            auto it = ctx.id_map.find(io.drag_id.widget_id);
+            if (it != ctx.id_map.end() && it->second->has_event_handler(EventFlagBits::drag))
+                it->second->dispatch_drag(drag_delta, begin_drag ? KeyPressState::press : KeyPressState::repeat);
             mark_host_refresh_request();
         }
 
@@ -499,7 +521,7 @@ namespace auik
             mark_host_refresh_request();
         }
 
-        void deregister_widget_shortcuts(u32 widget_id)
+        AUIK_EXPORT void deregister_widget_shortcuts(u32 widget_id)
         {
             if (!widget_id) return;
             auto &ctx = get_context();
@@ -660,14 +682,7 @@ namespace auik
             io.last_click_pos = io.mouse_pos;
             io.last_drag_pos = io.mouse_pos;
 
-            io.clicked_id = ctx.hover_id;
-            io.drag_id = ctx.hover_id;
-            if (io.drag_id)
-            {
-                auto drag_it = ctx.id_map.find(io.drag_id.widget_id);
-                if (drag_it != ctx.id_map.end() && drag_it->second->has_event_handler(EventFlagBits::drag))
-                    drag_it->second->dispatch_drag({0.0f, 0.0f}, KeyPressState::press);
-            }
+            if (!io.drag_id) io.clicked_id = ctx.hover_id;
 
             auto it = ctx.id_map.find(ctx.hover_id.widget_id);
             if (it != ctx.id_map.end())
@@ -686,15 +701,13 @@ namespace auik
                     });
                 ctx.active_id = next_active_id;
                 const StyleState prev_style = it->second->style_state();
-                // Focus visuals are applied in focus transition path.
-                // Press should not override an already-focused widget.
-                StyleState next_style = prev_style == StyleState::focus ? StyleState::focus : StyleState::active;
-                if (next_style != StyleState::focus && !has_widget_state_style(*it->second, next_style))
-                    next_style = prev_style;
+                // Pressed state has priority over focus for the duration of the press.
+                // resolve_release_state() restores focus after release.
+                StyleState next_style = StyleState::active;
                 if (prev_style != next_style) it->second->set_style_state(next_style);
                 // Pressed element (tag-based selector target) should always enter active visuals,
                 // even if owning widget keeps focus state.
-                detail::set_style_selector(io.drag_id, io.drag_id ? StyleState::active : StyleState::normal);
+                detail::set_style_selector(ctx.hover_id, ctx.hover_id ? StyleState::active : StyleState::normal);
                 const bool active_changed = prev_active_id != ctx.active_id;
                 const bool style_changed = it->second->style_state() != prev_style_state;
                 if (active_changed || style_changed)
@@ -706,9 +719,32 @@ namespace auik
             else set_focus_target(ctx, nullptr);
         }
 
-        static void handle_left_mouse_release(Context &ctx, IO &io)
+        static void finish_drag(Context &ctx, IO &io)
         {
             auto &frame_cache = ctx.frame_cache;
+            const ElementID drag_id = io.drag_id;
+            const ElementID hover_id = ctx.hover_id;
+
+            frame_cache.drag_widget_id = 0;
+            frame_cache.drag_delta = {0.0f, 0.0f};
+            frame_cache.changes &= ~FrameChangesBits::drag_delta;
+
+            auto it = ctx.id_map.find(hover_id.widget_id);
+            if (drag_id && hover_id && it != ctx.id_map.end() && it->second->has_event_handler(EventFlagBits::drop) &&
+                it->second->accepts_drag_hover(drag_id, hover_id))
+                it->second->dispatch_drop(drag_id, hover_id);
+
+            it = ctx.id_map.find(drag_id.widget_id);
+            if (drag_id && it != ctx.id_map.end() && it->second->has_event_handler(EventFlagBits::drag))
+                it->second->dispatch_drag({0.0f, 0.0f}, KeyPressState::release);
+
+            io.drag_id = {};
+            io.drag_key_flags = {};
+            io.clicked_id = {};
+        }
+
+        static void handle_left_mouse_release(Context &ctx, IO &io, bool finish_active_drag)
+        {
             const ElementID clicked_id = io.clicked_id;
             const ElementID hover_id = ctx.hover_id;
             const u32 clicked_widget_id = clicked_id.widget_id;
@@ -716,20 +752,7 @@ namespace auik
             if (it != ctx.id_map.end() && it->second->has_event_handler(EventFlagBits::click))
                 it->second->dispatch_click(MouseKey::left, KeyPressState::release, io.click_count);
 
-            // Interrupted drag: clear pending frame payload.
-            frame_cache.drag_widget_id = 0;
-            frame_cache.drag_delta = {0.0f, 0.0f};
-            frame_cache.changes &= ~FrameChangesBits::drag_delta;
-
-            it = ctx.id_map.find(hover_id.widget_id);
-            if (io.drag_id && hover_id && it != ctx.id_map.end() &&
-                it->second->has_event_handler(EventFlagBits::drop) &&
-                it->second->accepts_drag_hover(io.drag_id, hover_id))
-                it->second->dispatch_drop(io.drag_id, hover_id);
-
-            it = ctx.id_map.find(io.drag_id.widget_id);
-            if (it != ctx.id_map.end() && it->second->has_event_handler(EventFlagBits::drag))
-                it->second->dispatch_drag({0.0f, 0.0f}, KeyPressState::release);
+            if (finish_active_drag) finish_drag(ctx, io);
 
             if (ctx.active_id != 0)
             {
@@ -762,8 +785,29 @@ namespace auik
 
             if (clicked_id || hover_id) on_hover_id_updated(clicked_id, hover_id);
 
-            io.clicked_id = {};
-            io.drag_id = {};
+            if (!io.active_mouse_buttons) io.clicked_id = {};
+        }
+
+        static void handle_aux_mouse_press(Context &ctx, IO &io, MouseKey key)
+        {
+            io.mouse_down = true;
+            io.last_drag_pos = io.mouse_pos;
+            if (!io.clicked_id && !io.drag_id) io.clicked_id = ctx.hover_id;
+
+            auto it = ctx.id_map.find(ctx.hover_id.widget_id);
+            if (it == ctx.id_map.end()) return;
+            if (it->second->has_event_handler(EventFlagBits::click))
+                it->second->dispatch_click(key, KeyPressState::press, 1);
+        }
+
+        static void handle_aux_mouse_release(Context &ctx, IO &io, MouseKey key, bool finish_active_drag)
+        {
+            auto it = ctx.id_map.find(io.clicked_id.widget_id);
+            if (it != ctx.id_map.end() && it->second->has_event_handler(EventFlagBits::click))
+                it->second->dispatch_click(key, KeyPressState::release, 1);
+
+            if (finish_active_drag) finish_drag(ctx, io);
+            if (!io.active_mouse_buttons) io.clicked_id = {};
         }
 
         AUIK_EXPORT void on_mouse_click_event(MouseKey key, KeyPressState state)
@@ -772,26 +816,31 @@ namespace auik
             auto &io = ctx.io;
             update_window_time(ctx.window_ctx);
 
-            if (state == KeyPressState::release) io.active_mouse_buttons.erase(key);
-            else io.active_mouse_buttons.insert(key);
+            const MouseKeyFlags key_flags = MouseKeyFlags(key);
+            if (state == KeyPressState::release) io.active_mouse_buttons &= ~key_flags;
+            else io.active_mouse_buttons |= key_flags;
+            io.mouse_down = static_cast<bool>(io.active_mouse_buttons);
+            const bool finish_active_drag = io.drag_id && (io.drag_key_flags & key_flags);
 
             if (key != MouseKey::left)
             {
-                const u32 target_id = ctx.hover_id.widget_id;
-                auto it = ctx.id_map.find(target_id);
-                if (it != ctx.id_map.end() && it->second->has_event_handler(EventFlagBits::click))
-                    it->second->dispatch_click(key, state, 1);
+                if (state == KeyPressState::press)
+                {
+                    dispatch_shortcut(ctx);
+                    handle_aux_mouse_press(ctx, io, key);
+                }
+                else if (state == KeyPressState::release) handle_aux_mouse_release(ctx, io, key, finish_active_drag);
                 return;
             }
 
             if (state == KeyPressState::press)
             {
+                dispatch_shortcut(ctx);
                 handle_left_mouse_press(ctx, io);
                 return;
             }
 
-            io.mouse_down = false;
-            if (state == KeyPressState::release) handle_left_mouse_release(ctx, io);
+            if (state == KeyPressState::release) handle_left_mouse_release(ctx, io, finish_active_drag);
         }
 
         AUIK_EXPORT void flush_frame_changes()

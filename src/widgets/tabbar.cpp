@@ -3,6 +3,7 @@
 #include <auik/detail/rect.hpp>
 #include <auik/widgets/combobox.hpp>
 #include <auik/widgets/detail/selectable.hpp>
+#include <auik/widgets/primitives.hpp>
 #include <auik/widgets/tabbar.hpp>
 #include <auik/widgets/window.hpp>
 #include "../core/session_stream_utils.hpp"
@@ -10,6 +11,9 @@
 #define AUIK_TABBAR_POPUP_ITEM_FALLBACK_HEIGHT 24.0f
 #define AUIK_TABBAR_SCROLL_STEP                32.0f
 #define AUIK_DROPDOWN_MIN_VISIBLE_ITEMS        4.0f
+#define TABBAR_MODEL_TEXT_FIELD_ID             0u
+#define TABBAR_MODEL_SELECTED_FIELD_ID         1u
+#define TABBAR_MODEL_CHANGED_FIELD_ID          2u
 
 namespace auik
 {
@@ -56,8 +60,45 @@ namespace auik
     static inline amal::vec2 snap_drag_visual_position(const amal::vec2 &position)
     { return {amal::round(position.x), amal::round(position.y)}; }
 
+    static inline amal::vec2 resolve_drag_visual_position(const Widget &widget, const amal::vec2 &base,
+                                                          const amal::vec2 &candidate, const amal::vec2 &size)
+    {
+        const Widget *parent = widget.parent();
+        const amal::vec2 snapped = base + snap_drag_visual_position(candidate - base);
+        if (!parent) return snapped;
+
+        const auto parent_bounds = parent->bounds();
+        if (parent_bounds.size.x <= 0.0f) return snapped;
+
+        const f32 min_x = parent_bounds.offset.x;
+        const f32 max_x = amal::max(parent_bounds.offset.x + parent_bounds.size.x - size.x, min_x);
+        return {amal::clamp(snapped.x, min_x, max_x), snapped.y};
+    }
+
     static inline f32 dominant_scroll_axis(const amal::vec2 &delta)
     { return amal::abs(delta.x) > amal::abs(delta.y) ? delta.x : delta.y; }
+
+    static inline bool is_tabbar_item_hovered(u32 widget_id, u32 item_tag_id, u32 element_id)
+    {
+        const auto hover_id = detail::get_context().hover_id;
+        if (hover_id.widget_id != widget_id || hover_id.element_id != element_id) return false;
+        return hover_id.tag_id == item_tag_id || hover_id.tag_id == AUIK_TAG_CLOSE_BUTTON ||
+               hover_id.tag_id == AUIK_TAG_TABBAR_CHANGE_ICON;
+    }
+
+    static bool read_tabbar_model_selected(ModelBinding &binding, ModelRecordID record_id)
+    {
+        bool selected = false;
+        read_model_binding_value(binding, record_id, TABBAR_MODEL_SELECTED_FIELD_ID, selected);
+        return selected;
+    }
+
+    static bool read_tabbar_model_changed(ModelBinding &binding, ModelRecordID record_id)
+    {
+        bool changed = false;
+        read_model_binding_value(binding, record_id, TABBAR_MODEL_CHANGED_FIELD_ID, changed);
+        return changed;
+    }
 
     static inline TabbarFlags normalize_tab_bar_flags(TabbarFlags flags)
     {
@@ -121,9 +162,7 @@ namespace auik
     Tabbar::Tabbar(u32 id, const acul::vector<StringView> &items, TabbarFlags tab_flags, WidgetFlags widget_flags,
                    amal::vec2 inline_size)
         : Tabbar(id, tab_flags, widget_flags, inline_size)
-    {
-        set_items(items);
-    }
+    { set_items(items); }
 
     Tabbar::Tabbar(u32 id, TabbarFlags tab_flags, WidgetFlags widget_flags, amal::vec2 inline_size)
         : Widget(id, widget_flags, make_tab_bar_event_flags(tab_flags), {{0.0f, 0.0f}, inline_size}, AUIK_TAG_TABBAR),
@@ -157,74 +196,204 @@ namespace auik
         close_popup(false);
         if (_popup) acul::release(_popup);
         if (_overflow_button) acul::release(_overflow_button);
-        for (auto *tab : _tabs) acul::release(tab);
-        for (auto *button : _close_buttons) acul::release(button);
-        _tabs.clear();
-        _close_buttons.clear();
+        for (auto &item : _items) release_item(item);
+        _items.clear();
     }
 
-    void Tabbar::rebuild_items()
+    Widget *Tabbar::change_icon(u32 element_id)
     {
-        if (_popup) _popup->clear_children();
-        while (_close_buttons.size() < _tabs.size())
+        const u32 index = find_index_by_element_id(element_id);
+        return index < _items.size() ? _items[index].change_icon : nullptr;
+    }
+
+    const Widget *Tabbar::change_icon(u32 element_id) const
+    {
+        const u32 index = find_index_by_element_id(element_id);
+        return index < _items.size() ? _items[index].change_icon : nullptr;
+    }
+
+    Tabbar::value_type *Tabbar::data()
+    {
+        _item_data_cache.clear();
+        _item_data_cache.reserve(_items.size());
+        for (const auto &item : _items) _item_data_cache.push_back(item.tab);
+        return _item_data_cache.empty() ? nullptr : _item_data_cache.data();
+    }
+
+    const Tabbar::value_type *Tabbar::data() const
+    {
+        _item_data_cache.clear();
+        _item_data_cache.reserve(_items.size());
+        for (const auto &item : _items) _item_data_cache.push_back(item.tab);
+        return _item_data_cache.empty() ? nullptr : _item_data_cache.data();
+    }
+
+    void *Tabbar::item_user_data_by_element_id(u32 element_id) const
+    {
+        const u32 index = find_index_by_element_id(element_id);
+        return index < _items.size() ? _items[index].user_data : nullptr;
+    }
+
+    void Tabbar::set_tab_changed(u32 element_id)
+    {
+        const u32 index = find_index_by_element_id(element_id);
+        if (index >= _items.size() || _items[index].changed) return;
+        _items[index].changed = true;
+        refresh_layout_owner(*this);
+        detail::get_context().dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
+        detail::mark_host_refresh_request();
+    }
+
+    void Tabbar::set_tab_unchanged(u32 element_id)
+    {
+        const u32 index = find_index_by_element_id(element_id);
+        if (index >= _items.size() || !_items[index].changed) return;
+        _items[index].changed = false;
+        refresh_layout_owner(*this);
+        detail::get_context().dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
+        detail::mark_host_refresh_request();
+    }
+
+    bool Tabbar::is_changed(u32 element_id) const
+    {
+        const u32 index = find_index_by_element_id(element_id);
+        return index < _items.size() && _items[index].changed;
+    }
+
+    Widget *create_tab_changed_icon(u32 id)
+    {
+        auto *icon = acul::alloc<WRect>(id, amal::rect{{0.0f, 0.0f}, AUIK_SIZE_INHERIT},
+                                        WidgetFlagBits::attachable | WidgetFlagBits::hittable);
+        icon->set_style_tag(AUIK_STYLE_TAG_TABBAR_CHANGE_ICON);
+        return icon;
+    }
+
+    void Tabbar::set_changed_icon_create_cb(PFN_on_changed_icon_create cb)
+    {
+        if (_on_changed_icon_create == cb) return;
+        for (auto &item : _items)
         {
-            auto *button = acul::alloc<ImageButton>(AUIK_TAG_CLOSE_BUTTON, get_cached_image(AUIK_ICON_CLOSE),
-                                                    amal::vec2{0.0f, 0.0f},
-                                                    amal::vec2{AUIK_SIZE_X_INHERIT, AUIK_SIZE_Y_INHERIT},
-                                                    WidgetFlagBits::visible | WidgetFlagBits::hittable,
-                                                    _close_button_style_tag);
-            button->set_parent(this);
-            button->get_rect().id.widget_id = id();
-            button->get_rect().id.tag_id = AUIK_TAG_CLOSE_BUTTON;
-            button->set_focus_parent(this);
-            button->update_style();
-            _close_buttons.push_back(button);
-        }
-        while (_close_buttons.size() > _tabs.size())
-        {
-            acul::release(_close_buttons.back());
-            _close_buttons.erase(_close_buttons.end() - 1);
+            if (item.change_icon)
+            {
+                item.change_icon->invalidate_draw_commands(DrawReasonBits::layout);
+                acul::release(item.change_icon);
+                item.change_icon = nullptr;
+            }
         }
 
-        if (_tabs.empty())
+        _on_changed_icon_create = cb;
+        if (_on_changed_icon_create)
+        {
+            for (auto &item : _items)
+            {
+                item.change_icon = _on_changed_icon_create(id());
+                if (!item.change_icon) continue;
+                item.change_icon->set_parent(this);
+                item.change_icon->set_focus_parent(this);
+                item.change_icon->get_rect().id = make_element_id(id(), AUIK_TAG_TABBAR_CHANGE_ICON, item.element_id);
+                item.change_icon->set_rect_tag_id(AUIK_TAG_TABBAR_CHANGE_ICON);
+                item.change_icon->update_style();
+            }
+            sync_changed_from_model_binding();
+        }
+
+        rebuild_items();
+        refresh_layout_owner(*this);
+    }
+
+    Tabbar::Item Tabbar::create_item(u32 element_id, StringView text)
+    {
+        Item item{};
+        item.element_id = element_id;
+        item.tab = acul::alloc<detail::Selectable>(make_element_id(id(), _item_style_tag, element_id), text, false,
+                                                   amal::vec2{AUIK_SIZE_X_INHERIT, AUIK_SIZE_Y_INHERIT}, this,
+                                                   detail::get_selectable_item_flags());
+        item.tab->set_style_tag(_item_style_tag);
+        item.tab->set_selected_style_tag(_selected_item_style_tag);
+        item.tab->set_focus_parent(this);
+        item.tab->update_style();
+
+        if (_on_changed_icon_create)
+        {
+            item.change_icon = _on_changed_icon_create(id());
+            if (item.change_icon)
+            {
+                item.change_icon->set_parent(this);
+                item.change_icon->set_focus_parent(this);
+                item.change_icon->get_rect().id = make_element_id(id(), AUIK_TAG_TABBAR_CHANGE_ICON, element_id);
+                item.change_icon->set_rect_tag_id(AUIK_TAG_TABBAR_CHANGE_ICON);
+                item.change_icon->update_style();
+            }
+        }
+
+        if (closable())
+        {
+            item.close_button =
+                acul::alloc<ImageButton>(AUIK_TAG_CLOSE_BUTTON, get_cached_image(AUIK_ICON_CLOSE),
+                                         amal::vec2{0.0f, 0.0f}, amal::vec2{AUIK_SIZE_X_INHERIT, AUIK_SIZE_Y_INHERIT},
+                                         WidgetFlagBits::visible | WidgetFlagBits::hittable, _close_button_style_tag);
+            item.close_button->set_parent(this);
+            item.close_button->get_rect().id = make_element_id(id(), AUIK_TAG_CLOSE_BUTTON, element_id);
+            item.close_button->set_focus_parent(this);
+            item.close_button->update_style();
+        }
+        return item;
+    }
+
+    void Tabbar::release_item(Item &item)
+    {
+        acul::release(item.tab);
+        acul::release(item.change_icon);
+        acul::release(item.close_button);
+        item = {};
+    }
+
+    void Tabbar::sync_items()
+    {
+        if (_items.empty())
         {
             _selected_index = 0u;
             return;
         }
-        if (_selected_index >= _tabs.size()) _selected_index = static_cast<u32>(_tabs.size() - 1u);
+        if (_selected_index >= _items.size()) _selected_index = static_cast<u32>(_items.size() - 1u);
         u32 first_selected_index = static_cast<u32>(-1);
-        for (u32 i = 0; i < _tabs.size(); ++i)
+        for (u32 i = 0; i < _items.size(); ++i)
         {
-            auto *tab = _tabs[i];
+            auto *tab = _items[i].tab;
             if (!tab || !tab->selected()) continue;
             if (first_selected_index == static_cast<u32>(-1)) first_selected_index = i;
             else if (!multiple()) tab->set_selected(false);
         }
         if (first_selected_index == static_cast<u32>(-1))
         {
-            if (auto_select_first_item() && _selected_index < _tabs.size() && _tabs[_selected_index])
+            if (auto_select_first_item() && _selected_index < _items.size() && _items[_selected_index].tab)
             {
-                _tabs[_selected_index]->set_selected(true);
+                _items[_selected_index].tab->set_selected(true);
                 first_selected_index = _selected_index;
             }
         }
         else _selected_index = first_selected_index;
 
         const auto transition = detail::get_widget_style_selector_transition(id());
-        for (u32 i = 0; i < _tabs.size(); ++i)
+        for (u32 i = 0; i < _items.size(); ++i)
         {
-            const u32 element_id = _element_ids[i];
-            auto *tab = _tabs[i];
-            tab->get_rect().id.element_id = element_id;
-            _close_buttons[i]->get_rect().id.widget_id = id();
-            _close_buttons[i]->get_rect().id.element_id = element_id;
+            auto &item = _items[i];
+            const u32 element_id = item.element_id;
+            if (item.tab) item.tab->get_rect().id.element_id = element_id;
+            if (item.change_icon)
+            {
+                item.change_icon->get_rect().id = make_element_id(id(), AUIK_TAG_TABBAR_CHANGE_ICON, element_id);
+                item.change_icon->set_rect_tag_id(AUIK_TAG_TABBAR_CHANGE_ICON);
+            }
+            if (item.close_button)
+                item.close_button->get_rect().id = make_element_id(id(), AUIK_TAG_CLOSE_BUTTON, element_id);
 
             if (_popup)
             {
                 auto *popup_item = acul::alloc<detail::Selectable>(
-                    make_element_id(id(), _popup_item_style_tag, element_id), tab->source_text(), false,
-                    amal::vec2{AUIK_SIZE_X_INHERIT, AUIK_SIZE_Y_INHERIT}, _popup,
-                    detail::get_selectable_item_flags());
+                    make_element_id(id(), _popup_item_style_tag, element_id),
+                    item.tab ? item.tab->source_text() : StringView{}, false,
+                    amal::vec2{AUIK_SIZE_X_INHERIT, AUIK_SIZE_Y_INHERIT}, _popup, detail::get_selectable_item_flags());
                 popup_item->set_style_tag(_popup_item_style_tag);
                 popup_item->set_selected_style_tag(_selected_item_style_tag);
                 popup_item->set_focus_parent(_popup);
@@ -232,6 +401,12 @@ namespace auik
             }
             update_item_state(i, transition);
         }
+    }
+
+    void Tabbar::rebuild_items()
+    {
+        if (_popup) _popup->clear_children();
+        sync_items();
     }
 
     void Tabbar::set_items(acul::vector<acul::string> items)
@@ -253,12 +428,40 @@ namespace auik
         _model_binding = binding;
         if (!_model_binding) return;
 
-        auto rebuild = [this]() {
-            rebuild_from_model_binding();
-            refresh_layout_owner(*this);
+        _model_binding->on_records = [this](const ModelRecordsEvent &event) { handle_model_records(event); };
+        _model_binding->on_field_change = [this](ModelRecordID record_id, ModelFieldID field_id) {
+            if (!_model_binding) return;
+            u32 index = static_cast<u32>(-1);
+            for (u32 i = 0u; i < _model_binding->records.size(); ++i)
+            {
+                if (_model_binding->records[i] != record_id) continue;
+                index = i;
+                break;
+            }
+            if (index >= _items.size()) return;
+            if (field_id == TABBAR_MODEL_SELECTED_FIELD_ID)
+            {
+                const bool selected = read_tabbar_model_selected(*_model_binding, record_id);
+                if (selected) set_selected_silent(_items[index].element_id);
+                else if (_items[index].tab) _items[index].tab->set_selected(false);
+                const auto transition = detail::get_widget_style_selector_transition(id());
+                update_item_state(index, transition);
+                refresh_layout_owner(*this);
+                return;
+            }
+            if (field_id == TABBAR_MODEL_CHANGED_FIELD_ID)
+            {
+                _items[index].changed = read_tabbar_model_changed(*_model_binding, record_id);
+                const auto transition = detail::get_widget_style_selector_transition(id());
+                update_item_state(index, transition);
+                refresh_layout_owner(*this);
+                return;
+            }
+            if (field_id != TABBAR_MODEL_TEXT_FIELD_ID) return;
+            acul::string text{};
+            read_model_binding_value(*_model_binding, record_id, TABBAR_MODEL_TEXT_FIELD_ID, text);
+            update_item_text(index, text);
         };
-        _model_binding->on_records = [rebuild](const ModelRecordsEvent &) { rebuild(); };
-        _model_binding->on_field_change = [rebuild](ModelRecordID, ModelFieldID) { rebuild(); };
         attach_model_binding(*_model_binding);
         rebuild_model_binding_records(*_model_binding);
         rebuild_from_model_binding();
@@ -280,28 +483,112 @@ namespace auik
             for (ModelRecordID record_id : _model_binding->records)
             {
                 acul::string text{};
-                read_model_binding_value(*_model_binding, record_id, 1u, text);
+                read_model_binding_value(*_model_binding, record_id, TABBAR_MODEL_TEXT_FIELD_ID, text);
                 items.push_back(std::move(text));
             }
         }
         set_items(std::move(items));
+        sync_selection_from_model_binding();
+        sync_changed_from_model_binding();
         update_depth(depth_range());
+    }
+
+    void Tabbar::handle_model_records(const ModelRecordsEvent &event)
+    {
+        if (!_model_binding || !is_model_binding_valid(*_model_binding))
+        {
+            rebuild_from_model_binding();
+            refresh_layout_owner(*this);
+            return;
+        }
+
+        switch (event.op)
+        {
+            case ModelRecordsOp::create:
+            {
+                acul::string text{};
+                read_model_binding_value(*_model_binding, event.record_id, TABBAR_MODEL_TEXT_FIELD_ID, text);
+                const u32 insert_index = amal::min(event.to_index, static_cast<u32>(_items.size()));
+                insert_item(insert_index, text);
+                if (insert_index < _items.size())
+                {
+                    const bool selected = read_tabbar_model_selected(*_model_binding, event.record_id);
+                    const bool changed = read_tabbar_model_changed(*_model_binding, event.record_id);
+                    _items[insert_index].changed = changed;
+                    if (selected) set_selected_silent(_items[insert_index].element_id);
+                    else if (_items[insert_index].tab) _items[insert_index].tab->set_selected(false);
+                    const auto transition = detail::get_widget_style_selector_transition(id());
+                    update_item_state(insert_index, transition);
+                }
+                update_depth(depth_range());
+                break;
+            }
+            case ModelRecordsOp::destroy:
+            {
+                remove_item(event.from_index);
+                update_depth(depth_range());
+                break;
+            }
+            case ModelRecordsOp::move:
+            case ModelRecordsOp::order:
+            case ModelRecordsOp::reset:
+                rebuild_from_model_binding();
+                break;
+        }
+        refresh_layout_owner(*this);
+    }
+
+    void Tabbar::sync_selection_from_model_binding()
+    {
+        if (!_model_binding || !is_model_binding_valid(*_model_binding)) return;
+        u32 selected_index = 0xFFFFFFFFu;
+        bool changed = false;
+        for (u32 index = 0u; index < _items.size() && index < _model_binding->records.size(); ++index)
+        {
+            const ModelRecordID record_id = _model_binding->records[index];
+            const bool selected = read_tabbar_model_selected(*_model_binding, record_id);
+            if (_items[index].tab)
+            {
+                changed = changed || _items[index].tab->selected() != selected;
+                _items[index].tab->set_selected(selected);
+            }
+            if (selected && selected_index == 0xFFFFFFFFu) selected_index = index;
+        }
+        if (selected_index != 0xFFFFFFFFu) _selected_index = selected_index;
+
+        const auto transition = detail::get_widget_style_selector_transition(id());
+        StyleUpdateFlags flags = StyleUpdateFlagBits::none;
+        for (u32 index = 0u; index < _items.size(); ++index) flags |= update_item_state(index, transition);
+        if (changed ||
+            (flags & (StyleUpdateFlagBits::layout | StyleUpdateFlagBits::parent_layout | StyleUpdateFlagBits::redraw)))
+            refresh_selection_owner(*this, flags);
+    }
+
+    void Tabbar::sync_changed_from_model_binding()
+    {
+        if (!_model_binding || !is_model_binding_valid(*_model_binding)) return;
+        bool changed = false;
+        for (u32 index = 0u; index < _items.size() && index < _model_binding->records.size(); ++index)
+        {
+            const ModelRecordID record_id = _model_binding->records[index];
+            const bool next_changed = read_tabbar_model_changed(*_model_binding, record_id);
+            if (index >= _items.size() || _items[index].changed == next_changed) continue;
+            _items[index].changed = next_changed;
+            changed = true;
+        }
+        if (!changed) return;
+        detail::get_context().dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
+        refresh_layout_owner(*this);
+        detail::mark_host_refresh_request();
     }
 
     void Tabbar::set_items(const acul::vector<StringView> &items)
     {
-        const bool had_items = !_tabs.empty() || !_close_buttons.empty() || (_popup && !_popup->children.empty());
-        if (had_items)
-        {
-            reset_draw_records();
-            if (_style.id != Theme::STYLE_ID_INVALID) invalidate_draw_commands(DrawReasonBits::layout);
-        }
+        const bool had_items = !_items.empty() || (_popup && !_popup->children.empty());
+        if (had_items) { invalidate_draw_commands(DrawReasonBits::layout); }
         if (_popup) _popup->clear_children();
-        for (auto *tab : _tabs) acul::release(tab);
-        for (auto *button : _close_buttons) acul::release(button);
-        _tabs.clear();
-        _close_buttons.clear();
-        _element_ids.clear();
+        for (auto &item : _items) release_item(item);
+        _items.clear();
         _selected_index = 0u;
         _next_element_id = 1u;
         _drag_element_id = 0u;
@@ -310,19 +597,51 @@ namespace auik
         for (u32 i = 0; i < items.size(); ++i)
         {
             const u32 element_id = _next_element_id++;
-            _element_ids.push_back(element_id);
-            auto *tab =
-                acul::alloc<detail::Selectable>(make_element_id(id(), _item_style_tag, element_id), items[i], false,
-                                                amal::vec2{AUIK_SIZE_X_INHERIT, AUIK_SIZE_Y_INHERIT}, this,
-                                                detail::get_selectable_item_flags());
-            tab->set_style_tag(_item_style_tag);
-            tab->set_selected_style_tag(_selected_item_style_tag);
-            tab->set_focus_parent(this);
-            tab->update_style();
-            _tabs.push_back(tab);
+            _items.push_back(create_item(element_id, items[i]));
         }
-        if (!_tabs.empty() && auto_select_first_item()) _tabs[0]->set_selected(true);
+        if (!_items.empty() && auto_select_first_item()) _items[0].tab->set_selected(true);
         rebuild_items();
+    }
+
+    void Tabbar::insert_item(u32 index, StringView item)
+    {
+        index = amal::min(index, static_cast<u32>(_items.size()));
+        const u32 element_id = _next_element_id++;
+        _items.insert(_items.begin() + index, create_item(element_id, item));
+        if (_selected_index >= index && _items.size() > 1u) ++_selected_index;
+        if (_items.size() == 1u && auto_select_first_item())
+        {
+            _selected_index = 0u;
+            if (_items[0].tab) _items[0].tab->set_selected(true);
+        }
+        rebuild_items();
+    }
+
+    void Tabbar::remove_item(u32 index)
+    {
+        if (index >= _items.size()) return;
+
+        const bool removed_selected = _items[index].tab && _items[index].tab->selected();
+        release_item(_items[index]);
+        _items.erase(_items.begin() + index);
+        if (_items.empty()) _selected_index = 0u;
+        else if (removed_selected)
+        {
+            _selected_index = amal::min(index, static_cast<u32>(_items.size() - 1u));
+            if (auto_select_first_item() && _items[_selected_index].tab)
+                _items[_selected_index].tab->set_selected(true);
+        }
+        else if (_selected_index > index) --_selected_index;
+        else if (_selected_index >= _items.size()) _selected_index = static_cast<u32>(_items.size() - 1u);
+        rebuild_items();
+    }
+
+    void Tabbar::update_item_text(u32 index, StringView text)
+    {
+        if (index >= _items.size() || !_items[index].tab) return;
+        _items[index].tab->set_text(text);
+        rebuild_items();
+        refresh_layout_owner(*this);
     }
 
     void Tabbar::set_style_tag(u32 tag_id)
@@ -335,14 +654,19 @@ namespace auik
 
     void Tabbar::update_item_tags()
     {
-        for (u32 i = 0; i < _tabs.size(); ++i)
+        for (u32 i = 0; i < _items.size(); ++i)
         {
-            const u32 element_id = i < _element_ids.size() ? _element_ids[i] : 0u;
-            if (auto *tab = _tabs[i])
+            const u32 element_id = _items[i].element_id;
+            if (auto *tab = _items[i].tab)
             {
                 tab->get_rect().id.tag_id = _item_style_tag;
                 tab->set_style_tag(_item_style_tag);
                 tab->set_selected_style_tag(_selected_item_style_tag);
+            }
+            if (i < _items.size() && _items[i].change_icon)
+            {
+                _items[i].change_icon->get_rect().id = make_element_id(id(), AUIK_TAG_TABBAR_CHANGE_ICON, element_id);
+                _items[i].change_icon->set_rect_tag_id(AUIK_TAG_TABBAR_CHANGE_ICON);
             }
             if (_popup && i < _popup->children.size())
             {
@@ -354,9 +678,9 @@ namespace auik
                     popup_item->set_selected_style_tag(_selected_item_style_tag);
                 }
             }
-            if (i < _close_buttons.size() && _close_buttons[i])
+            if (i < _items.size() && _items[i].close_button)
             {
-                _close_buttons[i]->set_style_tag(_close_button_style_tag);
+                _items[i].close_button->set_style_tag(_close_button_style_tag);
             }
         }
     }
@@ -369,44 +693,44 @@ namespace auik
 
     u32 Tabbar::selected_index() const
     {
-        for (u32 i = 0; i < _tabs.size(); ++i)
-            if (_tabs[i] && _tabs[i]->selected()) return i;
+        for (u32 i = 0; i < _items.size(); ++i)
+            if (_items[i].tab && _items[i].tab->selected()) return i;
         return 0u;
     }
 
     u32 Tabbar::selected_id() const
     {
         const u32 index = selected_index();
-        if (index >= _tabs.size() || !_tabs[index] || !_tabs[index]->selected()) return 0u;
-        return index < _element_ids.size() ? _element_ids[index] : 0u;
+        if (index >= _items.size() || !_items[index].tab || !_items[index].tab->selected()) return 0u;
+        return _items[index].element_id;
     }
 
     acul::vector<u32> Tabbar::selected_ids() const
     {
         acul::vector<u32> out;
-        for (u32 i = 0; i < _tabs.size() && i < _element_ids.size(); ++i)
-            if (_tabs[i] && _tabs[i]->selected()) out.push_back(_element_ids[i]);
+        for (const auto &item : _items)
+            if (item.tab && item.tab->selected()) out.push_back(item.element_id);
         return out;
     }
 
     bool Tabbar::is_selected(u32 element_id) const
     {
         const u32 index = find_index_by_element_id(element_id);
-        return index < _tabs.size() && _tabs[index] && _tabs[index]->selected();
+        return index < _items.size() && _items[index].tab && _items[index].tab->selected();
     }
 
     void Tabbar::set_selected(u32 element_id)
     {
         const u32 index = find_index_by_element_id(element_id);
-        if (index >= _tabs.size()) return;
+        if (index >= _items.size()) return;
         const u32 prev_selected = selected_id();
         const auto prev_selected_ids = selected_ids();
         if (prev_selected == element_id && prev_selected_ids.size() == 1u) return;
         if (prev_selected != 0u && prev_selected != element_id) _last_selected_element_id = prev_selected;
         _selected_index = index;
-        for (u32 i = 0; i < _tabs.size(); ++i)
-            if (_tabs[i]) _tabs[i]->set_selected(i == index);
-        if (mark_changed()) return;
+        for (u32 i = 0; i < _items.size(); ++i)
+            if (_items[i].tab) _items[i].tab->set_selected(i == index);
+        if (mark_changed(TabbarChangeReason::selection)) return;
         const auto transition = detail::get_widget_style_selector_transition(id());
         StyleUpdateFlags flags = StyleUpdateFlagBits::none;
         for (u32 selected_id : prev_selected_ids)
@@ -421,13 +745,13 @@ namespace auik
     void Tabbar::set_selected_silent(u32 element_id)
     {
         const u32 index = find_index_by_element_id(element_id);
-        if (index >= _tabs.size()) return;
+        if (index >= _items.size()) return;
         const u32 prev_selected = selected_id();
         const auto prev_selected_ids = selected_ids();
         if (prev_selected != 0u && prev_selected != element_id) _last_selected_element_id = prev_selected;
         _selected_index = index;
-        for (u32 i = 0; i < _tabs.size(); ++i)
-            if (_tabs[i]) _tabs[i]->set_selected(i == index);
+        for (u32 i = 0; i < _items.size(); ++i)
+            if (_items[i].tab) _items[i].tab->set_selected(i == index);
         const auto transition = detail::get_widget_style_selector_transition(id());
         for (u32 selected_id : prev_selected_ids)
         {
@@ -440,26 +764,26 @@ namespace auik
     void Tabbar::set_selected(const acul::vector<u32> &element_ids)
     {
         const auto prev_selected_ids = selected_ids();
-        for (auto *tab : _tabs)
-            if (tab) tab->set_selected(false);
+        for (auto &item : _items)
+            if (item.tab) item.tab->set_selected(false);
         for (u32 element_id : element_ids)
         {
             const u32 index = find_index_by_element_id(element_id);
-            if (index >= _tabs.size() || !_tabs[index]) continue;
-            _tabs[index]->set_selected(true);
+            if (index >= _items.size() || !_items[index].tab) continue;
+            _items[index].tab->set_selected(true);
             _selected_index = index;
             if (!multiple()) break;
         }
         const auto next_selected_ids = selected_ids();
         if (next_selected_ids == prev_selected_ids) return;
         if (!next_selected_ids.empty()) _last_selected_element_id = next_selected_ids[0];
-        if (mark_changed()) return;
+        if (mark_changed(TabbarChangeReason::selection)) return;
         const auto transition = detail::get_widget_style_selector_transition(id());
         StyleUpdateFlags flags = StyleUpdateFlagBits::none;
         auto update_changed = [&](u32 element_id) {
             if (element_id == 0u) return;
             const u32 index = find_index_by_element_id(element_id);
-            if (index < _tabs.size()) flags |= update_item_state(index, transition);
+            if (index < _items.size()) flags |= update_item_state(index, transition);
         };
         for (u32 element_id : prev_selected_ids) update_changed(element_id);
         for (u32 element_id : next_selected_ids)
@@ -478,9 +802,9 @@ namespace auik
 
     StyleState Tabbar::resolve_tab_item_state(u32 index, const detail::WidgetStyleSelectorTransition &transition) const
     {
-        if (index >= _element_ids.size()) return StyleState::normal;
+        if (index >= _items.size()) return StyleState::normal;
         if (transition.current_id.widget_id == id() && transition.current_id.tag_id == _item_style_tag &&
-            transition.current_id.element_id == _element_ids[index])
+            transition.current_id.element_id == _items[index].element_id)
             return transition.current_state;
         return StyleState::normal;
     }
@@ -494,25 +818,44 @@ namespace auik
 
     StyleUpdateFlags Tabbar::update_tab_item_style(u32 index, const detail::WidgetStyleSelectorTransition &transition)
     {
-        if (index >= _tabs.size()) return StyleUpdateFlagBits::none;
-        auto *tab = _tabs[index];
+        if (index >= _items.size()) return StyleUpdateFlagBits::none;
+        auto *tab = _items[index].tab;
         if (!tab) return StyleUpdateFlagBits::none;
-        const bool selected = index < _element_ids.size() && is_selected(_element_ids[index]);
-        tab->set_style_state(resolve_tab_item_state(index, transition));
+        const bool selected = is_selected(_items[index].element_id);
+        const bool selected_changed = tab->selected() != selected;
+        const bool state_changed = tab->set_style_state(resolve_tab_item_state(index, transition));
         tab->set_selected(selected);
-        return tab->update_style();
+        StyleUpdateFlags out = tab->update_style();
+        if (state_changed || selected_changed) out |= StyleUpdateFlagBits::redraw;
+        return out;
     }
 
     StyleUpdateFlags Tabbar::update_close_button_style(u32 index,
                                                        const detail::WidgetStyleSelectorTransition &transition)
     {
-        if (index >= _close_buttons.size() || !_close_buttons[index]) return StyleUpdateFlagBits::none;
+        if (index >= _items.size() || !_items[index].close_button) return StyleUpdateFlagBits::none;
         StyleState close_state = StyleState::normal;
-        if (transition.current_id.tag_id == AUIK_TAG_CLOSE_BUTTON && index < _element_ids.size() &&
-            transition.current_id.element_id == _element_ids[index])
+        if (transition.current_id.tag_id == AUIK_TAG_CLOSE_BUTTON &&
+            transition.current_id.element_id == _items[index].element_id)
             close_state = transition.current_state;
-        _close_buttons[index]->set_style_state(close_state);
-        return _close_buttons[index]->update_style();
+        const bool state_changed = _items[index].close_button->set_style_state(close_state);
+        StyleUpdateFlags out = _items[index].close_button->update_style();
+        if (state_changed) out |= StyleUpdateFlagBits::redraw;
+        return out;
+    }
+
+    StyleUpdateFlags Tabbar::update_change_icon_style(u32 index,
+                                                      const detail::WidgetStyleSelectorTransition &transition)
+    {
+        if (index >= _items.size() || !_items[index].change_icon) return StyleUpdateFlagBits::none;
+        StyleState icon_state = StyleState::normal;
+        if (transition.current_id.tag_id == AUIK_TAG_TABBAR_CHANGE_ICON &&
+            transition.current_id.element_id == _items[index].element_id)
+            icon_state = transition.current_state;
+        const bool state_changed = _items[index].change_icon->set_style_state(icon_state);
+        StyleUpdateFlags out = _items[index].change_icon->update_style();
+        if (state_changed) out |= StyleUpdateFlagBits::redraw;
+        return out;
     }
 
     StyleUpdateFlags Tabbar::update_popup_item_style(u32 index, const detail::WidgetStyleSelectorTransition &transition)
@@ -520,14 +863,17 @@ namespace auik
         if (!_popup || index >= _popup->children.size()) return StyleUpdateFlagBits::none;
         auto *child = static_cast<detail::Selectable *>(_popup->children[index]);
         if (!child) return StyleUpdateFlagBits::none;
-        const bool selected = index < _element_ids.size() && is_selected(_element_ids[index]);
+        const bool selected = index < _items.size() && is_selected(_items[index].element_id);
+        const bool selected_changed = child->selected() != selected;
         StyleState state = StyleState::normal;
-        if (transition.current_id.tag_id == _popup_item_style_tag && index < _element_ids.size() &&
-            transition.current_id.element_id == _element_ids[index])
+        if (index < _items.size() && transition.current_id.tag_id == _popup_item_style_tag &&
+            transition.current_id.element_id == _items[index].element_id)
             state = transition.current_state;
-        child->set_style_state(state);
+        const bool state_changed = child->set_style_state(state);
         child->set_selected(selected);
-        return child->update_style();
+        StyleUpdateFlags out = child->update_style();
+        if (state_changed || selected_changed) out |= StyleUpdateFlagBits::redraw;
+        return out;
     }
 
     StyleUpdateFlags Tabbar::update_style()
@@ -542,13 +888,16 @@ namespace auik
             transition.current_id.tag_id == _item_style_tag || transition.prev_id.tag_id == _item_style_tag;
         const bool transition_targets_close =
             transition.current_id.tag_id == AUIK_TAG_CLOSE_BUTTON || transition.prev_id.tag_id == AUIK_TAG_CLOSE_BUTTON;
+        const bool transition_targets_change = transition.current_id.tag_id == AUIK_TAG_TABBAR_CHANGE_ICON ||
+                                               transition.prev_id.tag_id == AUIK_TAG_TABBAR_CHANGE_ICON;
         const bool transition_targets_popup_item =
             transition.current_id.tag_id == _popup_item_style_tag || transition.prev_id.tag_id == _popup_item_style_tag;
         const bool transition_targets_overflow = transition.current_id.tag_id == AUIK_TAG_TABBAR_POPUP_BTN ||
                                                  transition.prev_id.tag_id == AUIK_TAG_TABBAR_POPUP_BTN;
         const bool local_hover_transition =
-            transition_targets_self && (transition_targets_item || transition_targets_close ||
-                                        transition_targets_popup_item || transition_targets_overflow);
+            transition_targets_self &&
+            (transition_targets_item || transition_targets_close || transition_targets_change ||
+             transition_targets_popup_item || transition_targets_overflow);
 
         if (_overflow_button)
         {
@@ -573,12 +922,24 @@ namespace auik
                 out |= update_close_button_style(prev_index, transition);
                 if (current_index != prev_index) out |= update_close_button_style(current_index, transition);
             }
+            if (transition_targets_change)
+            {
+                out |= update_change_icon_style(prev_index, transition);
+                if (current_index != prev_index) out |= update_change_icon_style(current_index, transition);
+            }
+            if (transition_targets_item || transition_targets_close || transition_targets_change)
+            {
+                const bool prev_changed = prev_index < _items.size() && _items[prev_index].changed;
+                const bool current_changed = current_index < _items.size() && _items[current_index].changed;
+                if (prev_changed || current_changed) update_layout_from_current_bounds(true);
+            }
         }
         else
         {
-            for (u32 i = 0; i < _tabs.size(); ++i)
+            for (u32 i = 0; i < _items.size(); ++i)
             {
                 out |= update_tab_item_style(i, transition);
+                out |= update_change_icon_style(i, transition);
                 out |= update_close_button_style(i, transition);
             }
         }
@@ -625,23 +986,37 @@ namespace auik
 
     amal::vec2 Tabbar::resolve_tab_required_size(u32 index)
     {
-        if (index >= _tabs.size() || !_tabs[index]) return {0.0f, 0.0f};
-        auto *tab = _tabs[index];
+        if (index >= _items.size() || !_items[index].tab) return {0.0f, 0.0f};
+        auto *tab = _items[index].tab;
         tab->set_layout_size({0.0f, 0.0f});
         tab->update_layout_min_size();
         amal::vec2 required = tab->required_size();
-        if (closable() && index < _close_buttons.size())
+        amal::vec2 change_required{0.0f, 0.0f};
+        amal::vec2 close_required{0.0f, 0.0f};
+        if (index < _items.size())
         {
-            auto *close_button = _close_buttons[index];
+            auto *change_icon = _items[index].change_icon;
+            if (change_icon)
+            {
+                change_icon->set_layout_size({0.0f, 0.0f});
+                change_icon->update_layout_min_size();
+                change_required = change_icon->required_size();
+            }
+        }
+        if (closable() && index < _items.size())
+        {
+            auto *close_button = _items[index].close_button;
             if (close_button)
             {
                 close_button->set_layout_size({0.0f, 0.0f});
                 close_button->update_layout_min_size();
-                const amal::vec2 close_required = close_button->required_size();
-                required.x += close_required.x;
-                required.y = amal::max(required.y, close_required.y);
+                close_required = close_button->required_size();
             }
         }
+        const amal::vec2 slot_required{amal::max(change_required.x, close_required.x),
+                                       amal::max(change_required.y, close_required.y)};
+        required.x += slot_required.x;
+        required.y = amal::max(required.y, slot_required.y);
         return required;
     }
 
@@ -652,7 +1027,7 @@ namespace auik
         const amal::vec4 padding = style.padding();
         const f32 inline_spacing = amal::max(style.inline_spacing(), 0.0f);
         amal::vec2 tabs_size{0.0f, 0.0f};
-        for (u32 i = 0; i < _tabs.size(); ++i)
+        for (u32 i = 0; i < _items.size(); ++i)
         {
             const amal::vec2 required = resolve_tab_required_size(i);
             if (required.x <= 0.0f && required.y <= 0.0f) continue;
@@ -704,7 +1079,8 @@ namespace auik
         set_layout_size(widget_size);
         Widget::update_layout(true);
 
-        if (detail::is_fast_layout_update() && !popup() && !scroll() && !movable() && !closable())
+        if (detail::is_fast_layout_update() && !popup() && !scroll() && !movable() && !closable() &&
+            !_on_changed_icon_create)
         {
             const f32 content_x = position().x + padding.x;
             const f32 content_y = position().y + padding.y;
@@ -737,11 +1113,11 @@ namespace auik
             else _content_clip_id = 0xFFFFu;
 
             f32 cursor_x = content_x;
-            _visible_count = static_cast<u32>(_tabs.size());
-            _overflow_start = static_cast<u32>(_tabs.size());
-            for (u32 i = 0; i < _tabs.size(); ++i)
+            _visible_count = static_cast<u32>(_items.size());
+            _overflow_start = static_cast<u32>(_items.size());
+            for (u32 i = 0; i < _items.size(); ++i)
             {
-                auto *tab = _tabs[i];
+                auto *tab = _items[i].tab;
                 if (!tab) continue;
                 if (i > 0u) cursor_x += inline_spacing;
                 const amal::vec2 required = resolve_tab_required_size(i);
@@ -749,18 +1125,21 @@ namespace auik
                 tab->sync_widget_flags();
                 const bool fill_tab_height = tab->fill_height();
                 const f32 tab_h = fill_tab_height ? content_h : required.y;
-                const f32 tab_y = fill_tab_height ? content_y : content_y + amal::max((content_h - required.y) * 0.5f,
-                                                                                       0.0f);
+                const f32 tab_y =
+                    fill_tab_height ? content_y : content_y + amal::max((content_h - required.y) * 0.5f, 0.0f);
                 tab->set_layout_size({required.x, tab_h});
                 tab->set_position({cursor_x, tab_y});
                 tab->update_layout(true);
                 cursor_x += required.x;
             }
-            for (auto *button : _close_buttons)
+            for (auto &item : _items)
             {
-                if (!button) continue;
-                button->unset_visible();
-                button->sync_widget_flags();
+                if (item.close_button)
+                {
+                    item.close_button->unset_visible();
+                    item.close_button->sync_widget_flags();
+                }
+                if (item.change_icon) item.change_icon->sync_widget_flags();
             }
             if (_overflow_button) _overflow_button->set_open(false);
             close_popup();
@@ -801,52 +1180,84 @@ namespace auik
         f32 cursor_x = content_x - (scroll() ? _scroll_offset : 0.0f);
         f32 total_w = 0.0f;
         _visible_count = 0u;
-        _overflow_start = static_cast<u32>(_tabs.size());
+        _overflow_start = static_cast<u32>(_items.size());
         const f32 visible_tabs_right = content_x + amal::max(content_w - popup_reserved, 0.0f);
 
         const u32 drag_index = find_index_by_element_id(_drag_element_id);
-        for (u32 i = 0; i < _tabs.size(); ++i)
+        for (u32 i = 0; i < _items.size(); ++i)
         {
-            auto *tab = _tabs[i];
+            auto *tab = _items[i].tab;
             if (!tab) continue;
             if (i > 0u) cursor_x += inline_spacing;
             amal::vec2 required = resolve_tab_required_size(i);
+            amal::vec2 change_required{0.0f, 0.0f};
             amal::vec2 close_required{0.0f, 0.0f};
-            auto *close_button = i < _close_buttons.size() ? _close_buttons[i] : nullptr;
+            auto *change_icon = i < _items.size() ? _items[i].change_icon : nullptr;
+            auto *close_button = i < _items.size() ? _items[i].close_button : nullptr;
+            if (change_icon) { change_required = change_icon->required_size(); }
             if (close_button && closable()) { close_required = close_button->required_size(); }
+            const amal::vec2 slot_required{amal::max(change_required.x, close_required.x),
+                                           amal::max(change_required.y, close_required.y)};
             const bool fits_popup = cursor_x + required.x <= visible_tabs_right;
             const bool visible = !popup() || fits_popup;
-            if (!visible && _overflow_start == _tabs.size()) _overflow_start = i;
+            const u32 element_id = _items[i].element_id;
+            const bool hovered = element_id != 0u && is_tabbar_item_hovered(id(), _item_style_tag, element_id);
+            const bool changed = i < _items.size() && _items[i].changed && change_icon;
+            const bool show_change_icon = visible && changed && !hovered;
+            const bool show_close_button = visible && close_button && closable() && (!changed || hovered);
+            if (!visible && _overflow_start == _items.size()) _overflow_start = i;
             if (visible) ++_visible_count;
             if (!popup() || visible) tab->set_visible();
             else tab->unset_visible();
             tab->sync_widget_flags();
             if (close_button)
             {
-                if (closable() && visible) close_button->set_visible();
+                if (show_close_button) close_button->set_visible();
                 else close_button->unset_visible();
                 close_button->sync_widget_flags();
             }
+            if (change_icon)
+            {
+                if (show_change_icon) change_icon->set_visible();
+                else change_icon->unset_visible();
+                change_icon->sync_widget_flags();
+            }
             const bool fill_tab_height = tab->fill_height();
             const f32 tab_h = fill_tab_height ? content_h : required.y;
-            const f32 tab_y = fill_tab_height ? content_y : content_y + amal::max((content_h - required.y) * 0.5f,
-                                                                                   0.0f);
+            const f32 tab_y =
+                fill_tab_height ? content_y : content_y + amal::max((content_h - required.y) * 0.5f, 0.0f);
             tab->set_layout_size({required.x, tab_h});
             const amal::vec2 tab_base_pos{cursor_x, tab_y};
             amal::vec2 drag_visual_offset{0.0f, 0.0f};
-            if (movable() && i == drag_index && (_drag_offset.x != 0.0f || _drag_offset.y != 0.0f))
+            if (movable() && i == drag_index)
             {
-                const amal::vec2 visual_pos = snap_drag_visual_position(tab_base_pos + _drag_offset);
-                drag_visual_offset = visual_pos - tab_base_pos;
+                if (_drag_offset.x != 0.0f || _drag_offset.y != 0.0f)
+                {
+                    const amal::vec2 candidate = tab_base_pos + _drag_offset;
+                    const amal::vec2 visual_pos =
+                        resolve_drag_visual_position(*this, tab_base_pos, candidate, {required.x, tab_h});
+                    drag_visual_offset = visual_pos - tab_base_pos;
+                }
                 _drag_applied_offset = drag_visual_offset;
             }
             tab->set_position(tab_base_pos + drag_visual_offset);
             tab->update_layout(true);
-            if (close_button && close_button->is_visible())
+            if (change_icon)
             {
-                const f32 close_x = cursor_x + required.x - close_required.x;
+                const f32 icon_x =
+                    cursor_x + required.x - slot_required.x + amal::max(slot_required.x - change_required.x, 0.0f);
+                const f32 icon_y = tab->position().y + amal::max((tab->size().y - change_required.y) * 0.5f, 0.0f);
+                change_icon->set_position(amal::vec2{icon_x, icon_y} + drag_visual_offset);
+                change_icon->set_layout_size(change_required);
+                change_icon->update_layout(true);
+            }
+            if (close_button)
+            {
+                const f32 close_x =
+                    cursor_x + required.x - slot_required.x + amal::max(slot_required.x - close_required.x, 0.0f);
                 const f32 close_y = tab->position().y + amal::max((tab->size().y - close_required.y) * 0.5f, 0.0f);
                 close_button->set_position(amal::vec2{close_x, close_y} + drag_visual_offset);
+                close_button->set_layout_size(close_required);
                 close_button->update_layout(true);
             }
             cursor_x += required.x;
@@ -860,11 +1271,13 @@ namespace auik
         if (scroll() && old_scroll_offset != _scroll_offset)
         {
             const f32 dx = old_scroll_offset - _scroll_offset;
-            for (auto *tab : _tabs)
-                if (tab) tab->translate({dx, 0.0f});
-            for (auto *button : _close_buttons)
-                if (button) button->translate({dx, 0.0f});
-            if (movable() && drag_index < _tabs.size())
+            for (auto &item : _items)
+            {
+                if (item.tab) item.tab->translate({dx, 0.0f});
+                if (item.change_icon) item.change_icon->translate({dx, 0.0f});
+                if (item.close_button) item.close_button->translate({dx, 0.0f});
+            }
+            if (movable() && drag_index < _items.size())
             {
                 _drag_offset.x += dx;
                 _drag_applied_offset.x += dx;
@@ -872,7 +1285,7 @@ namespace auik
             detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
         }
 
-        if (popup() && _overflow_button && _overflow_start < _tabs.size())
+        if (popup() && _overflow_button && _overflow_start < _items.size())
         {
             _overflow_button->update_layout({{position().x + size().x - padding.z - overflow_size.x,
                                               content_y + amal::max((content_h - overflow_size.y) * 0.5f, 0.0f)},
@@ -914,10 +1327,12 @@ namespace auik
             if (_content_clip_id != 0xFFFFu) update_clip_rect(_content_clip_id, tabs_clip);
         }
         else set_clip_id(get_layout_parent_clip_id());
-        for (auto *tab : _tabs)
-            if (tab) tab->translate(delta);
-        for (auto *button : _close_buttons)
-            if (button) button->translate(delta);
+        for (auto &item : _items)
+        {
+            if (item.tab) item.tab->translate(delta);
+            if (item.change_icon) item.change_icon->translate(delta);
+            if (item.close_button) item.close_button->translate(delta);
+        }
         if (_overflow_button) _overflow_button->translate(delta);
         if (_open && _popup) static_cast<Widget *>(_popup)->translate(delta);
     }
@@ -927,10 +1342,12 @@ namespace auik
         Widget::reset_clip_rect_records();
         _full_clip_id = 0xFFFFu;
         _content_clip_id = 0xFFFFu;
-        for (auto *tab : _tabs)
-            if (tab) tab->reset_clip_rect_records();
-        for (auto *button : _close_buttons)
-            if (button) button->reset_clip_rect_records();
+        for (auto &item : _items)
+        {
+            if (item.tab) item.tab->reset_clip_rect_records();
+            if (item.change_icon) item.change_icon->reset_clip_rect_records();
+            if (item.close_button) item.close_button->reset_clip_rect_records();
+        }
         if (_popup) _popup->reset_clip_rect_records();
     }
 
@@ -964,10 +1381,12 @@ namespace auik
             else update_clip_rect(_content_clip_id, tabs_clip);
         }
         else _content_clip_id = 0xFFFFu;
-        for (auto *tab : _tabs)
-            if (tab) tab->rebuild_clip_rects();
-        for (auto *button : _close_buttons)
-            if (button) button->rebuild_clip_rects();
+        for (auto &item : _items)
+        {
+            if (item.tab) item.tab->rebuild_clip_rects();
+            if (item.change_icon) item.change_icon->rebuild_clip_rects();
+            if (item.close_button) item.close_button->rebuild_clip_rects();
+        }
         if (_overflow_button) _overflow_button->rebuild_clip_rects(clip_id());
         if (_popup) _popup->rebuild_clip_rects();
     }
@@ -975,10 +1394,12 @@ namespace auik
     void Tabbar::reset_draw_records()
     {
         Widget::reset_draw_records();
-        for (auto *tab : _tabs)
-            if (tab) tab->reset_draw_records();
-        for (auto *button : _close_buttons)
-            if (button) button->reset_draw_records();
+        for (auto &item : _items)
+        {
+            if (item.tab) item.tab->reset_draw_records();
+            if (item.change_icon) item.change_icon->reset_draw_records();
+            if (item.close_button) item.close_button->reset_draw_records();
+        }
         if (_overflow_button) _overflow_button->reset_draw_records();
         if (_popup) _popup->reset_draw_records();
     }
@@ -990,11 +1411,12 @@ namespace auik
         DepthCursor cursor(this->depth_range(), tab_layer_requirement + 1u);
         const amal::vec2 tab_range = cursor.next(tab_layer_requirement);
         const amal::vec2 control_range = cursor.next(1u);
-        for (u32 i = 0; i < _tabs.size(); ++i)
+        for (u32 i = 0; i < _items.size(); ++i)
         {
-            auto *tab = _tabs[i];
+            auto *tab = _items[i].tab;
             if (tab) tab->update_depth(tab_range);
-            if (i < _close_buttons.size() && _close_buttons[i]) { _close_buttons[i]->update_depth(control_range); }
+            if (i < _items.size() && _items[i].change_icon) _items[i].change_icon->update_depth(control_range);
+            if (i < _items.size() && _items[i].close_button) { _items[i].close_button->update_depth(control_range); }
         }
         if (_overflow_button) _overflow_button->update_depth(control_range);
         if (_popup) _popup->update_depth(get_tab_popup_depth_range());
@@ -1004,10 +1426,14 @@ namespace auik
     u32 Tabbar::get_depth_requirement() const
     {
         u32 tab_requirement = 1u;
-        for (auto *tab : _tabs)
-            if (tab) tab_requirement = amal::max(tab_requirement, tab->get_depth_requirement());
-        for (auto *button : _close_buttons)
-            if (button) tab_requirement = amal::max(tab_requirement, button->get_depth_requirement());
+        for (auto &item : _items)
+        {
+            if (item.tab) tab_requirement = amal::max(tab_requirement, item.tab->get_depth_requirement());
+            if (item.change_icon)
+                tab_requirement = amal::max(tab_requirement, item.change_icon->get_depth_requirement());
+            if (item.close_button)
+                tab_requirement = amal::max(tab_requirement, item.close_button->get_depth_requirement());
+        }
         if (_overflow_button) tab_requirement = amal::max(tab_requirement, _overflow_button->get_depth_requirement());
         return tab_requirement + 1u;
     }
@@ -1015,10 +1441,12 @@ namespace auik
     void Tabbar::back_hit_depth()
     {
         Widget::back_hit_depth();
-        for (auto *tab : _tabs)
-            if (tab) tab->back_hit_depth();
-        for (auto *button : _close_buttons)
-            if (button) button->back_hit_depth();
+        for (auto &item : _items)
+        {
+            if (item.tab) item.tab->back_hit_depth();
+            if (item.change_icon) item.change_icon->back_hit_depth();
+            if (item.close_button) item.close_button->back_hit_depth();
+        }
         if (_overflow_button) _overflow_button->back_hit_depth();
         if (_popup) _popup->back_hit_depth();
     }
@@ -1026,10 +1454,12 @@ namespace auik
     void Tabbar::restore_hit_depth()
     {
         Widget::restore_hit_depth();
-        for (auto *tab : _tabs)
-            if (tab) tab->restore_hit_depth();
-        for (auto *button : _close_buttons)
-            if (button) button->restore_hit_depth();
+        for (auto &item : _items)
+        {
+            if (item.tab) item.tab->restore_hit_depth();
+            if (item.change_icon) item.change_icon->restore_hit_depth();
+            if (item.close_button) item.close_button->restore_hit_depth();
+        }
         if (_overflow_button) _overflow_button->restore_hit_depth();
         if (_popup) _popup->restore_hit_depth();
     }
@@ -1051,23 +1481,33 @@ namespace auik
             if (element_id.tag_id == _item_style_tag)
             {
                 const u32 index = find_index_by_element_id(element_id.element_id);
-                if (index >= _tabs.size() || !_tabs[index] || !_tabs[index]->is_visible()) return;
+                if (index >= _items.size() || !_items[index].tab || !_items[index].tab->is_visible()) return;
                 DrawCtx tab_ctx = ctx;
-                _tabs[index]->draw_local(tab_ctx);
+                _items[index].tab->draw_local(tab_ctx);
                 emitted = true;
                 return;
             }
             if (element_id.tag_id == AUIK_TAG_CLOSE_BUTTON)
             {
                 const u32 index = find_index_by_element_id(element_id.element_id);
-                if (index >= _close_buttons.size() || !_close_buttons[index] || !_close_buttons[index]->is_visible())
+                if (index >= _items.size() || !_items[index].close_button || !_items[index].close_button->is_visible())
                     return;
                 DrawCtx close_ctx = ctx;
-                _close_buttons[index]->draw_local(close_ctx);
+                _items[index].close_button->draw_local(close_ctx);
                 emitted = true;
                 return;
             }
-            if (element_id.tag_id == AUIK_TAG_TABBAR_POPUP_BTN && _overflow_button && _overflow_start < _tabs.size())
+            if (element_id.tag_id == AUIK_TAG_TABBAR_CHANGE_ICON)
+            {
+                const u32 index = find_index_by_element_id(element_id.element_id);
+                if (index >= _items.size() || !_items[index].change_icon || !_items[index].change_icon->is_visible())
+                    return;
+                DrawCtx icon_ctx = ctx;
+                _items[index].change_icon->draw_local(icon_ctx);
+                emitted = true;
+                return;
+            }
+            if (element_id.tag_id == AUIK_TAG_TABBAR_POPUP_BTN && _overflow_button && _overflow_start < _items.size())
             {
                 ensure_overflow_icon_resources();
                 _overflow_button->draw(ctx, can_emit_hit(ctx));
@@ -1110,19 +1550,27 @@ namespace auik
             widget->draw_local(invalidate_ctx);
         };
 
-        for (u32 i = 0; i < _tabs.size(); ++i)
+        for (u32 i = 0; i < _items.size(); ++i)
         {
-            auto *tab = _tabs[i];
+            auto *tab = _items[i].tab;
             if (!tab) continue;
-            auto *close_button = i < _close_buttons.size() ? _close_buttons[i] : nullptr;
+            auto *change_icon = i < _items.size() ? _items[i].change_icon : nullptr;
+            auto *close_button = i < _items.size() ? _items[i].close_button : nullptr;
             if (!tab->is_visible())
             {
                 invalidate_hidden_widget(tab);
+                invalidate_hidden_widget(change_icon);
                 invalidate_hidden_widget(close_button);
                 continue;
             }
             DrawCtx tab_ctx = ctx;
             tab->draw_local(tab_ctx);
+            if (change_icon && change_icon->is_visible())
+            {
+                DrawCtx icon_ctx = ctx;
+                change_icon->draw_local(icon_ctx);
+            }
+            else invalidate_hidden_widget(change_icon);
             if (close_button && close_button->is_visible())
             {
                 DrawCtx close_ctx = ctx;
@@ -1130,7 +1578,7 @@ namespace auik
             }
             else invalidate_hidden_widget(close_button);
         }
-        if (_overflow_button && _overflow_start < _tabs.size())
+        if (_overflow_button && _overflow_start < _items.size())
         {
             ensure_overflow_icon_resources();
             DrawCtx overflow_ctx = ctx;
@@ -1166,6 +1614,39 @@ namespace auik
     void Tabbar::on_hover(HoverState state)
     {
         bool changed = apply_hover_style_state(*this, state);
+        const auto transition = detail::get_widget_style_selector_transition(id());
+        const auto hover_id = detail::get_context().hover_id;
+        auto slot_needs_refresh = [&](u32 index) {
+            if (index >= _items.size()) return false;
+            auto &item = _items[index];
+            if (!item.changed || !item.change_icon) return false;
+            const u32 element_id = item.element_id;
+            if (element_id == 0u) return false;
+            const bool hovered = is_tabbar_item_hovered(id(), _item_style_tag, element_id);
+            const bool want_change_visible = !hovered;
+            const bool want_close_visible = hovered && item.close_button && closable();
+            return item.change_icon->is_visible() != want_change_visible ||
+                   (item.close_button && item.close_button->is_visible() != want_close_visible);
+        };
+        bool slot_changed = false;
+        auto check_slot = [&](const ElementID &element_id) {
+            if (element_id.widget_id != id()) return;
+            if (element_id.tag_id != _item_style_tag && element_id.tag_id != AUIK_TAG_CLOSE_BUTTON &&
+                element_id.tag_id != AUIK_TAG_TABBAR_CHANGE_ICON)
+                return;
+            const u32 index = find_index_by_element_id(element_id.element_id);
+            slot_changed = slot_changed || slot_needs_refresh(index);
+        };
+        check_slot(transition.prev_id);
+        check_slot(transition.current_id);
+        check_slot(hover_id);
+        if (slot_changed)
+        {
+            update_layout_from_current_bounds(true);
+            update_draw_commands(DrawReasonBits::layout);
+            detail::get_context().dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
+            detail::mark_host_refresh_request();
+        }
         if (changed)
         {
             update_style();
@@ -1177,7 +1658,7 @@ namespace auik
     void Tabbar::handle_item_click(u32 element_id)
     {
         const u32 index = find_index_by_element_id(element_id);
-        if (index >= _tabs.size()) return;
+        if (index >= _items.size()) return;
         const u32 prev_selected = selected_id();
         const auto prev_selected_ids = selected_ids();
         if (!multiple())
@@ -1189,27 +1670,29 @@ namespace auik
         const auto mods = detail::get_context().io.active_mods;
         if (mods & KeyModeBits::alt)
         {
-            if (_tabs[index]) _tabs[index]->set_selected(false);
+            if (_items[index].tab) _items[index].tab->set_selected(false);
         }
         else if (mods & KeyModeBits::control)
         {
-            if (_tabs[index]) _tabs[index]->set_selected(!_tabs[index]->selected());
+            if (_items[index].tab) _items[index].tab->set_selected(!_items[index].tab->selected());
         }
         else
         {
-            for (u32 i = 0; i < _tabs.size(); ++i)
-                if (_tabs[i]) _tabs[i]->set_selected(i == index);
+            for (u32 i = 0; i < _items.size(); ++i)
+                if (_items[i].tab) _items[i].tab->set_selected(i == index);
         }
         _selected_index = index;
         if (prev_selected != 0u && prev_selected != selected_id()) _last_selected_element_id = prev_selected;
         if (_last_selected_element_id == 0u && selected_id() != 0u) _last_selected_element_id = selected_id();
         const auto next_selected_ids = selected_ids();
+        if (next_selected_ids == prev_selected_ids) return;
+        if (mark_changed(TabbarChangeReason::selection)) return;
         const auto transition = detail::get_widget_style_selector_transition(id());
         StyleUpdateFlags flags = StyleUpdateFlagBits::none;
         auto update_changed = [&](u32 changed_id) {
             if (changed_id == 0u) return;
             const u32 changed_index = find_index_by_element_id(changed_id);
-            if (changed_index < _tabs.size()) flags |= update_item_state(changed_index, transition);
+            if (changed_index < _items.size()) flags |= update_item_state(changed_index, transition);
         };
         for (u32 selected_id : prev_selected_ids) update_changed(selected_id);
         for (u32 selected_id : next_selected_ids)
@@ -1229,71 +1712,73 @@ namespace auik
     void Tabbar::close_item(u32 element_id)
     {
         const u32 index = find_index_by_element_id(element_id);
-        if (index >= _tabs.size()) return;
-        const bool closed_selected = _tabs[index] && _tabs[index]->selected();
+        if (index >= _items.size()) return;
+        const u32 prev_selected_index = _selected_index;
+        _selected_index = index;
+        if (mark_changed(TabbarChangeReason::close))
+        {
+            _selected_index = prev_selected_index;
+            return;
+        }
+        const bool closed_selected = _items[index].tab && _items[index].tab->selected();
 
-        acul::release(_tabs[index]);
-        _tabs.erase(_tabs.begin() + index);
-        _element_ids.erase(_element_ids.begin() + index);
-        if (_tabs.empty()) _selected_index = 0u;
+        release_item(_items[index]);
+        _items.erase(_items.begin() + index);
+        if (_items.empty()) _selected_index = 0u;
         else
         {
-            if (_selected_index >= _tabs.size()) _selected_index = static_cast<u32>(_tabs.size() - 1u);
+            if (_selected_index >= _items.size()) _selected_index = static_cast<u32>(_items.size() - 1u);
             if (closed_selected && selected_id() == 0u && auto_select_first_item())
             {
                 const u32 last_index = find_index_by_element_id(_last_selected_element_id);
-                if (last_index < _tabs.size())
+                if (last_index < _items.size())
                 {
                     _selected_index = last_index;
-                    if (_tabs[_selected_index]) _tabs[_selected_index]->set_selected(true);
+                    if (_items[_selected_index].tab) _items[_selected_index].tab->set_selected(true);
                 }
                 else
                 {
                     const u32 fallback_index = index > 0u ? index - 1u : 0u;
-                    _selected_index = amal::min(fallback_index, static_cast<u32>(_tabs.size() - 1u));
-                    if (_tabs[_selected_index]) _tabs[_selected_index]->set_selected(true);
+                    _selected_index = amal::min(fallback_index, static_cast<u32>(_items.size() - 1u));
+                    if (_items[_selected_index].tab) _items[_selected_index].tab->set_selected(true);
                 }
             }
             else _selected_index = selected_index();
         }
         if (_drag_element_id == element_id) end_drag();
         rebuild_items();
-        mark_changed();
         refresh_layout_owner(*this);
     }
 
     u32 Tabbar::find_index_by_element_id(u32 element_id) const
     {
-        for (u32 i = 0; i < _element_ids.size(); ++i)
-            if (_element_ids[i] == element_id) return i;
+        for (u32 i = 0; i < _items.size(); ++i)
+            if (_items[i].element_id == element_id) return i;
         return static_cast<u32>(-1);
     }
 
     void Tabbar::reorder_item(u32 from, u32 to)
     {
-        if (from >= _tabs.size()) return;
-        to = amal::min(to, static_cast<u32>(_tabs.size() - 1u));
+        if (from >= _items.size()) return;
+        to = amal::min(to, static_cast<u32>(_items.size() - 1u));
         if (from == to) return;
-        auto *tab = _tabs[from];
-        const u32 element_id = _element_ids[from];
-        _tabs.erase(_tabs.begin() + from);
-        _element_ids.erase(_element_ids.begin() + from);
-        to = amal::min(to, static_cast<u32>(_tabs.size()));
-        _tabs.insert(_tabs.begin() + to, tab);
-        _element_ids.insert(_element_ids.begin() + to, element_id);
+        Item item = _items[from];
+        _items.erase(_items.begin() + from);
+        to = amal::min(to, static_cast<u32>(_items.size()));
+        _items.insert(_items.begin() + to, item);
         _selected_index = selected_index();
         rebuild_items();
-        mark_changed();
+        mark_changed(TabbarChangeReason::reorder);
         refresh_layout_owner(*this);
     }
 
     void Tabbar::begin_drag(u32 element_id)
     {
         const u32 index = find_index_by_element_id(element_id);
-        if (!movable() || index >= _tabs.size()) return;
+        if (!movable() || index >= _items.size()) return;
         _drag_element_id = element_id;
         _drag_preview_index = index;
-        if (auto *tab = _tabs[index])
+        if (auto *tab = _items[index].tab)
         {
             const auto bounds = tab->bounds();
             _drag_grab_offset = detail::get_io().mouse_pos - bounds.offset;
@@ -1327,13 +1812,13 @@ namespace auik
     u32 Tabbar::find_drop_index_by_x(f32 x) const
     {
         const u32 drag_index = find_index_by_element_id(_drag_element_id);
-        if (drag_index >= _tabs.size()) return 0u;
+        if (drag_index >= _items.size()) return 0u;
 
         u32 drop_index = 0u;
-        for (u32 i = 0; i < _tabs.size(); ++i)
+        for (u32 i = 0; i < _items.size(); ++i)
         {
             if (i == drag_index) continue;
-            auto *tab = _tabs[i];
+            auto *tab = _items[i].tab;
             if (!tab || !tab->is_visible()) continue;
             const auto bounds = tab->bounds();
             const f32 center_x = bounds.offset.x + bounds.size.x * 0.5f;
@@ -1346,8 +1831,8 @@ namespace auik
     u32 Tabbar::find_drop_index_by_dragged_center() const
     {
         const u32 drag_index = find_index_by_element_id(_drag_element_id);
-        if (drag_index >= _tabs.size()) return 0u;
-        auto *drag_tab = _tabs[drag_index];
+        if (drag_index >= _items.size()) return 0u;
+        auto *drag_tab = _items[drag_index].tab;
         if (!drag_tab) return 0u;
         const auto drag_bounds = drag_tab->bounds();
         const f32 drag_base_x = drag_bounds.offset.x - _drag_applied_offset.x;
@@ -1357,9 +1842,9 @@ namespace auik
     u32 Tabbar::insertion_index_at(const amal::vec2 &point) const
     {
         u32 drop_index = 0u;
-        for (u32 i = 0; i < _tabs.size(); ++i)
+        for (u32 i = 0; i < _items.size(); ++i)
         {
-            auto *tab = _tabs[i];
+            auto *tab = _items[i].tab;
             if (!tab || !tab->is_visible()) continue;
             const auto bounds = tab->bounds();
             const f32 center_x = bounds.offset.x + bounds.size.x * 0.5f;
@@ -1373,8 +1858,8 @@ namespace auik
     {
         begin_drag(element_id);
         const u32 index = find_index_by_element_id(element_id);
-        if (index >= _tabs.size()) return;
-        auto *tab = _tabs[index];
+        if (index >= _items.size()) return;
+        auto *tab = _items[index].tab;
         if (!tab) return;
 
         const auto bounds = tab->bounds();
@@ -1396,16 +1881,16 @@ namespace auik
     bool Tabbar::update_drag_realtime_order(f32 delta_x)
     {
         u32 drag_index = find_index_by_element_id(_drag_element_id);
-        if (drag_index >= _tabs.size()) return false;
-        auto *drag_tab = _tabs[drag_index];
+        if (drag_index >= _items.size()) return false;
+        auto *drag_tab = _items[drag_index].tab;
         if (!drag_tab) return false;
 
         bool changed = false;
         if (delta_x > 0.0f)
         {
-            while (drag_index + 1u < _tabs.size())
+            while (drag_index + 1u < _items.size())
             {
-                auto *neighbor = _tabs[drag_index + 1u];
+                auto *neighbor = _items[drag_index + 1u].tab;
                 if (!neighbor || !neighbor->is_visible()) break;
                 const auto drag_bounds = drag_tab->bounds();
                 const auto neighbor_bounds = neighbor->bounds();
@@ -1422,7 +1907,7 @@ namespace auik
         {
             while (drag_index > 0u)
             {
-                auto *neighbor = _tabs[drag_index - 1u];
+                auto *neighbor = _items[drag_index - 1u].tab;
                 if (!neighbor || !neighbor->is_visible()) break;
                 const auto drag_bounds = drag_tab->bounds();
                 const auto neighbor_bounds = neighbor->bounds();
@@ -1441,9 +1926,10 @@ namespace auik
 
     bool Tabbar::swap_drag_with_neighbor(u32 drag_index, u32 neighbor_index)
     {
-        if (drag_index >= _tabs.size() || neighbor_index >= _tabs.size() || drag_index == neighbor_index) return false;
-        auto *drag_tab = _tabs[drag_index];
-        auto *neighbor_tab = _tabs[neighbor_index];
+        if (drag_index >= _items.size() || neighbor_index >= _items.size() || drag_index == neighbor_index)
+            return false;
+        auto *drag_tab = _items[drag_index].tab;
+        auto *neighbor_tab = _items[neighbor_index].tab;
         if (!drag_tab || !neighbor_tab) return false;
 
         const bool move_right = neighbor_index > drag_index;
@@ -1458,29 +1944,20 @@ namespace auik
         const f32 new_neighbor_x = move_right ? drag_base_pos.x : new_drag_base_x + drag_size.x + inline_spacing;
         const amal::vec2 snapped_neighbor_pos = snap_drag_visual_position({new_neighbor_x, neighbor_pos.y});
         const amal::vec2 neighbor_delta = snapped_neighbor_pos - neighbor_pos;
-        neighbor_tab->translate(neighbor_delta);
-        if (neighbor_index < _close_buttons.size() && _close_buttons[neighbor_index] &&
-            _close_buttons[neighbor_index]->is_visible())
-            _close_buttons[neighbor_index]->translate(neighbor_delta);
+        auto translate_item = [](Item &item, const amal::vec2 &delta) {
+            if (item.tab) item.tab->translate(delta);
+            if (item.change_icon && item.change_icon->is_visible()) item.change_icon->translate(delta);
+            if (item.close_button && item.close_button->is_visible()) item.close_button->translate(delta);
+        };
+        translate_item(_items[neighbor_index], neighbor_delta);
 
         const f32 logical_drag_x = drag_base_pos.x + _drag_offset.x;
         _drag_offset = {logical_drag_x - new_drag_base_x, 0.0f};
         _drag_applied_offset = {drag_abs_pos.x - new_drag_base_x, 0.0f};
 
-        auto *tab_tmp = _tabs[drag_index];
-        _tabs[drag_index] = _tabs[neighbor_index];
-        _tabs[neighbor_index] = tab_tmp;
-
-        const u32 id_tmp = _element_ids[drag_index];
-        _element_ids[drag_index] = _element_ids[neighbor_index];
-        _element_ids[neighbor_index] = id_tmp;
-
-        if (drag_index < _close_buttons.size() && neighbor_index < _close_buttons.size())
-        {
-            auto *close_tmp = _close_buttons[drag_index];
-            _close_buttons[drag_index] = _close_buttons[neighbor_index];
-            _close_buttons[neighbor_index] = close_tmp;
-        }
+        const Item item_tmp = _items[drag_index];
+        _items[drag_index] = _items[neighbor_index];
+        _items[neighbor_index] = item_tmp;
 
         _selected_index = selected_index();
         return true;
@@ -1489,17 +1966,22 @@ namespace auik
     void Tabbar::update_drag_depth()
     {
         const u32 drag_index = find_index_by_element_id(_drag_element_id);
-        if (drag_index >= _tabs.size()) return;
+        if (drag_index >= _items.size()) return;
 
         const amal::vec2 parent_work_range = detail::depth_foreground_range(depth_range());
         amal::vec2 child_top_range{};
         assign_next_depth(parent_work_range, child_top_range);
         const amal::vec2 tab_range = detail::depth_foreground_range(child_top_range);
-        if (_tabs[drag_index]) _tabs[drag_index]->update_depth(tab_range);
-        if (drag_index < _close_buttons.size() && _close_buttons[drag_index])
+        if (_items[drag_index].tab) _items[drag_index].tab->update_depth(tab_range);
+        if (drag_index < _items.size() && _items[drag_index].change_icon)
+        {
+            amal::vec2 icon_range = tab_range;
+            _items[drag_index].change_icon->update_depth(icon_range);
+        }
+        if (drag_index < _items.size() && _items[drag_index].close_button)
         {
             amal::vec2 close_range = tab_range;
-            _close_buttons[drag_index]->update_depth(close_range);
+            _items[drag_index].close_button->update_depth(close_range);
         }
     }
 
@@ -1576,12 +2058,13 @@ namespace auik
                 begin_drag(ctx.hover_id.element_id);
             return;
         }
+        const u32 drag_index = find_index_by_element_id(_drag_element_id);
         if (state == KeyPressState::release)
         {
             const bool had_drag = _drag_element_id != 0u;
-            const bool should_snap_layout = _drag_moved && find_index_by_element_id(_drag_element_id) < _tabs.size();
+            const bool should_snap_layout = _drag_moved && drag_index < _items.size();
             end_drag();
-            if (should_snap_layout) mark_changed();
+            if (should_snap_layout) mark_changed(TabbarChangeReason::reorder);
             if (should_snap_layout || had_drag)
             {
                 add_render_command<detail::DragEventTraits>(this, [this, should_snap_layout]() {
@@ -1593,15 +2076,31 @@ namespace auik
             }
             return;
         }
-        const u32 drag_index = find_index_by_element_id(_drag_element_id);
-        if (state != KeyPressState::repeat || drag_index >= _tabs.size()) return;
+        if (state != KeyPressState::repeat || drag_index >= _items.size()) return;
         if (delta.x == 0.0f && delta.y == 0.0f) return;
 
+        const amal::vec2 prev_drag_offset = _drag_offset;
+        if (auto *drag_tab = _items[drag_index].tab)
+        {
+            const auto drag_bounds = drag_tab->bounds();
+            const amal::vec2 drag_base_pos = drag_bounds.offset - _drag_applied_offset;
+            const amal::vec2 candidate =
+                _drag_grab_offset_valid
+                    ? amal::vec2{detail::get_io().mouse_pos.x - _drag_grab_offset.x, drag_base_pos.y}
+                    : drag_base_pos + amal::vec2{_drag_offset.x + delta.x, 0.0f};
+            const amal::vec2 visual_pos =
+                resolve_drag_visual_position(*this, drag_base_pos, candidate, drag_bounds.size);
+            _drag_offset = {visual_pos.x - drag_base_pos.x, 0.0f};
+        }
+        else _drag_offset = {_drag_offset.x + delta.x, 0.0f};
+
+        const f32 drag_delta_x = _drag_offset.x - prev_drag_offset.x;
+        if (drag_delta_x == 0.0f) return;
+
         _drag_moved = true;
-        _drag_offset.x += delta.x;
         _drag_preview_index = find_drop_index_by_dragged_center();
-        add_render_command<detail::DragEventTraits>(this, [this, drag_delta_x = delta.x]() {
-            if (find_index_by_element_id(_drag_element_id) >= _tabs.size()) return;
+        add_render_command<detail::DragEventTraits>(this, [this, drag_delta_x]() {
+            if (find_index_by_element_id(_drag_element_id) >= _items.size()) return;
             update_layout_from_current_bounds(true);
             if (update_drag_realtime_order(drag_delta_x)) update_layout_from_current_bounds(true);
             update_draw_commands(DrawReasonBits::layout);
@@ -1640,7 +2139,7 @@ namespace auik
 
     void Tabbar::update_popup_layout()
     {
-        if (!_popup || _overflow_start >= _tabs.size()) return;
+        if (!_popup || _overflow_start >= _items.size()) return;
 
         _popup->set_parent(parent());
         _popup->set_window_style_tag(AUIK_STYLE_TAG_TABBAR_POPUP);
@@ -1707,7 +2206,7 @@ namespace auik
 
     void Tabbar::open_popup()
     {
-        if (!popup() || !_popup || _overflow_start >= _tabs.size()) return;
+        if (!popup() || !_popup || _overflow_start >= _items.size()) return;
         if (_open) return;
         _open = true;
         if (_overflow_button)

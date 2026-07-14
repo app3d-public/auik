@@ -19,7 +19,7 @@ namespace auik
                                       default_text_layout_flags()))
         {
             _text->set_parent(this);
-            _text->set_style_tag(AUIK_STYLE_TAG_TEXT_BUTTON_TITLE);
+            _text->set_style_tag(AUIK_STYLE_TAG_NO_PAD);
         }
         ~TextButton() override { acul::release(_text); }
 

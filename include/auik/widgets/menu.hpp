@@ -66,6 +66,7 @@ namespace auik
         };
 
         AUIK_EXPORT void set_item_shortcut(u32 element_id, acul::string shortcut);
+        AUIK_EXPORT void set_item_disabled(u32 element_id, bool disabled = true);
         AUIK_EXPORT void set_item_selected(u32 element_id, bool selected = true);
         AUIK_EXPORT void set_selected_items(const acul::vector<u32> &element_ids);
         AUIK_EXPORT bool is_item_selected(u32 element_id) const;
@@ -75,6 +76,8 @@ namespace auik
         u32 menu_item_style_tag() const { return _item_style_tag; }
         AUIK_EXPORT void set_popup_depth_mode(PopupDepthMode mode);
         PopupDepthMode popup_depth_mode() const { return _popup_depth_mode; }
+        void set_popup_parent(Widget *parent) { _popup_parent = parent; }
+        Widget *popup_parent() const { return _popup_parent; }
         AUIK_EXPORT void set_selected_enabled(bool value);
         bool selected_enabled() const { return _selected_enabled; }
         AUIK_EXPORT void sync_selection_mode_changes();
@@ -95,6 +98,7 @@ namespace auik
         AUIK_EXPORT void add_items(std::initializer_list<const char *> items);
         AUIK_EXPORT MenuItem *item(u32 element_id);
         AUIK_EXPORT const MenuItem *item(u32 element_id) const;
+        AUIK_EXPORT acul::vector<u32> element_ids() const;
         MenuItem *operator[](size_t index) { return (*_menu_base.root_layer()[0])[index]; }
         const MenuItem *operator[](size_t index) const { return (*_menu_base.root_layer()[0])[index]; }
         AUIK_EXPORT void draw_popups(DrawCtx &ctx);
@@ -117,6 +121,9 @@ namespace auik
         MenuItem *create_item(StringView text, Widget *parent = nullptr);
         MenuItem *find_item(u32 element_id);
         const MenuItem *find_item(u32 element_id) const;
+        detail::Selectable *create_root_tab(MenuItem *item);
+        void append_root_tab(MenuItem *item);
+        void release_root_tabs();
         RuntimeSuffixGroup &ensure_runtime_suffix_group(u32 group_index);
         const RuntimeSuffixGroup *runtime_suffix_group(u32 group_index) const;
         u32 push_root_suffix_group();
@@ -138,6 +145,7 @@ namespace auik
         acul::vector<acul::vector<u32>> group_layer_ids(const MenuGroupLayer *layer) const;
         acul::vector<u32> root_ids() const;
         void open_root(u32 element_id);
+        amal::rect resolve_root_popup_anchor(const amal::rect &anchor) const;
         bool open_next(u32 element_id, u32 depth, const amal::rect &anchor);
         void close_from_depth(u32 depth);
         StyleUpdateFlags update_root_item_state(u32 element_id);
@@ -155,6 +163,7 @@ namespace auik
         bool auto_select_first_item() const override { return false; }
         Window *ensure_popup(u32 depth);
         void layout_popup(u32 depth, const amal::rect &anchor, const acul::vector<acul::vector<u32>> &groups);
+        void reposition_open_popups();
         amal::vec2 resolve_popup_position(u32 depth, const amal::rect &anchor, const amal::vec2 &popup_size,
                                           u32 popup_id) const;
         void refresh_menu_clip_rects();
@@ -171,7 +180,6 @@ namespace auik
         amal::vec4 get_popup_clip_rect(Window *popup) const;
         void refresh_popup_clip_rect(Window *popup);
         void request_redraw();
-        bool draw_popup_child(const ElementID &element_id, DrawCtx &ctx);
         u16 get_layout_parent_clip_id() const override;
         amal::vec4 get_layout_parent_clip_rect() const override;
 
@@ -181,7 +189,8 @@ namespace auik
         acul::vector<Window *> _popups;
         acul::vector<u32> _open_path;
         StyleSelector _menu_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_WINDOW_MENU_BAR};
-        PopupDepthMode _popup_depth_mode = PopupDepthMode::workzone_overlay;
+        Widget *_popup_parent = nullptr;
+        PopupDepthMode _popup_depth_mode = PopupDepthMode::root_overlay;
         bool _selected_enabled = false;
     };
 
@@ -226,7 +235,7 @@ namespace auik
 
         MenuBar::MenuItem *item(u32 element_id) { return _menu ? _menu->item(element_id) : nullptr; }
         MenuBar::MenuItem *operator[](size_t index) { return _menu ? (*_menu)[index] : nullptr; }
-        const acul::vector<u32> &element_ids() const { return _menu->element_ids(); }
+        acul::vector<u32> element_ids() const { return _menu ? _menu->element_ids() : acul::vector<u32>{}; }
 
         u32 push_suffix_group() { return _menu ? _menu->push_root_suffix_group() : 0u; }
         u32 suffix_group_count() const { return _menu ? _menu->root_suffix_group_count() : 0u; }
@@ -415,43 +424,42 @@ namespace auik
         MenuBar *menu_bar() const { return menu_model(); }
         MenuBar *get_menu_bar() const { return menu_model(); }
 
-        const acul::vector<u32> &element_ids() const
+        acul::vector<u32> element_ids() const
         {
-            static const acul::vector<u32> empty;
             auto *model = menu_model();
-            return model ? model->element_ids() : empty;
+            return model ? model->element_ids() : acul::vector<u32>{};
         }
 
         size_t item_count() const { return element_ids().size(); }
         iterator begin()
         {
             auto *model = menu_model();
-            return model ? model->begin() : empty_items().begin();
+            return model ? model->begin() : iterator{};
         }
         iterator end()
         {
             auto *model = menu_model();
-            return model ? model->end() : empty_items().end();
+            return model ? model->end() : iterator{};
         }
         const_iterator begin() const
         {
             auto *model = menu_model();
-            return model ? model->begin() : empty_items().begin();
+            return model ? model->cbegin() : const_iterator{};
         }
         const_iterator end() const
         {
             auto *model = menu_model();
-            return model ? model->end() : empty_items().end();
+            return model ? model->cend() : const_iterator{};
         }
         const_iterator cbegin() const
         {
             auto *model = menu_model();
-            return model ? model->cbegin() : empty_items().cbegin();
+            return model ? model->cbegin() : const_iterator{};
         }
         const_iterator cend() const
         {
             auto *model = menu_model();
-            return model ? model->cend() : empty_items().cend();
+            return model ? model->cend() : const_iterator{};
         }
         bool empty() const
         {
@@ -515,12 +523,6 @@ namespace auik
         }
 
     private:
-        static acul::vector<value_type> &empty_items()
-        {
-            static acul::vector<value_type> items;
-            return items;
-        }
-
         Widget *_widget = nullptr;
     };
 

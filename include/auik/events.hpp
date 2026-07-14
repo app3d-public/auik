@@ -2,6 +2,7 @@
 
 #include <acul/enum.hpp>
 #include <acul/hash/hashmap.hpp>
+#include <acul/hash/utils.hpp>
 #include <acul/scalars.hpp>
 #include <acul/string/string.hpp>
 #include <acul/vector.hpp>
@@ -150,13 +151,20 @@ namespace auik
 
     using Key = KeyEnum::enum_type;
 
-    enum class MouseKey
+    struct MouseKeyFlagsBits
     {
-        unknown = -1,
-        left = 0,
-        right = 1,
-        middle = 2
+        enum enum_type : i8
+        {
+            unknown = -1,
+            left = 0x01,
+            right = 0x02,
+            middle = 0x04
+        };
+        using flag_bitmask = std::true_type;
     };
+
+    using MouseKey = MouseKeyFlagsBits::enum_type;
+    using MouseKeyFlags = acul::flags<MouseKeyFlagsBits>;
 
     inline constexpr i16 operator+(MouseKey k) { return static_cast<i16>(k); }
     inline constexpr i16 operator+(MouseKey lhs, i16 rhs) { return static_cast<i16>(lhs) + rhs; }
@@ -269,16 +277,12 @@ namespace auik
         constexpr bool is_valid() const { return widget_id != 0; }
         constexpr explicit operator bool() const { return is_valid(); }
         constexpr bool operator==(const ElementID &other) const
-        {
-            return widget_id == other.widget_id && tag_id == other.tag_id && element_id == other.element_id;
-        }
+        { return widget_id == other.widget_id && tag_id == other.tag_id && element_id == other.element_id; }
         constexpr bool operator!=(const ElementID &other) const { return !(*this == other); }
     };
 
     inline constexpr ElementID make_element_id(u32 widget_id = 0, u32 tag_id = 0, u32 element_id = 0)
-    {
-        return {widget_id, tag_id, element_id};
-    }
+    { return {widget_id, tag_id, element_id}; }
 
     struct DropEvent : EventBase
     {
@@ -313,34 +317,29 @@ namespace auik
         u32 id = AUIK_TAG_GLOBAL;
         KeyMode mods;
         acul::vector<Key> keys;
-        acul::vector<MouseKey> mouse;
+        MouseKeyFlags mouse;
 
-        bool empty() const { return (bool)mods == 0 && keys.empty() && mouse.empty(); }
+        bool empty() const { return (bool)mods == 0 && keys.empty() && !mouse; }
 
         bool operator==(const Shortcut &other) const
-        {
-            return id == other.id && mods == other.mods && keys == other.keys && mouse == other.mouse;
-        }
+        { return id == other.id && mods == other.mods && keys == other.keys && mouse == other.mouse; }
     };
 
     namespace detail
     {
-        template <class Keys, class MouseKeys>
-        inline u64 make_shortcut_hash(const Keys &keys, const MouseKeys &mouse_keys, KeyMode mods,
+        template <class Keys>
+        inline u64 make_shortcut_hash(const Keys &keys, MouseKeyFlags mouse_keys, KeyMode mods,
                                       u32 id = AUIK_TAG_GLOBAL)
         {
-            std::hash<i16> hasher16;
-            std::hash<u32> hasher32;
-            u64 result = hasher32(id);
-            result ^= static_cast<u64>(hasher16(mods)) + 0x9e3779b9ull + (result << 6) + (result >> 2);
+            size_t result = 0u;
+            acul::hash_combine(result, id);
+            acul::hash_combine(result, static_cast<i16>(mods));
 
-            for (const auto key : keys)
-                result ^= static_cast<u64>(hasher16(+key)) + 0x9e3779b9ull + (result << 6) + (result >> 2);
+            for (const auto key : keys) acul::hash_combine(result, +key);
 
-            for (const auto mouse_key : mouse_keys)
-                result ^= static_cast<u64>(hasher16(+mouse_key)) + 0x9e3779b9ull + (result << 6) + (result >> 2);
+            acul::hash_combine(result, static_cast<i16>(mouse_keys));
 
-            return result;
+            return static_cast<u64>(result);
         }
     } // namespace detail
 } // namespace auik

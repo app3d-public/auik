@@ -272,9 +272,9 @@ namespace auik
         auto append_node = [&](auto &&self, const Node &node, ModelRecordID parent_id) -> void {
             ModelRecord record{};
             auto *label_field = make_label_field(label_field_id, node.label);
-            auto *parent_field = acul::alloc<ModelValueField<ModelRecordID>>(parent_field_id, parent_id);
-            add_model_field(record, *label_field);
-            add_model_field(record, *parent_field);
+            auto *parent_field = make_model_field<ModelRecordID>(parent_field_id, parent_id);
+            add_model_field(record, label_field);
+            add_model_field(record, parent_field);
             auto &stored = model.add_record(std::move(record));
             const ModelRecordID record_id = stored.id;
             for (const auto &child : node.children) self(self, child, record_id);
@@ -297,7 +297,7 @@ namespace auik
     {
         return make_tree_model(db, model_id, nodes, label_field_id, parent_field_id,
                                [](ModelFieldID field_id, const T &label) -> ModelField * {
-                                   return acul::alloc<ModelValueField<T>>(field_id, label);
+                                   return make_model_field<T>(field_id, label);
                                });
     }
 

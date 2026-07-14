@@ -28,15 +28,11 @@ namespace auik
 
     inline void push_quads_batch_to_stream(DrawStream *stream, const QuadsInstanceData *data, u32 count,
                                            DrawDataID *out_draw_ids = nullptr)
-    {
-        push_data_batch_to_stream(stream, data, count, out_draw_ids);
-    }
+    { push_data_batch_to_stream(stream, data, count, out_draw_ids); }
 
     inline void update_quads_batch_in_stream(DrawStream *stream, const DrawDataID *draw_data_ids,
                                              const QuadsInstanceData *data, u32 count)
-    {
-        update_data_batch_in_stream(stream, draw_data_ids, data, count);
-    }
+    { update_data_batch_in_stream(stream, draw_data_ids, data, count); }
 
     inline bool fill_quads_instance_by_style(const Style &style, u16 clip_id, QuadsInstanceData &data)
     {
@@ -68,8 +64,8 @@ namespace auik
             }
             return;
         }
-        const bool force_update =
-            (ctx.reason & DrawReasonBits::record) || (detail::get_context().dirty_flags & DirtyFlagBits::hit_rect_update);
+        const bool force_update = (ctx.reason & DrawReasonBits::record) ||
+                                  (detail::get_context().dirty_flags & DirtyFlagBits::hit_rect_update);
         update_hit_rect(draw_id.hit_id, rect, force_update);
     }
 
@@ -84,17 +80,14 @@ namespace auik
             return;
         }
 
+        const bool keep_hit_rect = emit_hit_rect && ctx.is_hit_allowed && !(ctx.reason & DrawReasonBits::invalidate);
         if (draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID)
         {
             if (ctx.reason & DrawReasonBits::record) draw_id.render_id = AUIK_INVALID_DRAW_DATA_ID;
-            else
-            {
-                DrawCtx invalidate_ctx = ctx;
-                invalidate_ctx.reason |= DrawReasonBits::invalidate;
-                emit_context_draw(invalidate_ctx, stream, draw_id, nullptr, rect, false);
-            }
+            else invalidate_render_draw(stream, draw_id);
         }
-        emit_quads_hit_rect_only(ctx, draw_id, rect, emit_hit_rect);
+        if (keep_hit_rect) emit_quads_hit_rect_only(ctx, draw_id, rect, true);
+        else invalidate_hit_rect(draw_id);
     }
 
     struct TexturesInstanceData
@@ -114,15 +107,11 @@ namespace auik
 
     inline void push_textured_quads_batch_to_stream(DrawStream *stream, const TexturesInstanceData *data, u32 count,
                                                     DrawDataID *out_draw_ids = nullptr)
-    {
-        push_data_batch_to_stream(stream, data, count, out_draw_ids);
-    }
+    { push_data_batch_to_stream(stream, data, count, out_draw_ids); }
 
     inline void update_textured_quads_batch_in_stream(DrawStream *stream, const DrawDataID *draw_data_ids,
                                                       const TexturesInstanceData *data, u32 count)
-    {
-        update_data_batch_in_stream(stream, draw_data_ids, data, count);
-    }
+    { update_data_batch_in_stream(stream, draw_data_ids, data, count); }
 
     struct VertexStreamVertex
     {
@@ -153,24 +142,17 @@ namespace auik
     AUIK_EXPORT void create_vertex_stream(DrawStream &stream);
 
     inline DrawDataID push_vertex_stream_batch(DrawStream *stream, const VertexStreamBatchData &data)
-    {
-        return push_data_to_stream(stream, const_cast<VertexStreamBatchData *>(&data));
-    }
+    { return push_data_to_stream(stream, const_cast<VertexStreamBatchData *>(&data)); }
 
     inline void push_vertex_stream_batch_list(DrawStream *stream, const VertexStreamBatchData *data, u32 count,
                                               DrawDataID *out_draw_ids = nullptr)
-    {
-        push_data_batch_to_stream(stream, data, count, out_draw_ids);
-    }
+    { push_data_batch_to_stream(stream, data, count, out_draw_ids); }
 
     inline void update_vertex_stream_batch(DrawStream *stream, DrawDataID draw_data_id,
                                            const VertexStreamBatchData &data)
-    {
-        update_data_in_stream(stream, draw_data_id, const_cast<VertexStreamBatchData *>(&data));
-    }
+    { update_data_in_stream(stream, draw_data_id, const_cast<VertexStreamBatchData *>(&data)); }
 
-    inline void update_vertex_stream_batch_offset(DrawStream *stream, DrawDataID draw_data_id,
-                                                  const amal::vec2 &offset)
+    inline void update_vertex_stream_batch_offset(DrawStream *stream, DrawDataID draw_data_id, const amal::vec2 &offset)
     {
         VertexStreamBatchData data{};
         data.offset = offset;
@@ -193,9 +175,7 @@ namespace auik
 
     inline void update_vertex_stream_batch_list(DrawStream *stream, const DrawDataID *draw_data_ids,
                                                 const VertexStreamBatchData *data, u32 count)
-    {
-        update_data_batch_in_stream(stream, draw_data_ids, data, count);
-    }
+    { update_data_batch_in_stream(stream, draw_data_ids, data, count); }
 
     struct TexturedVertexStreamVertex
     {
@@ -232,21 +212,15 @@ namespace auik
     AUIK_EXPORT void create_textured_vertex_stream(DrawStream &stream);
 
     inline DrawDataID push_textured_vertex_stream_batch(DrawStream *stream, const TexturedVertexStreamBatchData &data)
-    {
-        return push_data_to_stream(stream, const_cast<TexturedVertexStreamBatchData *>(&data));
-    }
+    { return push_data_to_stream(stream, const_cast<TexturedVertexStreamBatchData *>(&data)); }
 
     inline void push_textured_vertex_stream_batch_list(DrawStream *stream, const TexturedVertexStreamBatchData *data,
                                                        u32 count, DrawDataID *out_draw_ids = nullptr)
-    {
-        push_data_batch_to_stream(stream, data, count, out_draw_ids);
-    }
+    { push_data_batch_to_stream(stream, data, count, out_draw_ids); }
 
     inline void update_textured_vertex_stream_batch(DrawStream *stream, DrawDataID draw_data_id,
                                                     const TexturedVertexStreamBatchData &data)
-    {
-        update_data_in_stream(stream, draw_data_id, const_cast<TexturedVertexStreamBatchData *>(&data));
-    }
+    { update_data_in_stream(stream, draw_data_id, const_cast<TexturedVertexStreamBatchData *>(&data)); }
 
     inline void update_textured_vertex_stream_batch_offset(DrawStream *stream, DrawDataID draw_data_id,
                                                            const amal::vec2 &offset)
@@ -273,7 +247,5 @@ namespace auik
 
     inline void update_textured_vertex_stream_batch_list(DrawStream *stream, const DrawDataID *draw_data_ids,
                                                          const TexturedVertexStreamBatchData *data, u32 count)
-    {
-        update_data_batch_in_stream(stream, draw_data_ids, data, count);
-    }
+    { update_data_batch_in_stream(stream, draw_data_ids, data, count); }
 } // namespace auik

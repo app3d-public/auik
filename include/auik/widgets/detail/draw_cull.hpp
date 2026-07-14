@@ -7,6 +7,7 @@ namespace auik::detail
     inline void draw_child_in_clip(Widget *child, DrawCtx &ctx, const amal::vec4 &clip_rect)
     {
         if (!child) return;
+        if (!child->is_visible() && !(ctx.reason & DrawReasonBits::invalidate)) return;
         if (ctx.reason & DrawReasonBits::invalidate)
         {
             DrawCtx child_ctx = ctx;

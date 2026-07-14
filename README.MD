@@ -80,10 +80,13 @@ The host application is responsible for compiling the generated files into its o
 Auik uses external platform and rendering bindings.
 
 ### GPU bindings
-- [auik-gbe-agrb](../auik-gbe-agrb) - Agrb (Vulkan) rendering backend
+- [auik-gbe-agrb](https://repos.homedatasrv.ru/app3d/auik-gbe-agrb) - Agrb (Vulkan) rendering backend
 
 ### Window bindings
-- [auik-wbe-awin](../auik-wbe-awin) - Awin window system integration
+- [auik-wbe-awin](https://repos.homedatasrv.ru/app3d/auik-wbe-awin) - Awin window system integration
+
+## Demo
+Auik provides an optional [auik-demo](https://repos.homedatasrv.ru/app3d/auik-demo) module containing a ready-to-use demo window built entirely from standard Auik widgets.
 
 ## License
 This project is licensed under the  [MIT License](LICENSE).

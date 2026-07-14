@@ -80,7 +80,6 @@ namespace auik::detail
             _selected_style_options_storage = make_selectable_multi_icon_options(icon_id);
             set_selected_style_options(&_selected_style_options_storage);
         }
-
     private:
         friend struct SelectableStyleScope;
 

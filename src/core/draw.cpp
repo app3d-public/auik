@@ -212,7 +212,6 @@ namespace auik
         if (!is_hit_allowed) hide_hit_rect(draw_id, rect);
         const DrawDataID stream_id = record_post_fx_chain(ctx, stream, data, ctx.post_fx_chain);
         draw_id.render_id = stream_id.render_id;
-        draw_id.hit_id = AUIK_INVALID_DRAW_DATA_ID;
         if (is_hit_allowed) update_hit_rect(draw_id.hit_id, rect, true);
         return draw_id;
     }
@@ -233,15 +232,18 @@ namespace auik
         return draw_id;
     }
 
-    static DrawDataID emit_draw_invalidate(const DrawCtx &ctx, DrawStream *stream, DrawDataID &draw_id, const void *data,
-                                           const detail::RectData &rect, bool is_hit_allowed)
+    void invalidate_render_draw(DrawStream *stream, DrawDataID &draw_id)
     {
-        (void)data;
         assert(stream);
         if (draw_id.render_id != AUIK_INVALID_DRAW_DATA_ID && stream->invalidate_data_in_stream)
             stream->invalidate_data_in_stream(stream, draw_id);
         draw_id.render_id = AUIK_INVALID_DRAW_DATA_ID;
+    }
 
+    static DrawDataID emit_draw_invalidate(DrawStream *stream, DrawDataID &draw_id, const detail::RectData &rect,
+                                           bool is_hit_allowed)
+    {
+        invalidate_render_draw(stream, draw_id);
         hide_hit_rect(draw_id, rect);
         return draw_id;
     }
@@ -250,8 +252,7 @@ namespace auik
                                  const detail::RectData &rect, bool emit_hit_rect)
     {
         const bool need_hit_rect = emit_hit_rect && ctx.is_hit_allowed;
-        if (ctx.reason & DrawReasonBits::invalidate)
-            return emit_draw_invalidate(ctx, stream, draw_id, data, rect, need_hit_rect);
+        if (ctx.reason & DrawReasonBits::invalidate) return emit_draw_invalidate(stream, draw_id, rect, need_hit_rect);
         if ((ctx.reason & DrawReasonBits::record) || draw_id.render_id == AUIK_INVALID_DRAW_DATA_ID)
             return emit_draw_record(ctx, stream, draw_id, data, rect, need_hit_rect);
         return emit_draw_update(ctx, stream, draw_id, data, rect, need_hit_rect);
@@ -277,7 +278,7 @@ namespace auik
             for (u32 i = 0u; i < count; ++i)
             {
                 const detail::RectData rect = rects ? rects[i] : detail::RectData{};
-                emit_draw_invalidate(ctx, stream, draw_ids[i], nullptr, rect, need_hit_rects);
+                emit_draw_invalidate(stream, draw_ids[i], rect, need_hit_rects);
             }
             return;
         }
@@ -294,10 +295,12 @@ namespace auik
         const bool should_record = (ctx.reason & DrawReasonBits::record) || !has_valid_draw;
         if (!need_hit_rects && (!has_invalid_draw || should_record))
         {
-            if (should_record) record_post_fx_chain_batch(ctx, stream, draw_ids, data, infer_stream_item_stride(stream),
-                                                          count, ctx.post_fx_chain);
-            else update_post_fx_chain_batch(ctx, stream, draw_ids, data, infer_stream_item_stride(stream), count,
-                                            ctx.post_fx_chain);
+            if (should_record)
+                record_post_fx_chain_batch(ctx, stream, draw_ids, data, infer_stream_item_stride(stream), count,
+                                           ctx.post_fx_chain);
+            else
+                update_post_fx_chain_batch(ctx, stream, draw_ids, data, infer_stream_item_stride(stream), count,
+                                           ctx.post_fx_chain);
             return;
         }
 

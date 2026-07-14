@@ -722,10 +722,10 @@ namespace auik
         out |= update_resize_indicator();
 
         for (auto *cell : _header)
-            if (cell) out |= cell->update_style();
+            if (cell && cell->is_visible()) out |= cell->update_style();
         for (auto &row : _rows)
             for (auto *cell : row)
-                if (cell) out |= cell->update_style();
+                if (cell && cell->is_visible()) out |= cell->update_style();
         return out;
     }
 
@@ -742,7 +742,7 @@ namespace auik
         for (size_t column = 0; column < _column_count; ++column)
         {
             auto *cell = header_block(column);
-            if (!cell) continue;
+            if (!cell || !cell->is_visible()) continue;
             cell->update_layout_min_size();
             _layout_metrics[column].x.min_value =
                 amal::max(_layout_metrics[column].x.min_value,
@@ -756,7 +756,7 @@ namespace auik
             for (size_t column = 0; column < _column_count; ++column)
             {
                 auto *cell = cell_block(row, column);
-                if (!cell) continue;
+                if (!cell || !cell->is_visible()) continue;
                 cell->update_layout_min_size();
                 _layout_metrics[column].x.min_value =
                     amal::max(_layout_metrics[column].x.min_value,
@@ -838,7 +838,7 @@ namespace auik
             const Style &header_cell_style = table_resolved_style(_header_cell_style);
             const amal::vec4 header_cell_insets = header_cell_style.margin() + header_cell_style.padding();
             for (auto *cell : _header)
-                if (cell)
+                if (cell && cell->is_visible())
                     header_h =
                         amal::max(header_h, cell->required_size().y + header_cell_insets.y + header_cell_insets.w);
 
@@ -847,7 +847,7 @@ namespace auik
             {
                 const f32 column_w = _layout_metrics[column].x.value;
                 auto *cell = header_block(column);
-                if (cell)
+                if (cell && cell->is_visible())
                 {
                     const auto &settings = settings_for_column(column);
                     cell->set_child_layout(0u, make_layout_flags(ChildLayout::block, settings.halign, settings.valign));
@@ -884,7 +884,7 @@ namespace auik
             {
                 const f32 column_w = _layout_metrics[column].x.value;
                 auto *cell = cell_block(row, column);
-                if (cell)
+                if (cell && cell->is_visible())
                 {
                     const auto &settings = settings_for_column(column);
                     cell->set_child_layout(0u, make_layout_flags(ChildLayout::block, settings.halign, settings.valign));
@@ -1019,12 +1019,12 @@ namespace auik
         const amal::vec2 content_range = detail::depth_foreground_range(this->depth_range());
         for (auto *cell : _header)
         {
-            if (!cell) continue;
+            if (!cell || !cell->is_visible()) continue;
             cell->update_depth(content_range);
         }
         for (auto &row : _rows)
             for (auto *cell : row)
-                if (cell) cell->update_depth(content_range);
+                if (cell && cell->is_visible()) cell->update_depth(content_range);
     }
 
     void Table::back_hit_depth()
@@ -1071,7 +1071,7 @@ namespace auik
 
     void Table::draw(DrawCtx &ctx)
     {
-        if (!(widget_flags & WidgetFlagBits::visible)) return;
+        if (!is_visible() && !(ctx.reason & DrawReasonBits::invalidate)) return;
         auto *quads_stream = get_primary_quads_stream();
         auto *theme = get_theme();
         const u32 parent_id = parent() ? parent()->id() : 0u;

@@ -144,18 +144,17 @@ namespace auik
     static bool is_tabbar_drag_escape(Tabbar *tabbar, u32 element_id)
     {
         if (!tabbar || element_id == 0u) return false;
-        const auto &element_ids = tabbar->element_ids();
         u32 index = static_cast<u32>(-1);
-        for (u32 i = 0u; i < element_ids.size(); ++i)
+        for (u32 i = 0u; i < tabbar->child_size(); ++i)
         {
-            if (element_ids[i] != element_id) continue;
+            if (tabbar->item_element_id(i) != element_id) continue;
             index = i;
             break;
         }
         if (index >= tabbar->child_size()) return false;
 
         const auto own_bounds = tabbar->bounds();
-        const auto *tab = tabbar->data()[index];
+        const auto *tab = tabbar->item_at(index);
         const f32 escape_x = tab ? amal::max(tab->size().x, 1.0f) : own_bounds.size.y;
         const f32 escape_y = amal::max(own_bounds.size.y, 1.0f);
         const auto mouse = detail::get_io().mouse_pos;
@@ -813,7 +812,7 @@ namespace auik
         _drag_zones_dirty = true;
         auto &ctx = detail::get_context();
         ctx.dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
-        update_own_layout(true);
+        update_layout_sync(true);
         detail::mark_host_refresh_request();
     }
 
@@ -850,7 +849,7 @@ namespace auik
                 detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
             }
         }
-        update_own_layout(true);
+        update_layout_sync(true);
     }
 
     bool Dockspace::needs_node_tab_panel(const Node &node) const { return tabpanel_enabled() && !node.windows.empty(); }
@@ -902,7 +901,6 @@ namespace auik
             node.windows.erase(node.windows.begin() + i);
             if (i < node.undocked_bounds.size()) node.undocked_bounds.erase(node.undocked_bounds.begin() + i);
             if (i < node.tab_titles.size()) node.tab_titles.erase(node.tab_titles.begin() + i);
-            if (i < node.tab_element_ids.size()) node.tab_element_ids.erase(node.tab_element_ids.begin() + i);
             node.active_window_index = static_cast<size_t>(-1);
             node.record_active_window = true;
             clear_node_chrome(node);
@@ -952,7 +950,7 @@ namespace auik
         extracted->set_auto_position(false, false);
         if (node->windows.empty()) remove_empty_node(node_id);
         else fit_node_to_required_width(node_id, true);
-        update_own_layout(true);
+        update_layout_sync(true);
         add_widget_to_root(extracted);
         const auto viewport = get_widget_viewport_rect(extracted);
         extracted->set_root_viewport_origin({viewport.x, viewport.y});
@@ -970,6 +968,32 @@ namespace auik
     {
         auto *node = get_node(node_id);
         if (!node || !window) return;
+        if (node->tabbar && node->tabbar->child_size() == node->windows.size())
+        {
+            for (size_t i = 0; i < node->windows.size(); ++i)
+            {
+                if (node->windows[i] != window) continue;
+                const u32 element_id = node->tabbar->item_element_id(static_cast<u32>(i));
+                invalidate_window_draw_records(window);
+                detach_window(window, i < node->undocked_bounds.size() ? &node->undocked_bounds[i] : nullptr);
+                acul::release(window);
+                node->windows.erase(node->windows.begin() + i);
+                if (i < node->undocked_bounds.size()) node->undocked_bounds.erase(node->undocked_bounds.begin() + i);
+                if (i < node->tab_titles.size()) node->tab_titles.erase(node->tab_titles.begin() + i);
+                node->active_window_index = static_cast<size_t>(-1);
+                node->record_active_window = true;
+                node->tabbar->close_item(element_id);
+                if (node->windows.empty()) remove_empty_node(node_id);
+                else
+                {
+                    node->active_window_index = selected_window_index(*node);
+                    fit_node_to_required_width(node_id, true);
+                }
+                update_layout_sync(true);
+                detail::mark_host_refresh_request();
+                return;
+            }
+        }
 
         amal::rect undocked_bounds{};
         invalidate_window_draw_records(window);
@@ -979,7 +1003,7 @@ namespace auik
         acul::release(extracted);
         if (node->windows.empty()) remove_empty_node(node_id);
         else fit_node_to_required_width(node_id, true);
-        update_own_layout(true);
+        update_layout_sync(true);
     }
 
     void Dockspace::close_group(DockNodeID node_id)
@@ -988,7 +1012,7 @@ namespace auik
         if (!node) return;
         clear_node_windows(*node);
         remove_empty_node(node_id);
-        update_own_layout(true);
+        update_layout_sync(true);
     }
 
     void Dockspace::add_window(DockNodeID node, Window *window)
@@ -996,7 +1020,6 @@ namespace auik
         auto *n = get_node(node);
         assert(n && "dock node is invalid");
         assert(window && "window is null");
-        assert(window->window_flags & WindowFlagBits::decorated);
         n->undocked_bounds.push_back(window->bounds());
         attach_window(window);
         n->windows.push_back(window);
@@ -1031,17 +1054,19 @@ namespace auik
         node->record_active_window = true;
 
         sync_node_tabbar(node_id, *node);
-        if (!node->tabbar || insert_index >= node->tabbar->element_ids().size()) return true;
-        const u32 element_id = node->tabbar->element_ids()[insert_index];
+        if (!node->tabbar || insert_index >= node->tabbar->child_size()) return true;
+        const u32 element_id = node->tabbar->item_element_id(insert_index);
+        if (element_id == 0u) return true;
         node->tabbar->set_selected_silent(element_id);
         fit_node_to_required_width(node_id, false);
         update_depth(this->depth_range());
-        update_own_layout(true);
+        update_layout_sync(true);
 
         node = get_node(node_id);
         if (!node || !node->tabbar) return true;
         auto &ctx = detail::get_context();
         ctx.io.drag_id = make_element_id(node->tabbar->id(), node->tabbar->item_style_tag(), element_id);
+        ctx.io.drag_key_flags = ctx.io.active_mouse_buttons;
         ctx.frame_cache.drag_widget_id = node->tabbar->id();
         node->tabbar->begin_external_drag(element_id);
         node->tabbar->invalidate_draw_commands(DrawReasonBits::layout);
@@ -1106,7 +1131,6 @@ namespace auik
         }
         detail::get_context().dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
         node.tab_titles.clear();
-        node.tab_element_ids.clear();
         node.tab_panel_rect.bounds = {};
         node.tab_panel_draw = {};
     }
@@ -1182,7 +1206,11 @@ namespace auik
             node.tabbar->set_selected_item_style_tag(AUIK_STYLE_TAG_DOCK_TAB_ITEM_SELECTED);
             node.tabbar->set_focus_parent(this);
             node.tabbar->bind()
-                .on_change([this, node_id](ChangeEvent &) { handle_tabbar_changed(node_id); })
+                .on_change([this, node_id](ChangeEvent &) {
+                    auto *node = get_node(node_id);
+                    if (!node || !node->tabbar) return;
+                    handle_tabbar_changed(node_id, node->tabbar->change_reason());
+                })
                 .on_drag([this, node_id](DragEvent &e) {
                     if (e.state != KeyPressState::repeat) return;
                     auto *node = get_node(node_id);
@@ -1217,9 +1245,11 @@ namespace auik
         }
         if (same_titles)
         {
-            if (node.tab_element_ids.size() != node.windows.size()) node.tab_element_ids = node.tabbar->element_ids();
-            if (node.record_active_window && node.active_window_index < node.tab_element_ids.size())
-                node.tabbar->set_selected_silent(node.tab_element_ids[node.active_window_index]);
+            for (size_t i = 0; i < node.windows.size() && i < node.tabbar->child_size(); ++i)
+                node.tabbar->set_item_user_data(static_cast<u32>(i), node.windows[i]);
+            if (node.record_active_window && node.active_window_index < node.tabbar->child_size())
+                node.tabbar->set_selected_silent(
+                    node.tabbar->item_element_id(static_cast<u32>(node.active_window_index)));
             return;
         }
 
@@ -1234,9 +1264,10 @@ namespace auik
         }
         node.tab_titles = titles;
         node.tabbar->set_items(title_views);
-        node.tab_element_ids = node.tabbar->element_ids();
-        if (node.record_active_window && node.active_window_index < node.tab_element_ids.size())
-            node.tabbar->set_selected_silent(node.tab_element_ids[node.active_window_index]);
+        for (size_t i = 0; i < node.windows.size() && i < node.tabbar->child_size(); ++i)
+            node.tabbar->set_item_user_data(static_cast<u32>(i), node.windows[i]);
+        if (node.record_active_window && node.active_window_index < node.tabbar->child_size())
+            node.tabbar->set_selected_silent(node.tabbar->item_element_id(static_cast<u32>(node.active_window_index)));
         node.tabbar->update_style();
         node.tabbar->update_depth(is_valid_depth_range(_tabbar_depth_range)
                                       ? _tabbar_depth_range
@@ -1292,9 +1323,7 @@ namespace auik
     {
         if (auto *parent_widget = parent(); parent_widget && parent_widget->signature() == AUIK_TAG_WIDGET_STACK &&
                                             !static_cast<WidgetStack *>(parent_widget)->is_active_child(this))
-        {
             return;
-        }
 
         const auto *dock_ctx = detail::g_context ? detail::g_context->dockspace_context : nullptr;
         const bool enabled = dock_ctx && dock_ctx->drag_zones_enabled && dock_ctx->drag_window;
@@ -2154,7 +2183,7 @@ namespace auik
         for (auto &helper : _resize_helpers) helper.hit_draw = {};
     }
 
-    void Dockspace::handle_tabbar_changed(DockNodeID node_id)
+    void Dockspace::handle_tabbar_changed(DockNodeID node_id, TabbarChangeReason reason)
     {
         auto *node_ptr = get_node(node_id);
         if (!node_ptr || !node_ptr->tabbar) return;
@@ -2162,62 +2191,77 @@ namespace auik
         Window *prev_active_window =
             node.active_window_index < node.windows.size() ? node.windows[node.active_window_index] : nullptr;
 
-        const auto &order = node.tabbar->element_ids();
-        if (order.size() == node.windows.size())
+        if (node.tabbar->child_size() == node.windows.size())
         {
-            if (node.tab_element_ids.size() != node.windows.size()) node.tab_element_ids = order;
+            bool order_valid = true;
+            bool order_changed = false;
+            acul::vector<Window *> windows;
+            acul::vector<amal::rect> undocked_bounds;
+            acul::vector<acul::string> tab_titles;
+            windows.reserve(node.windows.size());
+            undocked_bounds.reserve(node.undocked_bounds.size());
+            tab_titles.reserve(node.tab_titles.size());
 
-            bool order_changed = node.tab_element_ids.size() != order.size();
-            if (!order_changed)
+            for (u32 i = 0u; i < node.tabbar->child_size(); ++i)
             {
-                for (size_t i = 0; i < order.size(); ++i)
+                auto *window = static_cast<Window *>(node.tabbar->item_user_data(i));
+                size_t old_index = static_cast<size_t>(-1);
+                for (size_t window_i = 0; window_i < node.windows.size(); ++window_i)
                 {
-                    if (node.tab_element_ids[i] == order[i]) continue;
-                    order_changed = true;
+                    if (node.windows[window_i] != window) continue;
+                    old_index = window_i;
                     break;
                 }
+                if (old_index >= node.windows.size())
+                {
+                    order_valid = false;
+                    break;
+                }
+                if (old_index != i) order_changed = true;
+                windows.push_back(node.windows[old_index]);
+                if (old_index < node.undocked_bounds.size()) undocked_bounds.push_back(node.undocked_bounds[old_index]);
+                if (old_index < node.tab_titles.size()) tab_titles.push_back(node.tab_titles[old_index]);
             }
 
-            if (order_changed)
+            if (order_valid && order_changed)
             {
-                acul::vector<Window *> windows;
-                acul::vector<amal::rect> undocked_bounds;
-                acul::vector<acul::string> tab_titles;
-                windows.reserve(node.windows.size());
-                undocked_bounds.reserve(node.undocked_bounds.size());
-                tab_titles.reserve(node.tab_titles.size());
-
-                for (u32 element_id : order)
-                {
-                    size_t old_index = static_cast<size_t>(-1);
-                    for (size_t i = 0; i < node.tab_element_ids.size(); ++i)
-                    {
-                        if (node.tab_element_ids[i] != element_id) continue;
-                        old_index = i;
-                        break;
-                    }
-                    if (old_index >= node.windows.size()) return;
-                    windows.push_back(node.windows[old_index]);
-                    if (old_index < node.undocked_bounds.size())
-                        undocked_bounds.push_back(node.undocked_bounds[old_index]);
-                    if (old_index < node.tab_titles.size()) tab_titles.push_back(node.tab_titles[old_index]);
-                }
-
                 node.windows = std::move(windows);
                 node.undocked_bounds = std::move(undocked_bounds);
                 node.tab_titles = std::move(tab_titles);
-                node.tab_element_ids = order;
+                for (size_t i = 0; i < node.windows.size(); ++i)
+                    node.tabbar->set_item_user_data(static_cast<u32>(i), node.windows[i]);
+            }
+
+            if (reason == TabbarChangeReason::selection)
+            {
+                node.active_window_index = selected_window_index(node);
+                node.record_active_window = true;
+            }
+            else
+            {
+                node.active_window_index = static_cast<size_t>(-1);
+                if (prev_active_window)
+                {
+                    for (size_t i = 0; i < node.windows.size(); ++i)
+                    {
+                        if (node.windows[i] != prev_active_window) continue;
+                        node.active_window_index = i;
+                        break;
+                    }
+                }
             }
         }
-
-        node.active_window_index = static_cast<size_t>(-1);
-        if (prev_active_window)
+        else
         {
-            for (size_t i = 0; i < node.windows.size(); ++i)
+            node.active_window_index = static_cast<size_t>(-1);
+            if (prev_active_window)
             {
-                if (node.windows[i] != prev_active_window) continue;
-                node.active_window_index = i;
-                break;
+                for (size_t i = 0; i < node.windows.size(); ++i)
+                {
+                    if (node.windows[i] != prev_active_window) continue;
+                    node.active_window_index = i;
+                    break;
+                }
             }
         }
 
@@ -2236,17 +2280,18 @@ namespace auik
         auto *node_ptr = get_node(node_id);
         if (!node_ptr) return false;
         auto &node = *node_ptr;
+        auto *window =
+            node.tabbar ? static_cast<Window *>(node.tabbar->item_user_data_by_element_id(element_id)) : nullptr;
 
         size_t window_index = static_cast<size_t>(-1);
-        for (size_t i = 0; i < node.tab_element_ids.size(); ++i)
+        for (size_t i = 0; i < node.windows.size(); ++i)
         {
-            if (node.tab_element_ids[i] != element_id) continue;
+            if (node.windows[i] != window) continue;
             window_index = i;
             break;
         }
         if (window_index >= node.windows.size()) return false;
 
-        Window *window = node.windows[window_index];
         if (!window) return false;
 
         Tabbar *tabbar = node.tabbar;
@@ -2274,7 +2319,7 @@ namespace auik
         extracted->reset_draw_records();
         if (node.windows.empty()) remove_empty_node(node_id);
         else fit_node_to_required_width(node_id, true);
-        update_own_layout(true);
+        update_layout_sync(true);
         add_widget_to_root(extracted);
         const auto viewport = get_widget_viewport_rect(extracted);
         extracted->set_root_viewport_origin({viewport.x, viewport.y});
@@ -2285,6 +2330,7 @@ namespace auik
         const auto header_id = make_element_id(extracted->id(), AUIK_TAG_WINDOW_HEADER);
         ctx.io.clicked_id = header_id;
         ctx.io.drag_id = header_id;
+        if (!ctx.io.drag_key_flags) ctx.io.drag_key_flags = ctx.io.active_mouse_buttons;
         ctx.io.last_drag_pos = mouse;
         const bool was_already_focused = ctx.focus_id == extracted->id();
         focus_widget(extracted);
@@ -2613,12 +2659,12 @@ namespace auik
         (void)state;
     }
 
-    void Dockspace::update_own_layout(bool record)
+    void Dockspace::update_layout_sync(bool force_record, bool min_size_known)
     {
         auto &ctx = detail::get_context();
         ctx.dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
-        update_layout(false);
-        if (record)
+        update_layout(min_size_known);
+        if (force_record)
         {
             invalidate_draw_commands(DrawReasonBits::layout);
             reset_draw_records();
@@ -2657,10 +2703,12 @@ namespace auik
 
         if (state == KeyPressState::release)
         {
+            const bool was_resizing = _resizing_helper != static_cast<size_t>(-1);
             _resizing_helper = static_cast<size_t>(-1);
             _resize_drag_accum = {0.0f, 0.0f};
             _resize_basis.clear();
             detail::set_window_cursor(detail::CursorID::arrow, ctx.window_ctx);
+            if (was_resizing) update_layout_sync(false, false);
             return;
         }
 
@@ -2765,7 +2813,8 @@ namespace auik
             changed = true;
         }
         if (!changed) return;
-        update_own_layout();
+        detail::mark_fast_update_dirty();
+        update_layout_sync(false, true);
     }
 
     void Dockspace::on_drop(ElementID drag_id, ElementID drop_id)
@@ -2819,7 +2868,7 @@ namespace auik
 
         add_window(leaf_id, window);
         fit_node_to_required_width(leaf_id, false);
-        update_own_layout(true);
+        update_layout_sync(true);
     }
 
     void Dockspace::on_attach()
