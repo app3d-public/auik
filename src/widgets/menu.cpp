@@ -605,6 +605,16 @@ namespace auik
         if (auto *item = find_item(element_id)) item->set_shortcut(std::move(shortcut));
     }
 
+    void MenuBar::set_popup_viewport(Viewport *viewport)
+    {
+        if (_popup_viewport == viewport) return;
+        _popup_viewport = viewport;
+        for (auto *popup : _popups)
+            if (popup) popup->attach_to_viewport(get_popup_viewport());
+        reposition_open_popups();
+        detail::mark_layout_dirty();
+    }
+
     void MenuBar::set_item_disabled(u32 element_id, bool disabled)
     {
         auto *item = find_item(element_id);

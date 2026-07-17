@@ -75,6 +75,7 @@ namespace auik
         bool show_icon() const { return _show_icon; }
         AUIK_EXPORT void set_leading_count(u32 count);
         u32 leading_count() const { return _leading_count; }
+        AUIK_EXPORT void set_menu_popup_viewport(Viewport *viewport);
         AUIK_EXPORT void add_child(Widget *child);
         AUIK_EXPORT void add_children(const acul::vector<Widget *> &children);
 
@@ -118,6 +119,7 @@ namespace auik
         f32 _caption_buttons_width = 0.0f;
         u32 _leading_count = 0u;
         amal::rect _leading_region_rect{};
+        Viewport *_menu_popup_viewport = nullptr;
         bool _show_icon = false;
         TitlebarState *_state = nullptr;
     };

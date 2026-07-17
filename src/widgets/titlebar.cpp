@@ -126,12 +126,25 @@ namespace auik
 
     void Titlebar::set_leading_count(u32 count) { _leading_count = count; }
 
+    void Titlebar::set_menu_popup_viewport(Viewport *viewport)
+    {
+        _menu_popup_viewport = viewport;
+        for (auto *child : _children)
+            if (child && child->signature() == AUIK_TAG_MENU_BAR)
+                static_cast<MenuBar *>(child)->set_popup_viewport(viewport);
+    }
+
     void Titlebar::add_child(Widget *child)
     {
         assert(child && "titlebar child is null");
         child->set_parent(this);
         child->set_focus_parent(this);
-        if (child->signature() == AUIK_TAG_MENU_BAR) static_cast<MenuBar *>(child)->set_popup_parent(this);
+        if (child->signature() == AUIK_TAG_MENU_BAR)
+        {
+            auto *menu = static_cast<MenuBar *>(child);
+            menu->set_popup_parent(this);
+            menu->set_popup_viewport(_menu_popup_viewport);
+        }
         _children.push_back(child);
         if (child->widget_flags & WidgetFlagBits::attachable) child->on_attach();
     }

@@ -97,6 +97,14 @@ namespace auik
 
     bool ImageButton::resolve_coverage_mode() const { return _image ? _image->coverage_mode() : _coverage_mode; }
 
+    void ImageButton::set_selected(bool selected)
+    {
+        if (_selected == selected) return;
+        _selected = selected;
+        mark_changed();
+        redraw_external(has_draw_record());
+    }
+
     StyleUpdateFlags ImageButton::update_style()
     {
         const u32 parent_id = parent() ? parent()->id() : 0u;

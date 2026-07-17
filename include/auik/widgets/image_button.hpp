@@ -8,7 +8,7 @@
 
 namespace auik
 {
-    class ImageButton final : public Widget
+    class ImageButton : public Widget
     {
     public:
         AUIK_EXPORT ImageButton(u32 id, TextureID texture_id, amal::vec2 image_size, amal::vec2 size,
@@ -33,6 +33,9 @@ namespace auik
         Image *image() const { return _image; }
         void set_image(Image *image) { _image = image; }
 
+        bool is_selected() const { return _selected; }
+        AUIK_EXPORT void set_selected(bool selected);
+
         const amal::vec2 &image_size() const { return _image_size; }
         void set_image_size(const amal::vec2 &size) { _image_size = size; }
 
@@ -53,7 +56,7 @@ namespace auik
 
         virtual u32 signature() const override { return AUIK_TAG_IMAGE_BUTTON; }
 
-    private:
+    protected:
         DrawDataID _bg{};
         DrawDataID _image_draw{};
         StyleSelector _style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_IMAGE_BUTTON};
@@ -64,6 +67,7 @@ namespace auik
         amal::vec2 _image_size{0.0f, 0.0f};
         amal::vec2 _content_depth_range{0.0f, 1.0f};
         bool _coverage_mode = false;
+        bool _selected = false;
 
         amal::vec2 resolve_image_size() const;
         TextureID resolve_texture_id() const;

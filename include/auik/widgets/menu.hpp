@@ -75,6 +75,7 @@ namespace auik
         AUIK_EXPORT void set_menu_item_style_tag(u32 tag_id);
         u32 menu_item_style_tag() const { return _item_style_tag; }
         AUIK_EXPORT void set_popup_depth_mode(PopupDepthMode mode);
+        AUIK_EXPORT void set_popup_viewport(Viewport *viewport);
         PopupDepthMode popup_depth_mode() const { return _popup_depth_mode; }
         void set_popup_parent(Widget *parent) { _popup_parent = parent; }
         Widget *popup_parent() const { return _popup_parent; }
@@ -169,11 +170,13 @@ namespace auik
         void refresh_menu_clip_rects();
         amal::vec4 get_popup_bounds_rect() const
         {
+            if (_popup_viewport) return get_viewport_rect(_popup_viewport);
             if (_popup_depth_mode != PopupDepthMode::workzone_overlay) return get_main_viewport_rect();
             return get_widget_viewport_rect(this);
         }
         Viewport *get_popup_viewport() const
         {
+            if (_popup_viewport) return _popup_viewport;
             if (_popup_depth_mode != PopupDepthMode::workzone_overlay) return get_main_viewport();
             return this->viewport();
         }
@@ -190,6 +193,7 @@ namespace auik
         acul::vector<u32> _open_path;
         StyleSelector _menu_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_WINDOW_MENU_BAR};
         Widget *_popup_parent = nullptr;
+        Viewport *_popup_viewport = nullptr;
         PopupDepthMode _popup_depth_mode = PopupDepthMode::root_overlay;
         bool _selected_enabled = false;
     };

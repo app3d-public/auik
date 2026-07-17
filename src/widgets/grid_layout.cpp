@@ -114,14 +114,24 @@ namespace auik
 
     void GridLayout::update_layout_min_size()
     {
-        amal::vec2 required{_track_min_size.x * static_cast<f32>(_columns),
-                            _track_min_size.y * static_cast<f32>(_rows)};
-        for (auto &cell : _cells)
+        acul::vector<f32> column_required(_columns, _track_min_size.x);
+        acul::vector<f32> row_required(_rows, _track_min_size.y);
+        for (size_t row = 0u; row < _rows; ++row)
         {
-            if (!cell.widget || !cell.widget->is_visible()) continue;
-            cell.widget->update_layout_min_size();
-            required = amal::max(required, cell.widget->required_size());
+            for (size_t column = 0u; column < _columns; ++column)
+            {
+                auto &cell = _cells[cell_index(row, column)];
+                if (!cell.widget || !cell.widget->is_visible()) continue;
+                cell.widget->update_layout_min_size();
+                const amal::vec2 cell_required = cell.widget->required_size();
+                column_required[column] = amal::max(column_required[column], cell_required.x);
+                row_required[row] = amal::max(row_required[row], cell_required.y);
+            }
         }
+
+        amal::vec2 required{};
+        for (const f32 value : column_required) required.x += value;
+        for (const f32 value : row_required) required.y += value;
         if (is_size_concrete(style_size().x)) required.x = amal::max(required.x, style_size().x);
         if (is_size_concrete(style_size().y)) required.y = amal::max(required.y, style_size().y);
         set_required_size(required);
@@ -385,20 +395,55 @@ namespace auik
                                     f32 min_size)
     {
         if (weights.empty()) return;
-        sizes.resize(weights.size());
+        min_size = amal::max(min_size, 0.0f);
+        sizes.assign(weights.size(), min_size);
         const f32 min_total = min_size * static_cast<f32>(weights.size());
         const f32 usable = amal::max(available, min_total);
+        acul::vector<f32> effective_weights(weights.size());
         f32 weight_sum = 0.0f;
-        for (const f32 weight : weights) weight_sum += amal::max(weight, 0.0f);
-        if (weight_sum <= 0.0f) weight_sum = static_cast<f32>(weights.size());
+        for (size_t i = 0u; i < weights.size(); ++i)
+        {
+            effective_weights[i] = amal::max(weights[i], 0.0f);
+            weight_sum += effective_weights[i];
+        }
+        if (weight_sum <= 0.0f)
+        {
+            effective_weights.assign(weights.size(), 1.0f);
+            weight_sum = static_cast<f32>(weights.size());
+        }
 
         f32 remaining = usable;
-        for (size_t i = 0; i < weights.size(); ++i)
+        size_t active_count = weights.size();
+        acul::vector<u8> active(weights.size(), 1u);
+        while (active_count > 0u)
         {
-            const bool last = i + 1u == weights.size();
-            const f32 value = last ? remaining : amal::max(usable * (amal::max(weights[i], 0.0f) / weight_sum), min_size);
-            sizes[i] = value;
-            remaining = amal::max(remaining - value, 0.0f);
+            bool clamped = false;
+            for (size_t i = 0u; i < weights.size(); ++i)
+            {
+                if (!active[i]) continue;
+                const f32 share = weight_sum > 0.0f ? remaining * effective_weights[i] / weight_sum
+                                                    : remaining / static_cast<f32>(active_count);
+                if (share >= min_size) continue;
+                active[i] = 0u;
+                --active_count;
+                remaining = amal::max(remaining - min_size, 0.0f);
+                weight_sum -= effective_weights[i];
+                clamped = true;
+            }
+            if (clamped) continue;
+
+            f32 assigned = 0.0f;
+            size_t assigned_count = 0u;
+            for (size_t i = 0u; i < weights.size(); ++i)
+            {
+                if (!active[i]) continue;
+                ++assigned_count;
+                const bool last = assigned_count == active_count;
+                sizes[i] = last ? remaining - assigned
+                                : remaining * effective_weights[i] / weight_sum;
+                assigned += sizes[i];
+            }
+            break;
         }
     }
 

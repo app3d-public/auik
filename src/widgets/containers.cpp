@@ -89,9 +89,11 @@ namespace auik
             const f32 safe_available = amal::max(available_width, 0.0f);
             const f32 safe_available_height = amal::max(available_height, 0.0f);
             const f32 safe_fill_available = amal::max(fill_available_width, 0.0f);
+            const f32 requested_width = amal::max(fallback_size.x, 0.0f);
             const f32 occupied_width = child->fill_width()
                                            ? amal::min(safe_fill_available, safe_available)
-                                           : amal::min(amal::max(fallback_size.x, 0.0f), safe_available);
+                                           : child->is_width_fixed() ? requested_width
+                                                                     : amal::min(requested_width, safe_available);
             const f32 occupied_height = child->fill_height() ? safe_available_height : amal::max(fallback_size.y, 0.0f);
             return {{occupied_width, occupied_height}, {occupied_width, occupied_height}};
         }
@@ -193,6 +195,26 @@ namespace auik
             }
         }
 
+        static f32 inline_row_overflow(const acul::vector<Widget *> &children,
+                                       const acul::vector<ChildLayoutFlags> &layouts, size_t row_start,
+                                       size_t row_end, f32 available_width, f32 inline_spacing_x)
+        {
+            f32 required_width = 0.0f;
+            size_t child_count = 0u;
+            for (size_t i = row_start; i < row_end; ++i)
+            {
+                auto *child = children[i];
+                if (!child || !child->is_visible() || is_absolute_layout(child)) continue;
+                const ChildLayoutFlags layout = i < layouts.size() ? layouts[i] : ChildLayoutFlagBits::none;
+                const bool terminal_child = i + 1u == row_end && !is_inline_layout(layout);
+                if (!is_inline_layout(layout) && !terminal_child) continue;
+                required_width += amal::max(child->required_size().x, 0.0f);
+                ++child_count;
+            }
+            if (child_count > 1u) required_width += inline_spacing_x * static_cast<f32>(child_count - 1u);
+            return amal::max(required_width - available_width, 0.0f);
+        }
+
         static void layout_inline_row(Widget *layout_owner, const acul::vector<Widget *> &children,
                                       const acul::vector<ChildLayoutFlags> &layouts, size_t row_start, size_t row_end,
                                       const amal::rect &content_rect, const amal::vec2 &row_pos, f32 inline_spacing_x,
@@ -201,7 +223,9 @@ namespace auik
             const f32 available_width = content_rect.size.x;
             const f32 available_height = content_rect.offset.y + content_rect.size.y - row_pos.y;
             f32 left_x = row_pos.x;
-            f32 right_x = row_pos.x + available_width;
+            f32 right_x = row_pos.x + available_width +
+                          inline_row_overflow(children, layouts, row_start, row_end, available_width,
+                                              inline_spacing_x);
             row_height = 0.0f;
 
             for (size_t i = row_end; i > row_start; --i)
@@ -352,7 +376,9 @@ namespace auik
             const f32 available_width = content_rect.size.x;
             const f32 available_height = content_rect.offset.y + content_rect.size.y - row_pos.y;
             f32 left_x = row_pos.x;
-            f32 right_x = row_pos.x + available_width;
+            f32 right_x = row_pos.x + available_width +
+                          inline_row_overflow(children, layouts, row_start, row_end, available_width,
+                                              inline_spacing_x);
             row_height = 0.0f;
 
             for (size_t i = row_end; i > row_start; --i)

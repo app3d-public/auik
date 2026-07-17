@@ -15,6 +15,7 @@ namespace auik
         u16 clip_id = 0xFFFFu;
         f32 clip_depth = 0.0f;
         PFN_sync_viewport sync_viewport = nullptr;
+        bool fit_content = true;
     };
 
     struct ViewportGroup final : Viewport

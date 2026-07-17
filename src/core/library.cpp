@@ -237,7 +237,7 @@ namespace auik
                 layout_rect.w = amal::max(layout_rect.w - consumed, 0.0f);
                 consumed_h += consumed;
             }
-            if (viewport && viewport != get_main_viewport())
+            if (viewport && viewport != get_main_viewport() && viewport->fit_content)
             {
                 viewport->rect = {{viewport_rect.x, viewport_rect.y}, {viewport_rect.z, consumed_h}};
                 sync_viewport(viewport);
@@ -276,7 +276,7 @@ namespace auik
                 layout_rect.w = amal::max(layout_rect.w - consumed, 0.0f);
                 consumed_h += consumed;
             }
-            if (viewport && viewport != get_main_viewport())
+            if (viewport && viewport != get_main_viewport() && viewport->fit_content)
             {
                 viewport->rect = {{viewport_rect.x, viewport_rect.y}, {viewport_rect.z, consumed_h}};
                 sync_viewport(viewport);
