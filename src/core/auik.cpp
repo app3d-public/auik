@@ -447,6 +447,21 @@ namespace auik
         {
             auto &ctx = get_context();
             auto &io = ctx.io;
+
+            // Raw mouse events carry relative movement and may arrive several times
+            // before the host renders the next frame. Keep their accumulation in
+            // auik so window backends only have to forward the native event.
+            if (ctx.raw_mouse_mode)
+            {
+                if (!io.drag_id || delta == amal::vec2{0.0f}) return;
+                auto &frame_cache = ctx.frame_cache;
+                frame_cache.drag_widget_id = io.drag_id.widget_id;
+                frame_cache.drag_delta += delta;
+                frame_cache.changes |= FrameChangesBits::drag_delta;
+                mark_host_refresh_request();
+                return;
+            }
+
             if (!io.mouse_down || !io.clicked_id) return;
             if (!io.active_mouse_buttons) return;
 
