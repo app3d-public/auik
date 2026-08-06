@@ -47,10 +47,10 @@ namespace auik
 
         _model_binding->presenter.field_ids = std::move(field_ids);
         if (_model_binding->presenter.field_ids.empty()) _model_binding->presenter.field_ids.push_back(1u);
-        if (!_model_binding->presenter.present_field)
+        if (!_model_binding->presenter.present_record)
         {
             _model_binding->presenter.data = nullptr;
-            _model_binding->presenter.present_field = present_model_text_field;
+            _model_binding->presenter.present_record = present_model_text_record;
         }
         _model_binding->on_records = [this](const ModelRecordsEvent &) { rebuild_from_model_binding(); };
         _model_binding->on_field_change = [this](ModelRecordID, ModelFieldID) { rebuild_from_model_binding(); };
@@ -77,6 +77,7 @@ namespace auik
         set_columns({});
         if (model)
         {
+            u32 record_index = 0u;
             for (ModelRecordID record_id : _model_binding->records)
             {
                 auto *record = model->find_record(record_id);
@@ -84,12 +85,16 @@ namespace auik
                 if (record)
                 {
                     const auto &field_ids = _model_binding->presenter.field_ids;
-                    children.reserve(field_ids.size());
-                    for (ModelFieldID field_id : field_ids)
-                        if (auto *widget = present_model_field(*_model_binding, *record, field_id))
-                            children.push_back(widget);
+                    acul::vector<Widget *> widgets(field_ids.size(), nullptr);
+                    _model_binding->presenter.present_record(_model_binding, *record, record_index, widgets.data(),
+                                                             static_cast<u32>(widgets.size()),
+                                                             _model_binding->presenter.data);
+                    children.reserve(widgets.size());
+                    for (auto *widget : widgets)
+                        if (widget) children.push_back(widget);
                 }
                 add_column(std::move(children));
+                ++record_index;
             }
         }
         mark_changed();

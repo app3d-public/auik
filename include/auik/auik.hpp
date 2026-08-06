@@ -111,10 +111,19 @@ namespace auik
         }
     };
 
+    // Library lifecycle and global render/layout invalidation.
     AUIK_EXPORT bool init_library(const CreateInfo &create_info);
     AUIK_EXPORT void destroy_library();
+    AUIK_EXPORT void update_styles();
     AUIK_EXPORT void record_layout_commands();
     AUIK_EXPORT void redraw_all_commands();
+
+    // Input state and platform-facing helpers.
+    AUIK_EXPORT void set_cursor(CursorID::enum_type cursor);
+    AUIK_EXPORT bool is_widget_focused(const Widget *widget);
+    AUIK_EXPORT bool is_widget_hovered(const Widget *widget);
+
+    // Root widget ownership and focus management.
     AUIK_EXPORT void rebuild_root_widget_depths();
     AUIK_EXPORT void add_widget_to_root(Widget *widget, DepthZone zone = DepthZone::work);
     AUIK_EXPORT void mark_locale_changed();
@@ -125,8 +134,12 @@ namespace auik
     AUIK_EXPORT bool hide_widget(u32 id);
     AUIK_EXPORT bool show_widget(u32 id);
     AUIK_EXPORT void focus_widget(Widget *widget);
+
+    // Transient widgets are redrawn independently from the persistent widget tree.
     AUIK_EXPORT void push_widget_to_transient_cache(Widget *widget);
     AUIK_EXPORT bool erase_widget_from_transient_cache(Widget *widget);
+
+    // Delayed host tasks used by animations, tooltips and other timed UI work.
     AUIK_EXPORT void cancel_all_delayed_tasks();
     AUIK_EXPORT void cancel_delayed_tasks(u64 owner_id);
     AUIK_EXPORT void pause_delayed_tasks(f64 now);
@@ -136,6 +149,8 @@ namespace auik
     AUIK_EXPORT void show_tooltip(f32 x, const acul::string *text_source);
     AUIK_EXPORT void hide_tooltip();
     AUIK_EXPORT void clear_tooltip_if_source(const acul::string *text_source);
+
+    // GPU cache and viewport synchronization.
     AUIK_EXPORT void sync_draw_streams();
     AUIK_EXPORT void sync_clip_rect_cache();
     AUIK_EXPORT void sync_hit_rect_cache();
@@ -213,6 +228,7 @@ namespace auik
     inline void sync_gpu_cache()
     {
         auto &ctx = detail::get_context();
+        if (ctx.dirty_flags & DirtyFlagBits::styles) update_styles();
         if (ctx.dirty_flags & detail::layout_dirty_mask) record_layout_commands();
         else if (ctx.dirty_flags & DirtyFlagBits::clip_rect) sync_clip_rect_cache();
         if (ctx.dirty_flags & DirtyFlagBits::streams) sync_draw_streams();
@@ -236,6 +252,18 @@ namespace auik
 
     inline bool is_host_update_pending() { return detail::get_context().dirty_flags & DirtyFlagBits::host_update; }
 
+    // Host scheduling and current input state. mark_host_refresh_request() is defined inline by context.hpp;
+    // it only sets the host wake-up flag and does not invalidate layout or draw data.
+    inline void mark_host_refresh_request();
+    inline KeyMode active_key_mods() { return detail::get_context().io.active_mods; }
+
+    // Wake the host and request the resize/interactive fast path for the next frame.
+    inline void request_fast_update()
+    {
+        detail::mark_fast_update_dirty();
+        mark_host_refresh_request();
+    }
+
     inline void set_raw_mouse_mode(bool value) { detail::get_context().raw_mouse_mode = value; }
 
     inline bool is_raw_mouse_mode() { return detail::get_context().raw_mouse_mode; }
@@ -248,67 +276,61 @@ namespace auik
         return pf ? pf->get_frame_rate() : 1.0 / 60.0;
     }
 
+    // Global shortcuts are checked after the focused/hovered widget chain.
     template <class F>
     inline void register_shortcut(const Shortcut &shortcut, F &&fn)
     {
         auto &ctx = detail::get_context();
-        const u64 shortcut_hash = detail::make_shortcut_hash(shortcut.keys, shortcut.mouse, shortcut.mods, 0);
+        const u64 shortcut_hash =
+            detail::make_shortcut_hash(shortcut.keys, shortcut.mouse, shortcut.mods, AUIK_TAG_GLOBAL);
         ctx.io.shortcuts[shortcut_hash] = acul::unique_function<void()>(std::forward<F>(fn));
     }
 
+    // Widget shortcuts participate in chain lookup and are removed through deregister_shortcuts(widget).
     template <class F>
-    inline void register_shortcut(u32 widget_id, const Shortcut &shortcut, F &&fn)
+    inline void register_shortcut(Widget *widget, const Shortcut &shortcut, F &&fn)
     {
         auto &ctx = detail::get_context();
-        const u64 shortcut_hash = detail::make_shortcut_hash(shortcut.keys, shortcut.mouse, shortcut.mods, widget_id);
+        const u64 shortcut_hash =
+            detail::make_shortcut_hash(shortcut.keys, shortcut.mouse, shortcut.mods, widget->id());
         ctx.io.shortcuts[shortcut_hash] = acul::unique_function<void()>(std::forward<F>(fn));
-        auto &hashes = ctx.io.widget_shortcuts[widget_id];
-        bool exists = false;
-        for (u64 hash : hashes)
-        {
-            if (hash != shortcut_hash) continue;
-            exists = true;
-            break;
-        }
-        if (!exists) hashes.push_back(shortcut_hash);
-        auto it = ctx.id_map.find(widget_id);
-        if (it != ctx.id_map.end() && it->second) it->second->add_event_flags(EventFlagBits::shortcut);
+        auto &hashes = ctx.io.widget_shortcuts[widget->id()];
+        if (std::find(hashes.begin(), hashes.end(), shortcut_hash) == hashes.end()) hashes.push_back(shortcut_hash);
+        widget->add_event_flags(EventFlagBits::shortcut);
     }
 
     inline void deregister_shortcut(const Shortcut &shortcut)
     {
         auto &ctx = detail::get_context();
-        const u64 shortcut_hash = detail::make_shortcut_hash(shortcut.keys, shortcut.mouse, shortcut.mods, 0);
+        const u64 shortcut_hash =
+            detail::make_shortcut_hash(shortcut.keys, shortcut.mouse, shortcut.mods, AUIK_TAG_GLOBAL);
         ctx.io.shortcuts.erase(shortcut_hash);
     }
 
-    inline void deregister_shortcut(u32 widget_id, const Shortcut &shortcut)
+    inline void deregister_shortcut(Widget *widget, const Shortcut &shortcut)
     {
         auto &ctx = detail::get_context();
-        const u64 shortcut_hash = detail::make_shortcut_hash(shortcut.keys, shortcut.mouse, shortcut.mods, widget_id);
+        const u64 shortcut_hash =
+            detail::make_shortcut_hash(shortcut.keys, shortcut.mouse, shortcut.mods, widget->id());
         ctx.io.shortcuts.erase(shortcut_hash);
 
-        auto hashes_it = ctx.io.widget_shortcuts.find(widget_id);
-        if (hashes_it != ctx.io.widget_shortcuts.end())
-        {
-            auto &hashes = hashes_it->second;
-            for (size_t i = 0; i < hashes.size(); ++i)
-            {
-                if (hashes[i] != shortcut_hash) continue;
-                hashes.erase(hashes.begin() + i);
-                break;
-            }
-            if (hashes.empty()) ctx.io.widget_shortcuts.erase(hashes_it);
-        }
-
-        auto it = ctx.id_map.find(widget_id);
-        if (it != ctx.id_map.end() && it->second &&
-            ctx.io.widget_shortcuts.find(widget_id) == ctx.io.widget_shortcuts.end())
-            it->second->remove_event_flags(EventFlagBits::shortcut);
+        auto hashes_it = ctx.io.widget_shortcuts.find(widget->id());
+        if (hashes_it == ctx.io.widget_shortcuts.end()) return;
+        auto &hashes = hashes_it->second;
+        auto hash_it = std::find(hashes.begin(), hashes.end(), shortcut_hash);
+        if (hash_it != hashes.end()) hashes.erase(hash_it);
+        if (!hashes.empty()) return;
+        ctx.io.widget_shortcuts.erase(hashes_it);
+        widget->remove_event_flags(EventFlagBits::shortcut);
     }
 
-    inline void deregister_shortcuts(u32 widget_id) { detail::deregister_widget_shortcuts(widget_id); }
+    inline void deregister_shortcuts(Widget *widget)
+    {
+        detail::deregister_widget_shortcuts(widget->id());
+        widget->remove_event_flags(EventFlagBits::shortcut);
+    }
 
+    // Queue UI mutations for the render synchronization point. Immediate traits execute synchronously.
     template <class Traits, class F>
     inline bool add_render_command(Widget *widget, F &&fn)
     {
@@ -322,7 +344,7 @@ namespace auik
         auto &ctx = detail::get_context();
         if (ctx.dirty_flags & DirtyFlagBits::destroying) return false;
         ctx.disposal_queue.emplace(std::forward<F>(fn));
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
         return true;
     }
 
@@ -332,7 +354,7 @@ namespace auik
         auto &ctx = detail::get_context();
         if (ctx.dirty_flags & DirtyFlagBits::destroying) return false;
         ctx.disposal_queue.emplace(std::forward<F>(fn));
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
         return true;
     }
 
@@ -537,11 +559,6 @@ namespace auik
     AUIK_EXPORT bool load_font_icons(const FontRegistry &fonts, const acul::string &family,
                                      const FontIconGlyphLoader *loader);
 
-    AUIK_EXPORT bool load_material_icons(const FontRegistry &fonts, f32 dpi = 1.0f,
-                                         const FontIconGlyphLoader *next = nullptr);
-
-#ifdef _WIN32
-    AUIK_EXPORT bool load_win32_icons(const FontRegistry &fonts, f32 dpi = 1.0f,
+    AUIK_EXPORT bool load_remix_icons(const FontRegistry &fonts, f32 dpi = 1.0f,
                                       const FontIconGlyphLoader *next = nullptr);
-#endif
 } // namespace auik

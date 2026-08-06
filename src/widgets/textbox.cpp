@@ -4,7 +4,6 @@
 #include <cctype>
 #include "../core/session_stream_utils.hpp"
 
-
 #define AUIK_TEXTBOX_CARET_ON_TIME                    0.80
 #define AUIK_TEXTBOX_CARET_PERIOD                     1.20
 #define AUIK_TEXTBOX_CARET_BLINK_TASK_SCHEDULED_BIT   0x01u
@@ -14,6 +13,10 @@
 
 namespace auik
 {
+    constexpr detail::StylePropertyFlags g_textbox_content_style_mask =
+        detail::StylePropertiesBits::text_color | detail::StylePropertiesBits::text_size |
+        detail::StylePropertiesBits::font | detail::StylePropertiesBits::extra;
+
     static WidgetFlags resolve_textbox_widget_flags(WidgetFlags flags)
     {
         flags |= WidgetFlagBits::hittable;
@@ -23,7 +26,7 @@ namespace auik
     static EventFlags resolve_textbox_event_flags()
     {
         return EventFlagBits::hover | EventFlagBits::click | EventFlagBits::drag | EventFlagBits::focus |
-               EventFlagBits::key_input | EventFlagBits::char_input | EventFlagBits::shortcut;
+               EventFlagBits::key_input | EventFlagBits::char_input;
     }
 
     static acul::string make_password_presentation(const acul::string &value)
@@ -38,7 +41,9 @@ namespace auik
     }
 
     static acul::string make_textbox_presentation(const acul::string &value, TextFlags flags)
-    { return (flags & TextFlagBits::password) ? make_password_presentation(value) : value; }
+    {
+        return (flags & TextFlagBits::password) ? make_password_presentation(value) : value;
+    }
 
     static detail::TextEditKey map_key(Key key, KeyMode mods, bool multiline, bool read_only, bool password)
     {
@@ -164,15 +169,15 @@ namespace auik
                 make_text_layout_flags(TextOverflowMode::clip, text_wrap,
                                        text_wrap != TextWrapMode::none ? TextLayoutWidthMode::bounds
                                                                        : TextLayoutWidthMode::viewport)),
-          _placeholder(
-              (!placeholder.str || placeholder.str[0] == '\0')
-                  ? nullptr
-                  : acul::alloc<Text>(AUIK_TAG_TEXT, placeholder, amal::vec2{0.0f, 0.0f}, WidgetFlagBits::visible,
-                                      make_text_layout_flags(TextOverflowMode::clip, text_wrap))),
+          _placeholder((!placeholder.str || placeholder.str[0] == '\0')
+                           ? nullptr
+                           : acul::alloc<Text>(AUIK_TAG_TEXT, placeholder, amal::vec2{0.0f, 0.0f},
+                                               WidgetFlagBits::visible,
+                                               make_text_layout_flags(TextOverflowMode::clip, text_wrap))),
           _edit(acul::alloc<TextboxEditData>())
     {
         _text.set_parent(this);
-        _text.set_style_tag(AUIK_STYLE_TAG_NO_PAD);
+        _text.set_style_mask(g_textbox_content_style_mask);
         if (_placeholder)
         {
             _placeholder->set_style_tag(AUIK_STYLE_TAG_PLACEHOLDER);
@@ -180,13 +185,12 @@ namespace auik
         }
         this->text_flags = text_flags;
         detail::text_edit_initialize_state(&_edit_state, true);
-        register_shortcut(this->id(), Shortcut{.mods = KeyModeBits::control, .keys = {Key::c}},
+        register_shortcut(this, Shortcut{.mods = KeyModeBits::control, .keys = {Key::c}},
                           [this]() { copy_selection_to_clipboard(); });
-        register_shortcut(this->id(), Shortcut{.mods = KeyModeBits::control, .keys = {Key::v}},
+        register_shortcut(this, Shortcut{.mods = KeyModeBits::control, .keys = {Key::v}},
                           [this]() { paste_clipboard_at_cursor(); });
-        register_shortcut(this->id(), Shortcut{.mods = KeyModeBits::control, .keys = {Key::a}},
-                          [this]() { select_all_text(); });
-        register_shortcut(this->id(), Shortcut{.mods = KeyModeBits::control, .keys = {Key::x}},
+        register_shortcut(this, Shortcut{.mods = KeyModeBits::control, .keys = {Key::a}}, [this]() { select_all(); });
+        register_shortcut(this, Shortcut{.mods = KeyModeBits::control, .keys = {Key::x}},
                           [this]() { cut_selection_to_clipboard(); });
     }
 
@@ -212,6 +216,7 @@ namespace auik
             flags |= resolve_style_selector(_edit->drag_icon_style, id(), parent_id, StyleState::normal);
         }
         if (_scrollbar_y) flags |= _scrollbar_y->update_style();
+        _text.set_style_tag(style_tag());
         _text.update_style();
         apply_textbox_text_extras(_text, style);
         if (_placeholder)
@@ -223,7 +228,9 @@ namespace auik
     }
 
     void Textbox::sync_widget_flags()
-    { Widget::sync_widget_flags(is_disabled() ? EventFlagBits::none : requested_event_flags); }
+    {
+        Widget::sync_widget_flags(is_disabled() ? EventFlagBits::none : requested_event_flags);
+    }
 
     void Textbox::on_disabled_changed(bool disabled)
     {
@@ -242,16 +249,21 @@ namespace auik
         const auto &style = get_theme()->get_style(_style.id);
         const auto padding = style.padding();
         const auto margin = style.margin();
+        f32 text_w = _text.layout_result().size.x;
         f32 text_h = _text.required_size().y;
-        if (_placeholder) text_h = amal::max(text_h, _placeholder->required_size().y);
+        if (_placeholder)
+        {
+            text_w = amal::max(text_w, _placeholder->layout_result().size.x);
+            text_h = amal::max(text_h, _placeholder->required_size().y);
+        }
 
-        amal::vec2 min_size = {is_width_fixed() ? style_size().x : 0.0f,
-                               is_height_fixed() ? style_size().y : 0.0f};
-        if (fill_width()) min_size.x = 160.0f;
+        amal::vec2 min_size = {is_width_fixed() ? style_size().x : 0.0f, is_height_fixed() ? style_size().y : 0.0f};
         if (fill_height()) min_size.y = 0.0f;
-        if (min_size.x <= 0.0f) min_size.x = 160.0f;
+        if (min_size.x <= 0.0f) min_size.x = text_w + padding.x + padding.z;
         if (!is_height_fixed() && size().y > 0.0f && !should_resize_to_content()) min_size.y = size().y;
         if (min_size.y <= 0.0f) min_size.y = amal::max(text_h, style.text_size()) + padding.y + padding.w;
+        min_size.x = amal::max(min_size.x, style.min_width());
+        min_size.y = amal::max(min_size.y, style.min_height());
         set_required_size({min_size.x + margin.x + margin.z, min_size.y + margin.y + margin.w});
     }
 
@@ -264,7 +276,8 @@ namespace auik
         const auto margin = style.margin();
         const amal::vec2 layout_origin = position();
 
-        amal::vec2 box_size = size();
+        amal::vec2 box_size = {amal::max(size().x - margin.x - margin.z, 0.0f),
+                               amal::max(size().y - margin.y - margin.w, 0.0f)};
         if (!fill_width() && !is_width_fixed()) box_size.x = required_size().x - margin.x - margin.z;
         else if (box_size.x <= 0.0f) box_size.x = required_size().x - margin.x - margin.z;
         if ((!fill_height() && !is_height_fixed()) || box_size.y <= 0.0f ||
@@ -881,7 +894,7 @@ namespace auik
         select_text_range(static_cast<int>(line.text_start), static_cast<int>(line.text_end));
     }
 
-    void Textbox::select_all_text()
+    void Textbox::select_all()
     {
         const auto &text = value();
         if (text.empty()) return;
@@ -1117,7 +1130,10 @@ namespace auik
             acul::release(_placeholder);
             _placeholder = nullptr;
         }
-        else if (_placeholder) { _placeholder->set_text(value); }
+        else if (_placeholder)
+        {
+            _placeholder->set_text(value);
+        }
         else
         {
             _placeholder = acul::alloc<Text>(AUIK_TAG_TEXT, value, amal::vec2{0.0f, 0.0f}, WidgetFlagBits::visible);
@@ -1219,7 +1235,9 @@ namespace auik
         const auto &style = get_theme()->get_style(_style.id);
         const amal::vec4 margin = style.margin();
         const amal::vec2 current_pos = position();
+        const amal::vec2 current_size = size();
         set_position({current_pos.x - margin.x, current_pos.y - margin.y});
+        set_layout_size({current_size.x + margin.x + margin.z, current_size.y + margin.y + margin.w});
         update_layout(min_size_known);
     }
 
@@ -1642,10 +1660,14 @@ namespace auik
     }
 
     bool Textbox::edit_insert_chars(void *user_data, int pos, const detail::TextEditChar *text, int text_len)
-    { return edit_replace_chars(user_data, pos, 0, text, text_len); }
+    {
+        return edit_replace_chars(user_data, pos, 0, text, text_len);
+    }
 
     void Textbox::edit_delete_chars(void *user_data, int pos, int count)
-    { edit_replace_chars(user_data, pos, count, nullptr, 0); }
+    {
+        edit_replace_chars(user_data, pos, count, nullptr, 0);
+    }
 
     bool Textbox::edit_replace_chars(void *user_data, int pos, int delete_count, const detail::TextEditChar *text,
                                      int text_len)
@@ -1685,8 +1707,9 @@ namespace auik
         return self ? detail::prev_utf8_index(self->value(), idx) : idx - 1;
     }
 
-    MultilineTextbox::MultilineTextbox(u32 id, const acul::string &value, amal::vec2 inline_size, bool can_expand_to_content,
-                                       WidgetFlags flags, TextFlags text_flags, StringView placeholder)
+    MultilineTextbox::MultilineTextbox(u32 id, const acul::string &value, amal::vec2 inline_size,
+                                       bool can_expand_to_content, WidgetFlags flags, TextFlags text_flags,
+                                       StringView placeholder)
         : Textbox(id, value, inline_size, flags, AUIK_STYLE_TAG_MULTILINE_TEXTBOX, text_flags, placeholder,
                   TextWrapMode::word),
           _can_expand_to_content(can_expand_to_content)
@@ -1756,10 +1779,10 @@ namespace auik
         umbf::Block *read_textbox(acul::bin_stream &stream)
         {
             const auto data = read_textbox_payload(stream);
-            auto *widget = acul::alloc<Textbox>(
-                data.common.id, data.value, data.common.inline_size, WidgetFlags(data.common.widget_flags),
-                data.style_tag, TextFlags(data.text_flags),
-                StringView{data.placeholder.c_str(), data.placeholder_translated}, data.text_wrap);
+            auto *widget =
+                acul::alloc<Textbox>(data.common.id, data.value, data.common.inline_size,
+                                     WidgetFlags(data.common.widget_flags), data.style_tag, TextFlags(data.text_flags),
+                                     StringView{data.placeholder.c_str(), data.placeholder_translated}, data.text_wrap);
             detail::apply_widget_common_data(widget, data.common);
             return widget;
         }

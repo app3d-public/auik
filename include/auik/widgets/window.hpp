@@ -13,6 +13,12 @@ namespace auik
     class PopupMenu;
     class RubberBand;
 
+    struct RubberBandCommitEvent
+    {
+        RubberBand *band = nullptr;
+        KeyMode mods{};
+    };
+
     struct WindowFlagBits
     {
         enum enum_type
@@ -45,9 +51,13 @@ namespace auik
                WindowFlagBits::scrollable | WindowFlagBits::dockable;
     }
     constexpr inline WindowFlags get_fixed_window_flags()
-    { return WindowFlagBits::decorated | WindowFlagBits::scrollable; }
+    {
+        return WindowFlagBits::decorated | WindowFlagBits::scrollable;
+    }
     constexpr inline WindowFlags get_popup_window_flags()
-    { return WindowFlagBits::movable | WindowFlagBits::scrollable; }
+    {
+        return WindowFlagBits::movable | WindowFlagBits::scrollable;
+    }
 
     class Window : public Widget
     {
@@ -96,6 +106,10 @@ namespace auik
         AUIK_EXPORT PopupMenu *header_popup_menu() const;
         RubberBand *rubber_band() const { return _rubber_band; }
         RubberBand *get_rubber_band() const { return _rubber_band; }
+        void on_rubber_band_commit(acul::unique_function<void(RubberBandCommitEvent &)> callback)
+        {
+            _on_rubber_band_commit = std::move(callback);
+        }
         const acul::string &title() const { return _title; }
         AUIK_EXPORT void set_title(StringView title);
         AUIK_EXPORT const Text *title_text() const;
@@ -138,6 +152,10 @@ namespace auik
         AUIK_EXPORT virtual void restore_hit_depth() override;
         AUIK_EXPORT virtual void update_layout_min_size() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
+        inline void sync_widget_flags() override
+        {
+            Widget::sync_widget_flags(requested_event_flags | _window_event_flags);
+        }
         AUIK_EXPORT virtual void draw(DrawCtx &ctx) override;
         u32 signature() const override { return AUIK_TAG_WINDOW; }
 
@@ -153,16 +171,18 @@ namespace auik
         PFN_window_menu_suffix_create _window_menu_suffix_create = nullptr;
         u32 _header_menu_suffix_group = 0xFFFFu;
         RubberBand *_rubber_band = nullptr;
+        acul::unique_function<void(RubberBandCommitEvent &)> _on_rubber_band_commit = nullptr;
         amal::ivec2 _resize_dir{0, 0};
         bool _move_drag_active = false;
         detail::RectData _resize_hit_rect{};
         f32 _resize_hit_depth = 0.0f;
         DrawDataID _resize_hit_draw_id{};
         DrawDataID _bg_draw_id{};
+        EventFlags _window_event_flags = EventFlagBits::none;
         u32 _window_style_tag = AUIK_STYLE_TAG_WINDOW;
         StyleSelector _window_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_WINDOW};
 
-        virtual bool accepts_focus_on_mouse_press(ElementID hit_id) const override;
+        AUIK_EXPORT virtual bool accepts_focus_on_mouse_press(ElementID hit_id) const override;
         virtual u16 content_clip_id() const override { return clip_id(); }
         virtual amal::vec4 get_content_clip_rect() const override
         {
@@ -171,9 +191,11 @@ namespace auik
             if (clip_id() != 0xFFFFu) return get_clip_rect(clip_id());
             return get_main_viewport_rect();
         }
-        virtual void on_attach() override;
-        virtual void on_detach() override;
+        AUIK_EXPORT virtual void on_attach() override;
+        AUIK_EXPORT virtual void on_detach() override;
+        void sync_window_event_flags(bool scroll, bool hover);
         void sync_rubber_band();
+        void commit_rubber_band();
         void redraw_decorations(DrawReasonFlags reason = DrawReasonBits::none);
 
         AUIK_EXPORT virtual void on_scroll(const amal::vec2 &delta) override;

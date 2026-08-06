@@ -11,7 +11,6 @@
 
 namespace auik
 {
-
     class Text : public Widget
     {
     public:
@@ -22,7 +21,9 @@ namespace auik
             : Widget(id, flags, EventFlagBits::none, {{0.0f}, max_size}, AUIK_TAG_TEXT),
               _text(std::move(text)),
               _style({Theme::STYLE_ID_INVALID, Theme::STYLE_ID_INVALID})
-        { _layout_config.flags = layout_flags; }
+        {
+            _layout_config.flags = layout_flags;
+        }
         Text(u32 id, StringView text, amal::vec2 max_size, WidgetFlags flags,
              TextLayoutFlags layout_flags = default_text_layout_flags())
             : Text(id, acul::string(text.str ? text.str : ""), max_size, flags, layout_flags)
@@ -34,11 +35,14 @@ namespace auik
             : Text(id, StringView{text}, max_size, flags, layout_flags)
         {
         }
-        
+
         Text(u32 id, ModelBinding *binding, amal::vec2 max_size, WidgetFlags flags,
              TextLayoutFlags layout_flags = default_text_layout_flags())
             : Text(id, acul::string{}, max_size, flags, layout_flags)
-        { set_model_binding(binding); }
+        {
+            set_model_binding(binding);
+        }
+
         AUIK_EXPORT StyleUpdateFlags update_style() override;
         AUIK_EXPORT void update_layout_min_size() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
@@ -77,7 +81,6 @@ namespace auik
         AUIK_EXPORT const char *translated_text_literal() const;
         bool is_translated_text() const { return _translated_text; }
         AUIK_EXPORT bool update_translated_text();
-
         const detail::TextLayoutResult &layout_result() const { return _layout_result; }
         u32 style_tag() const { return _style.tag_id; }
         void set_style_tag(u32 tag_id)
@@ -85,6 +88,8 @@ namespace auik
             if (_style.tag_id == tag_id) return;
             _style = {Theme::STYLE_ID_INVALID, tag_id};
         }
+        void set_style_mask(detail::StylePropertyFlags mask) { _style_mask = mask; }
+        detail::StylePropertyFlags style_mask() const { return _style_mask; }
 
         bool multiline() const { return text_wrap_mode(_layout_config.flags) == TextWrapMode::word; }
         void set_multiline(bool value)
@@ -161,6 +166,7 @@ namespace auik
         bool _instances_gpu_dirty = true;
         bool _tight_content_height = false;
         bool _translated_text = false;
+        detail::StylePropertyFlags _style_mask = acul::flag_traits<detail::StylePropertiesBits>::all_flags;
         u16 _applied_clip_id = 0xFFFFu;
         const PostFxChain *_applied_post_fx_chain = nullptr;
 
@@ -242,10 +248,12 @@ namespace auik
 
     inline Model *make_text_value_model(ModelDB *db, ModelID model_id = 0u, ModelFieldID field_id = 1u,
                                         acul::string value = {})
-    { return make_value_model<acul::string>(db, model_id, field_id, std::move(value)); }
+    {
+        return make_value_model<acul::string>(db, model_id, field_id, std::move(value));
+    }
 
-    AUIK_EXPORT Widget *present_model_text_field(ModelBinding *binding, ModelRecord &record, ModelFieldID field_id,
-                                                 void *data);
+    AUIK_EXPORT void present_model_text_record(ModelBinding *binding, ModelRecord &record, u32 record_index,
+                                               Widget **widgets, u32 widget_count, void *data);
 
     inline EText *make_etext(u32 id, StringView text = "", amal::vec2 max_size = AUIK_SIZE_FIT)
     {

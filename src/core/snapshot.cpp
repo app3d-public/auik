@@ -124,7 +124,7 @@ namespace auik
         rebuild_root_widget_depths();
         if (ctx.main_viewport && ctx.main_viewport->rect.size.x > 0.0f && ctx.main_viewport->rect.size.y > 0.0f)
             update_root_widgets_layout(ctx.main_viewport);
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
         return true;
     }
 

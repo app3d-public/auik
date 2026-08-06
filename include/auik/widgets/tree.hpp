@@ -14,7 +14,9 @@
 #define AUIK_TABLE_TREE_FLAG_COLUMN_RESIZABLE        0x2u
 #define AUIK_TABLE_TREE_FLAG_RESIZE_INDICATOR_ACTIVE 0x4u
 #define AUIK_TABLE_TREE_FLAG_COLUMN_SIZE_OVERRIDES   0x8u
-#define AUIK_TREE_PARENT_FIELD 2u
+#define AUIK_TABLE_TREE_FLAG_REORDER                 0x10u
+#define AUIK_TABLE_TREE_FLAG_REORDER_INHERIT         0x20u
+#define AUIK_TREE_PARENT_FIELD                       2u
 
 namespace auik
 {
@@ -23,26 +25,72 @@ namespace auik
     public:
         static AUIK_EXPORT constexpr size_t invalid_node = static_cast<size_t>(-1);
 
+        enum class ReorderZone : u8
+        {
+            before,
+            child,
+            after
+        };
+
+        struct ReorderTarget
+        {
+            size_t hovered_node = invalid_node;
+            size_t reference_node = invalid_node;
+            size_t indicator_node = invalid_node;
+            size_t parent_node = invalid_node;
+            ReorderZone zone = ReorderZone::after;
+            u32 depth = 0u;
+
+            explicit operator bool() const { return reference_node != invalid_node; }
+        };
+
         struct Node
         {
-            Widget *label = nullptr;
+            DrawBlock *label = nullptr;
+            Widget *hierarchy_anchor = nullptr;
             size_t parent = invalid_node;
             bool expanded = true;
         };
+
+        struct ReorderEvent
+        {
+            size_t dragged_node = invalid_node;
+            size_t hovered_node = invalid_node;
+            size_t reference_node = invalid_node;
+            size_t parent_node = invalid_node;
+            ReorderZone zone = ReorderZone::after;
+            u32 depth = 0u;
+        };
+
+        using BackgroundClickCallback = acul::unique_function<void(ClickEvent &)>;
+        using ReorderBeginCallback = acul::unique_function<void(size_t)>;
+        using ReorderCallback = acul::unique_function<void(ReorderEvent &)>;
 
         AUIK_EXPORT explicit Tree(u32 id, amal::vec2 inline_size, WidgetFlags flags, u32 style_tag_id);
         AUIK_EXPORT ~Tree() override;
 
         AUIK_EXPORT void clear();
         AUIK_EXPORT void set_model_binding(ModelBinding *binding);
-        size_t add_node(Widget *label, size_t parent = invalid_node) { return add_node(label, Row{}, parent); }
+        void set_parent_field_id(ModelFieldID field_id) { _parent_field_id = field_id; }
+        ModelFieldID parent_field_id() const { return _parent_field_id; }
+        void on_background_click(BackgroundClickCallback callback) { _on_background_click = std::move(callback); }
+        void on_reorder_begin(ReorderBeginCallback callback) { _on_reorder_begin = std::move(callback); }
+        void on_reorder(ReorderCallback callback) { _on_reorder = std::move(callback); }
+        void set_reorder_handle_tag(u32 tag) { _reorder_handle_tag = tag; }
+        u32 reorder_handle_tag() const { return _reorder_handle_tag; }
+        void set_hierarchy_anchor_tag(u32 tag) { _hierarchy_anchor_tag = tag; }
+        u32 hierarchy_anchor_tag() const { return _hierarchy_anchor_tag; }
+        AUIK_EXPORT size_t node_from_widget(const Widget *widget) const;
+        size_t add_node(DrawBlock *label, size_t parent = invalid_node) { return add_node(label, Row{}, parent); }
         AUIK_EXPORT void set_node_expanded(size_t node, bool expanded, bool animate = true);
         AUIK_EXPORT bool node_expanded(size_t node) const;
         AUIK_EXPORT bool node_has_children(size_t node) const;
 
         AUIK_EXPORT void set_alternating_rows(bool value);
         bool alternating_rows() const
-        { return detail::has_table_flag(_tree_flags, AUIK_TABLE_TREE_FLAG_ALTERNATING_ROWS); }
+        {
+            return detail::has_table_flag(_tree_flags, AUIK_TABLE_TREE_FLAG_ALTERNATING_ROWS);
+        }
         AUIK_EXPORT void set_alternating_row_style_tag(u32 tag_id);
         u32 alternating_row_style_tag() const { return _alternating_row_style.tag_id; }
 
@@ -63,11 +111,22 @@ namespace auik
         void set_indent_width(f32 value) { _indent_width = value; }
         AUIK_EXPORT bool is_row_hovered(size_t visible_row) const;
         AUIK_EXPORT bool is_arrow_hovered(size_t node) const;
+        AUIK_EXPORT void set_reorder(bool value);
+        bool reorder() const { return detail::has_table_flag(_tree_flags, AUIK_TABLE_TREE_FLAG_REORDER); }
+        AUIK_EXPORT void set_reorder_inherit(bool value);
+        bool reorder_inherit() const
+        {
+            return detail::has_table_flag(_tree_flags, AUIK_TABLE_TREE_FLAG_REORDER_INHERIT);
+        }
+        AUIK_EXPORT ReorderTarget resolve_reorder_target(const amal::vec2 &position) const;
+        AUIK_EXPORT void show_reorder_indicator(const ReorderTarget &target);
+        AUIK_EXPORT void hide_reorder_indicator();
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
         AUIK_EXPORT void update_layout_min_size() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
+        AUIK_EXPORT void reset_clip_rect_records() override;
         AUIK_EXPORT void rebuild_clip_rects() override;
         AUIK_EXPORT void reset_draw_records() override;
         AUIK_EXPORT void update_depth(const amal::vec2 &depth_range) override;
@@ -84,9 +143,9 @@ namespace auik
         virtual u32 signature() const override { return AUIK_TAG_TREE; }
 
     protected:
-        using Row = acul::vector<Widget *>;
+        using Row = acul::vector<DrawBlock *>;
         virtual bool supports_columns() const { return false; }
-        AUIK_EXPORT size_t add_node(Widget *label, Row cells, size_t parent);
+        AUIK_EXPORT size_t add_node(DrawBlock *label, Row cells, size_t parent);
         AUIK_EXPORT void set_default_column_settings(TableColumnSettings settings);
         const TableColumnSettings &default_column_settings() const { return _default_column_settings; }
         AUIK_EXPORT void set_column_settings(acul::vector<TableColumnSettings> settings);
@@ -95,7 +154,9 @@ namespace auik
         const acul::vector<TableColumnSettings> &column_settings() const { return _column_settings; }
         AUIK_EXPORT void set_column_resizable(bool value);
         bool column_resizable() const
-        { return detail::has_table_flag(_tree_flags, AUIK_TABLE_TREE_FLAG_COLUMN_RESIZABLE); }
+        {
+            return detail::has_table_flag(_tree_flags, AUIK_TABLE_TREE_FLAG_COLUMN_RESIZABLE);
+        }
         AUIK_EXPORT bool is_resize_border_hovered(size_t element_id) const;
         const acul::vector<acul::point2D<f32>> &size_overrides() const { return _size_overrides; }
         AUIK_EXPORT void set_size_overrides(acul::vector<acul::point2D<f32>> values, bool column_overrides);
@@ -137,7 +198,8 @@ namespace auik
         size_t node_ancestor_at_depth(size_t node, size_t depth) const;
         size_t resolve_column_count() const;
         u32 cell_element_id(size_t visible_row, size_t column) const;
-        Widget *cell_widget(size_t visible_row, size_t column) const;
+        DrawBlock *cell_widget(size_t visible_row, size_t column) const;
+        Widget *element_widget(ElementID element) const;
         const TableColumnSettings &settings_for_column(size_t column) const;
         void update_column_widths(f32 inner_width);
         void resize_visuals();
@@ -145,8 +207,10 @@ namespace auik
         void sync_cell_parents();
         void invalidate_layout();
         void update_own_layout();
+        void update_reorder_indicator_layout();
         StyleUpdateFlags update_resize_indicator();
         void rebuild_from_model_binding();
+        bool dispatch_reorder_drag(DragEvent &event);
 
         void ensure_arrow_resources();
         ArrowAnimation *find_arrow_animation(size_t node);
@@ -158,14 +222,14 @@ namespace auik
 
         acul::vector<Node> _nodes;
         acul::vector<Row> _node_cells;
+        acul::hashmap<const Widget *, size_t> _widget_nodes;
         acul::vector<size_t> _visible_nodes;
-        acul::vector<acul::vector<Widget *>> _cells;
+        acul::vector<acul::vector<DrawBlock *>> _cells;
         acul::vector<acul::point2D<detail::TableTrackMetrics>> _layout_metrics;
-        acul::vector<detail::TableCellVisual> _row_visuals;
-        acul::vector<detail::TableCellVisual> _cell_visuals;
         acul::vector<detail::TableCellVisual> _alt_row_visuals;
         acul::vector<detail::TableCellVisual> _resize_border_hit_visuals;
         detail::TableCellVisual _resize_indicator_visual;
+        detail::TableCellVisual _reorder_indicator_visual;
         acul::vector<QuadsInstanceData> _tree_line_data;
         acul::vector<DrawDataID> _tree_line_draws;
         acul::vector<ArrowVisual> _arrow_visuals;
@@ -177,6 +241,7 @@ namespace auik
         StyleSelector _line_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_TREE_LINE};
         StyleSelector _collapse_icon_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_TREE_COLLAPSE_ICON};
         StyleSelector _resize_border_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_TABLE_TREE_RESIZE_BORDER};
+        StyleSelector _reorder_indicator_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_TREE_REORDER_INDICATOR};
         acul::vector<TableColumnSettings> _column_settings;
         acul::vector<acul::point2D<f32>> _size_overrides;
         acul::vector<acul::point2D<f32>> _resize_size_basis;
@@ -189,31 +254,47 @@ namespace auik
         amal::vec2 _resize_drag_accum{0.0f, 0.0f};
         size_t _column_count = 0u;
         f32 _indent_width = 16.0f;
+        ReorderTarget _reorder_target{};
         ModelBinding *_model_binding = nullptr;
+        ModelFieldID _parent_field_id = AUIK_TREE_PARENT_FIELD;
+        BackgroundClickCallback _on_background_click = nullptr;
+        ReorderBeginCallback _on_reorder_begin = nullptr;
+        ReorderCallback _on_reorder = nullptr;
+        size_t _drag_node = invalid_node;
+        u32 _reorder_handle_tag = 0u;
+        u32 _hierarchy_anchor_tag = 0u;
     };
 
     class TableTree final : public Tree
     {
     public:
-        using Row = acul::vector<Widget *>;
+        using Row = acul::vector<DrawBlock *>;
 
         explicit TableTree(u32 id, amal::vec2 inline_size, WidgetFlags flags, u32 style_tag_id)
             : Tree(id, inline_size, flags, style_tag_id)
         {
         }
 
-        size_t add_node(Widget *label, Row cells = {}, size_t parent = invalid_node)
-        { return Tree::add_node(label, std::move(cells), parent); }
+        size_t add_node(DrawBlock *label, Row cells = {}, size_t parent = invalid_node)
+        {
+            return Tree::add_node(label, std::move(cells), parent);
+        }
         const Row &node_cells(size_t node) const { return Tree::node_cells_impl(node); }
         void set_model_binding(ModelBinding *binding, acul::vector<ModelFieldID> field_ids)
-        { Tree::set_model_binding(binding, std::move(field_ids)); }
+        {
+            Tree::set_model_binding(binding, std::move(field_ids));
+        }
 
         void set_default_column_settings(TableColumnSettings settings) { Tree::set_default_column_settings(settings); }
         const TableColumnSettings &default_column_settings() const { return Tree::default_column_settings(); }
         void set_column_settings(acul::vector<TableColumnSettings> settings)
-        { Tree::set_column_settings(std::move(settings)); }
+        {
+            Tree::set_column_settings(std::move(settings));
+        }
         void set_column_settings(size_t column, TableColumnSettings settings)
-        { Tree::set_column_settings(column, settings); }
+        {
+            Tree::set_column_settings(column, settings);
+        }
         void clear_column_settings() { Tree::clear_column_settings(); }
         const acul::vector<TableColumnSettings> &column_settings() const { return Tree::column_settings(); }
         void set_column_resizable(bool value) { Tree::set_column_resizable(value); }
@@ -222,7 +303,9 @@ namespace auik
         bool is_resize_border_hovered(size_t element_id) const { return Tree::is_resize_border_hovered(element_id); }
         const acul::vector<acul::point2D<f32>> &size_overrides() const { return Tree::size_overrides(); }
         void set_size_overrides(acul::vector<acul::point2D<f32>> values, bool column_overrides)
-        { Tree::set_size_overrides(std::move(values), column_overrides); }
+        {
+            Tree::set_size_overrides(std::move(values), column_overrides);
+        }
 
         virtual u32 signature() const override { return AUIK_TAG_TABLE_TREE; }
 
@@ -295,10 +378,9 @@ namespace auik
                                         ModelFieldID label_field_id = 1u,
                                         ModelFieldID parent_field_id = AUIK_TREE_PARENT_FIELD)
     {
-        return make_tree_model(db, model_id, nodes, label_field_id, parent_field_id,
-                               [](ModelFieldID field_id, const T &label) -> ModelField * {
-                                   return make_model_field<T>(field_id, label);
-                               });
+        return make_tree_model(
+            db, model_id, nodes, label_field_id, parent_field_id,
+            [](ModelFieldID field_id, const T &label) -> ModelField * { return make_model_field<T>(field_id, label); });
     }
 
     namespace streams

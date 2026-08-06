@@ -23,6 +23,9 @@ Unlike traditional UI systems that generate a single vertex stream, Auik organiz
 ## Styling
 Auik includes a CSS-inspired theme system. Themes can be created either through the native C++ API or through the CSS transpiler.
 
+## Icons
+Auik provides an API for default icons using [Remix Icon](https://github.com/Remix-Design/RemixIcon). Icons and fonts are not bundled.
+
 ## Limitations
 * Auik supports standard alpha blending but does not provide order-independent transparency (OIT).
 Transparent widgets rendered through different streams or pipelines may not preserve strict painter-order composition.

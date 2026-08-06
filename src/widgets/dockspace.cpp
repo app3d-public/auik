@@ -72,7 +72,7 @@ namespace auik
         for (auto *dock : ctx->docks)
             if (dock) dock->update_drag_zones();
         ctx->drag_zones_dirty = false;
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
     }
 
     void disable_dockspace_drag_zones(Window *window, const char *reason)
@@ -88,7 +88,7 @@ namespace auik
         for (auto *dock : ctx->docks)
             if (dock) dock->update_drag_zones();
         ctx->drag_zones_dirty = false;
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
     }
 
     enum DockMenuAction : u32
@@ -180,10 +180,14 @@ namespace auik
     }
 
     static f32 cross_size(const amal::vec2 &value, amal::axis axis)
-    { return axis == amal::axis::x ? value.y : value.x; }
+    {
+        return axis == amal::axis::x ? value.y : value.x;
+    }
 
     static amal::vec2 make_axis_size(amal::axis axis, f32 main, f32 cross)
-    { return axis == amal::axis::x ? amal::vec2{main, cross} : amal::vec2{cross, main}; }
+    {
+        return axis == amal::axis::x ? amal::vec2{main, cross} : amal::vec2{cross, main};
+    }
 
     static void set_axis_size(amal::vec2 &value, amal::axis axis, f32 size)
     {
@@ -221,10 +225,14 @@ namespace auik
     }
 
     static u32 resize_helper_tag_for_axis(amal::axis axis)
-    { return axis == amal::axis::x ? AUIK_TAG_DOCKSPACE_RESIZE_HELPER_V : AUIK_TAG_DOCKSPACE_RESIZE_HELPER_H; }
+    {
+        return axis == amal::axis::x ? AUIK_TAG_DOCKSPACE_RESIZE_HELPER_V : AUIK_TAG_DOCKSPACE_RESIZE_HELPER_H;
+    }
 
     static bool is_resize_helper_tag(u32 tag_id)
-    { return tag_id == AUIK_TAG_DOCKSPACE_RESIZE_HELPER_V || tag_id == AUIK_TAG_DOCKSPACE_RESIZE_HELPER_H; }
+    {
+        return tag_id == AUIK_TAG_DOCKSPACE_RESIZE_HELPER_V || tag_id == AUIK_TAG_DOCKSPACE_RESIZE_HELPER_H;
+    }
 
     static void update_existing_resize_helper_hit(DrawDataID &draw_id, const detail::RectData &rect)
     {
@@ -233,10 +241,14 @@ namespace auik
     }
 
     static u32 make_dockspace_tabbar_id(u32 dockspace_id, DockNodeID node_id)
-    { return dockspace_id + AUIK_DOCKSPACE_TABBAR_ID_BASE + node_id; }
+    {
+        return dockspace_id + AUIK_DOCKSPACE_TABBAR_ID_BASE + node_id;
+    }
 
     static u32 make_dockspace_menu_id(u32 dockspace_id, DockNodeID node_id)
-    { return dockspace_id + AUIK_DOCKSPACE_MENU_ID_BASE + node_id; }
+    {
+        return dockspace_id + AUIK_DOCKSPACE_MENU_ID_BASE + node_id;
+    }
 
     static amal::vec2 make_dockspace_tabbar_depth_range(const amal::vec2 &dock_depth_range)
     {
@@ -335,10 +347,21 @@ namespace auik
             _open = value;
             _button.set_open(value);
             if (_open) open_menu();
-            else release_menu(false);
+            else if (_menu) _menu->set_open(false);
         }
 
         bool is_open() const { return _open; }
+        bool owns_active_window_menu() const { return _menu_owner && _menu_owner == active_window(); }
+
+        bool sync_menu_model(bool force = false)
+        {
+            auto *window = active_window();
+            const bool source_changed = _menu_owner ? _menu_owner != window : active_window_menu() != nullptr;
+            if (!force && _model_ready && !source_changed) return _model_has_items;
+            _model_has_items = rebuild_menu_model();
+            _model_ready = true;
+            return _model_has_items;
+        }
 
         void update_layout_min_size() override
         {
@@ -361,7 +384,7 @@ namespace auik
             set_clip_id(clip_id);
             _button.update_style(id(), parent() ? parent()->id() : 0u, resolve_button_state());
             _button.update_layout(bounds, clip_id);
-            if (_open) open_menu();
+            if (_open) refresh_menu_anchor();
             Widget::update_layout(true);
         }
 
@@ -374,7 +397,9 @@ namespace auik
         }
 
         void update_depth(const amal::vec2 &dock_depth_range) override
-        { update_depth(dock_depth_range, make_dockspace_tabbar_depth_range(dock_depth_range)); }
+        {
+            update_depth(dock_depth_range, make_dockspace_tabbar_depth_range(dock_depth_range));
+        }
 
         void update_depth(const amal::vec2 &dock_depth_range, const amal::vec2 &tabbar_depth_range)
         {
@@ -414,7 +439,7 @@ namespace auik
             if (delta.x == 0.0f && delta.y == 0.0f) return;
             Widget::translate(delta);
             _button.translate(delta);
-            if (_open) open_menu();
+            if (_open) refresh_menu_anchor();
         }
 
         void reset_draw_records() override
@@ -446,7 +471,7 @@ namespace auik
                 const DockNodeID node_id = _node_id;
                 add_render_command<detail::ClickEventTraits>(
                     dockspace, [dockspace, node_id]() { dockspace->toggle_menu(node_id); });
-                detail::mark_host_refresh_request();
+                mark_host_refresh_request();
                 return;
             }
         }
@@ -459,7 +484,7 @@ namespace auik
             if (_menu && detail::get_context().focus_id == _menu->id()) return;
             add_render_command<detail::FocusEventTraits>(this, [this]() {
                 if (_dockspace) _dockspace->close_menu();
-                detail::mark_host_refresh_request();
+                mark_host_refresh_request();
             });
         }
 
@@ -472,7 +497,6 @@ namespace auik
         void on_detach() override
         {
             if (_menu && (_menu->widget_flags & WidgetFlagBits::attachable)) _menu->on_detach();
-            erase_widget_from_transient_cache(this);
             Widget::on_detach();
         }
 
@@ -481,7 +505,6 @@ namespace auik
             if (_dockspace && _dockspace->_open_menu_node == _node_id)
                 _dockspace->_open_menu_node = AUIK_DOCK_NODE_INVALID;
             set_open(false);
-            erase_widget_from_transient_cache(this);
         }
 
         void discard_popup()
@@ -492,7 +515,6 @@ namespace auik
             _button.set_open(false);
             if (_menu) _menu->discard_popup();
             release_menu(true);
-            erase_widget_from_transient_cache(this);
         }
 
         void detach_menu_for_action()
@@ -501,11 +523,7 @@ namespace auik
                 _dockspace->_open_menu_node = AUIK_DOCK_NODE_INVALID;
             _open = false;
             _button.set_open(false);
-            if (!_menu)
-            {
-                erase_widget_from_transient_cache(this);
-                return;
-            }
+            if (!_menu) return;
             _menu->set_open(false);
             _menu->pop_suffix_group();
             _menu->clear_popup_anchor_override();
@@ -523,7 +541,8 @@ namespace auik
                 acul::release(_menu);
                 _menu = nullptr;
             }
-            erase_widget_from_transient_cache(this);
+            _model_ready = false;
+            _model_has_items = false;
         }
 
     private:
@@ -575,10 +594,14 @@ namespace auik
                 _menu = nullptr;
                 _menu_owner = nullptr;
                 owner->set_menu_widget(menu);
+                _model_ready = false;
+                _model_has_items = false;
                 return;
             }
             acul::release(_menu);
             _menu = nullptr;
+            _model_ready = false;
+            _model_has_items = false;
         }
 
         StyleState resolve_button_state() const
@@ -607,7 +630,10 @@ namespace auik
                 auto *menu = window->take_menu_widget();
                 _menu = menu && menu->get_rect().id.tag_id == AUIK_TAG_POPUP_MENU ? static_cast<PopupMenu *>(menu)
                                                                                   : nullptr;
-                if (menu && !_menu) { window->set_menu_widget(menu); }
+                if (menu && !_menu)
+                {
+                    window->set_menu_widget(menu);
+                }
                 if (_menu)
                 {
                     _menu_owner = window;
@@ -668,11 +694,8 @@ namespace auik
             return has_any;
         }
 
-        void open_menu()
+        amal::rect menu_anchor() const
         {
-            if (!_open) return;
-            const bool has_menu = rebuild_menu_model();
-            if (!has_menu) return;
             amal::rect anchor = _button.bounds();
             if (const auto *node = _dockspace ? _dockspace->get_node(_node_id) : nullptr;
                 node && node->tab_panel_rect.bounds.size.y > 0.0f)
@@ -680,8 +703,21 @@ namespace auik
                 anchor.offset.y = node->tab_panel_rect.bounds.offset.y;
                 anchor.size.y = node->tab_panel_rect.bounds.size.y;
             }
+            return anchor;
+        }
+
+        void refresh_menu_anchor()
+        {
+            if (!_menu || !_dockspace) return;
             _menu->update_depth(get_dock_menu_popup_depth_range(_dockspace->depth_range()));
-            _menu->set_popup_anchor_override(anchor);
+            _menu->set_popup_anchor_override(menu_anchor());
+        }
+
+        void open_menu()
+        {
+            if (!_open) return;
+            if (!_model_ready || !_model_has_items) return;
+            refresh_menu_anchor();
             _menu->set_open(true);
         }
 
@@ -690,6 +726,8 @@ namespace auik
         detail::PopupTrigger _button;
         PopupMenu *_menu = nullptr;
         Window *_menu_owner = nullptr;
+        bool _model_ready = false;
+        bool _model_has_items = false;
         bool _open = false;
     };
 
@@ -764,7 +802,9 @@ namespace auik
     }
 
     DockNodeID Dockspace::create_leaf(DockNodeID parent, DockNodeSettings settings)
-    { return create_node(parent, false, settings); }
+    {
+        return create_node(parent, false, settings);
+    }
 
     void Dockspace::set_split_axis(DockNodeID node, amal::axis axis)
     {
@@ -776,7 +816,8 @@ namespace auik
         settings = normalize_dock_node_settings(settings);
         if (auto *n = get_node(node))
         {
-            const bool recreate_tabbar = n->tabbar && n->settings.tabbar_flags != settings.tabbar_flags;
+            const bool recreate_tabbar = n->tabbar && (n->settings.tabbar_flags != settings.tabbar_flags ||
+                                                       n->settings.tabpanel != settings.tabpanel);
             n->settings = settings;
             update_node_style_cache(node, *n);
             if (recreate_tabbar) clear_node_chrome(*n);
@@ -799,11 +840,13 @@ namespace auik
         invalidate_draw_commands(DrawReasonBits::layout);
         update_draw_commands(DrawReasonBits::layout | DrawReasonBits::record);
         if (ctx.dirty_flags & DirtyFlagBits::clip_rect) sync_clip_rect_cache();
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
     }
 
     void Dockspace::set_new_node_settings(DockNodeSettings settings)
-    { _new_node_settings = normalize_dock_node_settings(settings); }
+    {
+        _new_node_settings = normalize_dock_node_settings(settings);
+    }
 
     void Dockspace::set_policy_flags(DockspaceFlags flags)
     {
@@ -813,7 +856,7 @@ namespace auik
         auto &ctx = detail::get_context();
         ctx.dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
         update_layout_sync(true);
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
     }
 
     void Dockspace::set_docking_enabled(bool enabled)
@@ -839,9 +882,9 @@ namespace auik
         for (auto &node : _nodes)
         {
             if (node.menu) node.menu->close_popup();
-            if (!_menu_group.empty()) continue;
             if (node.menu)
             {
+                if (node.menu->sync_menu_model(true)) continue;
                 if (node.menu->widget_flags & WidgetFlagBits::attachable) node.menu->on_detach();
                 if (can_invalidate_dock_chrome()) node.menu->invalidate_draw_commands(DrawReasonBits::layout);
                 acul::release(node.menu);
@@ -852,7 +895,10 @@ namespace auik
         update_layout_sync(true);
     }
 
-    bool Dockspace::needs_node_tab_panel(const Node &node) const { return tabpanel_enabled() && !node.windows.empty(); }
+    bool Dockspace::needs_node_tab_panel(const Node &node) const
+    {
+        return tabpanel_enabled() && node.settings.tabpanel && !node.windows.empty();
+    }
 
     void Dockspace::attach_window(Window *window)
     {
@@ -935,7 +981,10 @@ namespace auik
     void Dockspace::undock_window(DockNodeID node_id, Window *window)
     {
         auto *node = get_node(node_id);
-        if (!node || !window) { return; }
+        if (!node || !window)
+        {
+            return;
+        }
 
         amal::rect undocked_bounds{};
         invalidate_window_draw_records(window);
@@ -961,7 +1010,7 @@ namespace auik
         extracted->update_draw_commands(DrawReasonBits::record);
         auto &ctx = detail::get_context();
         ctx.dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
     }
 
     void Dockspace::close_window(DockNodeID node_id, Window *window)
@@ -990,7 +1039,7 @@ namespace auik
                     fit_node_to_required_width(node_id, true);
                 }
                 update_layout_sync(true);
-                detail::mark_host_refresh_request();
+                mark_host_refresh_request();
                 return;
             }
         }
@@ -1025,6 +1074,11 @@ namespace auik
         n->windows.push_back(window);
         n->active_window_index = n->windows.size() - 1u;
         n->record_active_window = true;
+        if (needs_node_tab_panel(*n))
+        {
+            sync_node_tabbar(node, *n);
+            if (has_node_menu(*n)) sync_node_menu(node, *n);
+        }
         auto &map = detail::get_context().id_map;
         if (map.find(id()) != map.end()) update_depth(this->depth_range());
     }
@@ -1073,7 +1127,7 @@ namespace auik
         node->tabbar->reset_draw_records();
         node->tabbar->update_draw_commands(DrawReasonBits::layout | DrawReasonBits::record);
         ctx.dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
         return true;
     }
 
@@ -1380,7 +1434,10 @@ namespace auik
         auto *node = get_node(node_id);
         if (!node || !node->menu || !has_node_menu(*node)) return;
 
-        if (_open_menu_node == node_id) { close_menu(); }
+        if (_open_menu_node == node_id)
+        {
+            close_menu();
+        }
         else
         {
             close_menu();
@@ -1393,7 +1450,7 @@ namespace auik
         update_layout(false);
         update_draw_commands(DrawReasonBits::layout);
         if (ctx.dirty_flags & DirtyFlagBits::clip_rect) sync_clip_rect_cache();
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
     }
 
     void Dockspace::queue_menu_action(DockNodeID node_id, u32 action)
@@ -1433,6 +1490,7 @@ namespace auik
         if (!tabpanel_enabled()) return false;
         if (node.windows.empty()) return false;
         if (!_menu_group.empty()) return true;
+        if (node.menu && node.menu->owns_active_window_menu()) return true;
         const size_t active_index = selected_window_index(node);
         auto *window = active_index < node.windows.size() ? node.windows[active_index] : nullptr;
         auto *menu = window_popup_menu(window);
@@ -1453,6 +1511,7 @@ namespace auik
             if (map.find(id()) != map.end() && (node.menu->widget_flags & WidgetFlagBits::attachable))
                 node.menu->on_attach();
         }
+        node.menu->sync_menu_model();
         node.menu->update_depth(this->depth_range(), is_valid_depth_range(_tabbar_depth_range)
                                                          ? _tabbar_depth_range
                                                          : make_dockspace_tabbar_depth_range(this->depth_range()));
@@ -1927,7 +1986,10 @@ namespace auik
             interactive = false;
             auto *before = before_child < node->children.size() ? get_node(node->children[before_child]) : nullptr;
             auto *after = after_child < node->children.size() ? get_node(node->children[after_child]) : nullptr;
-            if (leading) { return; }
+            if (leading)
+            {
+                return;
+            }
             visible = before && after && has_visible_resize_helper_flag(before->settings.flags, node->axis) &&
                       has_visible_resize_helper_flag(after->settings.flags, node->axis);
             interactive = before && after && has_resize_helper_flag(before->settings.flags, node->axis) &&
@@ -2102,7 +2164,10 @@ namespace auik
     {
         if (!min_size_known) update_layout_min_size();
 
-        if (parent()) { set_layout_size(amal::max(size(), required_size())); }
+        if (parent())
+        {
+            set_layout_size(amal::max(size(), required_size()));
+        }
         Widget::update_layout(true);
         ensure_own_clip_rect({position().x, position().y, size().x, size().y});
 
@@ -2346,7 +2411,7 @@ namespace auik
         extracted->update_draw_commands(DrawReasonBits::record);
         enable_dockspace_drag_zones(extracted);
         ctx.dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
         return true;
     }
 
@@ -2610,8 +2675,7 @@ namespace auik
         draw_resize_helpers(ctx);
         if (_deferred_menu_popup_draw && _deferred_menu_popup_draw->is_open())
         {
-            // @needs-testing: Popup draw is currently forced to the tail of the dockspace draw pass. If more
-            // overlapping translucent/rounded UI cases appear, revisit whether this needs a real ordered UI pass/OIT.
+            // Popup belongs to the dockspace draw order and is emitted once after all dock content.
             DrawCtx menu_ctx = ctx;
             _deferred_menu_popup_draw->draw_popups(menu_ctx);
         }
@@ -2648,7 +2712,7 @@ namespace auik
         if (helper_state)
         {
             ctx.dirty_flags |= DirtyFlagBits::redraw;
-            detail::mark_host_refresh_request();
+            mark_host_refresh_request();
         }
     }
 
@@ -2671,7 +2735,7 @@ namespace auik
             update_draw_commands(DrawReasonBits::layout | DrawReasonBits::record);
         }
         else update_draw_commands(DrawReasonBits::layout);
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
     }
 
     void Dockspace::on_drag(const amal::vec2 &delta, KeyPressState state)
@@ -2925,7 +2989,8 @@ namespace auik
                 .write(settings.size)
                 .write(settings.min_size)
                 .write(static_cast<u32>(settings.flags))
-                .write(static_cast<u32>(settings.tabbar_flags));
+                .write(static_cast<u32>(settings.tabbar_flags))
+                .write(settings.tabpanel);
         }
 
         static DockNodeSettings read_node_settings(acul::bin_stream &stream)
@@ -2933,7 +2998,12 @@ namespace auik
             DockNodeSettings settings{};
             u32 flags = 0u;
             u32 tabbar_flags = 0u;
-            stream.read(settings.style_tag).read(settings.size).read(settings.min_size).read(flags).read(tabbar_flags);
+            stream.read(settings.style_tag)
+                .read(settings.size)
+                .read(settings.min_size)
+                .read(flags)
+                .read(tabbar_flags)
+                .read(settings.tabpanel);
             settings.flags = DockspaceResizeFlags(flags);
             settings.tabbar_flags = TabbarFlags(tabbar_flags);
             return normalize_dock_node_settings(settings);

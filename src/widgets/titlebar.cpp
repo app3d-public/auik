@@ -18,6 +18,10 @@
 
 namespace auik
 {
+#ifdef _WIN32
+    static bool update_win32_titlebar_metrics(TitlebarState &base_state, UINT dpi = 0u);
+#endif
+
     inline void destroy_titlebar_state(TitlebarState *state)
     {
         assert(state->destroy && "destroy function is null");
@@ -83,7 +87,7 @@ namespace auik
 
         auto &ctx = detail::get_context();
         ctx.dirty_flags |= DirtyFlagBits::redraw;
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
     }
 
     static void update_titlebar_child_depths(const amal::vec2 &parent_depth_range,
@@ -121,7 +125,7 @@ namespace auik
         if (_show_icon == value) return;
         _show_icon = value;
         detail::mark_layout_dirty();
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
     }
 
     void Titlebar::set_leading_count(u32 count) { _leading_count = count; }
@@ -565,6 +569,24 @@ namespace auik
         WNDPROC prev_proc = nullptr;
     };
 
+    static bool update_win32_titlebar_metrics(TitlebarState &base_state, UINT dpi)
+    {
+        auto &state = static_cast<Win32TitlebarState &>(base_state);
+        if (dpi == 0u) dpi = GetDpiForWindow(state.hwnd);
+        const auto previous_frame = state.frame;
+        const i32 previous_padding = state.padding;
+        const amal::vec2 previous_button_size = state.caption_button_size;
+        const f32 previous_height = state.height;
+        state.frame.x = GetSystemMetricsForDpi(SM_CXFRAME, dpi);
+        state.frame.y = GetSystemMetricsForDpi(SM_CYFRAME, dpi);
+        state.padding = GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi);
+        const f32 scale = static_cast<f32>(dpi) / 96.0f;
+        state.caption_button_size = {GetSystemMetrics(SM_CXSIZE) * scale, GetSystemMetrics(SM_CYSIZE) * scale};
+        state.height = GetSystemMetrics(SM_CYCAPTION) * scale;
+        return previous_frame != state.frame || previous_padding != state.padding ||
+               previous_button_size != state.caption_button_size || previous_height != state.height;
+    }
+
     static i32 hit_test_caption_button_index(const TitlebarState &state, const amal::ivec2 &pos, i32 client_width)
     {
         if (state.caption_button_size.x <= 0.0f || state.caption_button_size.y <= 0.0f) return -1;
@@ -623,6 +645,15 @@ namespace auik
 
         switch (msg)
         {
+            case WM_DPICHANGED:
+            {
+                if (state && update_win32_titlebar_metrics(*state, LOWORD(wParam)))
+                {
+                    detail::mark_layout_dirty();
+                    mark_host_refresh_request();
+                }
+                break;
+            }
             case WM_NCHITTEST:
             {
                 if (!state) break;
@@ -801,9 +832,17 @@ namespace auik
         {
             auto *glyph = font.find_glyph(size, codepoints[i]);
             if (!glyph) return false;
-            auto *image =
-                make_image(ids[i], glyph->texture_id,
-                           {static_cast<f32>(glyph->size.x), static_cast<f32>(glyph->size.y)}, glyph->uv_rect);
+            const amal::vec2 image_size{static_cast<f32>(glyph->size.x), static_cast<f32>(glyph->size.y)};
+            auto *image = get_cached_image(ids[i]);
+            if (image)
+            {
+                image->set_texture_id(glyph->texture_id);
+                image->set_uv_offset(glyph->uv_rect.offset);
+                image->set_uv_size(glyph->uv_rect.size);
+                image->set_size(image_size);
+                image->set_layout_size(image_size);
+            }
+            else image = make_image(ids[i], glyph->texture_id, image_size, glyph->uv_rect);
             if (!image) return false;
             image->set_coverage_mode(true);
             cache_image(ids[i], image);
@@ -825,6 +864,21 @@ namespace auik
     }
 #endif
 
+    bool Titlebar::reload_caption_button_icons(f32 dpi, const FontRegistry &fonts)
+    {
+#ifdef _WIN32
+        if (!_state || dpi <= 0.0f) return false;
+        if (!add_window_caption_button_icons(fonts, dpi)) return false;
+        detail::mark_layout_dirty();
+        mark_host_refresh_request();
+        return true;
+#else
+        (void)dpi;
+        (void)fonts;
+        return true;
+#endif
+    }
+
     bool adjust_window_by_titlebar_settings(Titlebar *titlebar, TitlebarCreateFlags flags, const FontRegistry &fonts)
     {
 #ifdef _WIN32
@@ -841,14 +895,10 @@ namespace auik
         state->flags = flags;
         state->hwnd = hwnd;
         state->destroy = &destroy_win32_titlebar_state;
-        state->frame.x = GetSystemMetricsForDpi(SM_CXFRAME, dpi_value);
-        state->frame.y = GetSystemMetricsForDpi(SM_CYFRAME, dpi_value);
-        state->padding = GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi_value);
-        state->caption_button_size = {GetSystemMetrics(SM_CXSIZE) * dpi, GetSystemMetrics(SM_CYSIZE) * dpi};
-        state->height = GetSystemMetrics(SM_CYCAPTION) * dpi;
         state->caption_buttons[AUIK_WINDOW_CAPTION_BTN_MIN] = flags & TitlebarCreateFlagBits::minimize_box;
         state->caption_buttons[AUIK_WINDOW_CAPTION_BTN_MAX] = flags & TitlebarCreateFlagBits::maximize_box;
         state->caption_buttons[AUIK_WINDOW_CAPTION_BTN_CLOSE] = true;
+        update_win32_titlebar_metrics(*state, dpi_value);
 
         if (!bind_win32_titlebar_state(state))
         {

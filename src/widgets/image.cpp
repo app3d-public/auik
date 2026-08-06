@@ -53,7 +53,7 @@ namespace auik
         image_data.z_order = get_z_order();
         image_data.texture_id = static_cast<u16>(_texture_id.bind_slot);
         image_data.clip_id = clip_id();
-        image_data.flags = _coverage_mode ? AUIK_TEXTURE_INSTANCE_TEXT_BIT : 0u;
+        image_data.flags = _coverage_mode ? AUIK_TEXTURE_INSTANCE_TINT_BIT : 0u;
         emit_context_draw(ctx, textured_quads_stream, _image, &image_data, get_rect(), false);
     }
 

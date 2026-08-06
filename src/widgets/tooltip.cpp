@@ -67,7 +67,7 @@ namespace auik
         update_layout(false);
 
         redraw_external(has_draw_record(), DrawReasonBits::layout | DrawReasonBits::external);
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
     }
 
     void Tooltip::hide()

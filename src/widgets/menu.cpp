@@ -90,12 +90,11 @@ namespace auik
               _selected_options({}),
               _style({Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_COMBO_BOX_ITEM}),
               _selected_style({Theme::STYLE_ID_INVALID, _selected_options.tag_id}),
-              _label(acul::alloc<Text>(AUIK_TAG_TEXT, data ? data->source_text() : StringView{},
-                                        amal::vec2{0.0f, 0.0f}, WidgetFlagBits::visible,
-                                        make_text_layout_flags(TextOverflowMode::ellipsis))),
+              _label(acul::alloc<Text>(AUIK_TAG_TEXT, data ? data->source_text() : StringView{}, amal::vec2{0.0f, 0.0f},
+                                       WidgetFlagBits::visible, make_text_layout_flags(TextOverflowMode::ellipsis))),
               _shortcut(acul::alloc<Text>(AUIK_TAG_TEXT, data ? data->shortcut_source() : StringView{},
-                                           amal::vec2{0.0f, 0.0f}, WidgetFlagBits::visible,
-                                           make_text_layout_flags(TextOverflowMode::clip))),
+                                          amal::vec2{0.0f, 0.0f}, WidgetFlagBits::visible,
+                                          make_text_layout_flags(TextOverflowMode::clip))),
               _item_id(item_id),
               _has_next(data && data->has_group_layer())
         {
@@ -148,9 +147,9 @@ namespace auik
             _selected_enabled = enabled;
             _style = {Theme::STYLE_ID_INVALID,
                       enabled ? AUIK_STYLE_TAG_COMBO_BOX_ITEM_MULTI : AUIK_STYLE_TAG_COMBO_BOX_ITEM};
-            _selected_options =
-                enabled ? detail::make_selectable_icon_options(AUIK_ICON_CHECKMARK)
-                        : detail::make_selectable_highlight_options(AUIK_STYLE_TAG_COMBO_BOX_ITEM_SELECTED);
+            _selected_options = enabled
+                                    ? detail::make_selectable_icon_options(AUIK_ICON_CHECKMARK)
+                                    : detail::make_selectable_highlight_options(AUIK_STYLE_TAG_COMBO_BOX_ITEM_SELECTED);
             _selected_style = {Theme::STYLE_ID_INVALID, _selected_options.tag_id};
             if (mode_changed)
             {
@@ -320,8 +319,8 @@ namespace auik
                                     can_emit_hit(ctx));
             }
             const bool draw_state_bg = !_selected || !selected_style_enabled();
-            const bool visible = draw_state_bg && fill_quads_instance_by_style(get_theme()->get_style(_style.id),
-                                                                               clip_id(), bg);
+            const bool visible =
+                draw_state_bg && fill_quads_instance_by_style(get_theme()->get_style(_style.id), clip_id(), bg);
             emit_quads_instance(ctx, quads_stream, _bg, bg, get_rect(), visible, can_emit_hit(ctx));
             _label->draw_local(ctx);
             if (!_shortcut->text().empty()) _shortcut->draw_local(ctx);
@@ -351,8 +350,7 @@ namespace auik
             {
                 if (!*chain) *chain = text->add_post_effect(get_disabled_post_effect());
             }
-            else if (*chain && text->remove_post_effect(*chain))
-                *chain = nullptr;
+            else if (*chain && text->remove_post_effect(*chain)) *chain = nullptr;
         }
 
         void ensure_selected_icon_resources()
@@ -417,7 +415,7 @@ namespace auik
             icon.z_order = _selected_icon_rect.depth;
             icon.texture_id = static_cast<u16>(texture.bind_slot);
             icon.clip_id = clip_id();
-            icon.flags = AUIK_TEXTURE_INSTANCE_TEXT_BIT;
+            icon.flags = AUIK_TEXTURE_INSTANCE_TINT_BIT;
             emit_context_draw(ctx, stream, _selected_icon_draw, &icon, _selected_icon_rect, false);
         }
 
@@ -461,7 +459,7 @@ namespace auik
             icon.z_order = next_depth(_content_depth_range);
             icon.texture_id = static_cast<u16>(texture.bind_slot);
             icon.clip_id = clip_id();
-            icon.flags = AUIK_TEXTURE_INSTANCE_TEXT_BIT;
+            icon.flags = AUIK_TEXTURE_INSTANCE_TINT_BIT;
             emit_context_draw(ctx, stream, _next_icon_draw, &icon, get_rect(), false);
         }
 
@@ -555,11 +553,13 @@ namespace auik
                 sync_widget_after_style_update(item, style_flags);
             }
         }
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
     }
 
     MenuBar::MenuItem *MenuBar::create_item(StringView text, Widget *parent)
-    { return _menu_base.create_item(text, parent); }
+    {
+        return _menu_base.create_item(text, parent);
+    }
 
     MenuBar::MenuItem *MenuBar::find_item(u32 element_id) { return _menu_base.find_item(element_id); }
 
@@ -646,7 +646,7 @@ namespace auik
         if (mark_changed()) return;
         sync_popup_item_states();
         detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
     }
 
     void MenuBar::set_selected_items(const acul::vector<u32> &element_ids)
@@ -668,17 +668,23 @@ namespace auik
         if (mark_changed()) return;
         sync_popup_item_states();
         detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
     }
 
     MenuBar::MenuItem *MenuBar::append_item(const char *text, acul::unique_function<void(ClickEvent &)> callback)
-    { return append_item(StringView{text}, std::move(callback)); }
+    {
+        return append_item(StringView{text}, std::move(callback));
+    }
 
     MenuBar::MenuItem *MenuBar::append_item(acul::string text, acul::unique_function<void(ClickEvent &)> callback)
-    { return append_item(StringView{text}, std::move(callback)); }
+    {
+        return append_item(StringView{text}, std::move(callback));
+    }
 
     MenuBar::MenuItem *MenuBar::append_item(StringView text, acul::unique_function<void(ClickEvent &)> callback)
-    { return append_root_suffix_item(text, std::move(callback)); }
+    {
+        return append_root_suffix_item(text, std::move(callback));
+    }
 
     void MenuBar::add_items(u32 count)
     {
@@ -793,7 +799,9 @@ namespace auik
     }
 
     const MenuBar::RuntimeSuffixGroup *MenuBar::runtime_suffix_group(u32 group_index) const
-    { return group_index < _runtime_suffix_groups.size() ? &_runtime_suffix_groups[group_index] : nullptr; }
+    {
+        return group_index < _runtime_suffix_groups.size() ? &_runtime_suffix_groups[group_index] : nullptr;
+    }
 
     u32 MenuBar::push_root_suffix_group()
     {
@@ -818,7 +826,9 @@ namespace auik
 
     MenuBar::MenuItem *MenuBar::append_root_suffix_item(acul::string text,
                                                         acul::unique_function<void(ClickEvent &)> callback)
-    { return append_root_suffix_item(StringView{text}, std::move(callback)); }
+    {
+        return append_root_suffix_item(StringView{text}, std::move(callback));
+    }
 
     MenuBar::MenuItem *MenuBar::append_root_suffix_item(StringView text,
                                                         acul::unique_function<void(ClickEvent &)> callback)
@@ -835,7 +845,9 @@ namespace auik
 
     MenuBar::MenuItem *MenuBar::append_root_suffix_item(u32 group_index, acul::string text,
                                                         acul::unique_function<void(ClickEvent &)> callback)
-    { return append_root_suffix_item(group_index, StringView{text}, std::move(callback)); }
+    {
+        return append_root_suffix_item(group_index, StringView{text}, std::move(callback));
+    }
 
     MenuBar::MenuItem *MenuBar::append_root_suffix_item(u32 group_index, StringView text,
                                                         acul::unique_function<void(ClickEvent &)> callback)
@@ -873,11 +885,17 @@ namespace auik
         discard_popups();
         if (group->empty())
         {
-            if (group_index + 1u == _runtime_suffix_groups.size()) { _runtime_suffix_groups.pop_back(); }
+            if (group_index + 1u == _runtime_suffix_groups.size())
+            {
+                _runtime_suffix_groups.pop_back();
+            }
             return;
         }
         _menu_base.release_group_items(group->group);
-        if (group_index + 1u == _runtime_suffix_groups.size()) { _runtime_suffix_groups.pop_back(); }
+        if (group_index + 1u == _runtime_suffix_groups.size())
+        {
+            _runtime_suffix_groups.pop_back();
+        }
     }
 
     acul::vector<u32> MenuBar::root_ids() const
@@ -1224,7 +1242,17 @@ namespace auik
             get_theme()->get_resolved_style(AUIK_STYLE_TAG_MENU_POPUP, popup_id, 0, StyleState::normal));
         const auto &item_style = get_theme()->get_style(get_theme()->get_resolved_style(
             AUIK_STYLE_TAG_COMBO_BOX_ITEM, AUIK_TAG_COMBO_BOX_ITEM, popup_id, StyleState::normal));
-        return clamp({anchor_right - 1.0f, anchor.offset.y - popup_style.padding().y - item_style.margin().y});
+        const f32 right_x = anchor_right - 1.0f;
+        const f32 left_x = anchor_left - popup_size.x + 1.0f;
+        const f32 popup_y = anchor.offset.y - popup_style.padding().y - item_style.margin().y;
+        const bool fits_right = right_x + popup_size.x <= max_x;
+        const bool fits_left = left_x >= min_x;
+        if (fits_right) return clamp({right_x, popup_y});
+        if (fits_left) return clamp({left_x, popup_y});
+
+        const f32 space_right = max_x - anchor_right;
+        const f32 space_left = anchor_left - min_x;
+        return clamp({space_left > space_right ? left_x : right_x, popup_y});
     }
 
     void MenuBar::layout_popup(u32 depth, const amal::rect &anchor, const acul::vector<acul::vector<u32>> &groups)
@@ -1319,7 +1347,6 @@ namespace auik
         refresh_popup_clip_rect(popup);
         popup->update_layout(false);
         refresh_popup_clip_rect(popup);
-        static_cast<Widget *>(popup)->update_draw_commands(DrawReasonBits::record);
     }
 
     amal::rect MenuBar::resolve_root_popup_anchor(const amal::rect &anchor) const
@@ -1460,6 +1487,8 @@ namespace auik
         for (auto *popup : _popups)
             if (popup)
             {
+                if (popup->is_visible() && !(detail::get_context().dirty_flags & DirtyFlagBits::destroying))
+                    static_cast<Widget *>(popup)->invalidate_draw_commands(DrawReasonBits::full_redraw);
                 popup->unset_visible();
                 popup->sync_widget_flags();
             }
@@ -1469,7 +1498,7 @@ namespace auik
     void MenuBar::request_redraw()
     {
         detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
     }
 
     StyleUpdateFlags MenuBar::update_root_item_state(u32 element_id)
@@ -1722,7 +1751,6 @@ namespace auik
             if (_menu) _menu->close_all();
             if (_menu && detail::get_context().focus_id == _menu->id()) focus_widget(nullptr);
             detach_menu_from_popup();
-            erase_widget_from_transient_cache(this);
         }
     }
 
@@ -1733,7 +1761,6 @@ namespace auik
         if (_menu) _menu->discard_popups();
         if (_menu && detail::get_context().focus_id == _menu->id()) focus_widget(nullptr);
         detach_menu_from_popup();
-        erase_widget_from_transient_cache(this);
     }
 
     void PopupMenu::open_menu()
@@ -1756,7 +1783,6 @@ namespace auik
         _menu->update_depth(detail::get_global_foreground_depth_range());
         _menu->open_root_items_at(_popup_anchor_overridden ? _popup_anchor_override : _button.bounds(), ids);
         focus_widget(_menu);
-        push_widget_to_transient_cache(this);
     }
 
     StyleUpdateFlags PopupMenu::update_style()
@@ -1856,7 +1882,7 @@ namespace auik
         const auto hover_id = detail::get_context().hover_id;
         if (!is_button_hit(hover_id)) return;
         add_render_command<detail::ClickEventTraits>(this, [this]() { set_open(!_open); });
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
     }
 
     void PopupMenu::on_focus(bool focused)
@@ -1868,7 +1894,7 @@ namespace auik
             set_open(false);
             redraw_all_commands();
         });
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
     }
 
     void PopupMenu::on_attach()
@@ -1880,7 +1906,6 @@ namespace auik
     void PopupMenu::on_detach()
     {
         detach_menu_from_popup();
-        erase_widget_from_transient_cache(this);
         Widget::on_detach();
     }
 

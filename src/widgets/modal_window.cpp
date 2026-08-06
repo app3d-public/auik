@@ -255,7 +255,7 @@ namespace auik
     {
         auto &ctx = detail::get_context();
         ctx.dirty_flags |= DirtyFlagBits::redraw;
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
     }
 
     void ModalQueue::update_modal_draw_commands(DrawReasonFlags reason)
@@ -583,7 +583,7 @@ namespace auik
         if (_close_all_pending) return;
         _close_all_pending = true;
         add_render_command<detail::DeferredEventTraits>(this, [this]() { close_all_windows_now(); });
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
     }
 
     u32 ModalQueue::group_count(u32 group_id) const

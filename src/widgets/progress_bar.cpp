@@ -223,7 +223,7 @@ namespace auik
         start_animation(_animation, this);
         update_draw_commands(DrawReasonBits::external);
         detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
     }
 
     f32 ProgressBar::clamped_value(f32 value) const

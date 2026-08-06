@@ -1,8 +1,8 @@
 :root {
-    --color-surface: rgb(42, 43, 41);
-    --color-surface-light: rgb(75, 74, 74);
-    --color-hover: rgba(85, 85, 85);
-    --color-active: rgb(31, 31, 31);
+    --color-surface: rgb(40, 40, 41);
+    --color-surface-light: rgb(70, 70, 70);
+    --color-surface-dark: rgb(31, 31, 31);
+    --color-hover: rgb(85, 85, 85);
     --color-border: rgb(51, 51, 51);
     --color-accent: rgb(72, 114, 255);
     --color-accent-hover: rgb(91, 130, 255);
@@ -38,11 +38,11 @@
 }
 
 .selection {
-    background-color: rgba(72, 114, 255, 0.4);
+    background-color: rgba(72, 114, 255, 0.5);
 }
 
 .rubber-band {
-    background-color: rgba(72, 114, 255, 0.3);
+    background-color: rgba(72, 114, 255, 0.5);
     border: 1px solid rgba(72, 114, 255, 0.8);
 }
 
@@ -158,13 +158,13 @@
 
 .dock-node-tab-panel {
     margin: 0px;
-    background-color: var(--color-surface-light);
+    background-color: var(--color-surface-dark);
 }
 
 .dock-tabbar {
     width: stretch;
     height: fit-content;
-    margin: 0px;
+    margin: 4px 0px;
     inline-spacing: 0px;
 }
 
@@ -172,7 +172,7 @@
     margin: -2px 4px 0px 4px;
     padding: 6px;
     background-color: rgba(0, 0, 0, 0);
-    border-radius: 4px;
+    border-radius: 3px;
 }
 
 .dock-tabbar-menu:hover {
@@ -209,8 +209,9 @@
 
 .dock-tab-item-selected {
     margin: 0px;
-    padding: 5px 10px;
-    background-color: var(--color-surface);
+    padding: 5px 12px;
+    background-color: var(--color-surface-light);
+    border-radius: 3px;
 }
 
 .dock-tab-item-selected:hover {
@@ -225,23 +226,23 @@
 
 .tree-cell {
     margin: 0px 5px;
-    padding: 0px 4px;
+    padding: 4px 4px;
 }
 
 .tree-row-alt {
     margin: 0px;
-    background-color: rgba(255, 255, 255, 0.035);
+    background-color: rgb(34, 34, 35);
 }
 
 .tree-line {
     margin: 0px;
-    background-color: rgb(100, 100, 100);
-    border: 1px solid rgb(100, 100, 100);
+    background-color: rgb(70, 70, 70);
+    border: 2px solid;
 }
 
 .tree-collapse-icon {
     margin: 4px 0px;
-    padding: 0px 10px;
+    padding: 0px 3px 0px 7px;
     color: var(--color-text);
 }
 
@@ -313,7 +314,7 @@
 
 .window-header {
     padding: 8px 8px;
-    background-color: var(--color-active);
+    background-color: var(--color-surface-dark);
     border-radius: 6px 6px 0px 0px;
 }
 
@@ -322,7 +323,7 @@
 }
 
 .titlebar {
-    background-color: var(--color-active);
+    background-color: var(--color-surface-dark);
 }
 
 .titlebar-leading-region {
@@ -406,12 +407,14 @@
 }
 
 .textbox {
+    min-width: 160px;
     padding: 4px 8px;
     background-color: var(--color-surface-light);
     border-radius: 4px;
 }
 
 .multiline-textbox {
+    min-width: 160px;
     padding: 4px 8px;
     vertical-align: top;
     white-space: normal;
@@ -502,7 +505,7 @@
 .combo-box-popup {
     margin: 0px;
     padding: 2px 0px;
-    background-color: var(--color-active);
+    background-color: var(--color-surface-dark);
     border-radius: 0px 0px 4px 4px;
 }
 
@@ -517,6 +520,13 @@
     padding: 3px 26px 3px 6px;
     border-radius: 3px;
     vertical-align: middle;
+}
+
+.tree-reorder-indicator {
+    width: stretch;
+    height: 2px;
+    margin: 0px;
+    background-color: rgb(90, 90, 90);
 }
 
 .combo-box-item:hover {
@@ -580,10 +590,9 @@
 }
 
 .tabbar-change-icon {
-    width: 14px;
-    height: 14px;
-    margin: 0px 8px 0px 8px;
-    padding: 3px;
+    width: calc(8px * var(--dpi));
+    height: calc(8px * var(--dpi));
+    margin: 0px calc(8px * var(--dpi));
     background-color: rgb(190, 190, 190);
     border-radius: calc(4px * var(--dpi));
 }
@@ -605,7 +614,7 @@
 .tabbar-popup {
     margin: 0px;
     padding: 2px 0px;
-    background-color: var(--color-active);
+    background-color: var(--color-surface-dark);
     border-radius: 4px;
 }
 
@@ -678,7 +687,7 @@
 
 .main-menu-bar {
     margin: 0px;
-    background-color: var(--color-active);
+    background-color: var(--color-surface-dark);
 }
 
 .titlebar-menu-bar {
@@ -812,7 +821,7 @@
 .tooltip {
     margin: 0px;
     padding: 6px 10px;
-    background-color: var(--color-active);
+    background-color: var(--color-surface-dark);
     border: 0px solid var(--color-border);
     border-radius: 3px;
     color: rgb(235, 235, 235);
@@ -821,7 +830,7 @@
 .scrollbar-track {
     margin: 0px;
     padding: 2px;
-    background-color: var(--color-active);
+    background-color: var(--color-surface-dark);
 }
 
 .scrollbar-thumb {

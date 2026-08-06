@@ -71,13 +71,14 @@ namespace auik
         amal::vec2 min_size{80.0f, 80.0f};
         DockspaceResizeFlags flags = DockspaceResizeFlagBits::resize_helper | DockspaceResizeFlagBits::visible_resize_helper;
         TabbarFlags tabbar_flags = TabbarFlagBits::none;
+        bool tabpanel = true;
     };
 
     inline DockNodeSettings make_dockspace_settings(
         u32 style_tag = AUIK_STYLE_TAG_DOCKSPACE_NODE, const amal::vec2 &size = {0.0f, 0.0f},
         const amal::vec2 &min_size = {80.0f, 80.0f},
         DockspaceResizeFlags flags = DockspaceResizeFlagBits::resize_helper | DockspaceResizeFlagBits::visible_resize_helper,
-        TabbarFlags tabbar_flags = TabbarFlagBits::none)
+        TabbarFlags tabbar_flags = TabbarFlagBits::none, bool tabpanel = true)
     {
         DockNodeSettings settings{};
         settings.style_tag = style_tag;
@@ -85,6 +86,7 @@ namespace auik
         settings.min_size = min_size;
         settings.flags = flags;
         settings.tabbar_flags = tabbar_flags;
+        settings.tabpanel = tabpanel;
         return settings;
     }
 

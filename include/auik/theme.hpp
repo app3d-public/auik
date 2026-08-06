@@ -127,7 +127,6 @@ namespace auik
     struct StyleExtraAlign
     {
         u32 flags = 0u;
-        amal::vec4 position{0.0f};
     };
 
     struct StyleExtraText

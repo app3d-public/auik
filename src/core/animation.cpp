@@ -253,7 +253,7 @@ namespace auik
             const bool active = state.next_frame(current_animation_time(), owner, user_data);
             owner->update_draw_commands(DrawReasonBits::external);
             detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
-            detail::mark_host_refresh_request();
+            mark_host_refresh_request();
             if (active) next_animation_frame(state, owner, user_data);
         });
         return true;

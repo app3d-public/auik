@@ -52,7 +52,9 @@ namespace auik
     constexpr inline bool is_size_dynamic(f32 value) { return is_size_min_fit(value) || value >= AUIK_SIZE_X_FILL; }
 
     constexpr inline bool is_size_dynamic(const amal::vec2 &size)
-    { return is_size_dynamic(size.x) || is_size_dynamic(size.y); }
+    {
+        return is_size_dynamic(size.x) || is_size_dynamic(size.y);
+    }
 
     struct WidgetFlagBits
     {
@@ -83,8 +85,7 @@ namespace auik
             bottom = 0x10,
             hcenter = 0x20,
             hleft = 0x40,
-            block = 0x80,
-            absolute = 0x100
+            block = 0x80
         };
         using flag_bitmask = std::true_type;
     };
@@ -114,13 +115,19 @@ namespace auik
     }
 
     constexpr inline ChildLayoutFlags child_layout_display_mask()
-    { return ChildLayoutFlagBits::block | ChildLayoutFlagBits::linline; }
+    {
+        return ChildLayoutFlagBits::block | ChildLayoutFlagBits::linline;
+    }
 
     constexpr inline ChildLayoutFlags child_layout_halign_mask()
-    { return ChildLayoutFlagBits::hleft | ChildLayoutFlagBits::hcenter | ChildLayoutFlagBits::aright; }
+    {
+        return ChildLayoutFlagBits::hleft | ChildLayoutFlagBits::hcenter | ChildLayoutFlagBits::aright;
+    }
 
     constexpr inline ChildLayoutFlags child_layout_valign_mask()
-    { return ChildLayoutFlagBits::top | ChildLayoutFlagBits::vcenter | ChildLayoutFlagBits::bottom; }
+    {
+        return ChildLayoutFlagBits::top | ChildLayoutFlagBits::vcenter | ChildLayoutFlagBits::bottom;
+    }
 
     inline ChildLayoutFlags merge_child_layout_flags(ChildLayoutFlags style, ChildLayoutFlags layout)
     {
@@ -146,6 +153,14 @@ namespace auik
         using flag_bitmask = std::true_type;
     };
     using StyleUpdateFlags = acul::flags<StyleUpdateFlagBits>;
+
+    class Widget;
+    class DrawBlock;
+    namespace detail
+    {
+        AUIK_EXPORT void request_style_refresh(Widget *widget);
+        AUIK_EXPORT void request_widget_refresh(Widget *widget, StyleUpdateFlags flags);
+    }
 
     struct WidgetUserData
     {
@@ -177,7 +192,9 @@ namespace auik
     constexpr inline detail::StylePropertyFlags g_style_parent_layout_mask = detail::StylePropertiesBits::margin;
 
     constexpr inline WidgetFlags get_default_widget_flags()
-    { return WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::configurable; }
+    {
+        return WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::configurable;
+    }
 
     class Widget : public umbf::Block
     {
@@ -196,6 +213,17 @@ namespace auik
             UserBind &on_click(acul::unique_function<void(ClickEvent &)> fn)
             {
                 on_click_fn = std::move(fn);
+                if (_owner && on_click_fn) _owner->add_event_flags(EventFlagBits::click);
+                return *this;
+            }
+
+            UserBind &prepend_click(acul::unique_function<void(ClickEvent &)> fn)
+            {
+                auto next = std::move(on_click_fn);
+                on_click_fn = [first = std::move(fn), next = std::move(next)](ClickEvent &event) mutable {
+                    if (first) first(event);
+                    if (!event.is_prevented_default() && next) next(event);
+                };
                 if (_owner && on_click_fn) _owner->add_event_flags(EventFlagBits::click);
                 return *this;
             }
@@ -282,7 +310,9 @@ namespace auik
                                            amal::rect{bounds.offset,
                                                       {is_size_concrete(bounds.size.x) ? bounds.size.x : 0.0f,
                                                        is_size_concrete(bounds.size.y) ? bounds.size.y : 0.0f}}))
-        { assert(_viewport && "main viewport must be set before creating widgets"); }
+        {
+            assert(_viewport && "main viewport must be set before creating widgets");
+        }
 
         AUIK_EXPORT virtual ~Widget();
 
@@ -290,7 +320,9 @@ namespace auik
 
         template <class T, class... Args>
         T *emplace_user_data(Args &&...args)
-        { return emplace_user_data_tagged<T>(AUIK_UD_CUSTOM_DATA, std::forward<Args>(args)...); }
+        {
+            return emplace_user_data_tagged<T>(AUIK_UD_CUSTOM_DATA, std::forward<Args>(args)...);
+        }
 
         template <class T, class... Args>
         T *emplace_user_data_tagged(u32 tag, Args &&...args)
@@ -313,7 +345,9 @@ namespace auik
 
         template <class T>
         T *get_user_data(u32 tag = AUIK_UD_CUSTOM_DATA) const
-        { return static_cast<T *>(get_user_data(tag)); }
+        {
+            return static_cast<T *>(get_user_data(tag));
+        }
 
         const WidgetUserData *user_data_head() const { return _user_data; }
         AUIK_EXPORT void emplace_user_data_ref_head(u32 tag, void *handle);
@@ -400,10 +434,16 @@ namespace auik
         }
         inline const amal::vec2 &required_size() const { return _required_size; }
         inline void set_required_size(const amal::vec2 &size)
-        { _required_size = {amal::max(size.x, 0.0f), amal::max(size.y, 0.0f)}; }
+        {
+            _required_size = {amal::max(size.x, 0.0f), amal::max(size.y, 0.0f)};
+        }
         inline void apply_style_layout(const Style &style)
         {
-            const auto mask = style.mask();
+            apply_style_layout(style, style.mask());
+        }
+        inline void apply_style_layout(const Style &style, detail::StylePropertyFlags mask)
+        {
+            mask &= style.mask();
             amal::vec2 next_style_size = _requested_size;
             if (mask & detail::StylePropertiesBits::width) next_style_size.x = style.width();
             if (mask & detail::StylePropertiesBits::height) next_style_size.y = style.height();
@@ -489,6 +529,11 @@ namespace auik
         virtual void rebuild_clip_rects() {}
         virtual void reset_draw_records() { reset_external_draw_cull_state(); }
         virtual void sync_widget_flags() { sync_widget_flags(resolve_event_flags(requested_event_flags)); }
+
+        // Setters only change local widget state. Use these explicit synchronization points when an attached
+        // widget must immediately apply a changed style or rebuild its layout/draw data.
+        inline void sync_widget_style() { detail::request_style_refresh(this); }
+        inline void sync_widget(StyleUpdateFlags flags) { detail::request_widget_refresh(this, flags); }
 
         void update_draw_commands(DrawReasonFlags reason = DrawReasonBits::none)
         {
@@ -606,6 +651,7 @@ namespace auik
         {
             HoverEvent e{};
             e.state = state;
+            e.target = detail::get_style_selector_id();
             if (_user_bind && _user_bind->on_hover_fn)
             {
                 _user_bind->on_hover_fn(e);
@@ -620,6 +666,10 @@ namespace auik
             e.key = key;
             e.state = state;
             e.click_count = click_count;
+            const auto &io = detail::get_context().io;
+            e.target = io.clicked_id;
+            e.drag_id = io.drag_id;
+            e.mods = io.active_mods;
             if (_user_bind && _user_bind->on_click_fn)
             {
                 _user_bind->on_click_fn(e);
@@ -633,6 +683,9 @@ namespace auik
             DragEvent e{};
             e.delta = delta;
             e.state = state;
+            const auto &io = detail::get_context().io;
+            e.origin = io.drag_id;
+            e.mods = io.active_mods;
             if (_user_bind && _user_bind->on_drag_fn)
             {
                 _user_bind->on_drag_fn(e);
@@ -800,7 +853,7 @@ namespace auik
                     else widget->invalidate_draw_commands(DrawReasonBits::external);
                     ctx.dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
                 });
-                detail::mark_host_refresh_request();
+                mark_host_refresh_request();
             }
         }
 
@@ -943,7 +996,9 @@ namespace auik
     }
 
     inline StyleState resolve_widget_visual_state(const Widget &widget, StyleState state)
-    { return has_widget_state_style(widget, state) ? state : StyleState::normal; }
+    {
+        return has_widget_state_style(widget, state) ? state : StyleState::normal;
+    }
 
     inline Widget *resolve_parent_layout_update_target(Widget *widget)
     {
@@ -965,8 +1020,7 @@ namespace auik
             {
                 auto *left_align = static_cast<const StyleExtraAlign *>(left_node->data);
                 auto *right_align = static_cast<const StyleExtraAlign *>(right_node->data);
-                if (!left_align || !right_align || left_align->flags != right_align->flags ||
-                    left_align->position != right_align->position)
+                if (!left_align || !right_align || left_align->flags != right_align->flags)
                     return false;
             }
             else if (left_node->id == AUIK_STYLE_EXTRA_TEXT)
@@ -992,9 +1046,11 @@ namespace auik
         return widget.set_style_state(StyleState::hover);
     }
 
-    inline StyleUpdateFlags make_style_update_flags(const Style &prev_style, const Style &next_style)
+    inline StyleUpdateFlags make_style_update_flags(
+        const Style &prev_style, const Style &next_style,
+        detail::StylePropertyFlags property_mask = acul::flag_traits<detail::StylePropertiesBits>::all_flags)
     {
-        const auto union_mask = prev_style.mask() | next_style.mask();
+        const auto union_mask = (prev_style.mask() | next_style.mask()) & property_mask;
         detail::StylePropertyFlags changed = detail::StylePropertiesBits::none;
         if ((union_mask & detail::StylePropertiesBits::padding) && prev_style.padding() != next_style.padding())
             changed |= detail::StylePropertiesBits::padding;
@@ -1048,7 +1104,8 @@ namespace auik
                                                    StyleState state = StyleState::normal)
     {
         auto *theme = get_theme();
-        const StyleID prev_style_id = selector.id;
+        const bool invalidate_previous = detail::get_context().dirty_flags & DirtyFlagBits::styles;
+        const StyleID prev_style_id = invalidate_previous ? Theme::STYLE_ID_INVALID : selector.id;
         const StyleID next_style_id = theme->get_resolved_style(selector.tag_id, self_id, parent_id, state);
         selector.id = next_style_id;
         if (prev_style_id == Theme::STYLE_ID_INVALID)

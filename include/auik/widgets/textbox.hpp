@@ -65,11 +65,11 @@ namespace auik
         const char *placeholder_literal() const
         { return _placeholder ? _placeholder->translated_text_literal() : nullptr; }
         AUIK_EXPORT void set_placeholder(StringView value);
+        AUIK_EXPORT void select_all();
         inline void set_style_tag(u32 tag_id)
         {
             if (_style.tag_id == tag_id) return;
             _style = {Theme::STYLE_ID_INVALID, tag_id};
-            set_rect_tag_id(tag_id);
         }
         u32 style_tag() const { return _style.tag_id; }
         TextWrapMode text_wrap() const { return _text.multiline() ? TextWrapMode::word : TextWrapMode::none; }
@@ -191,7 +191,6 @@ namespace auik
         AUIK_EXPORT void select_text_range(int start, int end);
         AUIK_EXPORT void select_word_at_point(const amal::vec2 &point);
         AUIK_EXPORT void select_line_at_point(const amal::vec2 &point);
-        AUIK_EXPORT void select_all_text();
         AUIK_EXPORT void copy_selection_to_clipboard();
         AUIK_EXPORT void cut_selection_to_clipboard();
         AUIK_EXPORT void paste_clipboard_at_cursor();

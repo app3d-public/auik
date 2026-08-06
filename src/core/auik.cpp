@@ -100,8 +100,8 @@ namespace auik
                 if (transient_cache[i] == this) transient_cache.erase(transient_cache.begin() + i);
                 else ++i;
             }
+            if (requested_event_flags & EventFlagBits::shortcut) detail::deregister_widget_shortcuts(id());
         }
-        if (requested_event_flags & EventFlagBits::shortcut) detail::deregister_widget_shortcuts(id());
     }
 
     PostFxChain *Widget::add_post_effect(PostEffect *effect, const void *instance_data, const void *post_data)
@@ -209,7 +209,7 @@ namespace auik
                     ctx.dirty_flags |= DirtyFlagBits::redraw;
                 }
             });
-            detail::mark_host_refresh_request();
+            mark_host_refresh_request();
         }
 
         template <class Traits>
@@ -358,26 +358,26 @@ namespace auik
             const auto &io = ctx.io;
             const KeyMode mods = build_active_shortcut_mods(io);
             if (!mods && io.active_keys.empty() && !io.active_mouse_buttons) return false;
-
             Widget *node = resolve_input_root(ctx);
             while (node)
             {
                 if (node->has_event_handler(EventFlagBits::shortcut))
                 {
-                    const u64 hash =
+                    const u64 shortcut_hash =
                         detail::make_shortcut_hash(io.active_keys, io.active_mouse_buttons, mods, node->id());
-                    auto it = io.shortcuts.find(hash);
-                    if (it != io.shortcuts.end())
+                    auto binding = io.shortcuts.find(shortcut_hash);
+                    if (binding != io.shortcuts.end())
                     {
-                        it->second();
+                        binding->second();
                         return true;
                     }
                 }
                 node = node->focus_parent();
             }
 
-            const u64 hash = detail::make_shortcut_hash(io.active_keys, io.active_mouse_buttons, mods, AUIK_TAG_GLOBAL);
-            auto global_it = io.shortcuts.find(hash);
+            const u64 global_hash =
+                detail::make_shortcut_hash(io.active_keys, io.active_mouse_buttons, mods, AUIK_TAG_GLOBAL);
+            auto global_it = io.shortcuts.find(global_hash);
             if (global_it == io.shortcuts.end()) return false;
             global_it->second();
             return true;
@@ -539,16 +539,11 @@ namespace auik
         AUIK_EXPORT void deregister_widget_shortcuts(u32 widget_id)
         {
             if (!widget_id) return;
-            auto &ctx = get_context();
-            auto it = ctx.io.widget_shortcuts.find(widget_id);
-            if (it == ctx.io.widget_shortcuts.end()) return;
-
-            for (u64 shortcut_hash : it->second) ctx.io.shortcuts.erase(shortcut_hash);
-            ctx.io.widget_shortcuts.erase(it);
-
-            auto widget_it = ctx.id_map.find(widget_id);
-            if (widget_it != ctx.id_map.end() && widget_it->second)
-                widget_it->second->remove_event_flags(EventFlagBits::shortcut);
+            auto &io = get_context().io;
+            auto it = io.widget_shortcuts.find(widget_id);
+            if (it == io.widget_shortcuts.end()) return;
+            for (u64 hash : it->second) io.shortcuts.erase(hash);
+            io.widget_shortcuts.erase(it);
         }
 
         template <class F>
@@ -778,7 +773,7 @@ namespace auik
                     resolve_release_state(w, ctx.hover_id.widget_id);
                     enqueue_style_refresh<detail::HoverEventTraits>(w);
                 });
-                detail::mark_host_refresh_request();
+                mark_host_refresh_request();
             }
 
             if (clicked_widget_id != 0)
@@ -901,6 +896,91 @@ namespace auik
         }
 
     } // namespace detail
+
+    AUIK_EXPORT void detail::request_style_refresh(Widget *widget)
+    {
+        if (!widget || !detail::g_context) return;
+        auto &ctx = detail::get_context();
+        if (ctx.dirty_flags & DirtyFlagBits::destroying) return;
+
+        const auto attached = ctx.id_map.find(widget->id());
+        if (attached == ctx.id_map.end() || attached->second != widget) return;
+
+        const auto style_flags = widget->update_style();
+        if (style_flags == StyleUpdateFlagBits::none) return;
+
+        Widget *owner = nullptr;
+        if (style_flags & StyleUpdateFlagBits::parent_layout)
+            owner = resolve_parent_layout_update_target(widget);
+        else owner = widget;
+
+        for (auto *candidate = owner; candidate; candidate = candidate->parent())
+        {
+            auto it = ctx.id_map.find(candidate->id());
+            if (it == ctx.id_map.end() || it->second != candidate) continue;
+            owner = candidate;
+            break;
+        }
+        auto owner_it = ctx.id_map.find(owner->id());
+        if (owner_it == ctx.id_map.end() || owner_it->second != owner) return;
+
+        const u32 owner_id = owner->id();
+        Widget *expected_owner = owner;
+        add_render_command([owner_id, expected_owner, style_flags]() {
+            auto &ctx = detail::get_context();
+            auto it = ctx.id_map.find(owner_id);
+            if (it == ctx.id_map.end() || it->second != expected_owner) return;
+
+            const bool layout_dirty = style_flags &
+                                      (StyleUpdateFlagBits::layout | StyleUpdateFlagBits::parent_layout);
+            if (layout_dirty) expected_owner->update_layout(false);
+            expected_owner->update_draw_commands(layout_dirty ? DrawReasonBits::layout : DrawReasonBits::external);
+            ctx.dirty_flags |= DirtyFlagBits::redraw;
+            if (layout_dirty) ctx.dirty_flags |= DirtyFlagBits::hit_rect_update;
+        });
+    }
+
+    AUIK_EXPORT void detail::request_widget_refresh(Widget *widget, StyleUpdateFlags flags)
+    {
+        if (!widget || !detail::g_context || flags == StyleUpdateFlagBits::none) return;
+        auto &ctx = detail::get_context();
+        if (ctx.dirty_flags & DirtyFlagBits::destroying) return;
+        const auto attached = ctx.id_map.find(widget->id());
+        if (attached == ctx.id_map.end() || attached->second != widget) return;
+
+        Widget *owner = flags & StyleUpdateFlagBits::parent_layout ? resolve_parent_layout_update_target(widget)
+                                                                   : widget;
+        if (!owner) return;
+        const u32 owner_id = owner->id();
+        Widget *expected_owner = owner;
+        add_render_command([owner_id, expected_owner, flags]() {
+            auto &ctx = detail::get_context();
+            const auto current = ctx.id_map.find(owner_id);
+            if (current == ctx.id_map.end() || current->second != expected_owner) return;
+            const bool layout_dirty = flags & (StyleUpdateFlagBits::layout | StyleUpdateFlagBits::parent_layout);
+            if (layout_dirty) expected_owner->update_layout(false);
+            expected_owner->update_draw_commands(layout_dirty ? DrawReasonBits::layout : DrawReasonBits::external);
+            ctx.dirty_flags |= DirtyFlagBits::redraw;
+            if (layout_dirty) ctx.dirty_flags |= DirtyFlagBits::hit_rect_update;
+            mark_host_refresh_request();
+        });
+    }
+
+    AUIK_EXPORT void set_cursor(CursorID::enum_type cursor)
+    {
+        auto &ctx = detail::get_context();
+        detail::set_window_cursor(cursor, ctx.window_ctx);
+    }
+
+    AUIK_EXPORT bool is_widget_focused(const Widget *widget)
+    {
+        return widget && detail::get_context().focus_id == widget->id();
+    }
+
+    AUIK_EXPORT bool is_widget_hovered(const Widget *widget)
+    {
+        return widget && detail::get_context().hover_id.widget_id == widget->id();
+    }
 
     AUIK_EXPORT void focus_widget(Widget *widget) { detail::set_focus_target(detail::get_context(), widget); }
 } // namespace auik

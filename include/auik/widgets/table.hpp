@@ -37,15 +37,13 @@ namespace auik
         TableColumnSizing sizing = TableColumnSizing::stretch;
         f32 value = 1.0f;
         f32 min_width = 0.0f;
-        HAlign halign = HAlign::left;
-        VAlign valign = VAlign::none;
     };
 
     class Table final : public Widget
     {
     public:
-        using Cell = ::auik::Block *;
-        using ConstCell = const ::auik::Block *;
+        using Cell = ::auik::DrawBlock *;
+        using ConstCell = const ::auik::DrawBlock *;
         using Row = acul::vector<Cell>;
         using Rows = acul::vector<Row>;
 
@@ -200,7 +198,6 @@ namespace auik
         AUIK_EXPORT void set_model_binding(ModelBinding *binding, acul::vector<ModelFieldID> field_ids = {});
         AUIK_EXPORT void set_rows(Rows rows);
         AUIK_EXPORT void add_row(Row row);
-        AUIK_EXPORT void set_cell(size_t row, size_t column, Widget *value);
         AUIK_EXPORT void set_cell(size_t row, size_t column, Cell value);
 
         AUIK_EXPORT void set_header(Row header);
@@ -304,8 +301,6 @@ namespace auik
         Row _header;
         Rows _rows;
         acul::vector<acul::point2D<TrackMetrics>> _layout_metrics;
-        acul::vector<CellVisual> _header_visuals;
-        acul::vector<CellVisual> _cell_visuals;
         acul::vector<CellVisual> _alt_row_visuals;
         acul::vector<u32> _cell_style_tags;
         acul::vector<acul::point2D<CellVisual>> _resize_border_hit_visuals;
@@ -337,8 +332,10 @@ namespace auik
 
     inline Table::Cell make_table_cell(Widget *child = nullptr)
     {
-        auto *cell = acul::alloc<Block>(AUIK_TAG_TABLE_CELL, WidgetFlagBits::visible | WidgetFlagBits::configurable,
-                                        AUIK_TAG_BLOCK);
+        auto *cell = acul::alloc<DrawBlock>(AUIK_TAG_TABLE_CELL,
+                                            WidgetFlagBits::visible | WidgetFlagBits::configurable,
+                                            AUIK_STYLE_TAG_TABLE_CELL);
+        cell->set_scrollbars_enabled(false, false);
         if (child) cell->add_child(child);
         return cell;
     }

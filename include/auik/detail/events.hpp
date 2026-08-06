@@ -4,9 +4,10 @@
 #include <acul/pair.hpp>
 #include <acul/scalars.hpp>
 #include <amal/rect.hpp>
-#include <umbf/utils.hpp>
 #include <auik/symbol_export.h>
+#include <umbf/utils.hpp>
 #include "../events.hpp"
+
 
 #define AUIK_TAG_HITBOX 0xBF9B2277u
 
@@ -61,21 +62,7 @@ namespace auik::detail
         };
     };
 
-    struct CursorID
-    {
-        enum enum_type
-        {
-            arrow,       // The regular arrow cursor.
-            ibeam,       // The text input I-beam cursor.
-            resize_ew,   // The horizontal resize/move arrow cursor.  This is usually a horizontal double-headed arrow.
-            resize_ns,   // The vertical resize/move cursor. This is usually a vertical double-headed arrow.
-            resize_nwse, // The top-left to bottom-right diagonal resize/move cursor.  This is usually a diagonal
-                         // double-headed arrow.
-            resize_nesw, // The top-right to bottom-left diagonal resize/move cursor.  This is usually a diagonal
-                         // double-headed arrow.
-            max          // The maximum cursor ID
-        };
-    };
+    using CursorID = auik::CursorID;
 
     using PFN_get_window_handle = void *(*)(struct WindowContext *);
     using PFN_set_window_cursor = void (*)(CursorID::enum_type, struct WindowContext *);
@@ -107,10 +94,10 @@ namespace auik::detail
     AUIK_EXPORT void on_mouse_click_event(MouseKey key, KeyPressState state);
     AUIK_EXPORT void on_key_event(Key key, KeyPressState state, KeyMode mods);
     AUIK_EXPORT void on_char_event(u32 char_code);
-    AUIK_EXPORT void deregister_widget_shortcuts(u32 widget_id);
     AUIK_EXPORT void flush_frame_changes();
     AUIK_EXPORT void reset_event_state();
     AUIK_EXPORT void on_hover_id_updated(const ElementID &prev_hover_id, const ElementID &hover_id);
+    AUIK_EXPORT void deregister_widget_shortcuts(u32 widget_id);
     inline void *get_window_handle(WindowContext *window_ctx)
     {
         assert(window_ctx && "auik window context is not initialized");

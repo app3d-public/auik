@@ -5,12 +5,7 @@
 #include <auik/detail/text.hpp>
 #include <auik/widgets/image.hpp>
 #include <fontconfig/fontconfig.h>
-#include <auik/detail/platform.hpp>
 #include <freetype/freetype.h>
-
-#ifdef _WIN32
-    #include <windows.h>
-#endif
 
 namespace auik
 {
@@ -247,6 +242,7 @@ namespace auik
             release_prepared();
             return true;
         }
+
     } // namespace
 
     Font::Font(const FontInfo &info, int face_index) { load(info, face_index); }
@@ -599,21 +595,65 @@ namespace auik
     {
         if (loader.size == 0u || loader.codepoints.size() != loader.ids.size()) return false;
 
-        if (!font.load_glyphs(loader.size, loader.codepoints)) return false;
+        auto *face = detail::TextFontAccess::face(font, loader.size);
+        if (!face) return false;
 
-        for (u32 i = 0; i < loader.codepoints.size(); ++i)
+        acul::vector<PreparedGlyph> prepared;
+        prepared.reserve(loader.codepoints.size());
+
+        auto release_images = [&]() {
+            for (auto &item : prepared)
+                if (item.image.pixels) acul::release(item.image.pixels);
+        };
+
+        for (u32 codepoint : loader.codepoints)
         {
-            auto *glyph = font.find_glyph(loader.size, loader.codepoints[i]);
-            if (!glyph) return false;
+            const u32 glyph_index = FT_Get_Char_Index(face, codepoint);
+            PreparedGlyph item;
+            if (!prepare_glyph(font, loader.size, glyph_index, codepoint, item))
+            {
+                release_images();
+                return false;
+            }
+            if (item.glyph.empty || !item.image.pixels)
+            {
+                if (item.image.pixels) acul::release(item.image.pixels);
+                release_images();
+                return false;
+            }
+            prepared.push_back(std::move(item));
+        }
 
-            const amal::vec2 image_size{static_cast<f32>(glyph->size.x), static_cast<f32>(glyph->size.y)};
-            auto *image = make_image(loader.ids[i], glyph->texture_id, image_size, glyph->uv_rect);
+        acul::vector<umbf::Image2D> images;
+        images.reserve(prepared.size());
+        for (const auto &item : prepared) images.push_back(item.image);
+
+        acul::vector<detail::AtlasAllocation> allocations;
+        if (!detail::allocate_atlas_regions(images, allocations) || allocations.size() != loader.ids.size())
+        {
+            release_images();
+            return false;
+        }
+
+        for (u32 i = 0; i < loader.ids.size(); ++i)
+        {
+            const amal::vec2 image_size{static_cast<f32>(prepared[i].image.width),
+                                        static_cast<f32>(prepared[i].image.height)};
+            auto *image = get_cached_image(loader.ids[i]);
             if (image)
             {
-                image->set_coverage_mode(true);
-                cache_image(loader.ids[i], image);
+                image->set_texture_id(allocations[i].texture_id);
+                image->set_uv_offset(allocations[i].uv_rect.offset);
+                image->set_uv_size(allocations[i].uv_rect.size);
+                image->set_size(image_size);
+                image->set_layout_size(image_size);
             }
+            else image = make_image(loader.ids[i], allocations[i].texture_id, image_size, allocations[i].uv_rect);
+            if (!image) continue;
+            image->set_coverage_mode(true);
+            cache_image(loader.ids[i], image);
         }
+        release_images();
         return true;
     }
 
@@ -655,50 +695,24 @@ namespace auik
         return load_font_info_icon_glyphs(*font_info, loader);
     }
 
-    bool load_material_icons(const FontRegistry &fonts, f32 dpi, const FontIconGlyphLoader *next)
+    bool load_remix_icons(const FontRegistry &fonts, f32 dpi, const FontIconGlyphLoader *next)
     {
-        FontInfo *font_info = get_font_info_by_family(fonts, "Material Symbols Outlined");
+        FontInfo *font_info = get_font_info_by_family(fonts, "remixicon");
         if (!font_info) return false;
 
-        const FontIconGlyphLoader defaults{
-            .size = round_font_px(18.0f * dpi),
-            .codepoints = {0xE5CCu, 0xE5C5u, 0xE5CEu, 0xE5CAu, 0xE5D2u, 0xE5CDu},
-            .ids = {AUIK_ICON_CHEVRON_RIGHT, AUIK_ICON_CHEVRON_DOWN, AUIK_ICON_CHEVRON_UP, AUIK_ICON_CHECKMARK,
-                    AUIK_ICON_MENU, AUIK_ICON_CLOSE},
-            .next = next};
+        const FontIconGlyphLoader arrows{.size = round_font_px(16.0f * dpi),
+                                         .codepoints = {0xEA6Eu, 0xEA4Eu, 0xEA78u},
+                                         .ids = {AUIK_ICON_CHEVRON_RIGHT, AUIK_ICON_CHEVRON_DOWN, AUIK_ICON_CHEVRON_UP},
+                                         .load_flags = FontLoadFlagBits::target_light | FontLoadFlagBits::no_bitmap,
+                                         .render_mode = FontRenderMode::light,
+                                         .next = next};
+
+        const FontIconGlyphLoader menu{
+            .size = round_font_px(12.0f * dpi), .codepoints = {0xEF3Bu}, .ids = {AUIK_ICON_MENU}, .next = &arrows};
+        const FontIconGlyphLoader defaults{.size = round_font_px(14.0f * dpi),
+                                           .codepoints = {0xEB7Bu, 0xEB99u},
+                                           .ids = {AUIK_ICON_CHECKMARK, AUIK_ICON_CLOSE},
+                                           .next = &menu};
         return load_font_info_icon_glyphs(*font_info, &defaults);
     }
-
-#ifdef _WIN32
-    bool load_win32_icons(const FontRegistry &fonts, f32 dpi, const FontIconGlyphLoader *next)
-    {
-        FontInfo *font_info = nullptr;
-        if (detail::is_win_11_or_greater()) font_info = get_font_info_by_family(fonts, "Segoe Fluent Icons");
-        if (!font_info) font_info = get_font_info_by_family(fonts, "Segoe MDL2 Assets");
-        if (!font_info) return false;
-
-        const FontIconGlyphLoader close{
-            .size = round_font_px(pt_to_px(8.5f, dpi)),
-            .codepoints = {0xE711u},
-            .ids = {AUIK_ICON_CLOSE},
-            .load_flags = FontLoadFlagBits::target_light | FontLoadFlagBits::no_bitmap,
-            .render_mode = FontRenderMode::light,
-            .next = next};
-        const FontIconGlyphLoader controls{
-            .size = round_font_px(pt_to_px(9.5f, dpi)),
-            .codepoints = {0xE76Cu, 0xE70Du, 0xE70Eu, 0xE73Eu},
-            .ids = {AUIK_ICON_CHEVRON_RIGHT, AUIK_ICON_CHEVRON_DOWN, AUIK_ICON_CHEVRON_UP, AUIK_ICON_CHECKMARK},
-            .load_flags = FontLoadFlagBits::target_light | FontLoadFlagBits::no_bitmap,
-            .render_mode = FontRenderMode::light,
-            .next = &close};
-        const FontIconGlyphLoader menu{
-            .size = round_font_px(11.5f * dpi),
-            .codepoints = {0xE700u},
-            .ids = {AUIK_ICON_MENU},
-            .load_flags = FontLoadFlagBits::target_light | FontLoadFlagBits::no_bitmap,
-            .render_mode = FontRenderMode::light,
-            .next = &controls};
-        return load_font_info_icon_glyphs(*font_info, &menu);
-    }
-#endif
 } // namespace auik

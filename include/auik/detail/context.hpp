@@ -93,13 +93,16 @@ namespace auik
             delayed_tasks = 0x200,
             destroying = 0x400,
             locale = 0x800,
-            fast_update = 0x1000
+            fast_update = 0x1000,
+            styles = 0x2000
         };
         using flag_bitmask = std::true_type;
     };
 
     using DirtyFlags = acul::flags<DirtyFlagBits>;
     using DirtyMask = DirtyFlags::mask_t;
+
+    inline void mark_host_refresh_request();
 
     namespace detail
     {
@@ -312,6 +315,10 @@ namespace auik
         }
 
         inline void mark_layout_dirty() { get_context().dirty_flags |= DirtyFlagBits::layout; }
+        inline void mark_styles_dirty()
+        {
+            get_context().dirty_flags |= DirtyFlagBits::styles | DirtyFlagBits::layout | DirtyFlagBits::redraw;
+        }
         inline void mark_fast_update_dirty() { get_context().dirty_flags |= DirtyFlagBits::fast_update; }
         inline bool is_fast_layout_update() { return get_context().dirty_flags & DirtyFlagBits::fast_update; }
         inline void unmark_layout_dirty() { clear_dirty_flags(layout_dirty_mask); }
@@ -331,13 +338,6 @@ namespace auik
         inline PFN_widget_attach get_default_widget_attach_cb()
         {
             return get_context().widget_create_options.widget_attach;
-        }
-
-        inline void mark_host_refresh_request()
-        {
-            auto &ctx = get_context();
-            if (ctx.host_refresh_request) *ctx.host_refresh_request = true;
-            ctx.dirty_flags |= DirtyFlagBits::host_update;
         }
 
         inline void mark_texture_bindings_mutation()
@@ -420,17 +420,29 @@ namespace auik
             }
             return out;
         }
-
-        inline void clear_widget_pending_bits() {}
-
     } // namespace detail
+
+    inline void mark_host_refresh_request()
+    {
+        auto &ctx = detail::get_context();
+        if (ctx.host_refresh_request) *ctx.host_refresh_request = true;
+        ctx.dirty_flags |= DirtyFlagBits::host_update;
+    }
+
+    AUIK_EXPORT void update_styles();
 
     inline Theme *get_theme() { return detail::get_context().theme; }
     inline void set_theme(Theme *theme)
     {
         auto &ctx = detail::get_context();
-        if (ctx.theme) detail::mark_layout_dirty();
+        if (ctx.theme == theme) return;
+        const bool replacing_theme = ctx.theme != nullptr;
         ctx.theme = theme;
+        if (replacing_theme)
+        {
+            detail::mark_styles_dirty();
+            update_styles();
+        }
     }
 
     inline DrawStream *get_primary_quads_stream()

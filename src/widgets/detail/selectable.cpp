@@ -1,8 +1,9 @@
-#include <auik/pipelines.hpp>
 #include <auik/detail/depth.hpp>
 #include <auik/detail/pixel_snap.hpp>
+#include <auik/pipelines.hpp>
 #include <auik/widgets/detail/selectable.hpp>
 #include <auik/widgets/image.hpp>
+
 
 namespace auik::detail
 {
@@ -11,9 +12,7 @@ namespace auik::detail
         Selectable &widget;
         StyleID previous_id;
 
-        explicit SelectableStyleScope(Selectable &widget)
-            : widget(widget),
-              previous_id(widget._style.id)
+        explicit SelectableStyleScope(Selectable &widget) : widget(widget), previous_id(widget._style.id)
         {
             const StyleID next_id = widget.effective_layout_style_id();
             if (next_id != Theme::STYLE_ID_INVALID) widget._style.id = next_id;
@@ -26,10 +25,10 @@ namespace auik::detail
     {
         const u32 parent_id = parent() ? parent()->id() : 0u;
         const StyleState current_state = style_state();
-        const StyleID prev_layout_style = _layout_style_id;
+        const StyleID prev_layout_style =
+            detail::get_context().dirty_flags & DirtyFlagBits::styles ? Theme::STYLE_ID_INVALID : _layout_style_id;
         auto flags = resolve_style_selector(_style, id(), parent_id, current_state);
-        if (_selected && selected_style_enabled())
-            flags |= resolve_style_selector(_selected_style, id(), parent_id, current_state);
+        if (selected_style_enabled()) flags |= resolve_style_selector(_selected_style, id(), parent_id, current_state);
         _layout_style_id = _selected && selected_style_enabled() ? _selected_style.id : _style.id;
         const auto &style = get_theme()->get_style(_layout_style_id);
         apply_style_layout(style);
@@ -127,7 +126,8 @@ namespace auik::detail
         {
             emit_context_draw(ctx, quads_stream, _selected_bg, nullptr, get_rect(), false);
             emit_context_draw(ctx, quads_stream, _bg, nullptr, get_rect(), false);
-            emit_context_draw(ctx, get_primary_textured_quads_stream(), _selected_icon_draw, nullptr, get_rect(), false);
+            emit_context_draw(ctx, get_primary_textured_quads_stream(), _selected_icon_draw, nullptr, get_rect(),
+                              false);
             DrawCtx text_ctx = ctx;
             text_ctx.is_hit_allowed = false;
             Text::draw(text_ctx);
@@ -202,9 +202,8 @@ namespace auik::detail
         ensure_selected_icon_resource();
         const amal::vec4 padding = style.padding();
         const amal::vec2 icon_size = selected_icon_size(style);
-        _selected_icon_rect.bounds = {{position().x + padding.x,
-                                       position().y + amal::max((size().y - icon_size.y) * 0.5f, 0.0f)},
-                                      icon_size};
+        _selected_icon_rect.bounds = {
+            {position().x + padding.x, position().y + amal::max((size().y - icon_size.y) * 0.5f, 0.0f)}, icon_size};
         _selected_icon_rect.bounds = snap_rect_offset_to_pixel_grid(_selected_icon_rect.bounds);
         _selected_icon_rect.clip_id = clip_id();
         _selected_icon_rect.depth = _selected_icon_z;
@@ -229,7 +228,7 @@ namespace auik::detail
         icon.z_order = _selected_icon_z;
         icon.texture_id = static_cast<u16>(_selected_icon_texture.bind_slot);
         icon.clip_id = clip_id();
-        icon.flags = AUIK_TEXTURE_INSTANCE_TEXT_BIT;
+        icon.flags = AUIK_TEXTURE_INSTANCE_TINT_BIT;
         emit_context_draw(ctx, stream, _selected_icon_draw, &icon, _selected_icon_rect, false);
     }
 } // namespace auik::detail

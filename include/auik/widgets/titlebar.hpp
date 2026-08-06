@@ -98,6 +98,7 @@ namespace auik
             if (_state) _state->titlebar = this;
         }
         TitlebarState *titlebar_state() const { return _state; }
+        AUIK_EXPORT bool reload_caption_button_icons(f32 dpi, const FontRegistry &fonts);
         AUIK_EXPORT void set_caption_hover_button(i32 index);
         AUIK_EXPORT void set_caption_active_button(i32 index);
         virtual u32 signature() const override { return AUIK_TAG_TITLEBAR; }

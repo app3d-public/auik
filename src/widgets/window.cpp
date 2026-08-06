@@ -76,19 +76,27 @@ namespace auik
     }
 
     static inline bool owns_window_menu_tree(const Window &window)
-    { return window.get_menu() && !is_docked_window(window); }
+    {
+        return window.get_menu() && !is_docked_window(window);
+    }
     static inline MenuBar *window_menu_bar(const Window &window)
     {
         auto *menu = window.get_menu();
         return menu && menu->is_menu_bar() ? menu->menu_bar() : nullptr;
     }
     static inline bool owns_classic_menu_bar_tree(const Window &window)
-    { return owns_window_menu_tree(window) && window_menu_bar(window); }
+    {
+        return owns_window_menu_tree(window) && window_menu_bar(window);
+    }
     static inline bool owns_popup_menu_tree(const Window &window)
-    { return !is_docked_window(window) && window.header_popup_menu(); }
+    {
+        return !is_docked_window(window) && window.header_popup_menu();
+    }
 
     static inline bool should_use_docked_window_style(const Window &window, u32 base_style_tag)
-    { return is_docked_window(window) && base_style_tag == AUIK_STYLE_TAG_WINDOW; }
+    {
+        return is_docked_window(window) && base_style_tag == AUIK_STYLE_TAG_WINDOW;
+    }
 
     static inline void get_window_resize_direction(const detail::RectData &rect, const amal::vec2 &mouse_pos,
                                                    int &resize_x, int &resize_y)
@@ -520,7 +528,9 @@ namespace auik
     }
 
     const Text *Window::title_text() const
-    { return _header ? static_cast<const WindowHeader *>(_header)->title_text() : nullptr; }
+    {
+        return _header ? static_cast<const WindowHeader *>(_header)->title_text() : nullptr;
+    }
 
     Window::~Window()
     {
@@ -628,7 +638,10 @@ namespace auik
     void Window::remove_header_menu_suffix()
     {
         if (_header_menu_suffix_group == 0xFFFFu) return;
-        if (auto *menu = header_popup_menu()) { menu->erase_suffix_group(_header_menu_suffix_group); }
+        if (auto *menu = header_popup_menu())
+        {
+            menu->erase_suffix_group(_header_menu_suffix_group);
+        }
         _header_menu_suffix_group = 0xFFFFu;
     }
 
@@ -677,6 +690,17 @@ namespace auik
         _rubber_band->update_layout(true);
     }
 
+    void Window::commit_rubber_band()
+    {
+        if (!_rubber_band || !_rubber_band->committed()) return;
+        if (_on_rubber_band_commit)
+        {
+            RubberBandCommitEvent event{_rubber_band, detail::get_context().io.active_mods};
+            _on_rubber_band_commit(event);
+        }
+        _rubber_band->clear_commit();
+    }
+
     void Window::on_attach()
     {
         if (!parent()) detail::setup_root_window(this);
@@ -694,6 +718,14 @@ namespace auik
             (_default_header_menu->widget_flags & WidgetFlagBits::attachable))
             _default_header_menu->on_attach();
         if (_rubber_band && (_rubber_band->widget_flags & WidgetFlagBits::attachable)) _rubber_band->on_attach();
+    }
+
+    void Window::sync_window_event_flags(bool scroll, bool hover)
+    {
+        _window_event_flags = EventFlagBits::none;
+        if (scroll) _window_event_flags |= EventFlagBits::scroll;
+        if (hover) _window_event_flags |= EventFlagBits::hover;
+        sync_widget_flags();
     }
 
     void Window::on_detach()
@@ -1099,10 +1131,7 @@ namespace auik
                 const bool needs_scroll_events = is_scrollbar_y_visible || is_scrollbar_x_visible;
                 const bool needs_hover_events = needs_scroll_events || ((window_flags & WindowFlagBits::resizable) &&
                                                                         !(window_flags & WindowFlagBits::docked));
-                if (needs_scroll_events) add_event_flags(EventFlagBits::scroll);
-                else remove_event_flags(EventFlagBits::scroll);
-                if (needs_hover_events) add_event_flags(EventFlagBits::hover);
-                else remove_event_flags(EventFlagBits::hover);
+                sync_window_event_flags(needs_scroll_events, needs_hover_events);
             }
 
             sync_rubber_band();
@@ -1188,15 +1217,12 @@ namespace auik
             const bool needs_scroll_events = is_scrollbar_y_visible || is_scrollbar_x_visible;
             const bool needs_hover_events = needs_scroll_events || ((window_flags & WindowFlagBits::resizable) &&
                                                                     !(window_flags & WindowFlagBits::docked));
-            if (needs_scroll_events) add_event_flags(EventFlagBits::scroll);
-            else remove_event_flags(EventFlagBits::scroll);
-            if (needs_hover_events) add_event_flags(EventFlagBits::hover);
-            else remove_event_flags(EventFlagBits::hover);
+            sync_window_event_flags(needs_scroll_events, needs_hover_events);
             if (was_scrollbar_y_visible != is_scrollbar_y_visible || was_scrollbar_x_visible != is_scrollbar_x_visible)
             {
                 auto &ctx = detail::get_context();
                 ctx.dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
-                detail::mark_host_refresh_request();
+                mark_host_refresh_request();
             }
         }
         sync_rubber_band();
@@ -1302,9 +1328,12 @@ namespace auik
     {
         auto &ctx = detail::get_context();
         const auto drag_id = ctx.io.drag_id;
-        if (drag_id.widget_id == id() && drag_id.tag_id == AUIK_TAG_RUBBER_BAND)
+        const bool own_rubber_band = drag_id.widget_id == id() && drag_id.tag_id == AUIK_TAG_RUBBER_BAND;
+        const bool descendant_rubber_band = drag_id.widget_id != id();
+        if (_rubber_band && (own_rubber_band || descendant_rubber_band))
         {
-            if (_rubber_band) _rubber_band->dispatch_drag(delta, state);
+            _rubber_band->dispatch_drag(delta, state);
+            if (state == KeyPressState::release) commit_rubber_band();
             return;
         }
 
@@ -1333,7 +1362,7 @@ namespace auik
                 update_layout(false);
                 update_draw_commands(DrawReasonBits::layout);
                 ctx.dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
-                detail::mark_host_refresh_request();
+                mark_host_refresh_request();
             }
             return;
         }

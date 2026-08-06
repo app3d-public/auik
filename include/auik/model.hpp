@@ -17,6 +17,7 @@ namespace auik
 {
     class Widget;
     struct Model;
+    struct ModelBinding;
     struct ModelField;
 
     using ModelID = u64;
@@ -172,14 +173,14 @@ namespace auik
     using PFN_model_record_id = ModelRecordID (*)(ModelRecord &record);
     using PFN_model_field_data_batch = ModelBatchData (*)(const ModelRecordID *record_ids, u32 count,
                                                           ModelFieldID field_id, void *data);
-    using PFN_present_model_field = Widget *(*)(ModelBinding * binding, ModelRecord &record, ModelFieldID field_id,
-                                                void *data);
+    using PFN_present_model_record = void (*)(ModelBinding *binding, ModelRecord &record, u32 record_index,
+                                              Widget **widgets, u32 widget_count, void *data);
 
     struct ModelRecordPresenter
     {
         void *data = nullptr;
         acul::vector<ModelFieldID> field_ids;
-        PFN_present_model_field present_field = nullptr;
+        PFN_present_model_record present_record = nullptr;
     };
 
     AUIK_EXPORT ModelRecordID make_generated_model_record_id(ModelRecord &record);
@@ -681,8 +682,6 @@ namespace auik
 
     AUIK_EXPORT void detach_model_binding(ModelBinding &binding);
 
-    AUIK_EXPORT Widget *present_model_field(ModelBinding &binding, ModelRecord &record, ModelFieldID field_id);
-    AUIK_EXPORT Widget *present_model_field(ModelBinding &binding, ModelRecordID record_id, ModelFieldID field_id);
     AUIK_EXPORT ModelRecordID *find_model_binding_record(ModelBinding &binding, ModelRecordID record_id);
 
     inline void bind_model_record(ModelBinding &binding, ModelRecordID record_id)

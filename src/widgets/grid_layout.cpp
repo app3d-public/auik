@@ -286,7 +286,7 @@ namespace auik
                                       ctx.window_ctx);
             detail::get_context().dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
             update_draw_commands(DrawReasonBits::external);
-            detail::mark_host_refresh_request();
+            mark_host_refresh_request();
             return;
         }
 
@@ -311,7 +311,7 @@ namespace auik
                 update_draw_commands(DrawReasonBits::layout);
                 detail::get_context().dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
             }
-            detail::mark_host_refresh_request();
+            mark_host_refresh_request();
             return;
         }
 
@@ -339,7 +339,7 @@ namespace auik
         update_layout(true);
         update_draw_commands(DrawReasonBits::layout);
         detail::get_context().dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
     }
 
     void GridLayout::on_attach()

@@ -95,14 +95,14 @@ namespace auik
         return _image ? amal::rect{_image->uv_offset(), _image->uv_size()} : _uv_rect;
     }
 
-    bool ImageButton::resolve_coverage_mode() const { return _image ? _image->coverage_mode() : _coverage_mode; }
+    bool ImageButton::resolve_coverage_mode() const
+    { return _coverage_mode || (_image && _image->coverage_mode()); }
 
     void ImageButton::set_selected(bool selected)
     {
         if (_selected == selected) return;
         _selected = selected;
         mark_changed();
-        redraw_external(has_draw_record());
     }
 
     StyleUpdateFlags ImageButton::update_style()
@@ -232,7 +232,7 @@ namespace auik
         image_data.z_order = _image_rect.depth;
         image_data.texture_id = static_cast<u16>(texture_id.bind_slot);
         image_data.clip_id = clip_id();
-        image_data.flags = resolve_coverage_mode() ? AUIK_TEXTURE_INSTANCE_TEXT_BIT : 0u;
+        image_data.flags = resolve_coverage_mode() ? AUIK_TEXTURE_INSTANCE_TINT_BIT : 0u;
         emit_context_draw(ctx, textured_quads_stream, _image_draw, &image_data, _image_rect, false);
     }
 

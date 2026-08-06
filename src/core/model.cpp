@@ -168,7 +168,9 @@ namespace auik
     }
 
     AUIK_EXPORT bool model_pipeline_cache_active(const ModelDB *db)
-    { return db && db->_pipeline_cache_scope_depth != 0u; }
+    {
+        return db && db->_pipeline_cache_scope_depth != 0u;
+    }
 
     static void clear_model_pipeline_cache(ModelDB *db)
     {
@@ -243,7 +245,9 @@ namespace auik
         }
     }
     AUIK_EXPORT bool is_model_binding_valid(const ModelBinding &binding)
-    { return binding.db && binding.db->synced && find_model(binding.db, binding.model_id) != nullptr; }
+    {
+        return binding.db && binding.db->synced && find_model(binding.db, binding.model_id) != nullptr;
+    }
 
     AUIK_EXPORT bool is_model_field_access_valid(ModelDB *db, ModelID model_id, const ModelFieldAccess &access)
     {
@@ -380,7 +384,9 @@ namespace auik
     }
 
     AUIK_EXPORT bool access_model_binding_field(ModelBinding &binding, ModelFieldAccess &out)
-    { return access_model_binding_field(binding, AUIK_MODEL_RECORD_ID_INVALID, AUIK_MODEL_FIELD_ID_INVALID, out); }
+    {
+        return access_model_binding_field(binding, AUIK_MODEL_RECORD_ID_INVALID, AUIK_MODEL_FIELD_ID_INVALID, out);
+    }
 
     AUIK_EXPORT void dispatch_model_field(ModelField &field)
     {
@@ -496,21 +502,6 @@ namespace auik
         return dst && process_model_pipeline_reverse(db, access.pipeline, src, dst);
     }
 
-    AUIK_EXPORT Widget *present_model_field(ModelBinding &binding, ModelRecord &record, ModelFieldID field_id)
-    {
-        return binding.presenter.present_field
-                   ? binding.presenter.present_field(&binding, record, field_id, binding.presenter.data)
-                   : nullptr;
-    }
-
-    AUIK_EXPORT Widget *present_model_field(ModelBinding &binding, ModelRecordID record_id, ModelFieldID field_id)
-    {
-        assert(binding.db && binding.db->synced);
-        auto *model = find_model(binding.db, binding.model_id);
-        auto *record = model ? model->find_record(record_id) : nullptr;
-        return record ? present_model_field(binding, *record, field_id) : nullptr;
-    }
-
     AUIK_EXPORT ModelRecordID *find_model_binding_record(ModelBinding &binding, ModelRecordID record_id)
     {
         assert(binding.db && binding.db->synced);
@@ -553,8 +544,7 @@ namespace auik
         attach_model_binding(*binding);
 
         if (binding->default_access.field_id != AUIK_MODEL_FIELD_ID_INVALID)
-            dispatch_model_binding_field(*binding, binding->default_access.record_id,
-                                         binding->default_access.field_id);
+            dispatch_model_binding_field(*binding, binding->default_access.record_id, binding->default_access.field_id);
         return true;
     }
 

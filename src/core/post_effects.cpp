@@ -182,7 +182,7 @@ namespace auik
             if (!owner) return;
             owner->update_draw_commands(DrawReasonBits::external);
             detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
-            detail::mark_host_refresh_request();
+            mark_host_refresh_request();
         }
 
         template <class Runtime>
@@ -457,14 +457,16 @@ namespace auik
                 data,
                 [](void *effect_data, DrawStream *stream, const void *draw_data, const void *) -> DrawDataID {
                     return with_mutated_batch_copy<VertexStreamBatchData, VertexStreamVertex>(
-                        draw_data, [&](auto &batch) {
+                        draw_data,
+                        [&](auto &batch) {
                             apply_alpha_to_vertex_batch(batch, static_cast<AlphaHandlerData *>(effect_data)->alpha);
                         },
                         [&](auto &copy) { return stream->push_data_to_stream(stream, &copy); });
                 },
                 [](void *effect_data, DrawStream *stream, DrawDataID draw_id, const void *draw_data, const void *) {
                     with_mutated_batch_copy<VertexStreamBatchData, VertexStreamVertex>(
-                        draw_data, [&](auto &batch) {
+                        draw_data,
+                        [&](auto &batch) {
                             apply_alpha_to_vertex_batch(batch, static_cast<AlphaHandlerData *>(effect_data)->alpha);
                         },
                         [&](auto &copy) {
@@ -484,7 +486,8 @@ namespace auik
                 [](void *effect_data, DrawStream *stream, const void *draw_data, const void *post_data) -> DrawDataID {
                     const auto *handler = static_cast<const RotateHandlerData *>(effect_data);
                     const auto *rotate_post = static_cast<const RotatePostData *>(post_data);
-                    if (!handler || !handler->runtime || !rotate_post) return stream->push_data_to_stream(stream, draw_data);
+                    if (!handler || !handler->runtime || !rotate_post)
+                        return stream->push_data_to_stream(stream, draw_data);
                     if (rotate_post->id == AUIK_INVALID_POST_EFFECT_DATA_ID ||
                         rotate_post->id >= handler->runtime->entries.size())
                         return stream->push_data_to_stream(stream, draw_data);
@@ -538,7 +541,8 @@ namespace auik
                 [](void *effect_data, DrawStream *stream, const void *draw_data, const void *post_data) -> DrawDataID {
                     const auto *handler = static_cast<const RotateHandlerData *>(effect_data);
                     const auto *rotate_post = static_cast<const RotatePostData *>(post_data);
-                    if (!handler || !handler->runtime || !rotate_post) return stream->push_data_to_stream(stream, draw_data);
+                    if (!handler || !handler->runtime || !rotate_post)
+                        return stream->push_data_to_stream(stream, draw_data);
                     if (rotate_post->id == AUIK_INVALID_POST_EFFECT_DATA_ID ||
                         rotate_post->id >= handler->runtime->entries.size())
                         return stream->push_data_to_stream(stream, draw_data);
@@ -860,7 +864,8 @@ namespace auik
                     const auto *handler = static_cast<const FadeHandlerData *>(effect_data);
                     const auto *fade_post = static_cast<const FadePostData *>(post_data);
                     return with_mutated_batch_copy<VertexStreamBatchData, VertexStreamVertex>(
-                        draw_data, [&](auto &batch) {
+                        draw_data,
+                        [&](auto &batch) {
                             if (handler && handler->runtime && fade_post &&
                                 fade_post->id < handler->runtime->entries.size())
                             {
@@ -877,7 +882,8 @@ namespace auik
                     const auto *handler = static_cast<const FadeHandlerData *>(effect_data);
                     const auto *fade_post = static_cast<const FadePostData *>(post_data);
                     with_mutated_batch_copy<VertexStreamBatchData, VertexStreamVertex>(
-                        draw_data, [&](auto &batch) {
+                        draw_data,
+                        [&](auto &batch) {
                             if (handler && handler->runtime && fade_post &&
                                 fade_post->id < handler->runtime->entries.size())
                             {
@@ -1163,7 +1169,8 @@ namespace auik
         effect->release_instance = &release_instance_impl<FadeEffectRuntime>;
         effect->is_instance_valid = &is_instance_valid_impl<FadeEffectRuntime>;
         set_handler_impl(effect, get_default_stream(AUIK_PRIMARY_QUAD_STREAM), make_fade_quads_node(effect, true));
-        set_handler_impl(effect, get_default_stream(AUIK_PRIMARY_OVERLAY_QUADS_STREAM), make_fade_quads_node(effect, true));
+        set_handler_impl(effect, get_default_stream(AUIK_PRIMARY_OVERLAY_QUADS_STREAM),
+                         make_fade_quads_node(effect, true));
         set_handler_impl(effect, get_default_stream(AUIK_PRIMARY_TEXTURED_QUADS_STREAM),
                          make_fade_textures_node(effect, true));
         set_handler_impl(effect, get_default_stream(AUIK_PRIMARY_VERTEX_STREAM), make_fade_vertex_node(effect, true));
@@ -1233,7 +1240,10 @@ namespace auik
 
     void retain_fade_post_effect_data(PostEffect *effect, u32 id) { retain_post_effect_instance(effect, id); }
     void release_fade_post_effect_data(PostEffect *effect, u32 id) { release_post_effect_instance(effect, id); }
-    bool is_fade_post_effect_data_valid(PostEffect *effect, u32 id) { return is_post_effect_instance_valid(effect, id); }
+    bool is_fade_post_effect_data_valid(PostEffect *effect, u32 id)
+    {
+        return is_post_effect_instance_valid(effect, id);
+    }
     void reset_fade_post_effect_data(PostEffect *effect, u32 id, Widget *owner, f32 duration_sec)
     {
         update_post_effect_instance(effect, id, owner, &duration_sec);

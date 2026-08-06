@@ -563,18 +563,11 @@ def update_box_property(style_rule: dict, name: str, tokens: list, variables: di
 
 def update_extra_property(style_rule: dict, declaration: CssDeclaration, variables: dict[str, str]) -> bool:
     name = declaration.name
-    if name not in ("display", "position", "text-align", "vertical-align", "white-space", "text-overflow",
-                    "left", "top", "right", "bottom"):
+    if name not in ("display", "text-align", "vertical-align", "white-space", "text-overflow"):
         return False
 
     extras = style_rule.setdefault("extras", {})
-    if name == "position":
-        value = single_ident(declaration.tokens)
-        if value != "absolute":
-            raise ValueError(f"{name} supports only 'absolute'")
-        align = extras.setdefault("align", {})
-        align["absolute"] = True
-    elif name == "display":
+    if name == "display":
         value = single_ident(declaration.tokens)
         if not value:
             raise ValueError(f"{name} expects a single keyword")
@@ -604,11 +597,6 @@ def update_extra_property(style_rule: dict, declaration: CssDeclaration, variabl
             raise ValueError(f"{name} expects a single keyword")
         text = extras.setdefault("text", {})
         text["overflow"] = text_overflow_for_value(value)
-    elif name in ("left", "top", "right", "bottom"):
-        align = extras.setdefault("align", {})
-        align["absolute"] = True
-        position = align.setdefault("position", {})
-        position[name] = resolve_value(declaration.tokens, variables)
     return True
 
 
@@ -622,22 +610,8 @@ def extra_calls(style_rule: dict) -> list[str]:
             value = align.get(key)
             if value and value != "0u":
                 flags.append(value)
-        if align.get("absolute"):
-            flags.append("ChildLayoutFlagBits::absolute")
         flag_expr = " | ".join(flags) if flags else "0u"
-        position = align.get("position", {})
-        position_values = {
-            "left": position.get("left", "0.0f"),
-            "top": position.get("top", "0.0f"),
-            "right": position.get("right", "0.0f"),
-            "bottom": position.get("bottom", "0.0f"),
-        }
-        calls.append(
-            "align_extra(StyleExtraAlign{"
-            f"static_cast<u32>({flag_expr}), "
-            f"amal::vec4{{{position_values['left']}, {position_values['top']}, "
-            f"{position_values['right']}, {position_values['bottom']}" + "}})"
-        )
+        calls.append(f"align_extra(StyleExtraAlign{{static_cast<u32>({flag_expr})}})")
     text = extras.get("text")
     if text:
         wrap = text.get("wrap", "static_cast<TextWrapMode>(0u)")

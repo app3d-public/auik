@@ -271,6 +271,10 @@ namespace auik
 
         void set_popup_anchor_override(const amal::rect &anchor)
         {
+            if (_popup_anchor_overridden && _popup_anchor_override.offset.x == anchor.offset.x &&
+                _popup_anchor_override.offset.y == anchor.offset.y && _popup_anchor_override.size.x == anchor.size.x &&
+                _popup_anchor_override.size.y == anchor.size.y)
+                return;
             _popup_anchor_override = anchor;
             _popup_anchor_overridden = true;
             if (_open) open_menu();

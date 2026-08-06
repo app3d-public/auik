@@ -129,7 +129,7 @@ namespace auik
         DrawReasonFlags reason = get_draw_reason_from_style_update(flags);
         if ((flags & StyleUpdateFlagBits::redraw) && reason == DrawReasonBits::none) reason = DrawReasonBits::external;
         tabbar.update_draw_commands(reason);
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
     }
 
     static inline void refresh_layout_owner(Tabbar &tabbar)
@@ -140,13 +140,13 @@ namespace auik
         if (target->clip_id() == 0xFFFFu)
         {
             ctx.dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
-            detail::mark_host_refresh_request();
+            mark_host_refresh_request();
             return;
         }
         target->update_layout(false);
         target->update_draw_commands(DrawReasonBits::layout);
         ctx.dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
     }
 
     Tabbar::Tabbar(u32 id, acul::vector<acul::string> items, TabbarFlags tab_flags, WidgetFlags widget_flags,
@@ -241,7 +241,7 @@ namespace auik
         _items[index].changed = true;
         refresh_layout_owner(*this);
         detail::get_context().dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
     }
 
     void Tabbar::set_tab_unchanged(u32 element_id)
@@ -251,7 +251,7 @@ namespace auik
         _items[index].changed = false;
         refresh_layout_owner(*this);
         detail::get_context().dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
     }
 
     bool Tabbar::is_changed(u32 element_id) const
@@ -579,7 +579,7 @@ namespace auik
         if (!changed) return;
         detail::get_context().dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
         refresh_layout_owner(*this);
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
     }
 
     void Tabbar::set_items(const acul::vector<StringView> &items)
@@ -1607,7 +1607,7 @@ namespace auik
                 close_popup();
                 redraw_all_commands();
             });
-            detail::mark_host_refresh_request();
+            mark_host_refresh_request();
         }
     }
 
@@ -1645,7 +1645,7 @@ namespace auik
             update_layout_from_current_bounds(true);
             update_draw_commands(DrawReasonBits::layout);
             detail::get_context().dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
-            detail::mark_host_refresh_request();
+            mark_host_refresh_request();
         }
         if (changed)
         {
@@ -2008,7 +2008,7 @@ namespace auik
                 close_popup();
                 redraw_all_commands();
             });
-            detail::mark_host_refresh_request();
+            mark_host_refresh_request();
             return;
         }
         if (hover_id.tag_id == _item_style_tag)
@@ -2020,7 +2020,7 @@ namespace auik
                 close_popup();
                 if (was_open) redraw_all_commands();
             });
-            detail::mark_host_refresh_request();
+            mark_host_refresh_request();
             return;
         }
         if (hover_id.tag_id == _popup_item_style_tag)
@@ -2030,7 +2030,7 @@ namespace auik
                 close_popup();
                 redraw_all_commands();
             });
-            detail::mark_host_refresh_request();
+            mark_host_refresh_request();
             return;
         }
         if (hover_id.tag_id == AUIK_TAG_TABBAR_POPUP_BTN)
@@ -2039,7 +2039,7 @@ namespace auik
                 toggle_popup();
                 redraw_all_commands();
             });
-            detail::mark_host_refresh_request();
+            mark_host_refresh_request();
         }
     }
 
@@ -2072,7 +2072,7 @@ namespace auik
                     update_draw_commands(DrawReasonBits::layout);
                     detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
                 });
-                detail::mark_host_refresh_request();
+                mark_host_refresh_request();
             }
             return;
         }
@@ -2124,9 +2124,9 @@ namespace auik
             invalidate_draw_commands(DrawReasonBits::layout);
             update_draw_commands(DrawReasonBits::layout);
             ctx.dirty_flags |= DirtyFlagBits::redraw;
-            detail::mark_host_refresh_request();
+            mark_host_refresh_request();
         });
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
     }
 
     void Tabbar::clamp_scroll_offset()

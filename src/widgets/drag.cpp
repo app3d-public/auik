@@ -66,12 +66,16 @@ namespace auik
         };
 
         static inline bool has_drag_interaction_flag(u8 flags, DragInteractionFlagBits bit)
-        { return (flags & bit) != 0u; }
+        {
+            return (flags & bit) != 0u;
+        }
 
         static inline void set_drag_interaction_flag(u8 &flags, DragInteractionFlagBits bit) { flags |= bit; }
 
         static inline void clear_drag_interaction_flag(u8 &flags, DragInteractionFlagBits bit)
-        { flags &= static_cast<u8>(~bit); }
+        {
+            flags &= static_cast<u8>(~bit);
+        }
 
         static inline void clear_drag_interaction_flags(u8 &flags, u8 bits) { flags &= static_cast<u8>(~bits); }
 
@@ -101,7 +105,9 @@ namespace auik
 
         template <typename T>
         void Draggable<T>::set_value(T value)
-        { set_value_internal(value, false); }
+        {
+            set_value_internal(value, false);
+        }
 
         template <typename T>
         void Draggable<T>::set_value_internal(T value, bool manual_change)
@@ -170,7 +176,10 @@ namespace auik
                 clear_drag_interaction_flag(_interaction_flags, drag_interaction_select_all_on_next_focus);
                 set_drag_interaction_flag(_interaction_flags, drag_interaction_select_all_on_release);
             }
-            if (!focused) { _interaction_flags = drag_interaction_select_all_on_next_focus; }
+            if (!focused)
+            {
+                _interaction_flags = drag_interaction_select_all_on_next_focus;
+            }
         }
 
         template <typename T>
@@ -202,7 +211,7 @@ namespace auik
                 if (!has_drag_interaction_flag(_interaction_flags, drag_interaction_drag_active))
                 {
                     set_drag_interaction_flag(_interaction_flags, drag_interaction_text_edit_mode);
-                    select_all_text();
+                    select_all();
                     add_render_command<detail::ClickEventTraits>(this, [this]() { apply_render_update(false); });
                 }
                 return;
@@ -231,7 +240,7 @@ namespace auik
                 if (has_drag_interaction_flag(_interaction_flags, drag_interaction_drag_active)) return;
 
                 set_drag_interaction_flag(_interaction_flags, drag_interaction_text_edit_mode);
-                if (click_count > 1) select_all_text();
+                if (click_count > 1) select_all();
                 else collapse_cursor_at_point(get_mouse_pos());
                 add_render_command<detail::ClickEventTraits>(this, [this]() { apply_render_update(false); });
             }
@@ -372,7 +381,9 @@ namespace auik
 
         template <typename T>
         bool Draggable<T>::should_draw_caret() const
-        { return has_drag_interaction_flag(_interaction_flags, drag_interaction_text_edit_mode); }
+        {
+            return has_drag_interaction_flag(_interaction_flags, drag_interaction_text_edit_mode);
+        }
 
         template class Draggable<int>;
         template class Draggable<f32>;
@@ -388,7 +399,9 @@ namespace auik
     DragInt::DragInt(u32 id, ModelBinding *binding, int min_value, int max_value, f32 speed, amal::vec2 inline_size,
                      WidgetFlags flags)
         : Draggable(id, AUIK_TAG_DRAG_INT, 0, min_value, max_value, speed, inline_size, flags)
-    { set_model_binding(binding); }
+    {
+        set_model_binding(binding);
+    }
 
     DragFloat::DragFloat(u32 id, f32 value, f32 min_value, f32 max_value, f32 speed, amal::vec2 inline_size,
                          WidgetFlags flags)
@@ -396,11 +409,12 @@ namespace auik
     {
     }
 
-    DragFloat::DragFloat(u32 id, ModelBinding *binding, f32 min_value, f32 max_value, f32 speed,
-                         amal::vec2 inline_size,
+    DragFloat::DragFloat(u32 id, ModelBinding *binding, f32 min_value, f32 max_value, f32 speed, amal::vec2 inline_size,
                          WidgetFlags flags)
         : Draggable(id, AUIK_TAG_DRAG_FLOAT, 0, min_value, max_value, speed, inline_size, flags)
-    { set_model_binding(binding); }
+    {
+        set_model_binding(binding);
+    }
 
     DragDouble::DragDouble(u32 id, f64 value, f64 min_value, f64 max_value, f32 speed, amal::vec2 inline_size,
                            WidgetFlags flags)
@@ -409,16 +423,17 @@ namespace auik
     }
 
     DragDouble::DragDouble(u32 id, ModelBinding *binding, f64 min_value, f64 max_value, f32 speed,
-                           amal::vec2 inline_size,
-                           WidgetFlags flags)
+                           amal::vec2 inline_size, WidgetFlags flags)
         : Draggable(id, AUIK_TAG_DRAG_DOUBLE, 0.0, min_value, max_value, speed, inline_size, flags)
-    { set_model_binding(binding); }
+    {
+        set_model_binding(binding);
+    }
 
     namespace
     {
         template <typename T>
-        void apply_drag_common_data(detail::Draggable<T> *widget, const detail::WidgetCommonData &common,
-                                    u32 style_tag, u32 rect_tag)
+        void apply_drag_common_data(detail::Draggable<T> *widget, const detail::WidgetCommonData &common, u32 style_tag,
+                                    u32 rect_tag)
         {
             widget->set_style_tag(style_tag);
             widget->set_rect_tag_id(rect_tag);

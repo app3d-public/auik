@@ -477,7 +477,7 @@ namespace auik
             task.fn = std::move(fn);
             ctx.delayed_tasks.push_back(std::move(task));
             ctx.dirty_flags |= DirtyFlagBits::delayed_tasks;
-            detail::mark_host_refresh_request();
+            mark_host_refresh_request();
             return ctx.delayed_tasks.back().id;
         }
     } // namespace detail
@@ -628,6 +628,23 @@ namespace auik
     }
 
     static bool record_fast_update_commands();
+
+    void update_styles()
+    {
+        auto &ctx = detail::get_context();
+        if (!(ctx.dirty_flags & DirtyFlagBits::styles)) return;
+        acul::vector<Widget *> widgets;
+        widgets.reserve(ctx.id_map.size());
+        for (const auto &[id, widget] : ctx.id_map)
+            if (widget) widgets.push_back(widget);
+        for (Widget *widget : widgets)
+        {
+            const auto it = ctx.id_map.find(widget->id());
+            if (it != ctx.id_map.end() && it->second == widget) widget->update_style();
+        }
+        ctx.dirty_flags &= ~DirtyFlagBits::styles;
+        ctx.dirty_flags &= ~DirtyFlagBits::fast_update;
+    }
 
     void record_layout_commands()
     {
@@ -858,7 +875,7 @@ namespace auik
     {
         auto &ctx = detail::get_context();
         ctx.dirty_flags |= DirtyFlagBits::locale | DirtyFlagBits::layout | DirtyFlagBits::redraw;
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
     }
 
     AUIK_EXPORT bool remove_widget_from_root_unsync(Widget *widget)
@@ -882,7 +899,7 @@ namespace auik
                 ctx.io.drag_key_flags = {};
             }
             rebuild_root_widget_depths();
-            detail::mark_host_refresh_request();
+            mark_host_refresh_request();
             return true;
         }
         return false;
@@ -995,7 +1012,7 @@ namespace auik
             task.due_time += paused_dt;
             has_live_tasks = true;
         }
-        if (has_live_tasks) detail::mark_host_refresh_request();
+        if (has_live_tasks) mark_host_refresh_request();
     }
 
     AUIK_EXPORT f64 next_delayed_task_in(f64 now)
@@ -1059,7 +1076,7 @@ namespace auik
 
         erase_widget_from_transient_cache(ctx.tooltip);
         redraw_all_commands();
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
     }
 
     AUIK_EXPORT void clear_tooltip_if_source(const acul::string *text_source)

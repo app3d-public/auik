@@ -133,7 +133,7 @@ namespace auik::detail
             batch.vertex_count = 4u;
             batch.index_count = 6u;
             batch.texture_id = texture;
-            batch.flags = AUIK_TEXTURE_INSTANCE_TEXT_BIT;
+            batch.flags = AUIK_TEXTURE_INSTANCE_TINT_BIT;
 
             RotatePostData rotate_post{rotate_post_id};
             PostFxChain rotate_chain{rotate_effect, &rotate_post, rotate_post_id, ctx.post_fx_chain};
@@ -149,7 +149,9 @@ namespace auik::detail
         friend void destroy_popup_icon_animation(AnimationState *state, Widget *owner, void *user_data);
 
         RotatePostRuntimeData *rotate_data_mut(u32 rotate_post_id)
-        { return get_rotate_post_effect_data(get_rotate_post_effect(), rotate_post_id); }
+        {
+            return get_rotate_post_effect_data(get_rotate_post_effect(), rotate_post_id);
+        }
 
         void clear_draw()
         {
@@ -445,7 +447,7 @@ namespace auik::detail
                     icon_data.z_order = _hit_rect.depth;
                     icon_data.texture_id = static_cast<u16>(icon_texture.bind_slot);
                     icon_data.clip_id = _hit_rect.clip_id;
-                    icon_data.flags = AUIK_TEXTURE_INSTANCE_TEXT_BIT;
+                    icon_data.flags = AUIK_TEXTURE_INSTANCE_TINT_BIT;
                     emit_context_draw(ctx, textured_quads_stream, _icon_draw, &icon_data, _hit_rect, false);
                 }
             }
@@ -458,7 +460,7 @@ namespace auik::detail
         _rotate_transient->configure(_update_target, _icon_texture, _icon_uv_rect, _icon_rect, _hit_rect.depth,
                                      _hit_rect.clip_id);
         if (!_rotate_transient->start(opening, _open_angle)) return;
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
     }
 
     bool PopupTrigger::has_draw_record() const

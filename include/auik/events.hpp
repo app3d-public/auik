@@ -14,6 +14,20 @@
 
 namespace auik
 {
+    struct CursorID
+    {
+        enum enum_type
+        {
+            arrow,
+            ibeam,
+            resize_ew,
+            resize_ns,
+            resize_nwse,
+            resize_nesw,
+            max
+        };
+    };
+
     struct EventBase
     {
         void prevent_default() { _prevent_default = true; }
@@ -238,6 +252,26 @@ namespace auik
     };
     using TextFlags = acul::flags<TextFlagBits>;
 
+    struct ElementID
+    {
+        u32 widget_id = 0;
+        u32 tag_id = 0;
+        u32 element_id = 0;
+
+        constexpr bool is_valid() const { return widget_id != 0; }
+        constexpr explicit operator bool() const { return is_valid(); }
+        constexpr bool operator==(const ElementID &other) const
+        {
+            return widget_id == other.widget_id && tag_id == other.tag_id && element_id == other.element_id;
+        }
+        constexpr bool operator!=(const ElementID &other) const { return !(*this == other); }
+    };
+
+    inline constexpr ElementID make_element_id(u32 widget_id = 0, u32 tag_id = 0, u32 element_id = 0)
+    {
+        return {widget_id, tag_id, element_id};
+    }
+
     enum class HoverState : i8
     {
         leave = 0,
@@ -248,6 +282,7 @@ namespace auik
     struct HoverEvent : EventBase
     {
         HoverState state = HoverState::leave;
+        ElementID target{};
     };
 
     struct ClickEvent : EventBase
@@ -255,6 +290,9 @@ namespace auik
         MouseKey key = MouseKey::unknown;
         KeyPressState state = KeyPressState::release;
         u32 click_count = 0u;
+        ElementID target{};
+        ElementID drag_id{};
+        KeyMode mods{};
     };
 
     struct FocusEvent : EventBase
@@ -266,23 +304,9 @@ namespace auik
     {
         amal::vec2 delta{0.0f, 0.0f};
         KeyPressState state = KeyPressState::release;
+        ElementID origin{};
+        KeyMode mods{};
     };
-
-    struct ElementID
-    {
-        u32 widget_id = 0;
-        u32 tag_id = 0;
-        u32 element_id = 0;
-
-        constexpr bool is_valid() const { return widget_id != 0; }
-        constexpr explicit operator bool() const { return is_valid(); }
-        constexpr bool operator==(const ElementID &other) const
-        { return widget_id == other.widget_id && tag_id == other.tag_id && element_id == other.element_id; }
-        constexpr bool operator!=(const ElementID &other) const { return !(*this == other); }
-    };
-
-    inline constexpr ElementID make_element_id(u32 widget_id = 0, u32 tag_id = 0, u32 element_id = 0)
-    { return {widget_id, tag_id, element_id}; }
 
     struct DropEvent : EventBase
     {
@@ -322,17 +346,19 @@ namespace auik
         bool empty() const { return (bool)mods == 0 && keys.empty() && !mouse; }
 
         bool operator==(const Shortcut &other) const
-        { return id == other.id && mods == other.mods && keys == other.keys && mouse == other.mouse; }
+        {
+            return id == other.id && mods == other.mods && keys == other.keys && mouse == other.mouse;
+        }
     };
 
     namespace detail
     {
         template <class Keys>
         inline u64 make_shortcut_hash(const Keys &keys, MouseKeyFlags mouse_keys, KeyMode mods,
-                                      u32 id = AUIK_TAG_GLOBAL)
+                                      u32 widget_id = AUIK_TAG_GLOBAL)
         {
             size_t result = 0u;
-            acul::hash_combine(result, id);
+            acul::hash_combine(result, widget_id);
             acul::hash_combine(result, static_cast<i16>(mods));
 
             for (const auto key : keys) acul::hash_combine(result, +key);

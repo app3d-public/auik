@@ -8,11 +8,11 @@ collapse-header-content,0x045505ED
 collapse-header-trigger,0x997C7A55
 color-accent,0x83B56B5A
 color-accent-hover,0xF22637C4
-color-active,0xC0AA3F7D
 color-border,0xFA0805EE
 color-hover,0x8142D235
 color-picker-size,0x74246741
 color-surface,0xB0308B8C
+color-surface-dark,0x4602E159
 color-surface-light,0xE896760A
 color-text,0x6F4A66BD
 column,0xD4230ECF
@@ -98,6 +98,7 @@ tree,0x1FF1B3F1
 tree-cell,0xCB556FD5
 tree-collapse-icon,0x993CDD14
 tree-line,0x371BFC8B
+tree-reorder-indicator,0x827D0E2F
 tree-row-alt,0x29AAFEE3
 window,0x9AC9A862
 window-caption-button,0x060955B4

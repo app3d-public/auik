@@ -29,7 +29,7 @@ namespace auik
     {
         if (_style.id == Theme::STYLE_ID_INVALID) update_style();
         const auto &style = get_theme()->get_style(_style.id);
-        const auto margin = style.margin();
+        const auto margin = parent() ? style.margin() : amal::vec4{0.0f};
         const auto padding = style.padding();
         const bool has_fixed_cross = _axis == amal::axis::x ? is_height_fixed() : is_width_fixed();
         const f32 style_thickness = _axis == amal::axis::x ? style_size().y : style_size().x;
@@ -47,7 +47,7 @@ namespace auik
     {
         if (!min_size_known) update_layout_min_size();
         if (_style.id == Theme::STYLE_ID_INVALID) update_style();
-        const auto margin = get_theme()->get_style(_style.id).margin();
+        const auto margin = parent() ? get_theme()->get_style(_style.id).margin() : amal::vec4{0.0f};
         const amal::vec2 min_line_size = {amal::max(required_size().x - margin.x - margin.z, 0.0f),
                                           amal::max(required_size().y - margin.y - margin.w, 0.0f)};
         amal::vec2 line_size = {amal::max(size().x - margin.x - margin.z, 0.0f),

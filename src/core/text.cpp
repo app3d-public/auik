@@ -348,14 +348,15 @@ namespace auik
                         if (!glyph || !glyph->visible()) continue;
 
                         TexturesInstanceData instance{};
-                        instance.rect.offset = {amal::round(base_x + glyph_offset.x), amal::round(base_y + glyph_offset.y)};
+                        instance.rect.offset = {amal::round(base_x + glyph_offset.x),
+                                                amal::round(base_y + glyph_offset.y)};
                         instance.rect.size = {static_cast<f32>(glyph->size.x), static_cast<f32>(glyph->size.y)};
                         instance.tint_color = tint_color;
                         instance.uv_rect = glyph->uv_rect;
                         instance.z_order = render_config.z_order;
                         instance.texture_id = static_cast<u16>(glyph->texture_id.bind_slot);
                         instance.clip_id = render_config.clip_id;
-                        instance.flags = AUIK_TEXTURE_INSTANCE_TEXT_BIT;
+                        instance.flags = AUIK_TEXTURE_INSTANCE_TINT_BIT;
                         out.push_back(instance);
                     }
                 }
@@ -418,9 +419,9 @@ namespace auik
                 return true;
             }
 
-            static bool layout_wrapped_span(TextLayoutResult &out, Font &font, u32 size_px,
-                                            const acul::string &text, size_t start, size_t end,
-                                            const TextLayoutConfig &config, f32 &line_y, bool &truncated)
+            static bool layout_wrapped_span(TextLayoutResult &out, Font &font, u32 size_px, const acul::string &text,
+                                            size_t start, size_t end, const TextLayoutConfig &config, f32 &line_y,
+                                            bool &truncated)
             {
                 size_t cursor = start;
                 while (cursor < end)
@@ -520,7 +521,9 @@ namespace auik
         bool build_text_instances_from_layout(Font &font, u32 size_px, const TextLayoutResult &layout,
                                               const TextRenderConfig &render_config, u32 tint_color,
                                               acul::vector<TexturesInstanceData> &out)
-        { return append_instances_from_layout(font, size_px, layout, render_config, tint_color, out); }
+        {
+            return append_instances_from_layout(font, size_px, layout, render_config, tint_color, out);
+        }
 
         bool layout_single_line(Font &font, u32 size_px, const acul::string &utf8_text, const TextLayoutConfig &config,
                                 TextLayoutResult &out)

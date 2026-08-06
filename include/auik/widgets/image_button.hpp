@@ -50,8 +50,8 @@ namespace auik
         u32 style_tag() const { return _style.tag_id; }
         void set_style_tag(u32 tag_id)
         {
+            if (_style.tag_id == tag_id) return;
             _style = {Theme::STYLE_ID_INVALID, tag_id};
-            set_rect_tag_id(tag_id);
         }
 
         virtual u32 signature() const override { return AUIK_TAG_IMAGE_BUTTON; }
@@ -92,6 +92,14 @@ namespace auik
         constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
                                              WidgetFlagBits::configurable | WidgetFlagBits::hittable;
         return acul::alloc<ImageButton>(id, image, image_size, size, widget_flags, AUIK_STYLE_TAG_IMAGE_BUTTON);
+    }
+
+    inline ImageButton *make_styled_image(u32 id, Image *image, u32 style_tag,
+                                          amal::vec2 image_size = {0.0f, 0.0f},
+                                          amal::vec2 size = AUIK_SIZE_INHERIT)
+    {
+        constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::configurable;
+        return acul::alloc<ImageButton>(id, image, image_size, size, widget_flags, style_tag);
     }
 
     namespace streams

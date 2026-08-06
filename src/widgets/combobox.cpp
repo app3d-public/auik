@@ -261,7 +261,7 @@ namespace auik
         sync_label_text();
         auto &ctx = detail::get_context();
         ctx.dirty_flags |= DirtyFlagBits::redraw;
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
         if (_open)
         {
             update_popup_layout();
@@ -288,7 +288,7 @@ namespace auik
 
         auto &ctx = detail::get_context();
         ctx.dirty_flags |= DirtyFlagBits::redraw;
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
         if (_open)
         {
             update_popup_layout();
@@ -334,7 +334,7 @@ namespace auik
         sync_label_text();
         auto &ctx = detail::get_context();
         ctx.dirty_flags |= DirtyFlagBits::redraw;
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
     }
 
     StyleUpdateFlags Combobox::update_style()
@@ -535,7 +535,7 @@ namespace auik
                 close();
                 redraw_all_commands();
             });
-            detail::mark_host_refresh_request();
+            mark_host_refresh_request();
             return;
         }
         if (_open) set_style_state(StyleState::focus);
@@ -560,7 +560,7 @@ namespace auik
                     if (prevented) return;
                     redraw_all_commands();
                 });
-                detail::mark_host_refresh_request();
+                mark_host_refresh_request();
             }
             return;
         }
@@ -568,7 +568,7 @@ namespace auik
             toggle();
             redraw_all_commands();
         });
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
     }
 
     void Combobox::open()
@@ -737,7 +737,7 @@ namespace auik
             }
             schedule_outside_click_tick();
         });
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
     }
 
     bool Combobox::has_draw_record() const { return _trigger && _trigger->has_draw_record(); }
@@ -825,7 +825,7 @@ namespace auik
         }
         sync_label_text();
         detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
     }
 
     void MultipleCombobox::set_placeholder(acul::string value) { set_placeholder(StringView{value}); }
@@ -869,7 +869,7 @@ namespace auik
         sync_label_text();
         if (prevented) return;
         detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
     }
 
     StyleUpdateFlags MultipleCombobox::update_style()
@@ -1062,7 +1062,7 @@ namespace auik
                 close();
                 redraw_all_commands();
             });
-            detail::mark_host_refresh_request();
+            mark_host_refresh_request();
             return;
         }
         if (_open) set_style_state(StyleState::focus);
@@ -1101,7 +1101,7 @@ namespace auik
                     sync_label_text();
                     if (!prevented) redraw_all_commands();
                 });
-                detail::mark_host_refresh_request();
+                mark_host_refresh_request();
             }
             return;
         }
@@ -1109,7 +1109,7 @@ namespace auik
             toggle();
             redraw_all_commands();
         });
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
     }
 
     void MultipleCombobox::open()
@@ -1272,7 +1272,7 @@ namespace auik
             }
             schedule_outside_click_tick();
         });
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
     }
 
     bool MultipleCombobox::has_draw_record() const { return _trigger && _trigger->has_draw_record(); }

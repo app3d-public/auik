@@ -11,7 +11,9 @@ namespace auik
         : Widget(id, widget_flags, EventFlagBits::click, {{0.0f, 0.0f}, {0.0f, 0.0f}}, AUIK_TAG_CHECKBOX),
           _value(value),
           _checkmark_rect(detail::make_rect_data(AUIK_TAG_CHECKBOX_CHECKMARK, AUIK_TAG_CHECKBOX_CHECKMARK))
-    { ensure_checkmark_resource(); }
+    {
+        ensure_checkmark_resource();
+    }
 
     void Checkbox::ensure_checkmark_resource()
     {
@@ -163,7 +165,7 @@ namespace auik
                 checkmark_data.z_order = _checkmark_rect.depth;
                 checkmark_data.texture_id = static_cast<u16>(_checkmark_texture.bind_slot);
                 checkmark_data.clip_id = clip_id();
-                checkmark_data.flags = AUIK_TEXTURE_INSTANCE_TEXT_BIT;
+                checkmark_data.flags = AUIK_TEXTURE_INSTANCE_TINT_BIT;
                 emit_context_draw(ctx, textured_quads_stream, _checkmark_draw, &checkmark_data, _checkmark_rect, false);
             }
         }
@@ -177,7 +179,9 @@ namespace auik
     }
 
     Checkbox::Checkbox(u32 id, ModelBinding *binding, WidgetFlags widget_flags) : Checkbox(id, false, widget_flags)
-    { set_model_binding(binding); }
+    {
+        set_model_binding(binding);
+    }
 
     void Checkbox::set_model_binding(ModelBinding *binding)
     {

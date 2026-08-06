@@ -100,6 +100,12 @@ namespace auik
         invalidate_hit_rect(_draw_id);
     }
 
+    void RubberBand::reset_draw_records()
+    {
+        Widget::reset_draw_records();
+        _draw_id = {};
+    }
+
     void RubberBand::update_depth(const amal::vec2 &depth_range)
     {
         Widget::update_depth(depth_range);
@@ -147,8 +153,8 @@ namespace auik
         {
             set_visible();
             sync_widget_flags();
-            _start = get_mouse_pos();
-            _end = _start;
+            _start = detail::get_context().io.last_click_pos;
+            _end = get_mouse_pos();
             update_selection_rect();
             _active = true;
             _committed = false;
@@ -193,7 +199,7 @@ namespace auik
     void RubberBand::redraw_band()
     {
         redraw_external(has_draw_record(), DrawReasonBits::external | DrawReasonBits::transient);
-        detail::mark_host_refresh_request();
+        mark_host_refresh_request();
     }
 
     namespace
