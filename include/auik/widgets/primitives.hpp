@@ -18,7 +18,7 @@ namespace auik
         AUIK_EXPORT void set_style_tag(u32 tag_id);
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
-        AUIK_EXPORT void update_layout_min_size() override;
+        AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void rebuild_clip_rects() override;
@@ -41,7 +41,7 @@ namespace auik
         AUIK_EXPORT void set_style_tag(u32 tag_id);
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
-        AUIK_EXPORT void update_layout_min_size() override;
+        AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void rebuild_clip_rects() override;
         AUIK_EXPORT void reset_draw_records() override;
@@ -55,15 +55,15 @@ namespace auik
 
     inline WLine *make_w_line(u32 id, amal::axis axis = amal::axis::x)
     {
-        constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
-                                             WidgetFlagBits::configurable;
+        constexpr WidgetFlags widget_flags =
+            WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::configurable;
         return acul::alloc<WLine>(id, axis, widget_flags);
     }
 
     inline WRect *make_w_rect(u32 id, const amal::rect &bounds = {{0.0f, 0.0f}, AUIK_SIZE_INHERIT})
     {
-        constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
-                                             WidgetFlagBits::configurable;
+        constexpr WidgetFlags widget_flags =
+            WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::configurable;
         return acul::alloc<WRect>(id, bounds, widget_flags);
     }
 

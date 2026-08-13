@@ -74,7 +74,9 @@ namespace auik
         }
 
         static inline StyleState resolve_grab_visual_state(StyleState state)
-        { return state == StyleState::active ? StyleState::active : StyleState::normal; }
+        {
+            return state == StyleState::active ? StyleState::active : StyleState::normal;
+        }
 
         static inline StyleUpdateFlags resolve_style_and_mark_redraw(StyleSelector &selector, u32 self_id,
                                                                      u32 parent_id, StyleState state,
@@ -96,7 +98,9 @@ namespace auik
         }
 
         static inline bool is_slider_grab_hit(const ElementID &id, u32 widget_id, u32 tag_id)
-        { return id.widget_id == widget_id && id.tag_id == tag_id; }
+        {
+            return id.widget_id == widget_id && id.tag_id == tag_id;
+        }
 
         static inline f32 resolve_drag_mouse_offset(const amal::rect &grab_rect, amal::axis axis)
         {
@@ -298,10 +302,12 @@ namespace auik
         set_value(value);
     }
 
-    Slider::Slider(u32 id, ModelBinding *binding, f32 min_value, f32 max_value, f32 range_start_value,
-                   amal::axis axis, f32 size, WidgetFlags widget_flags)
+    Slider::Slider(u32 id, ModelBinding *binding, f32 min_value, f32 max_value, f32 range_start_value, amal::axis axis,
+                   f32 size, WidgetFlags widget_flags)
         : Slider(id, 0.0f, min_value, max_value, range_start_value, axis, size, widget_flags)
-    { set_model_binding(binding); }
+    {
+        set_model_binding(binding);
+    }
 
     StyleUpdateFlags Slider::update_style()
     {
@@ -358,7 +364,7 @@ namespace auik
         return true;
     }
 
-    void Slider::update_layout_min_size()
+    void Slider::update_layout_min_size_force()
     {
         const auto &track_style = get_theme()->get_style(_track_style.id);
         const amal::vec4 margin = track_style.margin();
@@ -368,7 +374,7 @@ namespace auik
 
     void Slider::update_layout(bool min_size_known)
     {
-        if (!min_size_known) update_layout_min_size();
+        if (layout_measure_required(min_size_known)) update_layout_min_size_force();
 
         const auto &style = get_theme()->get_style(_track_style.id);
         const amal::vec2 layout_origin = position();
@@ -376,10 +382,8 @@ namespace auik
         const amal::vec2 min_required = required_size();
         amal::vec2 slider_size = {amal::max(size().x - margin.x - margin.z, 0.0f),
                                   amal::max(size().y - margin.y - margin.w, 0.0f)};
-        if (fill_width())
-            slider_size.x = amal::max(slider_size.x, min_required.x - margin.x - margin.z);
-        else if (!is_width_fixed())
-            slider_size.x = amal::max(slider_size.x, min_required.x - margin.x - margin.z);
+        if (fill_width()) slider_size.x = amal::max(slider_size.x, min_required.x - margin.x - margin.z);
+        else if (!is_width_fixed()) slider_size.x = amal::max(slider_size.x, min_required.x - margin.x - margin.z);
         else slider_size.x = amal::max(slider_size.x, min_required.x - margin.x - margin.z);
         if (!fill_height() && !is_height_fixed()) slider_size.y = min_required.y - margin.y - margin.w;
         else slider_size.y = amal::max(slider_size.y, min_required.y - margin.y - margin.w);
@@ -473,7 +477,9 @@ namespace auik
     }
 
     bool Slider::has_draw_record() const
-    { return detail::has_render_record(_grab_draw_id) || detail::has_any_track_record(_track_visual); }
+    {
+        return detail::has_render_record(_grab_draw_id) || detail::has_any_track_record(_track_visual);
+    }
 
     void Slider::set_value(f32 new_value)
     {
@@ -708,7 +714,9 @@ namespace auik
                                    const acul::vector<amal::vec4> &colors, amal::axis axis, f32 size,
                                    WidgetFlags widget_flags)
         : GradientSlider(id, 0.0f, min_value, max_value, colors, axis, size, widget_flags)
-    { set_model_binding(binding); }
+    {
+        set_model_binding(binding);
+    }
 
     StyleUpdateFlags GradientSlider::update_style()
     {
@@ -758,9 +766,11 @@ namespace auik
     }
 
     amal::vec4 GradientSlider::resolve_active_color(f32 factor) const
-    { return detail::sample_gradient_color(_colors.data(), static_cast<u32>(_colors.size()), factor); }
+    {
+        return detail::sample_gradient_color(_colors.data(), static_cast<u32>(_colors.size()), factor);
+    }
 
-    void GradientSlider::update_layout_min_size()
+    void GradientSlider::update_layout_min_size_force()
     {
         const auto &track_style = get_theme()->get_style(_track_style.id);
         const amal::vec4 margin = track_style.margin();
@@ -770,7 +780,7 @@ namespace auik
 
     void GradientSlider::update_layout(bool min_size_known)
     {
-        if (!min_size_known) update_layout_min_size();
+        if (layout_measure_required(min_size_known)) update_layout_min_size_force();
 
         const auto &style = get_theme()->get_style(_track_style.id);
         const amal::vec2 layout_origin = position();
@@ -778,10 +788,8 @@ namespace auik
         const amal::vec2 min_required = required_size();
         amal::vec2 slider_size = {amal::max(size().x - margin.x - margin.z, 0.0f),
                                   amal::max(size().y - margin.y - margin.w, 0.0f)};
-        if (fill_width())
-            slider_size.x = amal::max(slider_size.x, min_required.x - margin.x - margin.z);
-        else if (!is_width_fixed())
-            slider_size.x = amal::max(slider_size.x, min_required.x - margin.x - margin.z);
+        if (fill_width()) slider_size.x = amal::max(slider_size.x, min_required.x - margin.x - margin.z);
+        else if (!is_width_fixed()) slider_size.x = amal::max(slider_size.x, min_required.x - margin.x - margin.z);
         else slider_size.x = amal::max(slider_size.x, min_required.x - margin.x - margin.z);
         if (!fill_height() && !is_height_fixed()) slider_size.y = min_required.y - margin.y - margin.w;
         else slider_size.y = amal::max(slider_size.y, min_required.y - margin.y - margin.w);
@@ -789,9 +797,8 @@ namespace auik
         const amal::vec2 pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
         const amal::vec2 old_pos = position();
         const amal::vec2 old_size = size();
-        const bool can_translate_cache =
-            min_size_known && old_size.x == slider_size.x && old_size.y == slider_size.y &&
-            (old_pos.x != pos.x || old_pos.y != pos.y);
+        const bool can_translate_cache = min_size_known && old_size.x == slider_size.x && old_size.y == slider_size.y &&
+                                         (old_pos.x != pos.x || old_pos.y != pos.y);
         set_position(pos);
         set_layout_size(slider_size);
         Widget::update_layout(true);
@@ -1195,7 +1202,9 @@ namespace auik
     }
 
     amal::vec4 TransparencySlider::resolve_active_color(f32 factor) const
-    { return {_color.r, _color.g, _color.b, factor}; }
+    {
+        return {_color.r, _color.g, _color.b, factor};
+    }
 
     void TransparencySlider::rebuild_gradient_colors()
     {
@@ -1204,7 +1213,7 @@ namespace auik
         _colors[1] = {_color.r, _color.g, _color.b, 1.0f};
     }
 
-    void TransparencySlider::update_layout_min_size()
+    void TransparencySlider::update_layout_min_size_force()
     {
         const auto &track_style = get_theme()->get_style(_track_style.id);
         const amal::vec4 margin = track_style.margin();
@@ -1242,7 +1251,7 @@ namespace auik
 
     void TransparencySlider::update_layout(bool min_size_known)
     {
-        if (!min_size_known) update_layout_min_size();
+        if (layout_measure_required(min_size_known)) update_layout_min_size_force();
 
         const auto &style = get_theme()->get_style(_track_style.id);
         const amal::vec2 layout_origin = position();
@@ -1250,10 +1259,8 @@ namespace auik
         const amal::vec2 min_required = required_size();
         amal::vec2 slider_size = {amal::max(size().x - margin.x - margin.z, 0.0f),
                                   amal::max(size().y - margin.y - margin.w, 0.0f)};
-        if (fill_width())
-            slider_size.x = amal::max(slider_size.x, min_required.x - margin.x - margin.z);
-        else if (!is_width_fixed())
-            slider_size.x = amal::max(slider_size.x, min_required.x - margin.x - margin.z);
+        if (fill_width()) slider_size.x = amal::max(slider_size.x, min_required.x - margin.x - margin.z);
+        else if (!is_width_fixed()) slider_size.x = amal::max(slider_size.x, min_required.x - margin.x - margin.z);
         else slider_size.x = amal::max(slider_size.x, min_required.x - margin.x - margin.z);
         if (!fill_height() && !is_height_fixed()) slider_size.y = min_required.y - margin.y - margin.w;
         else slider_size.y = amal::max(slider_size.y, min_required.y - margin.y - margin.w);
@@ -1261,9 +1268,8 @@ namespace auik
         const amal::vec2 pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
         const amal::vec2 old_pos = position();
         const amal::vec2 old_size = size();
-        const bool can_translate_cache =
-            min_size_known && old_size.x == slider_size.x && old_size.y == slider_size.y &&
-            (old_pos.x != pos.x || old_pos.y != pos.y);
+        const bool can_translate_cache = min_size_known && old_size.x == slider_size.x && old_size.y == slider_size.y &&
+                                         (old_pos.x != pos.x || old_pos.y != pos.y);
         set_position(pos);
         set_layout_size(slider_size);
         Widget::update_layout(true);
@@ -1294,7 +1300,9 @@ namespace auik
     TransparencySlider::TransparencySlider(u32 id, ModelBinding *binding, f32 min_value, f32 max_value, f32 size,
                                            const amal::vec4 &color, amal::axis axis, WidgetFlags widget_flags)
         : TransparencySlider(id, 0.0f, min_value, max_value, size, color, axis, widget_flags)
-    { set_model_binding(binding); }
+    {
+        set_model_binding(binding);
+    }
 
     void TransparencySlider::translate(const amal::vec2 &delta)
     {
@@ -1540,7 +1548,7 @@ namespace auik
             _checker->set_size(_track_rect.size);
             _checker->set_layout_size(_track_rect.size);
             _checker->set_clip_id(clip_id());
-            _checker->update_style();
+            _checker->update_style_invalidated();
             _checker->update_depth(_track_depth_range);
         }
 
@@ -1631,10 +1639,12 @@ namespace auik
         set_values(from_value, to_value);
     }
 
-    RangeSlider::RangeSlider(u32 id, ModelBinding *binding, f32 min_value, f32 max_value, amal::axis axis,
-                             f32 size, WidgetFlags widget_flags)
+    RangeSlider::RangeSlider(u32 id, ModelBinding *binding, f32 min_value, f32 max_value, amal::axis axis, f32 size,
+                             WidgetFlags widget_flags)
         : RangeSlider(id, 0.0f, 0.0f, min_value, max_value, axis, size, widget_flags)
-    { set_model_binding(binding); }
+    {
+        set_model_binding(binding);
+    }
 
     StyleUpdateFlags RangeSlider::update_style()
     {
@@ -1704,7 +1714,7 @@ namespace auik
         return out;
     }
 
-    void RangeSlider::update_layout_min_size()
+    void RangeSlider::update_layout_min_size_force()
     {
         const auto &track_style = get_theme()->get_style(_track_style.id);
         const amal::vec4 margin = track_style.margin();
@@ -1713,7 +1723,7 @@ namespace auik
     }
     void RangeSlider::update_layout(bool min_size_known)
     {
-        if (!min_size_known) update_layout_min_size();
+        if (layout_measure_required(min_size_known)) update_layout_min_size_force();
 
         const auto &style = get_theme()->get_style(_track_style.id);
         const amal::vec2 layout_origin = position();
@@ -1721,10 +1731,8 @@ namespace auik
         const amal::vec2 min_required = required_size();
         amal::vec2 slider_size = {amal::max(size().x - margin.x - margin.z, 0.0f),
                                   amal::max(size().y - margin.y - margin.w, 0.0f)};
-        if (fill_width())
-            slider_size.x = amal::max(slider_size.x, min_required.x - margin.x - margin.z);
-        else if (!is_width_fixed())
-            slider_size.x = amal::max(slider_size.x, min_required.x - margin.x - margin.z);
+        if (fill_width()) slider_size.x = amal::max(slider_size.x, min_required.x - margin.x - margin.z);
+        else if (!is_width_fixed()) slider_size.x = amal::max(slider_size.x, min_required.x - margin.x - margin.z);
         else slider_size.x = amal::max(slider_size.x, min_required.x - margin.x - margin.z);
         if (!fill_height() && !is_height_fixed()) slider_size.y = min_required.y - margin.y - margin.w;
         else slider_size.y = amal::max(slider_size.y, min_required.y - margin.y - margin.w);
@@ -1851,9 +1859,8 @@ namespace auik
         if (!changed) return;
         if (_model_binding)
         {
-            const ModelRecordID record_id = !_model_binding->records.empty()
-                                                ? _model_binding->records[0]
-                                                : AUIK_MODEL_RECORD_ID_INVALID;
+            const ModelRecordID record_id =
+                !_model_binding->records.empty() ? _model_binding->records[0] : AUIK_MODEL_RECORD_ID_INVALID;
             ModelFieldAccess from_access{};
             ModelFieldAccess to_access{};
             acul::vector<ModelField *> changed_fields;
@@ -1865,8 +1872,7 @@ namespace auik
                     changed_fields.push_back(field);
             }
             if (access_model_binding_field(*_model_binding, record_id, AUIK_RANGE_SLIDER_END_FIELD, to_access) &&
-                write_model_field_access_value<f32>(_model_binding->db, _model_binding->model_id, to_access,
-                                                    _to_value))
+                write_model_field_access_value<f32>(_model_binding->db, _model_binding->model_id, to_access, _to_value))
             {
                 if (auto *field = resolve_model_field(_model_binding->db, _model_binding->model_id, to_access))
                     changed_fields.push_back(field);
@@ -1892,9 +1898,8 @@ namespace auik
         _model_binding = binding;
         if (!_model_binding) return;
         auto sync_from_model = [this]() {
-            const ModelRecordID record_id = !_model_binding->records.empty()
-                                                ? _model_binding->records[0]
-                                                : AUIK_MODEL_RECORD_ID_INVALID;
+            const ModelRecordID record_id =
+                !_model_binding->records.empty() ? _model_binding->records[0] : AUIK_MODEL_RECORD_ID_INVALID;
             f32 from_value = 0.0f;
             f32 to_value = 0.0f;
             if (read_model_binding_value(*_model_binding, record_id, AUIK_RANGE_SLIDER_START_FIELD, from_value) &&
@@ -2375,4 +2380,3 @@ namespace auik
         AUIK_EXPORT const umbf::streams::Stream range_slider{read_range_slider, write_range_slider};
     } // namespace streams
 } // namespace auik
-

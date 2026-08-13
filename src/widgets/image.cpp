@@ -6,7 +6,7 @@
 
 namespace auik
 {
-    void Image::update_layout_min_size()
+    void Image::update_layout_min_size_force()
     {
         set_required_size({is_size_concrete(style_size().x) ? style_size().x : 0.0f,
                            is_size_concrete(style_size().y) ? style_size().y : 0.0f});
@@ -14,7 +14,7 @@ namespace auik
 
     void Image::update_layout(bool min_size_known)
     {
-        if (!min_size_known) update_layout_min_size();
+        if (layout_measure_required(min_size_known)) update_layout_min_size_force();
         const amal::vec2 layout_origin = position();
         set_position(layout_origin);
         set_layout_size(required_size());
@@ -29,10 +29,7 @@ namespace auik
         set_clip_id(parent()->content_clip_id());
     }
 
-    void Image::reset_draw_records()
-    {
-        _image = {};
-    }
+    void Image::reset_draw_records() { _image = {}; }
 
     void Image::draw(DrawCtx &ctx)
     {
@@ -73,7 +70,7 @@ namespace auik
         return flags;
     }
 
-    void CheckerImage::update_layout_min_size()
+    void CheckerImage::update_layout_min_size_force()
     {
         if (_style.id == Theme::STYLE_ID_INVALID) update_style();
         const auto &style = get_theme()->get_style(_style.id);
@@ -87,7 +84,7 @@ namespace auik
 
     void CheckerImage::update_layout(bool min_size_known)
     {
-        if (!min_size_known) update_layout_min_size();
+        if (layout_measure_required(min_size_known)) update_layout_min_size_force();
         const amal::vec2 layout_origin = position();
         if (_style.id == Theme::STYLE_ID_INVALID) update_style();
         const amal::vec4 margin = get_theme()->get_style(_style.id).margin();
@@ -112,10 +109,7 @@ namespace auik
         set_clip_id(parent()->content_clip_id());
     }
 
-    void CheckerImage::reset_draw_records()
-    {
-        _checker = {};
-    }
+    void CheckerImage::reset_draw_records() { _checker = {}; }
 
     void CheckerImage::draw(DrawCtx &ctx)
     {
@@ -150,8 +144,7 @@ namespace auik
             stream.read(coverage_mode);
 
             auto *widget = acul::alloc<Image>(common.id, AUIK_INVALID_TEXTURE_ID, common.inline_size,
-                                              amal::rect{{0.0f, 0.0f}, {1.0f, 1.0f}},
-                                              WidgetFlags(common.widget_flags));
+                                              amal::rect{{0.0f, 0.0f}, {1.0f, 1.0f}}, WidgetFlags(common.widget_flags));
             widget->set_coverage_mode(coverage_mode);
             detail::apply_widget_common_data(widget, common);
             return widget;
@@ -170,8 +163,8 @@ namespace auik
             u32 style_tag = AUIK_STYLE_TAG_GRADIENT_SLIDER;
             stream.read(style_tag);
 
-            auto *widget = acul::alloc<CheckerImage>(common.id, common.inline_size, style_tag,
-                                                     WidgetFlags(common.widget_flags));
+            auto *widget =
+                acul::alloc<CheckerImage>(common.id, common.inline_size, style_tag, WidgetFlags(common.widget_flags));
             detail::apply_widget_common_data(widget, common);
             return widget;
         }

@@ -7,6 +7,25 @@
 
 namespace auik
 {
+    namespace
+    {
+        bool is_at_drag_boundary(const detail::Context &ctx)
+        {
+            constexpr f32 boundary_margin = 1.0f;
+            const auto &position = ctx.io.mouse_pos;
+            const auto &display_size = ctx.io.display_size;
+            return position.x <= boundary_margin || position.y <= boundary_margin ||
+                   position.x >= display_size.x - boundary_margin || position.y >= display_size.y - boundary_margin;
+        }
+
+        inline void try_begin_unbound_drag(detail::Context &ctx, Widget *widget)
+        {
+            if (!widget->allows_unbounded_drag() || !is_at_drag_boundary(ctx)) return;
+            begin_unbound_drag();
+        }
+
+    } // namespace
+
     static void erase_user_data_tag(WidgetUserData *&head, u32 tag)
     {
         WidgetUserData *prev = nullptr;
@@ -104,6 +123,89 @@ namespace auik
         }
     }
 
+    void Widget::sync_widget_flags(EventFlags flags)
+    {
+        const bool visible_changed = static_cast<bool>(_synced_widget_flags & WidgetFlagBits::visible) != is_visible();
+        const bool disabled_changed =
+            static_cast<bool>(_synced_widget_flags & WidgetFlagBits::disabled) != is_disabled();
+        const bool read_only_changed =
+            static_cast<bool>(_synced_widget_flags & WidgetFlagBits::read_only) != is_read_only();
+        const bool hittable_changed =
+            static_cast<bool>(_synced_widget_flags & WidgetFlagBits::hittable) != is_hittable();
+
+        event_flags = flags;
+        _synced_widget_flags = widget_flags;
+
+        // Before the widget participates in either draw path, synchronization only commits the requested state.
+        // Disposal-queue ordering keeps a live attached/transient widget valid until queued work completes.
+        if (!is_attached() && !is_transient()) return;
+
+        auto &ctx = detail::get_context();
+        if (visible_changed || disabled_changed || read_only_changed || hittable_changed)
+            ctx.dirty_flags |= DirtyFlagBits::hit_rect_update;
+        if (visible_changed)
+        {
+            invalidate_layout_measure();
+            if (is_attached() && !(ctx.dirty_flags & DirtyFlagBits::destroying)) rebuild_root_widget_depths();
+        }
+
+        const bool disabled_post_missing = is_disabled() && !_disabled_post_fx;
+        if (disabled_changed || disabled_post_missing)
+        {
+            if (is_disabled()) apply_disabled_post_effect();
+            else restore_pre_disabled_post_effect();
+        }
+        if (disabled_changed) on_disabled_changed(is_disabled());
+
+        if (!(visible_changed || disabled_changed || disabled_post_missing)) return;
+        if (ctx.dirty_flags & DirtyFlagBits::destroying) return;
+
+        Widget *widget = this;
+        ctx.disposal_queue.emplace([widget]() {
+            auto &ctx = detail::get_context();
+            if (ctx.dirty_flags & DirtyFlagBits::destroying) return;
+
+            if (!widget->is_visible() || widget->is_disabled())
+            {
+                auto belongs_to_widget = [widget, &ctx](u32 id) {
+                    if (!id) return false;
+                    const auto it = ctx.id_map.find(id);
+                    if (it == ctx.id_map.end()) return false;
+                    for (Widget *node = it->second; node; node = node->parent())
+                        if (node == widget) return true;
+                    return false;
+                };
+                auto element_belongs_to_widget = [&](ElementID id) {
+                    return id.widget_id && belongs_to_widget(id.widget_id);
+                };
+                if (belongs_to_widget(ctx.focus_id)) ctx.focus_id = 0u;
+                if (belongs_to_widget(ctx.active_id)) ctx.active_id = 0u;
+                if (element_belongs_to_widget(ctx.hover_id)) ctx.hover_id = {};
+                if (element_belongs_to_widget(ctx.io.clicked_id)) ctx.io.clicked_id = {};
+                if (element_belongs_to_widget(ctx.io.drag_id))
+                {
+                    detail::cancel_unbounded_mouse_drag();
+                    ctx.io.drag_id = {};
+                    ctx.io.drag_key_flags = {};
+                }
+            }
+
+            widget->reset_external_draw_cull_state();
+            if (widget->is_visible())
+            {
+                if (widget->is_attached()) widget->update_draw_commands(DrawReasonBits::external);
+                if (widget->is_transient()) widget->update_draw_commands(DrawReasonBits::transient);
+            }
+            else
+            {
+                if (widget->is_attached()) widget->invalidate_draw_commands(DrawReasonBits::external);
+                if (widget->is_transient()) widget->invalidate_draw_commands(DrawReasonBits::transient);
+            }
+            ctx.dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
+        });
+        mark_host_refresh_request();
+    }
+
     PostFxChain *Widget::add_post_effect(PostEffect *effect, const void *instance_data, const void *post_data)
     {
         if (!effect) return nullptr;
@@ -190,7 +292,7 @@ namespace auik
                 if (it == ctx.id_map.end() || it->second != expected_widget) return;
                 Widget *widget = it->second;
                 if (!accepts_style_update(widget)) return;
-                const auto style_flags = widget->update_style();
+                const auto style_flags = widget->update_style_invalidated();
                 if (style_flags == StyleUpdateFlagBits::none) return;
                 if (style_flags & StyleUpdateFlagBits::parent_layout)
                 {
@@ -221,6 +323,19 @@ namespace auik
             enqueue_style_refresh<Traits>(it->second);
         }
 
+        static void enqueue_hover_dispatch(Widget *widget, HoverState state)
+        {
+            if (!widget || !widget->has_event_handler(EventFlagBits::hover)) return;
+            const u32 widget_id = widget->id();
+            Widget *expected_widget = widget;
+            add_render_command<detail::HoverEventTraits>(widget, [widget_id, expected_widget, state]() {
+                auto &ctx = detail::get_context();
+                auto it = ctx.id_map.find(widget_id);
+                if (it == ctx.id_map.end() || it->second != expected_widget) return;
+                it->second->dispatch_hover(state);
+            });
+        }
+
         static inline StyleState resolve_focus_visual_state(Widget *widget)
         {
             assert(widget && "widget cannot be null");
@@ -242,7 +357,7 @@ namespace auik
                 if (it == ctx.id_map.end()) return;
                 Widget *widget = it->second;
                 assert(widget && "widget is null");
-                if (widget->has_event_handler(EventFlagBits::hover)) widget->dispatch_hover(state);
+                enqueue_hover_dispatch(widget, state);
                 if (apply_hover_style_state(*widget, state)) enqueue_style_refresh<detail::HoverEventTraits>(widget);
             };
 
@@ -400,6 +515,7 @@ namespace auik
                 if (it != ctx.id_map.end() && it->second->has_event_handler(EventFlagBits::drag))
                     it->second->dispatch_drag({0.0f, 0.0f}, KeyPressState::release);
             }
+            end_unbound_drag();
 
             io.mouse_down = false;
             io.clicked_id = {};
@@ -479,9 +595,14 @@ namespace auik
             }
             auto it = ctx.id_map.find(io.drag_id.widget_id);
             if (it != ctx.id_map.end() && it->second->has_event_handler(EventFlagBits::drag))
+            {
                 it->second->dispatch_drag(drag_delta, begin_drag ? KeyPressState::press : KeyPressState::repeat);
+                try_begin_unbound_drag(ctx, it->second);
+            }
             mark_host_refresh_request();
         }
+
+        AUIK_EXPORT void cancel_unbounded_mouse_drag() { end_unbound_drag(); }
 
         AUIK_EXPORT void on_scroll_event(const amal::vec2 &pos)
         {
@@ -747,6 +868,7 @@ namespace auik
             it = ctx.id_map.find(drag_id.widget_id);
             if (drag_id && it != ctx.id_map.end() && it->second->has_event_handler(EventFlagBits::drag))
                 it->second->dispatch_drag({0.0f, 0.0f}, KeyPressState::release);
+            end_unbound_drag();
 
             io.drag_id = {};
             io.drag_key_flags = {};
@@ -870,7 +992,10 @@ namespace auik
                 {
                     auto it = ctx.id_map.find(drag_widget_id);
                     if (it != ctx.id_map.end() && it->second->has_event_handler(EventFlagBits::drag))
+                    {
                         it->second->dispatch_drag(drag_delta, KeyPressState::repeat);
+                        try_begin_unbound_drag(ctx, it->second);
+                    }
                 }
             }
 
@@ -897,6 +1022,33 @@ namespace auik
 
     } // namespace detail
 
+    AUIK_EXPORT bool begin_unbound_drag()
+    {
+        auto &ctx = detail::get_context();
+        assert(ctx.window_ctx && "begin_unbound_drag: no window context");
+        if (!ctx.window_ctx || !ctx.window_ctx->set_unbounded_mouse_drag) return false;
+        if (ctx.window_ctx->is_unbound_mode) return true;
+        const amal::vec2 cursor_position = detail::set_unbounded_mouse_drag(true, ctx.window_ctx);
+        ctx.io.mouse_pos = cursor_position;
+        ctx.io.last_drag_pos = cursor_position;
+        ctx.raw_mouse_mode = true;
+        ctx.window_ctx->is_unbound_mode = true;
+        return true;
+    }
+
+    AUIK_EXPORT void end_unbound_drag()
+    {
+        auto &ctx = detail::get_context();
+        assert(ctx.window_ctx && "end_unbound_drag: no window context");
+        if (!ctx.window_ctx->is_unbound_mode) return;
+        ctx.raw_mouse_mode = false;
+        ctx.window_ctx->is_unbound_mode = false;
+        if (!ctx.window_ctx->set_unbounded_mouse_drag) return;
+        const amal::vec2 cursor_position = detail::set_unbounded_mouse_drag(false, ctx.window_ctx);
+        ctx.io.mouse_pos = cursor_position;
+        ctx.io.last_drag_pos = cursor_position;
+    }
+
     AUIK_EXPORT void detail::request_style_refresh(Widget *widget)
     {
         if (!widget || !detail::g_context) return;
@@ -906,12 +1058,11 @@ namespace auik
         const auto attached = ctx.id_map.find(widget->id());
         if (attached == ctx.id_map.end() || attached->second != widget) return;
 
-        const auto style_flags = widget->update_style();
+        const auto style_flags = widget->update_style_invalidated();
         if (style_flags == StyleUpdateFlagBits::none) return;
 
         Widget *owner = nullptr;
-        if (style_flags & StyleUpdateFlagBits::parent_layout)
-            owner = resolve_parent_layout_update_target(widget);
+        if (style_flags & StyleUpdateFlagBits::parent_layout) owner = resolve_parent_layout_update_target(widget);
         else owner = widget;
 
         for (auto *candidate = owner; candidate; candidate = candidate->parent())
@@ -931,8 +1082,7 @@ namespace auik
             auto it = ctx.id_map.find(owner_id);
             if (it == ctx.id_map.end() || it->second != expected_owner) return;
 
-            const bool layout_dirty = style_flags &
-                                      (StyleUpdateFlagBits::layout | StyleUpdateFlagBits::parent_layout);
+            const bool layout_dirty = style_flags & (StyleUpdateFlagBits::layout | StyleUpdateFlagBits::parent_layout);
             if (layout_dirty) expected_owner->update_layout(false);
             expected_owner->update_draw_commands(layout_dirty ? DrawReasonBits::layout : DrawReasonBits::external);
             ctx.dirty_flags |= DirtyFlagBits::redraw;
@@ -948,9 +1098,11 @@ namespace auik
         const auto attached = ctx.id_map.find(widget->id());
         if (attached == ctx.id_map.end() || attached->second != widget) return;
 
-        Widget *owner = flags & StyleUpdateFlagBits::parent_layout ? resolve_parent_layout_update_target(widget)
-                                                                   : widget;
+        Widget *owner =
+            flags & StyleUpdateFlagBits::parent_layout ? resolve_parent_layout_update_target(widget) : widget;
         if (!owner) return;
+        if (flags & (StyleUpdateFlagBits::layout | StyleUpdateFlagBits::parent_layout))
+            widget->invalidate_layout_measure();
         const u32 owner_id = owner->id();
         Widget *expected_owner = owner;
         add_render_command([owner_id, expected_owner, flags]() {

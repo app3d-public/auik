@@ -37,7 +37,7 @@ namespace auik
         AUIK_EXPORT void clear();
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
-        AUIK_EXPORT void update_layout_min_size() override;
+        AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void reset_clip_rect_records() override;
@@ -66,7 +66,9 @@ namespace auik
 
             static Widget *item_widget(const Item &item) { return item.widget; }
             static amal::vec2 item_required_size(const Item &item)
-            { return item.widget ? item.widget->required_size() : amal::vec2{0.0f, 0.0f}; }
+            {
+                return item.widget ? item.widget->required_size() : amal::vec2{0.0f, 0.0f};
+            }
             static void attach_item(DockLayout *owner, Item &item);
             static void detach_item(DockLayout *owner, Item &item);
             static void update_item_min_size(DockLayout *owner, Item &item);
@@ -78,7 +80,7 @@ namespace auik
 
     inline DockLayout *make_dock_layout(u32 id, const amal::vec2 &inline_size = AUIK_SIZE_INHERIT)
     {
-        return acul::alloc<DockLayout>(id, inline_size, WidgetFlagBits::visible | WidgetFlagBits::attachable |
-                                                            WidgetFlagBits::configurable);
+        return acul::alloc<DockLayout>(
+            id, inline_size, WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::configurable);
     }
 } // namespace auik

@@ -21,7 +21,7 @@ namespace auik
         AUIK_EXPORT ~ProgressBar() override;
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
-        AUIK_EXPORT void update_layout_min_size() override;
+        AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void rebuild_clip_rects() override;
@@ -74,8 +74,8 @@ namespace auik
     inline ProgressBar *make_progress_bar(u32 id, f32 value = 0.0f, f32 min_value = 0.0f, f32 max_value = 1.0f,
                                           f32 size = 0.0f, amal::axis axis = amal::axis::x)
     {
-        constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
-                                             WidgetFlagBits::configurable;
+        constexpr WidgetFlags widget_flags =
+            WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::configurable;
         return acul::alloc<ProgressBar>(id, value, min_value, max_value, size, axis, widget_flags);
     }
 

@@ -123,7 +123,7 @@ namespace auik
         AUIK_EXPORT void hide_reorder_indicator();
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
-        AUIK_EXPORT void update_layout_min_size() override;
+        AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void reset_clip_rect_records() override;
@@ -209,6 +209,7 @@ namespace auik
         void update_own_layout();
         void update_reorder_indicator_layout();
         StyleUpdateFlags update_resize_indicator();
+        void request_model_rebuild();
         void rebuild_from_model_binding();
         bool dispatch_reorder_drag(DragEvent &event);
 
@@ -256,6 +257,7 @@ namespace auik
         f32 _indent_width = 16.0f;
         ReorderTarget _reorder_target{};
         ModelBinding *_model_binding = nullptr;
+        bool _model_rebuild_pending = false;
         ModelFieldID _parent_field_id = AUIK_TREE_PARENT_FIELD;
         BackgroundClickCallback _on_background_click = nullptr;
         ReorderBeginCallback _on_reorder_begin = nullptr;

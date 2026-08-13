@@ -42,9 +42,14 @@ namespace auik
         {
         }
 
-        ~Block() override { clear_children(); }
+        ~Block() { clear_children(); }
 
-        AUIK_EXPORT void clear_children();
+        void clear_children() { erase_children(0u, children.size()); }
+        AUIK_EXPORT void erase_children(size_t first, size_t count);
+        void erase_children_from(size_t first)
+        {
+            if (first < children.size()) erase_children(first, children.size() - first);
+        }
         AUIK_EXPORT void add_child(Widget *child, ChildLayoutFlags layout = default_child_layout_flags());
         AUIK_EXPORT void add_child_to_background(Widget *child, ChildLayoutFlags layout = default_child_layout_flags());
         AUIK_EXPORT void add_child_to_foreground(Widget *child, ChildLayoutFlags layout = default_child_layout_flags());
@@ -53,11 +58,12 @@ namespace auik
         AUIK_EXPORT void set_height(f32 value);
         AUIK_EXPORT void set_size(const amal::vec2 &value);
         void set_inline_spacing(f32 value) { _inline_spacing = value; }
+        f32 inline_spacing() const { return _inline_spacing; }
         const acul::vector<ChildLayoutFlags> &child_layouts() const { return _child_layouts; }
         amal::vec2 explicit_size() const { return _explicit_size; }
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
-        AUIK_EXPORT void update_layout_min_size() override;
+        AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void reset_clip_rect_records() override;
@@ -76,6 +82,7 @@ namespace auik
         }
         AUIK_EXPORT void on_attach() override;
         AUIK_EXPORT void on_detach() override;
+        AUIK_EXPORT void on_change(ChangeEvent &event) override;
 
     protected:
         AUIK_EXPORT virtual f32 resolved_inline_spacing() const;
@@ -122,7 +129,7 @@ namespace auik
         AUIK_EXPORT ~DrawBlock() override;
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
-        AUIK_EXPORT void update_layout_min_size() override;
+        AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void reset_clip_rect_records() override;
@@ -208,7 +215,7 @@ namespace auik
         bool ref_active() const { return _ref_active; }
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
-        AUIK_EXPORT void update_layout_min_size() override;
+        AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void reset_clip_rect_records() override;
@@ -262,7 +269,7 @@ namespace auik
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
         AUIK_EXPORT bool accepts_child_style_update(const Widget *child) const override;
-        AUIK_EXPORT void update_layout_min_size() override;
+        AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void reset_clip_rect_records() override;
@@ -317,7 +324,7 @@ namespace auik
         u32 trigger_style_tag() const { return _trigger_style_tag; }
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
-        AUIK_EXPORT void update_layout_min_size() override;
+        AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void rebuild_clip_rects() override;
@@ -361,7 +368,7 @@ namespace auik
         }
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
-        AUIK_EXPORT void update_layout_min_size() override;
+        AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         void draw(DrawCtx &) override {}
         u32 signature() const override { return AUIK_TAG_DUMMY; }

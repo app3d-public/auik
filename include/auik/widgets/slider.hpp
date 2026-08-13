@@ -127,7 +127,7 @@ namespace auik
                            amal::axis axis, f32 size, WidgetFlags widget_flags);
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
-        AUIK_EXPORT void update_layout_min_size() override;
+        AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void rebuild_clip_rects() override;
@@ -198,7 +198,7 @@ namespace auik
                                    WidgetFlags widget_flags);
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
-        AUIK_EXPORT void update_layout_min_size() override;
+        AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void rebuild_clip_rects() override;
@@ -267,7 +267,7 @@ namespace auik
         AUIK_EXPORT ~TransparencySlider() override;
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
-        AUIK_EXPORT void update_layout_min_size() override;
+        AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void rebuild_clip_rects() override;
@@ -341,7 +341,7 @@ namespace auik
                                 WidgetFlags widget_flags);
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
-        AUIK_EXPORT void update_layout_min_size() override;
+        AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void rebuild_clip_rects() override;
@@ -450,7 +450,9 @@ namespace auik
     }
 
     inline GradientSlider *make_hsl_slider(u32 id, f32 value, amal::axis axis)
-    { return make_hsl_slider(id, value, AUIK_SIZE_X_INHERIT, axis); }
+    {
+        return make_hsl_slider(id, value, AUIK_SIZE_X_INHERIT, axis);
+    }
 
     inline TransparencySlider *make_transparency_slider(u32 id, f32 value, const amal::vec4 &color,
                                                         f32 min_value = 0.0f, f32 max_value = 1.0f,

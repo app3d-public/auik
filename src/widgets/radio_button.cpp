@@ -6,7 +6,8 @@
 namespace auik
 {
     RadioButton::RadioButton(u32 id, bool value, WidgetFlags widget_flags)
-        : Widget(id, widget_flags, EventFlagBits::click, {{0.0f, 0.0f}, {0.0f, 0.0f}}, AUIK_TAG_RADIO_BUTTON),
+        : Widget(id, widget_flags, EventFlagBits::click, {{0.0f, 0.0f}, {0.0f, 0.0f}},
+                 AUIK_STYLE_TAG_RADIO_BUTTON),
           _value(value),
           _indicator_rect(detail::make_rect_data(AUIK_TAG_RADIO_BUTTON_INDICATOR, AUIK_TAG_RADIO_BUTTON_INDICATOR))
     {
@@ -34,7 +35,7 @@ namespace auik
         return out;
     }
 
-    void RadioButton::update_layout_min_size()
+    void RadioButton::update_layout_min_size_force()
     {
         auto *theme = get_theme();
         const auto &background_style = theme->get_style(_background_style.id);
@@ -68,7 +69,7 @@ namespace auik
 
     void RadioButton::update_layout(bool min_size_known)
     {
-        if (!min_size_known) update_layout_min_size();
+        if (layout_measure_required(min_size_known)) update_layout_min_size_force();
 
         auto *theme = get_theme();
         const auto &background_style = theme->get_style(_background_style.id);

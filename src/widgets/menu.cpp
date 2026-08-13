@@ -121,8 +121,8 @@ namespace auik
             StyleUpdateFlags out = resolve_style_selector(_style, _item_id, parent_id, style_state());
             if (selected_style_enabled())
                 out |= resolve_style_selector(_selected_style, _item_id, parent_id, StyleState::normal);
-            out |= _label->update_style();
-            out |= _shortcut->update_style();
+            out |= _label->update_style_invalidated();
+            out |= _shortcut->update_style_invalidated();
             return out;
         }
 
@@ -175,7 +175,7 @@ namespace auik
             _draw_recorded = false;
         }
 
-        void update_layout_min_size() override
+        void update_layout_min_size_force() override
         {
             _label->set_layout_size({0.0f, 0.0f});
             _shortcut->set_layout_size({0.0f, 0.0f});
@@ -201,7 +201,7 @@ namespace auik
         }
         void update_layout(bool min_size_known) override
         {
-            if (!min_size_known) update_layout_min_size();
+            if (layout_measure_required(min_size_known)) update_layout_min_size_force();
             const auto &style = get_theme()->get_style(_style.id);
             const amal::vec4 margin = style.margin();
             const amal::vec4 padding = style.padding();
@@ -549,7 +549,7 @@ namespace auik
                 if (!child || child->get_rect().id.tag_id != AUIK_TAG_COMBO_BOX_ITEM) continue;
                 auto *item = static_cast<PopupItem *>(child);
                 item->sync_selection_state(_selected_enabled, is_item_selected(popup_child_item_id(child)));
-                const auto style_flags = item->update_style();
+                const auto style_flags = item->update_style_invalidated();
                 sync_widget_after_style_update(item, style_flags);
             }
         }
@@ -578,7 +578,7 @@ namespace auik
         tab->set_style_tag(_item_style_tag);
         tab->set_selected_style_tag(_selected_item_style_tag);
         tab->set_focus_parent(this);
-        tab->update_style();
+        tab->update_style_invalidated();
         return tab;
     }
 
@@ -627,7 +627,7 @@ namespace auik
         {
             auto *popup_item = static_cast<PopupItem *>(child);
             popup_item->sync_menu_item_flags(item);
-            sync_widget_after_style_update(popup_item, popup_item->update_style());
+            sync_widget_after_style_update(popup_item, popup_item->update_style_invalidated());
         }
         request_redraw();
     }
@@ -957,7 +957,7 @@ namespace auik
         const u32 item_id = popup_child_item_id(child);
         const StyleState fallback = is_popup_item_focused(item_id) ? StyleState::focus : StyleState::normal;
         child->set_style_state(fallback);
-        return child->update_style();
+        return child->update_style_invalidated();
     }
 
     StyleState MenuBar::resolve_tab_item_state(u32 index, const detail::WidgetStyleSelectorTransition &transition) const
@@ -987,7 +987,7 @@ namespace auik
             for (auto *popup : _popups)
             {
                 if (!popup) continue;
-                out |= popup->update_style();
+                out |= popup->update_style_invalidated();
                 for (auto *child : popup->children)
                 {
                     if (!child) continue;
@@ -997,7 +997,7 @@ namespace auik
                         item->sync_selection_state(_selected_enabled, is_item_selected(popup_child_item_id(child)));
                     }
                     child->set_style_state(resolve_popup_item_state(child));
-                    out |= child->update_style();
+                    out |= child->update_style_invalidated();
                 }
             }
         }
@@ -1010,7 +1010,7 @@ namespace auik
             if (child)
             {
                 child->set_style_state(transition.current_state);
-                out |= child->update_style();
+                out |= child->update_style_invalidated();
                 current_transition_child = child;
             }
         }
@@ -1029,7 +1029,7 @@ namespace auik
                 const u32 item_id = popup_child_item_id(child);
                 const StyleState fallback = is_popup_item_focused(item_id) ? StyleState::focus : StyleState::normal;
                 child->set_style_state(fallback);
-                out |= child->update_style();
+                out |= child->update_style_invalidated();
             }
         }
         return out;
@@ -1270,7 +1270,7 @@ namespace auik
             if (auto *anchor = find_popup_child(_open_path[depth - 1u])) popup->set_focus_parent(anchor);
         }
         popup->clear_children();
-        popup->update_style();
+        popup->update_style_invalidated();
         f32 content_w = 0.0f;
         f32 content_h = 0.0f;
         bool needs_separator = false;
@@ -1296,7 +1296,7 @@ namespace auik
                 row->set_size({AUIK_SIZE_X_FILL, AUIK_SIZE_Y_FIT});
                 row->get_rect().id.widget_id = id();
                 row->set_focus_parent(popup);
-                row->update_style();
+                row->update_style_invalidated();
                 row->update_layout_min_size();
                 content_w = amal::max(content_w, row->required_size().x);
                 content_h += row->required_size().y;
@@ -1312,7 +1312,7 @@ namespace auik
                 auto *popup_item = static_cast<PopupItem *>(row);
                 popup_item->sync_selection_state(_selected_enabled, is_item_selected(item_id));
                 row->set_style_state(is_popup_item_focused(item_id) ? StyleState::focus : StyleState::normal);
-                row->update_style();
+                row->update_style_invalidated();
                 row->update_layout_min_size();
                 content_w = amal::max(content_w, row->required_size().x);
                 content_h += row->required_size().y;
@@ -1334,7 +1334,7 @@ namespace auik
         if (!need_scroll) popup->window_flags &= ~WindowFlagBits::scrollable;
         popup->set_visible();
         popup->sync_widget_flags();
-        popup->update_style();
+        popup->update_style_invalidated();
         const amal::vec2 popup_size{popup_w, popup_h};
         popup->set_position(resolve_popup_position(depth, anchor, popup_size, popup->id()));
         popup->set_size(popup_size);
@@ -1510,7 +1510,7 @@ namespace auik
         const auto transition = detail::get_widget_style_selector_transition(id());
         auto *tab = _items[index].tab;
         tab->set_style_state(resolve_tab_item_state(index, transition));
-        return tab->update_style();
+        return tab->update_style_invalidated();
     }
 
     bool MenuBar::is_item_open(u32 element_id) const
@@ -1546,7 +1546,7 @@ namespace auik
                     item->sync_selection_state(_selected_enabled, is_item_selected(popup_child_item_id(child)));
                 }
                 child->set_style_state(resolve_popup_item_state(child));
-                child->update_style();
+                child->update_style_invalidated();
             }
         }
     }
@@ -1777,7 +1777,7 @@ namespace auik
         _menu->attach_to_viewport(this->viewport());
         _menu->set_position({0.0f, 0.0f});
         _menu->set_layout_size({0.0f, 0.0f});
-        _menu->update_style();
+        _menu->update_style_invalidated();
         _menu->update_layout_min_size();
         attach_menu_for_popup();
         _menu->update_depth(detail::get_global_foreground_depth_range());
@@ -1789,19 +1789,19 @@ namespace auik
     {
         const auto state = resolve_button_state();
         StyleUpdateFlags out = _button.update_style(id(), parent() ? parent()->id() : 0u, state);
-        if (_menu) out |= _menu->update_style();
+        if (_menu) out |= _menu->update_style_invalidated();
         return out;
     }
 
-    void PopupMenu::update_layout_min_size()
+    void PopupMenu::update_layout_min_size_force()
     {
-        _button.update_layout_min_size({0.0f, 0.0f}, true);
+        _button.update_layout_min_size_force({0.0f, 0.0f}, true);
         set_required_size(_button.required_size());
     }
 
     void PopupMenu::update_layout(bool min_size_known)
     {
-        if (!min_size_known) update_layout_min_size();
+        if (layout_measure_required(min_size_known)) update_layout_min_size_force();
         Widget::update_layout(true);
         _button.update_layout(bounds(), clip_id());
         if (_open) open_menu();

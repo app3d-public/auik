@@ -11,7 +11,9 @@ namespace auik
     Column::Column(u32 id, ColumnItems columns, amal::vec2 inline_size, WidgetFlags flags)
         : Widget(id, flags, EventFlagBits::none, {{0.0f, 0.0f}, inline_size}, AUIK_TAG_COLUMN),
           _style({Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_COLUMN})
-    { set_columns(std::move(columns)); }
+    {
+        set_columns(std::move(columns));
+    }
 
     Column::~Column()
     {
@@ -158,12 +160,12 @@ namespace auik
         for (auto *slot : _columns)
         {
             if (!slot || !slot->is_visible()) continue;
-            out |= slot->update_style();
+            out |= slot->update_style_invalidated();
         }
         return out;
     }
 
-    void Column::update_layout_min_size()
+    void Column::update_layout_min_size_force()
     {
         const auto &style = get_theme()->get_style(_style.id);
         const amal::vec4 margin = style.margin();
@@ -179,7 +181,11 @@ namespace auik
         for (auto *slot : _columns)
         {
             if (!slot || !slot->is_visible()) continue;
-            slot->set_inline_spacing(spacing);
+            if (slot->inline_spacing() != spacing)
+            {
+                slot->set_inline_spacing(spacing);
+                slot->invalidate_layout_measure();
+            }
             slot->update_layout_min_size();
             const amal::vec2 slot_required = slot->required_size();
             if (has_column) content_required.x += spacing;
@@ -209,7 +215,7 @@ namespace auik
 
     void Column::update_layout(bool min_size_known)
     {
-        if (!min_size_known) update_layout_min_size();
+        if (layout_measure_required(min_size_known)) update_layout_min_size_force();
 
         const auto &style = get_theme()->get_style(_style.id);
         const amal::vec4 margin = style.margin();
@@ -233,7 +239,10 @@ namespace auik
         }
         else if (outer_size.x <= 0.0f) outer_size.x = required_inner.x;
         if (outer_size.y <= 0.0f) outer_size.y = required_inner.y;
-        if (!is_height_fixed()) { outer_size.y = amal::max(outer_size.y, required_inner.y); }
+        if (!is_height_fixed())
+        {
+            outer_size.y = amal::max(outer_size.y, required_inner.y);
+        }
 
         set_position(outer_pos);
         set_layout_size(outer_size);
@@ -408,6 +417,7 @@ namespace auik
         for (auto *child : children) slot->add_child(child);
         _columns.push_back(slot);
         _column_widths.push_back(0.0f);
+        invalidate_layout_measure();
     }
 
     void Column::update_column_clip_rects()
@@ -494,9 +504,8 @@ namespace auik
             u32 style_tag = AUIK_STYLE_TAG_COLUMN;
             stream.read(style_tag);
 
-            auto *column =
-                acul::alloc<Column>(common.id, Column::ColumnItems{}, common.inline_size,
-                                    WidgetFlags(common.widget_flags));
+            auto *column = acul::alloc<Column>(common.id, Column::ColumnItems{}, common.inline_size,
+                                               WidgetFlags(common.widget_flags));
             column->set_style_tag(style_tag);
             detail::apply_widget_common_data(column, common);
 

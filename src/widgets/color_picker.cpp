@@ -73,7 +73,9 @@ namespace auik
         }
 
         static inline StyleState resolve_grab_visual_state(StyleState state)
-        { return (state == StyleState::active || state == StyleState::focus) ? state : StyleState::normal; }
+        {
+            return (state == StyleState::active || state == StyleState::focus) ? state : StyleState::normal;
+        }
 
         static inline amal::vec4 make_circle_color(f32 hue_deg, f32 radius_t)
         {
@@ -225,8 +227,7 @@ namespace auik
 
     CircleColorPicker::CircleColorPicker(u32 id, const amal::vec4 &value, f32 inline_width, WidgetFlags widget_flags)
         : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::drag,
-                 {{0.0f, 0.0f}, {inline_width, AUIK_SIZE_Y_INHERIT}},
-                 AUIK_TAG_CIRCLE_COLOR_PICKER),
+                 {{0.0f, 0.0f}, {inline_width, AUIK_SIZE_Y_INHERIT}}, AUIK_TAG_CIRCLE_COLOR_PICKER),
           _value(value)
     {
         _grab_hit_rect = detail::make_rect_data(id, AUIK_TAG_CIRCLE_COLOR_PICKER_GRAB);
@@ -318,7 +319,7 @@ namespace auik
         return out;
     }
 
-    void CircleColorPicker::update_layout_min_size()
+    void CircleColorPicker::update_layout_min_size_force()
     {
         const Style *picker_style = get_theme()->get_desc_style(AUIK_TAG_CIRCLE_COLOR_PICKER);
         const amal::vec4 margin = picker_style ? picker_style->margin() : amal::vec4{0.0f};
@@ -328,7 +329,7 @@ namespace auik
 
     void CircleColorPicker::update_layout(bool min_size_known)
     {
-        if (!min_size_known) update_layout_min_size();
+        if (layout_measure_required(min_size_known)) update_layout_min_size_force();
         const Style *picker_style = get_theme()->get_desc_style(AUIK_TAG_CIRCLE_COLOR_PICKER);
         const amal::vec4 margin = picker_style ? picker_style->margin() : amal::vec4{0.0f};
         const amal::vec2 layout_origin = position();
@@ -336,9 +337,8 @@ namespace auik
         const amal::vec2 next_pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
         const amal::vec2 old_pos = position();
         const amal::vec2 old_size = size();
-        const bool can_translate_cache =
-            min_size_known && _cache_valid && old_size.x == side && old_size.y == side &&
-            (old_pos.x != next_pos.x || old_pos.y != next_pos.y);
+        const bool can_translate_cache = min_size_known && _cache_valid && old_size.x == side && old_size.y == side &&
+                                         (old_pos.x != next_pos.x || old_pos.y != next_pos.y);
 
         set_position(next_pos);
         set_layout_size({side, side});
@@ -650,7 +650,9 @@ namespace auik
     {
         (void)delta;
         if (state == KeyPressState::press || state == KeyPressState::repeat) update_value_from_mouse();
-        else if (state == KeyPressState::release) {}
+        else if (state == KeyPressState::release)
+        {
+        }
         else return;
 
         add_render_command<detail::DragEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
@@ -688,7 +690,7 @@ namespace auik
         return out;
     }
 
-    void GradientColorPicker::update_layout_min_size()
+    void GradientColorPicker::update_layout_min_size_force()
     {
         const Style *picker_style = get_theme()->get_desc_style(AUIK_TAG_GRADIENT_COLOR_PICKER);
         const amal::vec4 margin = picker_style ? picker_style->margin() : amal::vec4{0.0f};
@@ -699,7 +701,7 @@ namespace auik
 
     void GradientColorPicker::update_layout(bool min_size_known)
     {
-        if (!min_size_known) update_layout_min_size();
+        if (layout_measure_required(min_size_known)) update_layout_min_size_force();
         const Style *picker_style = get_theme()->get_desc_style(AUIK_TAG_GRADIENT_COLOR_PICKER);
         const amal::vec4 margin = picker_style ? picker_style->margin() : amal::vec4{0.0f};
         const amal::vec2 layout_origin = position();
@@ -708,9 +710,9 @@ namespace auik
         const amal::vec2 next_pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
         const amal::vec2 old_pos = position();
         const amal::vec2 old_size = size();
-        const bool can_translate_cache =
-            min_size_known && _cache_valid && old_size.x == widget_size.x && old_size.y == widget_size.y &&
-            (old_pos.x != next_pos.x || old_pos.y != next_pos.y);
+        const bool can_translate_cache = min_size_known && _cache_valid && old_size.x == widget_size.x &&
+                                         old_size.y == widget_size.y &&
+                                         (old_pos.x != next_pos.x || old_pos.y != next_pos.y);
 
         set_position(next_pos);
         set_layout_size(widget_size);
@@ -1028,7 +1030,9 @@ namespace auik
     {
         (void)delta;
         if (state == KeyPressState::press || state == KeyPressState::repeat) update_value_from_mouse();
-        else if (state == KeyPressState::release) {}
+        else if (state == KeyPressState::release)
+        {
+        }
         else return;
 
         add_render_command<detail::DragEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
@@ -1036,8 +1040,7 @@ namespace auik
 
     SquareColorPicker::SquareColorPicker(u32 id, const amal::vec4 &value, f32 inline_width, WidgetFlags widget_flags)
         : Widget(id, widget_flags, EventFlagBits::click | EventFlagBits::drag,
-                 {{0.0f, 0.0f}, {inline_width, AUIK_SIZE_Y_INHERIT}},
-                 AUIK_TAG_SQUARE_COLOR_PICKER)
+                 {{0.0f, 0.0f}, {inline_width, AUIK_SIZE_Y_INHERIT}}, AUIK_TAG_SQUARE_COLOR_PICKER)
     {
         _ring_grab_hit_rect = detail::make_rect_data(id, AUIK_TAG_SQUARE_COLOR_PICKER_GRAB);
         _gradient = acul::alloc<GradientColorPicker>(id, value, amal::vec2{0.0f, 0.0f}, WidgetFlagBits::visible);
@@ -1066,12 +1069,12 @@ namespace auik
         if (widget_grab_state == StyleState::active || widget_grab_state == StyleState::focus)
             out |= resolve_grab_state(widget_grab_state);
 
-        if (_gradient) out |= _gradient->update_style();
+        if (_gradient) out |= _gradient->update_style_invalidated();
         if (grab_changed) rebuild_grab_visual();
         return out;
     }
 
-    void SquareColorPicker::update_layout_min_size()
+    void SquareColorPicker::update_layout_min_size_force()
     {
         const Style *picker_style = get_theme()->get_desc_style(AUIK_TAG_SQUARE_COLOR_PICKER);
         const amal::vec4 margin = picker_style ? picker_style->margin() : amal::vec4{0.0f};
@@ -1081,7 +1084,7 @@ namespace auik
 
     void SquareColorPicker::update_layout(bool min_size_known)
     {
-        if (!min_size_known) update_layout_min_size();
+        if (layout_measure_required(min_size_known)) update_layout_min_size_force();
         const Style *picker_style = get_theme()->get_desc_style(AUIK_TAG_SQUARE_COLOR_PICKER);
         const amal::vec4 margin = picker_style ? picker_style->margin() : amal::vec4{0.0f};
         const amal::vec2 layout_origin = position();
@@ -1089,9 +1092,8 @@ namespace auik
         const amal::vec2 next_pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
         const amal::vec2 old_pos = position();
         const amal::vec2 old_size = size();
-        const bool can_translate_cache =
-            min_size_known && _cache_valid && old_size.x == side && old_size.y == side &&
-            (old_pos.x != next_pos.x || old_pos.y != next_pos.y);
+        const bool can_translate_cache = min_size_known && _cache_valid && old_size.x == side && old_size.y == side &&
+                                         (old_pos.x != next_pos.x || old_pos.y != next_pos.y);
 
         set_position(next_pos);
         set_layout_size({side, side});

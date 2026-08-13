@@ -25,7 +25,7 @@ namespace auik
         return flags;
     }
 
-    void WLine::update_layout_min_size()
+    void WLine::update_layout_min_size_force()
     {
         if (_style.id == Theme::STYLE_ID_INVALID) update_style();
         const auto &style = get_theme()->get_style(_style.id);
@@ -34,18 +34,17 @@ namespace auik
         const bool has_fixed_cross = _axis == amal::axis::x ? is_height_fixed() : is_width_fixed();
         const f32 style_thickness = _axis == amal::axis::x ? style_size().y : style_size().x;
         const f32 padding_thickness = _axis == amal::axis::x ? padding.y + padding.w : padding.x + padding.z;
-        const f32 thickness = has_fixed_cross ? amal::max(style_thickness, 0.0f)
-                                              : amal::max(padding_thickness, 1.0f);
+        const f32 thickness = has_fixed_cross ? amal::max(style_thickness, 0.0f) : amal::max(padding_thickness, 1.0f);
         const f32 length = _axis == amal::axis::x ? (is_width_fixed() && !fill_width() ? style_size().x : 0.0f)
                                                   : (is_height_fixed() && !fill_height() ? style_size().y : 0.0f);
-        const amal::vec2 line_size = _axis == amal::axis::x ? amal::vec2{length, thickness}
-                                                            : amal::vec2{thickness, length};
+        const amal::vec2 line_size =
+            _axis == amal::axis::x ? amal::vec2{length, thickness} : amal::vec2{thickness, length};
         set_required_size({line_size.x + margin.x + margin.z, line_size.y + margin.y + margin.w});
     }
 
     void WLine::update_layout(bool min_size_known)
     {
-        if (!min_size_known) update_layout_min_size();
+        if (layout_measure_required(min_size_known)) update_layout_min_size_force();
         if (_style.id == Theme::STYLE_ID_INVALID) update_style();
         const auto margin = parent() ? get_theme()->get_style(_style.id).margin() : amal::vec4{0.0f};
         const amal::vec2 min_line_size = {amal::max(required_size().x - margin.x - margin.z, 0.0f),
@@ -76,7 +75,8 @@ namespace auik
 
     void WLine::draw(DrawCtx &ctx)
     {
-        auto *quads_stream = get_primary_quads_stream();
+        auto *quads_stream =
+            (ctx.reason & DrawReasonBits::transient) ? get_overlay_quads_stream() : get_primary_quads_stream();
         QuadsInstanceData data{};
         data.rect = bounds();
         data.z_order = get_z_order();
@@ -102,7 +102,7 @@ namespace auik
         return flags;
     }
 
-    void WRect::update_layout_min_size()
+    void WRect::update_layout_min_size_force()
     {
         if (_style.id == Theme::STYLE_ID_INVALID) update_style();
         const auto &style = get_theme()->get_style(_style.id);
@@ -115,7 +115,7 @@ namespace auik
 
     void WRect::update_layout(bool min_size_known)
     {
-        if (!min_size_known) update_layout_min_size();
+        if (layout_measure_required(min_size_known)) update_layout_min_size_force();
         if (_style.id == Theme::STYLE_ID_INVALID) update_style();
         const auto &style = get_theme()->get_style(_style.id);
         const auto margin = style.margin();
@@ -145,7 +145,8 @@ namespace auik
 
     void WRect::draw(DrawCtx &ctx)
     {
-        auto *quads_stream = get_primary_quads_stream();
+        auto *quads_stream =
+            (ctx.reason & DrawReasonBits::transient) ? get_overlay_quads_stream() : get_primary_quads_stream();
         QuadsInstanceData data{};
         data.rect = bounds();
         data.z_order = get_z_order();

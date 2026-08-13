@@ -73,6 +73,19 @@ namespace auik
 
     using WidgetFlags = acul::flags<WidgetFlagBits>;
 
+    struct WidgetStateFlagBits
+    {
+        enum enum_type : u8
+        {
+            none = 0x0,
+            attached = 0x1,
+            transient = 0x2
+        };
+        using flag_bitmask = std::true_type;
+    };
+
+    using WidgetStateFlags = acul::flags<WidgetStateFlagBits>;
+
     struct ChildLayoutFlagBits
     {
         enum enum_type : u32
@@ -158,9 +171,10 @@ namespace auik
     class DrawBlock;
     namespace detail
     {
+        struct WidgetStateAccess;
         AUIK_EXPORT void request_style_refresh(Widget *widget);
         AUIK_EXPORT void request_widget_refresh(Widget *widget, StyleUpdateFlags flags);
-    }
+    } // namespace detail
 
     struct WidgetUserData
     {
@@ -375,6 +389,8 @@ namespace auik
         }
 
         inline u32 id() const { return _id; }
+        inline bool is_attached() const { return _widget_state_flags & WidgetStateFlagBits::attached; }
+        inline bool is_transient() const { return _widget_state_flags & WidgetStateFlagBits::transient; }
         inline Widget *parent() const { return _parent; }
         inline void set_parent(Widget *parent) { _parent = parent; }
         inline Widget *focus_parent() const { return _focus_parent; }
@@ -420,6 +436,7 @@ namespace auik
         }
         inline void set_size(const amal::vec2 &size)
         {
+            if (_inline_size == size) return;
             _inline_size = size;
             set_requested_size(resolve_style_size_from_inline(_inline_size, _requested_size));
         }
@@ -428,6 +445,9 @@ namespace auik
             const amal::vec2 resolved = {is_size_concrete(size.x) ? size.x : 0.0f,
                                          is_size_concrete(size.y) ? size.y : 0.0f};
             if (_rect.bounds.size.x == resolved.x && _rect.bounds.size.y == resolved.y) return;
+            const bool width_changed = _rect.bounds.size.x != resolved.x;
+            if (width_changed) _layout_dirty_flags |= layout_dirty_width;
+            if (_rect.bounds.size.y != resolved.y) _layout_dirty_flags |= layout_dirty_height;
             _rect.bounds.size = resolved;
             reset_external_draw_cull_state();
             detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
@@ -436,11 +456,10 @@ namespace auik
         inline void set_required_size(const amal::vec2 &size)
         {
             _required_size = {amal::max(size.x, 0.0f), amal::max(size.y, 0.0f)};
+            _layout_dirty_flags &= ~layout_dirty_measure;
+            _layout_dirty_flags |= layout_measure_updated;
         }
-        inline void apply_style_layout(const Style &style)
-        {
-            apply_style_layout(style, style.mask());
-        }
+        inline void apply_style_layout(const Style &style) { apply_style_layout(style, style.mask()); }
         inline void apply_style_layout(const Style &style, detail::StylePropertyFlags mask)
         {
             mask &= style.mask();
@@ -570,10 +589,28 @@ namespace auik
             draw(local_ctx);
         }
 
-        virtual void update_layout_min_size() { set_required_size(size()); }
+        virtual void update_layout_min_size_force() { set_required_size(size()); }
+        void invalidate_layout_measure()
+        {
+            for (Widget *widget = this; widget; widget = widget->_parent)
+            {
+                widget->_layout_dirty_flags |= layout_dirty_measure;
+                widget->_layout_dirty_flags &= ~layout_measure_updated;
+            }
+        }
+
+        inline bool update_layout_min_size()
+        {
+            if (!layout_measure_required(true)) return false;
+            update_layout_min_size_force();
+            return true;
+        }
+        // min_size_known means update_layout_min_size_force() has already been run for this
+        // subtree in the current measure/arrange transaction.
         virtual void update_layout(bool min_size_known = true)
         {
             (void)min_size_known;
+            _layout_dirty_flags = layout_dirty_none;
             detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
         }
         virtual u32 get_depth_requirement() const { return 1u; }
@@ -581,6 +618,12 @@ namespace auik
         AUIK_EXPORT virtual void back_hit_depth();
         AUIK_EXPORT virtual void restore_hit_depth();
         virtual StyleUpdateFlags update_style() = 0;
+        StyleUpdateFlags update_style_invalidated()
+        {
+            const StyleUpdateFlags flags = update_style();
+            if (flags & (StyleUpdateFlagBits::layout | StyleUpdateFlagBits::parent_layout)) invalidate_layout_measure();
+            return flags;
+        }
         // A container may suppress event-driven style updates for a child that it does not currently draw.
         virtual bool accepts_child_style_update(const Widget *) const { return true; }
         virtual void draw(DrawCtx &) = 0;
@@ -595,6 +638,9 @@ namespace auik
             (void)hover_id;
             return false;
         }
+        // Relative drags may continue with a hidden cursor after reaching a host-window boundary.
+        // The input dispatcher owns the raw-mouse lifecycle; widgets only opt into that policy.
+        virtual bool allows_unbounded_drag() const { return false; }
 
         virtual u16 content_clip_id() const { return clip_id(); }
         virtual amal::vec4 get_content_clip_rect() const { return get_clip_rect(content_clip_id()); }
@@ -626,6 +672,9 @@ namespace auik
         }
         virtual void on_attach()
         {
+            _widget_state_flags |= WidgetStateFlagBits::attached;
+            // Embedded implementation widgets participate in the live tree without owning an id-map entry.
+            if (!(widget_flags & WidgetFlagBits::attachable)) return;
             auto &ctx = detail::get_context();
             ctx.id_map.emplace(id(), this);
             if (is_disabled() && !post_effect()) apply_disabled_post_effect();
@@ -633,9 +682,15 @@ namespace auik
         }
         virtual void on_detach()
         {
+            if (!(widget_flags & WidgetFlagBits::attachable))
+            {
+                _widget_state_flags &= ~WidgetStateFlagBits::attached;
+                return;
+            }
             auto &map = detail::get_context().id_map;
             auto it = map.find(id());
             if (it != map.end() && it->second == this) map.erase(it);
+            _widget_state_flags &= ~WidgetStateFlagBits::attached;
         }
         virtual void on_scroll(const amal::vec2 &delta) {}
         virtual void on_focus(bool focused) {}
@@ -760,22 +815,40 @@ namespace auik
 
         inline bool mark_changed()
         {
-            bool prevented = false;
+            invalidate_layout_measure();
+            ChangeEvent event{};
+            event.target = id();
             for (Widget *widget = this; widget; widget = widget->parent())
-                prevented = widget->dispatch_change() || prevented;
-            return prevented;
+                widget->dispatch_change(event);
+            return event.is_prevented_default();
         }
 
     protected:
+        // required_size() and the arranged bounds are independent layout caches. These
+        // flags keep their validity in Widget so every widget can use the same contract.
+        bool layout_measure_required(bool min_size_known) const
+        {
+            return !min_size_known || (_layout_dirty_flags & layout_dirty_measure);
+        }
+        bool layout_width_dirty() const { return _layout_dirty_flags & layout_dirty_width; }
+        bool layout_height_dirty() const { return _layout_dirty_flags & layout_dirty_height; }
+        bool layout_measure_was_updated() const { return _layout_dirty_flags & layout_measure_updated; }
+        void invalidate_layout_arrange() { _layout_dirty_flags |= layout_dirty_width | layout_dirty_height; }
+
         inline bool dispatch_change()
         {
             ChangeEvent e{};
+            e.target = id();
+            e.current_target = id();
+            return dispatch_change(e);
+        }
+
+        inline bool dispatch_change(ChangeEvent &e)
+        {
+            e.current_target = id();
             if (_user_bind && _user_bind->on_change_fn)
-            {
                 _user_bind->on_change_fn(e);
-                if (e.is_prevented_default()) return true;
-            }
-            on_change(e);
+            if (!e.is_prevented_default()) on_change(e);
             return e.is_prevented_default();
         }
 
@@ -786,76 +859,7 @@ namespace auik
             detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
         }
 
-        inline void sync_widget_flags(EventFlags flags)
-        {
-            const bool visible_changed =
-                static_cast<bool>(_synced_widget_flags & WidgetFlagBits::visible) != is_visible();
-            const bool disabled_changed =
-                static_cast<bool>(_synced_widget_flags & WidgetFlagBits::disabled) != is_disabled();
-            const bool read_only_changed =
-                static_cast<bool>(_synced_widget_flags & WidgetFlagBits::read_only) != is_read_only();
-            const bool hittable_changed =
-                static_cast<bool>(_synced_widget_flags & WidgetFlagBits::hittable) != is_hittable();
-
-            event_flags = flags;
-            _synced_widget_flags = widget_flags;
-
-            if (visible_changed || disabled_changed || read_only_changed || hittable_changed)
-                detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
-            if (visible_changed && !(detail::get_context().dirty_flags & DirtyFlagBits::destroying))
-                rebuild_root_widget_depths();
-            const bool disabled_post_missing = is_disabled() && !_disabled_post_fx;
-            if (disabled_changed || disabled_post_missing)
-            {
-                if (is_disabled()) apply_disabled_post_effect();
-                else restore_pre_disabled_post_effect();
-            }
-            if (disabled_changed) on_disabled_changed(is_disabled());
-
-            if (visible_changed || disabled_changed || disabled_post_missing)
-            {
-                const u32 widget_id = id();
-                Widget *expected_widget = this;
-                auto &ctx = detail::get_context();
-                if (ctx.dirty_flags & DirtyFlagBits::destroying) return;
-                ctx.disposal_queue.emplace([widget_id, expected_widget]() {
-                    auto &ctx = detail::get_context();
-                    if (ctx.dirty_flags & DirtyFlagBits::destroying) return;
-                    auto it = ctx.id_map.find(widget_id);
-                    if (it == ctx.id_map.end() || it->second != expected_widget) return;
-                    Widget *widget = it->second;
-                    if (!widget->is_visible() || widget->is_disabled())
-                    {
-                        auto belongs_to_widget = [widget](u32 id) {
-                            if (!id) return false;
-                            auto &ctx = detail::get_context();
-                            auto it = ctx.id_map.find(id);
-                            if (it == ctx.id_map.end()) return false;
-                            for (Widget *node = it->second; node; node = node->parent())
-                                if (node == widget) return true;
-                            return false;
-                        };
-                        auto element_belongs_to_widget = [&](ElementID id) {
-                            return id.widget_id && belongs_to_widget(id.widget_id);
-                        };
-                        if (belongs_to_widget(ctx.focus_id)) ctx.focus_id = 0u;
-                        if (belongs_to_widget(ctx.active_id)) ctx.active_id = 0u;
-                        if (element_belongs_to_widget(ctx.hover_id)) ctx.hover_id = {};
-                        if (element_belongs_to_widget(ctx.io.clicked_id)) ctx.io.clicked_id = {};
-                        if (element_belongs_to_widget(ctx.io.drag_id))
-                        {
-                            ctx.io.drag_id = {};
-                            ctx.io.drag_key_flags = {};
-                        }
-                    }
-                    widget->reset_external_draw_cull_state();
-                    if (widget->is_visible()) widget->update_draw_commands(DrawReasonBits::external);
-                    else widget->invalidate_draw_commands(DrawReasonBits::external);
-                    ctx.dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
-                });
-                mark_host_refresh_request();
-            }
-        }
+        AUIK_EXPORT void sync_widget_flags(EventFlags flags);
 
         WidgetFlags _synced_widget_flags = WidgetFlagBits::none;
         PostFxChain *_post_fx_chain = nullptr;
@@ -872,9 +876,20 @@ namespace auik
 
         inline void set_requested_size(const amal::vec2 &size)
         {
+            if (_requested_size == size) return;
             _requested_size = size;
             set_layout_size(size);
         }
+
+        enum LayoutDirtyBits : u8
+        {
+            layout_dirty_none = 0,
+            layout_dirty_measure = 1u << 0u,
+            layout_dirty_width = 1u << 1u,
+            layout_dirty_height = 1u << 2u,
+            layout_measure_updated = 1u << 3u,
+            layout_dirty_all = layout_dirty_measure | layout_dirty_width | layout_dirty_height
+        };
 
         u32 _id;
         Widget *_parent = nullptr;
@@ -886,12 +901,16 @@ namespace auik
         Viewport *_viewport = nullptr;
         detail::RectData _rect{};
         amal::vec2 _required_size{0.0f, 0.0f};
+        u8 _layout_dirty_flags = layout_dirty_all;
         StyleState _style_state = StyleState::normal;
         bool _external_draw_culled = false;
         bool _external_draw_invalidated = false;
+        WidgetStateFlags _widget_state_flags = WidgetStateFlagBits::none;
         UserBind *_user_bind = nullptr;
 
     private:
+        friend struct detail::WidgetStateAccess;
+
         inline EventFlags resolve_event_flags(EventFlags flags) const
         {
             if (is_disabled()) return EventFlagBits::none;
@@ -929,6 +948,15 @@ namespace auik
 
     namespace detail
     {
+        struct WidgetStateAccess
+        {
+            static void set_transient(Widget *widget, bool transient)
+            {
+                if (transient) widget->_widget_state_flags |= WidgetStateFlagBits::transient;
+                else widget->_widget_state_flags &= ~WidgetStateFlagBits::transient;
+            }
+        };
+
         inline RootWidgetUserData *root_widget_user_data(Widget *widget)
         {
             auto *head = widget ? widget->user_data_head() : nullptr;
@@ -1020,8 +1048,7 @@ namespace auik
             {
                 auto *left_align = static_cast<const StyleExtraAlign *>(left_node->data);
                 auto *right_align = static_cast<const StyleExtraAlign *>(right_node->data);
-                if (!left_align || !right_align || left_align->flags != right_align->flags)
-                    return false;
+                if (!left_align || !right_align || left_align->flags != right_align->flags) return false;
             }
             else if (left_node->id == AUIK_STYLE_EXTRA_TEXT)
             {

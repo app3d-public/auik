@@ -17,7 +17,7 @@ namespace auik
         AUIK_EXPORT Checkbox(u32 id, ModelBinding *binding, WidgetFlags widget_flags);
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
-        AUIK_EXPORT void update_layout_min_size() override;
+        AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void rebuild_clip_rects() override;
@@ -29,7 +29,8 @@ namespace auik
         u32 signature() const override { return AUIK_TAG_CHECKBOX; }
 
         bool value() const { return _value; }
-        AUIK_EXPORT void set_value(bool value);
+        void set_value(bool value) { _value = value; }
+        AUIK_EXPORT void sync_value();
         AUIK_EXPORT void set_model_binding(ModelBinding *binding);
 
     private:

@@ -110,7 +110,7 @@ namespace auik
         }
 
         template <typename T>
-        void Draggable<T>::set_value_internal(T value, bool manual_change)
+        void Draggable<T>::set_value_internal(T value, bool manual_change, bool sync_model)
         {
             value = clamp_value(value, _min_value, _max_value);
             const T prev_value = this->value();
@@ -118,10 +118,13 @@ namespace auik
             _last_value = prev_value;
             _value = value;
             _manual_change = manual_change;
-            if (_value_model_binding) set_model_binding_value<T>(*_value_model_binding, value);
+            if (sync_model && _value_model_binding) set_model_binding_value<T>(*_value_model_binding, value);
             const bool prevented = mark_changed();
             sync_text_from_value();
-            if (!prevented) apply_render_update(true);
+            // A model-bound draggable reads its initial value before it is attached to the widget tree. Preserve the
+            // value and text presentation, but defer layout/draw work until Textbox::update_style() has resolved both
+            // the textbox and child Text styles.
+            if (!prevented && _style.id != Theme::STYLE_ID_INVALID) apply_render_update(true);
         }
 
         template <typename T>
@@ -133,18 +136,34 @@ namespace auik
 
             _value_model_binding->on_field_change = [this](ModelRecordID, ModelFieldID) {
                 T value{};
-                if (read_model_binding_value(*_value_model_binding, value)) set_value(value);
+                if (read_model_binding_value(*_value_model_binding, value)) set_value_internal(value, false, false);
             };
             attach_model_binding(*_value_model_binding);
             T value{};
-            if (read_model_binding_value(*_value_model_binding, value)) set_value(value);
+            if (read_model_binding_value(*_value_model_binding, value)) set_value_internal(value, false, false);
         }
 
         template <typename T>
         void Draggable<T>::set_postfix(StringView value)
         {
             _postfix = value.is_translated ? translate_string(value) : acul::string(value.str ? value.str : "");
+            // Numeric-only filtering would make the displayed postfix impossible to enter manually. Once a
+            // draggable has a postfix, keep the input ASCII-only and let the integration validate or convert the
+            // suffix from input_postfix() on commit.
+            text_flags = _postfix.empty() ? drag_text_flags<T>() : TextFlagBits::chars_ascii;
             sync_text_presentation_from_value();
+        }
+
+        template <typename T>
+        acul::string Draggable<T>::input_postfix() const
+        {
+            const acul::string text = acul::trim(Textbox::value());
+            if (text.empty()) return {};
+
+            const char *ptr = text.c_str();
+            f32 parsed = 0.0f;
+            if (!acul::stof(ptr, parsed)) return {};
+            return acul::trim(acul::string(ptr));
         }
 
         template <typename T>
@@ -247,6 +266,13 @@ namespace auik
         }
 
         template <typename T>
+        bool Draggable<T>::allows_unbounded_drag() const
+        {
+            return !(has_drag_interaction_flag(_interaction_flags, drag_interaction_text_edit_mode) &&
+                     !has_drag_interaction_flag(_interaction_flags, drag_interaction_select_all_on_release));
+        }
+
+        template <typename T>
         void Draggable<T>::on_drag(const amal::vec2 &delta, KeyPressState state)
         {
             if (has_drag_interaction_flag(_interaction_flags, drag_interaction_text_edit_mode) &&
@@ -286,7 +312,6 @@ namespace auik
                             _min_value, _max_value);
             _drag_value = static_cast<f64>(next_value);
             set_value(next_value);
-            add_render_command<DragEventTraits>(this, [this]() { apply_render_update(true); });
         }
 
         template <typename T>
@@ -322,7 +347,8 @@ namespace auik
         void Draggable<T>::sync_text_from_value()
         {
             _presented_value = value();
-            Textbox::set_value_internal(format_value(value()));
+            Textbox::set_value(format_value(value()));
+            Textbox::sync_value();
             _pending_text_commit = false;
             _manual_change = false;
         }

@@ -4,7 +4,6 @@
 #include <auik/widgets/detail/selectable.hpp>
 #include <auik/widgets/image.hpp>
 
-
 namespace auik::detail
 {
     struct SelectableStyleScope
@@ -42,10 +41,10 @@ namespace auik::detail
         return flags;
     }
 
-    void Selectable::update_layout_min_size()
+    void Selectable::update_layout_min_size_force()
     {
         SelectableStyleScope scope(*this);
-        Text::update_layout_min_size();
+        Text::update_layout_min_size_force();
         if (selected_icon_enabled())
         {
             const auto &style = get_theme()->get_style(effective_layout_style_id());

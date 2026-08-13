@@ -69,16 +69,18 @@ namespace auik
         u32 style_tag = AUIK_STYLE_TAG_DOCKSPACE_NODE;
         amal::vec2 size{0.0f, 0.0f};
         amal::vec2 min_size{80.0f, 80.0f};
-        DockspaceResizeFlags flags = DockspaceResizeFlagBits::resize_helper | DockspaceResizeFlagBits::visible_resize_helper;
+        DockspaceResizeFlags flags =
+            DockspaceResizeFlagBits::resize_helper | DockspaceResizeFlagBits::visible_resize_helper;
         TabbarFlags tabbar_flags = TabbarFlagBits::none;
         bool tabpanel = true;
     };
 
-    inline DockNodeSettings make_dockspace_settings(
-        u32 style_tag = AUIK_STYLE_TAG_DOCKSPACE_NODE, const amal::vec2 &size = {0.0f, 0.0f},
-        const amal::vec2 &min_size = {80.0f, 80.0f},
-        DockspaceResizeFlags flags = DockspaceResizeFlagBits::resize_helper | DockspaceResizeFlagBits::visible_resize_helper,
-        TabbarFlags tabbar_flags = TabbarFlagBits::none, bool tabpanel = true)
+    inline DockNodeSettings
+    make_dockspace_settings(u32 style_tag = AUIK_STYLE_TAG_DOCKSPACE_NODE, const amal::vec2 &size = {0.0f, 0.0f},
+                            const amal::vec2 &min_size = {80.0f, 80.0f},
+                            DockspaceResizeFlags flags = DockspaceResizeFlagBits::resize_helper |
+                                                         DockspaceResizeFlagBits::visible_resize_helper,
+                            TabbarFlags tabbar_flags = TabbarFlagBits::none, bool tabpanel = true)
     {
         DockNodeSettings settings{};
         settings.style_tag = style_tag;
@@ -127,7 +129,7 @@ namespace auik
         const MenuGroup &menu_group() const { return _menu_group; }
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
-        AUIK_EXPORT void update_layout_min_size() override;
+        AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void reset_clip_rect_records() override;
@@ -253,10 +255,10 @@ namespace auik
         StyleSelector _resize_helper_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_DOCKSPACE_RESIZE_HELPER};
         StyleSelector _resize_helper_drag_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_DOCKSPACE_RESIZE_HELPER_DRAG};
         StyleSelector _tab_panel_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_DOCK_NODE_TAB_PANEL};
-        DockNodeSettings _new_node_settings =
-            make_dockspace_settings(AUIK_STYLE_TAG_DOCKSPACE_NODE, {0.0f, 0.0f}, {80.0f, 80.0f},
-                                    DockspaceResizeFlagBits::resize_helper | DockspaceResizeFlagBits::visible_resize_helper,
-                                    TabbarFlagBits::none);
+        DockNodeSettings _new_node_settings = make_dockspace_settings(
+            AUIK_STYLE_TAG_DOCKSPACE_NODE, {0.0f, 0.0f}, {80.0f, 80.0f},
+            DockspaceResizeFlagBits::resize_helper | DockspaceResizeFlagBits::visible_resize_helper,
+            TabbarFlagBits::none);
         MenuGroup _menu_group;
     };
 

@@ -334,6 +334,8 @@ namespace auik
 
     struct ChangeEvent : EventBase
     {
+        u32 target = 0u;
+        u32 current_target = 0u;
     };
 
     struct Shortcut

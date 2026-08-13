@@ -65,7 +65,7 @@ namespace auik
         AUIK_EXPORT ~Tabbar() override;
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
-        AUIK_EXPORT void update_layout_min_size() override;
+        AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void reset_clip_rect_records() override;
@@ -307,11 +307,15 @@ namespace auik
 
     inline Tabbar *make_tabbar(u32 id, const acul::vector<StringView> &items,
                                TabbarFlags tab_flags = TabbarFlagBits::none, amal::vec2 inline_size = AUIK_SIZE_INHERIT)
-    { return acul::alloc<Tabbar>(id, items, tab_flags, detail::get_tabbar_widget_flags(), inline_size); }
+    {
+        return acul::alloc<Tabbar>(id, items, tab_flags, detail::get_tabbar_widget_flags(), inline_size);
+    }
 
     inline Tabbar *make_tabbar(u32 id, TabbarFlags tab_flags = TabbarFlagBits::none,
                                amal::vec2 inline_size = AUIK_SIZE_INHERIT)
-    { return acul::alloc<Tabbar>(id, tab_flags, detail::get_tabbar_widget_flags(), inline_size); }
+    {
+        return acul::alloc<Tabbar>(id, tab_flags, detail::get_tabbar_widget_flags(), inline_size);
+    }
 
     namespace streams
     {

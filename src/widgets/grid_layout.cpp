@@ -1,5 +1,5 @@
-#include <auik/pipelines.hpp>
 #include <auik/detail/depth.hpp>
+#include <auik/pipelines.hpp>
 #include <auik/widgets/detail/draw_cull.hpp>
 #include <auik/widgets/grid_layout.hpp>
 
@@ -47,7 +47,8 @@ namespace auik
     GridLayout::GridLayout(u32 id, size_t rows, size_t columns, amal::vec2 inline_size, WidgetFlags flags)
         : Widget(id, flags, EventFlagBits::hover | EventFlagBits::drag, {{0.0f, 0.0f}, inline_size},
                  AUIK_TAG_GRID_LAYOUT),
-          _rows(rows), _columns(columns)
+          _rows(rows),
+          _columns(columns)
     {
         _cells.resize(_rows * _columns);
         _row_weights.assign(_rows, 1.0f);
@@ -108,11 +109,11 @@ namespace auik
                 flags |= StyleUpdateFlagBits::redraw;
         }
         for (auto &cell : _cells)
-            if (cell.widget && cell.widget->is_visible()) flags |= cell.widget->update_style();
+            if (cell.widget && cell.widget->is_visible()) flags |= cell.widget->update_style_invalidated();
         return flags;
     }
 
-    void GridLayout::update_layout_min_size()
+    void GridLayout::update_layout_min_size_force()
     {
         acul::vector<f32> column_required(_columns, _track_min_size.x);
         acul::vector<f32> row_required(_rows, _track_min_size.y);
@@ -139,7 +140,7 @@ namespace auik
 
     void GridLayout::update_layout(bool min_size_known)
     {
-        if (!min_size_known) update_layout_min_size();
+        if (layout_measure_required(min_size_known)) update_layout_min_size_force();
         set_layout_size(resolve_layout_size_from_required());
         Widget::update_layout(true);
         set_clip_id(parent() ? parent()->content_clip_id() : clip_id());
@@ -218,8 +219,7 @@ namespace auik
         for (size_t i = 0u; i < _helpers.size(); ++i)
         {
             auto &helper = _helpers[i];
-            const f32 depth =
-                i == _resizing_helper ? active_resize_helper_depth(this->depth_range()) : helper_depth;
+            const f32 depth = i == _resizing_helper ? active_resize_helper_depth(this->depth_range()) : helper_depth;
             helper.rect.depth = depth;
             helper.rect.hit_depth = depth;
         }
@@ -361,7 +361,7 @@ namespace auik
         if (!cell.widget) return;
         cell.widget->set_parent(this);
         cell.widget->set_focus_parent(this);
-        cell.widget->update_style();
+        cell.widget->update_style_invalidated();
         if (detail::get_context().id_map.find(id()) != detail::get_context().id_map.end() &&
             (cell.widget->widget_flags & WidgetFlagBits::attachable))
             cell.widget->on_attach();
@@ -439,8 +439,7 @@ namespace auik
                 if (!active[i]) continue;
                 ++assigned_count;
                 const bool last = assigned_count == active_count;
-                sizes[i] = last ? remaining - assigned
-                                : remaining * effective_weights[i] / weight_sum;
+                sizes[i] = last ? remaining - assigned : remaining * effective_weights[i] / weight_sum;
                 assigned += sizes[i];
             }
             break;
@@ -470,10 +469,9 @@ namespace auik
             helper.axis = amal::axis::x;
             helper.track = column;
             helper.visible = true;
-            helper.rect = detail::make_rect_data(id(), AUIK_TAG_GRID_LAYOUT_RESIZE_HELPER_V,
-                                                 {{x - 2.0f, position().y}, {4.0f, size().y}}, clip_id(),
-                                                 resize_helper_depth(this->depth_range()), 0u,
-                                                 static_cast<u32>(helper_i));
+            helper.rect = detail::make_rect_data(
+                id(), AUIK_TAG_GRID_LAYOUT_RESIZE_HELPER_V, {{x - 2.0f, position().y}, {4.0f, size().y}}, clip_id(),
+                resize_helper_depth(this->depth_range()), 0u, static_cast<u32>(helper_i));
             if (helper_i == _resizing_helper)
             {
                 helper.rect.depth = active_resize_helper_depth(this->depth_range());
@@ -490,10 +488,9 @@ namespace auik
             helper.axis = amal::axis::y;
             helper.track = row;
             helper.visible = true;
-            helper.rect = detail::make_rect_data(id(), AUIK_TAG_GRID_LAYOUT_RESIZE_HELPER_H,
-                                                 {{position().x, y - 2.0f}, {size().x, 4.0f}}, clip_id(),
-                                                 resize_helper_depth(this->depth_range()), 0u,
-                                                 static_cast<u32>(helper_i));
+            helper.rect = detail::make_rect_data(
+                id(), AUIK_TAG_GRID_LAYOUT_RESIZE_HELPER_H, {{position().x, y - 2.0f}, {size().x, 4.0f}}, clip_id(),
+                resize_helper_depth(this->depth_range()), 0u, static_cast<u32>(helper_i));
             if (helper_i == _resizing_helper)
             {
                 helper.rect.depth = active_resize_helper_depth(this->depth_range());

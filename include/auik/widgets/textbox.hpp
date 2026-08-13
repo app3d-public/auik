@@ -17,13 +17,13 @@ namespace auik
     public:
         TextFlags text_flags = TextFlagBits::none;
 
-        AUIK_EXPORT Textbox(u32 id, const acul::string &value, amal::vec2 inline_size, WidgetFlags flags, u32 style_tag_id,
-                            TextFlags text_flags = TextFlagBits::none, StringView placeholder = {},
+        AUIK_EXPORT Textbox(u32 id, const acul::string &value, amal::vec2 inline_size, WidgetFlags flags,
+                            u32 style_tag_id, TextFlags text_flags = TextFlagBits::none, StringView placeholder = {},
                             TextWrapMode text_wrap = TextWrapMode::none);
         AUIK_EXPORT ~Textbox() override;
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
-        AUIK_EXPORT void update_layout_min_size() override;
+        AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void rebuild_clip_rects() override;
@@ -42,17 +42,10 @@ namespace auik
         u32 signature() const override { return AUIK_TAG_TEXTBOX; }
 
         const acul::string &value() const { return _value; }
-        void set_value(const acul::string &value)
-        {
-            if (this->value() == value) return;
-            set_value_internal(value);
-        }
-        void set_text_flags(TextFlags flags)
-        {
-            if (text_flags == flags) return;
-            text_flags = flags;
-            sync_text_presentation();
-        }
+        void set_value(const acul::string &value) { _value = value; }
+        AUIK_EXPORT void sync_value();
+
+        AUIK_EXPORT void commit_model_value();
         ModelBinding *model_binding() const { return _model_binding; }
         AUIK_EXPORT void set_model_binding(ModelBinding *binding);
 
@@ -63,8 +56,9 @@ namespace auik
         }
         bool is_translated_placeholder() const { return _placeholder && _placeholder->is_translated_text(); }
         const char *placeholder_literal() const
-        { return _placeholder ? _placeholder->translated_text_literal() : nullptr; }
-        AUIK_EXPORT void set_placeholder(StringView value);
+        {
+            return _placeholder ? _placeholder->translated_text_literal() : nullptr;
+        }
         AUIK_EXPORT void select_all();
         inline void set_style_tag(u32 tag_id)
         {
@@ -75,10 +69,10 @@ namespace auik
         TextWrapMode text_wrap() const { return _text.multiline() ? TextWrapMode::word : TextWrapMode::none; }
 
     protected:
-        AUIK_EXPORT void set_value_internal(const acul::string &value);
-
         inline bool show_placeholder() const
-        { return detail::get_context().focus_id != id() && value().empty() && _placeholder; }
+        {
+            return detail::get_context().focus_id != id() && value().empty() && _placeholder;
+        }
 
         inline void apply_render_update(bool layout_dirty, DrawReasonFlags reason = DrawReasonBits::external)
         {
@@ -242,9 +236,9 @@ namespace auik
     class MultilineTextbox final : public Textbox
     {
     public:
-        AUIK_EXPORT MultilineTextbox(u32 id, const acul::string &value, amal::vec2 inline_size, bool can_expand_to_content,
-                                     WidgetFlags flags, TextFlags text_flags = TextFlagBits::none,
-                                     StringView placeholder = {});
+        AUIK_EXPORT MultilineTextbox(u32 id, const acul::string &value, amal::vec2 inline_size,
+                                     bool can_expand_to_content, WidgetFlags flags,
+                                     TextFlags text_flags = TextFlagBits::none, StringView placeholder = {});
 
         bool can_expand_to_content() const { return _can_expand_to_content; }
         AUIK_EXPORT void set_can_expand_to_content(bool value);
@@ -262,8 +256,7 @@ namespace auik
     };
 
     inline Textbox *make_textbox(u32 id, const acul::string &value, const acul::string &placeholder = {},
-                                 TextFlags text_flags = TextFlagBits::none,
-                                 amal::vec2 inline_size = AUIK_SIZE_INHERIT)
+                                 TextFlags text_flags = TextFlagBits::none, amal::vec2 inline_size = AUIK_SIZE_INHERIT)
     {
         return acul::alloc<Textbox>(id, value, inline_size,
                                     WidgetFlagBits::visible | WidgetFlagBits::attachable |
@@ -273,7 +266,9 @@ namespace auik
 
     inline Textbox *make_textbox(u32 id, const acul::string &value, f32 width,
                                  TextFlags text_flags = TextFlagBits::none, const acul::string &placeholder = {})
-    { return make_textbox(id, value, placeholder, text_flags, {width, AUIK_SIZE_Y_INHERIT}); }
+    {
+        return make_textbox(id, value, placeholder, text_flags, {width, AUIK_SIZE_Y_INHERIT});
+    }
 
     // Style-width multiline input. height is the minimum/control height; when can_expand_to_content is true the widget
     // grows vertically to fit text, otherwise overflowing text is clipped and can be scrolled internally.
@@ -301,12 +296,16 @@ namespace auik
 
     inline MultilineTextbox *make_multiline_textbox(u32 id, const acul::string &value, amal::vec2 size,
                                                     TextFlags text_flags, const acul::string &placeholder = {})
-    { return make_multiline_textbox(id, value, size, false, text_flags, placeholder); }
+    {
+        return make_multiline_textbox(id, value, size, false, text_flags, placeholder);
+    }
 
     inline MultilineTextbox *make_multiline_textbox(u32 id, const acul::string &value, bool can_expand_to_content,
                                                     TextFlags text_flags = TextFlagBits::none,
                                                     const acul::string &placeholder = {})
-    { return make_multiline_textbox(id, value, 96.0f, can_expand_to_content, text_flags, placeholder); }
+    {
+        return make_multiline_textbox(id, value, 96.0f, can_expand_to_content, text_flags, placeholder);
+    }
 
     namespace streams
     {

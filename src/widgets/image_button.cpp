@@ -45,15 +45,11 @@ namespace auik
             amal::vec2 out = bounds_pos;
             const amal::vec2 free_size = {amal::max(bounds_size.x - rect_size.x, 0.0f),
                                           amal::max(bounds_size.y - rect_size.y, 0.0f)};
-            if (layout & ChildLayoutFlagBits::aright)
-                out.x += free_size.x;
-            else if (layout & ChildLayoutFlagBits::hcenter)
-                out.x += free_size.x * 0.5f;
+            if (layout & ChildLayoutFlagBits::aright) out.x += free_size.x;
+            else if (layout & ChildLayoutFlagBits::hcenter) out.x += free_size.x * 0.5f;
 
-            if (layout & ChildLayoutFlagBits::bottom)
-                out.y += free_size.y;
-            else if (layout & ChildLayoutFlagBits::vcenter)
-                out.y += free_size.y * 0.5f;
+            if (layout & ChildLayoutFlagBits::bottom) out.y += free_size.y;
+            else if (layout & ChildLayoutFlagBits::vcenter) out.y += free_size.y * 0.5f;
             return out;
         }
 
@@ -72,7 +68,8 @@ namespace auik
           _uv_rect(uv_rect),
           _image_rect(detail::make_rect_data(AUIK_TAG_IMAGE, AUIK_TAG_IMAGE)),
           _image_size(image_size)
-    {}
+    {
+    }
 
     ImageButton::ImageButton(u32 id, Image *image, amal::vec2 image_size, amal::vec2 size, WidgetFlags widget_flags,
                              u32 style_tag)
@@ -95,8 +92,7 @@ namespace auik
         return _image ? amal::rect{_image->uv_offset(), _image->uv_size()} : _uv_rect;
     }
 
-    bool ImageButton::resolve_coverage_mode() const
-    { return _coverage_mode || (_image && _image->coverage_mode()); }
+    bool ImageButton::resolve_coverage_mode() const { return _coverage_mode || (_image && _image->coverage_mode()); }
 
     void ImageButton::set_selected(bool selected)
     {
@@ -113,7 +109,7 @@ namespace auik
         return flags;
     }
 
-    void ImageButton::update_layout_min_size()
+    void ImageButton::update_layout_min_size_force()
     {
         const auto &style = get_theme()->get_style(_style.id);
         const amal::vec4 margin = style.margin();
@@ -124,7 +120,7 @@ namespace auik
 
     void ImageButton::update_layout(bool min_size_known)
     {
-        if (!min_size_known) update_layout_min_size();
+        if (layout_measure_required(min_size_known)) update_layout_min_size_force();
 
         const auto &style = get_theme()->get_style(_style.id);
         const amal::vec4 margin = style.margin();
@@ -260,8 +256,8 @@ namespace auik
             u32 style_tag = AUIK_STYLE_TAG_IMAGE_BUTTON;
             stream.read(image_size).read(coverage_mode).read(style_tag);
 
-            auto *widget = acul::alloc<ImageButton>(common.id, AUIK_INVALID_TEXTURE_ID, image_size,
-                                                    common.inline_size, amal::rect{{0.0f, 0.0f}, {1.0f, 1.0f}},
+            auto *widget = acul::alloc<ImageButton>(common.id, AUIK_INVALID_TEXTURE_ID, image_size, common.inline_size,
+                                                    amal::rect{{0.0f, 0.0f}, {1.0f, 1.0f}},
                                                     WidgetFlags(common.widget_flags), style_tag);
             widget->set_coverage_mode(coverage_mode);
             detail::apply_widget_common_data(widget, common);

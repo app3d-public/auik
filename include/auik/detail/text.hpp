@@ -104,15 +104,12 @@ namespace auik::detail
 
     struct ShapedGlyph
     {
-        const Glyph *glyph = nullptr;
         u32 glyph_index = 0;
         u32 cluster = 0;
         amal::vec2 pen{0.0f, 0.0f};
         amal::rect rect{};
         amal::vec2 advance{0.0f, 0.0f};
         amal::vec2 offset{0.0f, 0.0f};
-
-        bool visible() const { return glyph && glyph->visible() && !amal::is_rect_empty(rect); }
     };
 
     struct TextLine
@@ -149,6 +146,7 @@ namespace auik::detail
     struct TextFontAccess
     {
         static FT_Face face(Font &font, u32 size_px);
+        static hb_font_t *shaping_font(Font &font, u32 size_px);
         static Glyph *find_glyph_by_index(Font &font, u32 size_px, u32 glyph_index);
         static const Glyph *find_glyph_by_index(const Font &font, u32 size_px, u32 glyph_index);
         static bool load_glyph_indices(Font &font, u32 size_px, const acul::vector<u32> &glyph_indices);

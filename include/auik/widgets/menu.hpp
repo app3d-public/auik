@@ -199,7 +199,9 @@ namespace auik
     };
 
     inline MenuBar *make_menu_bar(u32 id, const acul::vector<StringView> &items = {})
-    { return acul::alloc<MenuBar>(id, items); }
+    {
+        return acul::alloc<MenuBar>(id, items);
+    }
 
     inline MenuBar *make_menu_bar(u32 id, std::initializer_list<const char *> items)
     {
@@ -250,10 +252,14 @@ namespace auik
 
         MenuBar::MenuItem *add_suffix_item(u32 group_index, acul::string text,
                                            acul::unique_function<void(ClickEvent &)> callback = nullptr)
-        { return _menu ? _menu->append_root_suffix_item(group_index, std::move(text), std::move(callback)) : nullptr; }
+        {
+            return _menu ? _menu->append_root_suffix_item(group_index, std::move(text), std::move(callback)) : nullptr;
+        }
 
         u32 add_suffix_separator(u32 group_index)
-        { return _menu ? _menu->append_root_suffix_separator(group_index) : 0u; }
+        {
+            return _menu ? _menu->append_root_suffix_separator(group_index) : 0u;
+        }
 
         void erase_suffix_group(u32 group_index)
         {
@@ -310,7 +316,7 @@ namespace auik
         MenuBar *menu_model() const { return _menu; }
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
-        AUIK_EXPORT void update_layout_min_size() override;
+        AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void update_depth(const amal::vec2 &depth_range) override;
         AUIK_EXPORT void back_hit_depth() override;

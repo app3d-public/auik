@@ -23,6 +23,7 @@ namespace auik
     using ModelID = u64;
     using ModelRecordID = u64;
     using ModelFieldID = u32;
+    using ModelPipelineID = u64;
 
     enum class ModelRecordsOp : u8
     {
@@ -200,7 +201,7 @@ namespace auik
         using const_binding_iterator = binding_container::const_iterator;
 
         void *data = nullptr;
-        PFN_model_record_id make_record_id_cb = nullptr;
+        PFN_model_record_id make_record_id_cb = make_generated_model_record_id;
         PFN_model_field_data_batch field_data_batch_callback = nullptr;
         record_container records;
         record_index_container record_indices;
@@ -349,6 +350,7 @@ namespace auik
     using PFN_model_pipeline_process = bool (*)(void *data, const void *src, void *dst);
     struct ModelPipelineNode
     {
+        ModelPipelineID id = 0u;
         PFN_model_pipeline_process process = nullptr;
         PFN_model_pipeline_process process_reverse = nullptr;
         u32 src_size = 0u;
@@ -362,19 +364,23 @@ namespace auik
         ModelID model_id = 0u;
         ModelRecordID record_id = AUIK_MODEL_RECORD_ID_INVALID;
         ModelFieldID field_id = AUIK_MODEL_FIELD_ID_INVALID;
-        const ModelPipelineNode *node = nullptr;
+        ModelPipelineID pipeline_id = 0u;
     };
 
     inline bool operator==(const ModelPipelineCacheKey &a, const ModelPipelineCacheKey &b)
-    { return a.model_id == b.model_id && a.record_id == b.record_id && a.field_id == b.field_id && a.node == b.node; }
+    {
+        return a.model_id == b.model_id && a.record_id == b.record_id && a.field_id == b.field_id &&
+               a.pipeline_id == b.pipeline_id;
+    }
+
+    using PFN_destroy_model_pipeline_cache_value = void (*)(void *);
 
     struct ModelPipelineCacheEntry
     {
         ModelPipelineCacheKey key;
-        const void *data = nullptr;
+        void *data = nullptr;
         u32 size = 0u;
-        u32 pool_offset = 0u;
-        bool owned = false;
+        PFN_destroy_model_pipeline_cache_value destroy = nullptr;
     };
 
     using PFN_destroy_model = void (*)(Model *);
@@ -407,11 +413,9 @@ namespace auik
         model_container models;
         pipeline_container pipelines;
         acul::vector<u8> _pipeline_allocation_pool;
-        acul::vector<u8> _pipeline_cache_pool;
         acul::vector<ModelPipelineCacheEntry> _pipeline_cache_entries;
         u32 _pipeline_allocation_input_stride = 0u;
         u32 _pipeline_allocation_count = 0u;
-        u32 _pipeline_cache_pool_used = 0u;
         u32 _pipeline_cache_scope_depth = 0u;
         bool synced = false;
 
@@ -526,12 +530,27 @@ namespace auik
     AUIK_EXPORT void end_model_pipeline_cache(ModelDB *db);
     AUIK_EXPORT const ModelPipelineCacheEntry *find_model_pipeline_cache_entry(const ModelDB *db,
                                                                                const ModelPipelineCacheKey &key);
-    AUIK_EXPORT const void *find_model_pipeline_cache_value(const ModelDB *db, const ModelPipelineCacheKey &key,
-                                                            u32 expected_size = 0u);
-    AUIK_EXPORT const void *store_model_pipeline_cache_external(ModelDB *db, const ModelPipelineCacheKey &key,
-                                                                const void *data, u32 size);
-    AUIK_EXPORT void *alloc_model_pipeline_cache_value(ModelDB *db, const ModelPipelineCacheKey &key, u32 size);
-    AUIK_EXPORT void cancel_model_pipeline_cache_value(ModelDB *db, const ModelPipelineCacheKey &key);
+
+    template <class T>
+    inline const T *find_model_pipeline_cache_value(const ModelDB *db, const ModelPipelineCacheKey &key)
+    {
+        const auto *entry = find_model_pipeline_cache_entry(db, key);
+        return entry && entry->data && entry->size == sizeof(T) ? static_cast<const T *>(entry->data) : nullptr;
+    }
+
+    template <class T>
+    inline void store_model_pipeline_cache_value(ModelDB *db, const ModelPipelineCacheKey &key, const T &value)
+    {
+        if (!model_pipeline_cache_active(db) || find_model_pipeline_cache_entry(db, key)) return;
+        auto *data = acul::alloc<T>(value);
+        if (!data) return;
+        db->_pipeline_cache_entries.push_back(ModelPipelineCacheEntry{
+            key,
+            data,
+            sizeof(T),
+            [](void *ptr) { acul::release(static_cast<T *>(ptr)); },
+        });
+    }
     AUIK_EXPORT bool is_model_binding_valid(const ModelBinding &binding);
     AUIK_EXPORT bool is_model_field_access_valid(ModelDB *db, ModelID model_id, const ModelFieldAccess &access);
     AUIK_EXPORT void *get_model_field_access_data(ModelDB *db, ModelID model_id, const ModelFieldAccess &access);
@@ -605,7 +624,19 @@ namespace auik
     template <class T>
     inline bool read_model_field_access_value(ModelDB *db, ModelID model_id, const ModelFieldAccess &access, T &out)
     {
-        if (access.pipeline) return process_model_field_access(db, model_id, access, &out);
+        if (access.pipeline)
+        {
+            const ModelPipelineCacheKey key{model_id, access.record_id, access.field_id, access.pipeline->id};
+            if (access.pipeline->id != 0u)
+                if (const auto *cached = find_model_pipeline_cache_value<T>(db, key))
+                {
+                    out = *cached;
+                    return true;
+                }
+            if (!process_model_field_access(db, model_id, access, &out)) return false;
+            if (access.pipeline->id != 0u) store_model_pipeline_cache_value(db, key, out);
+            return true;
+        }
         const auto *value = get_model_field_access_value<T>(db, model_id, access);
         if (!value) return false;
         out = *value;

@@ -315,7 +315,7 @@ namespace auik::detail
         return changed;
     }
 
-    void PopupTrigger::update_layout_min_size(amal::vec2 style_size, bool fixed)
+    void PopupTrigger::update_layout_min_size_force(amal::vec2 style_size, bool fixed)
     {
         ensure_icon_resources();
         const auto &style = get_theme()->get_style(_style.id);

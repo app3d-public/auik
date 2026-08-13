@@ -36,7 +36,7 @@ namespace auik
         const auto flags = resolve_style_selector(_style, id(), parent_id, style_state());
         const auto &style = get_theme()->get_style(_style.id);
         apply_style_layout(style);
-        _text->update_style();
+        _text->update_style_invalidated();
         if (_resolved_text_color != style.text_color())
         {
             _resolved_text_color = style.text_color();
@@ -45,7 +45,7 @@ namespace auik
         return flags;
     }
 
-    void TextButton::update_layout_min_size()
+    void TextButton::update_layout_min_size_force()
     {
         auto *theme = get_theme();
         const auto &style = theme->get_style(_style.id);
@@ -75,7 +75,7 @@ namespace auik
 
     void TextButton::update_layout(bool min_size_known)
     {
-        if (!min_size_known) update_layout_min_size();
+        if (layout_measure_required(min_size_known)) update_layout_min_size_force();
         auto *theme = get_theme();
         const auto &style = theme->get_style(_style.id);
         const amal::vec2 layout_origin = position();

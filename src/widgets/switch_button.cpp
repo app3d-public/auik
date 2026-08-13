@@ -9,7 +9,9 @@ namespace auik
         : Widget(id, widget_flags, EventFlagBits::click, {{0.0f, 0.0f}, {0.0f, 0.0f}}, AUIK_TAG_SWITCH_BUTTON),
           _value(value),
           _grab_rect(detail::make_rect_data(AUIK_TAG_SWITCH_BUTTON_GRAB, AUIK_TAG_SWITCH_BUTTON_GRAB))
-    { sync_track_tag(); }
+    {
+        sync_track_tag();
+    }
 
     amal::vec2 SwitchButton::resolve_grab_size(const Style &grab_style) const
     {
@@ -28,7 +30,9 @@ namespace auik
     u32 SwitchButton::track_rect_tag() const { return value() ? AUIK_TAG_SWITCH_BUTTON_ON : AUIK_TAG_SWITCH_BUTTON; }
 
     u32 SwitchButton::track_style_tag() const
-    { return value() ? AUIK_STYLE_TAG_SWITCH_BUTTON_ON : AUIK_STYLE_TAG_SWITCH_BUTTON; }
+    {
+        return value() ? AUIK_STYLE_TAG_SWITCH_BUTTON_ON : AUIK_STYLE_TAG_SWITCH_BUTTON;
+    }
 
     void SwitchButton::sync_track_tag()
     {
@@ -46,7 +50,7 @@ namespace auik
         return out;
     }
 
-    void SwitchButton::update_layout_min_size()
+    void SwitchButton::update_layout_min_size_force()
     {
         auto *theme = get_theme();
         const auto &track_style = theme->get_style(_track_style.id);
@@ -87,7 +91,7 @@ namespace auik
 
     void SwitchButton::update_layout(bool min_size_known)
     {
-        if (!min_size_known) update_layout_min_size();
+        if (layout_measure_required(min_size_known)) update_layout_min_size_force();
 
         auto *theme = get_theme();
         const auto &track_style = theme->get_style(_track_style.id);
@@ -180,11 +184,15 @@ namespace auik
     }
 
     bool SwitchButton::has_draw_record() const
-    { return _track_draw.render_id != AUIK_INVALID_DRAW_DATA_ID && _grab_draw.render_id != AUIK_INVALID_DRAW_DATA_ID; }
+    {
+        return _track_draw.render_id != AUIK_INVALID_DRAW_DATA_ID && _grab_draw.render_id != AUIK_INVALID_DRAW_DATA_ID;
+    }
 
     SwitchButton::SwitchButton(u32 id, ModelBinding *binding, WidgetFlags widget_flags)
         : SwitchButton(id, false, widget_flags)
-    { set_model_binding(binding); }
+    {
+        set_model_binding(binding);
+    }
 
     void SwitchButton::set_model_binding(ModelBinding *binding)
     {

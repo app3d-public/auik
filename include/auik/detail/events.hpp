@@ -66,6 +66,7 @@ namespace auik::detail
 
     using PFN_get_window_handle = void *(*)(struct WindowContext *);
     using PFN_set_window_cursor = void (*)(CursorID::enum_type, struct WindowContext *);
+    using PFN_set_unbounded_mouse_drag = amal::vec2 (*)(bool, struct WindowContext *);
     using PFN_get_clipboard_string = acul::string (*)(struct WindowContext *);
     using PFN_set_clipboard_string = void (*)(struct WindowContext *, const acul::string &);
     using PFN_destroy_window_backend = void (*)(struct WindowContext *);
@@ -78,8 +79,10 @@ namespace auik::detail
     {
         f64 time = 0.0;
         HostWindowState host_state = HostWindowState::normal;
+        bool is_unbound_mode = false;
         PFN_get_window_handle get_window_handle = nullptr;
         PFN_set_window_cursor set_cursor = nullptr;
+        PFN_set_unbounded_mouse_drag set_unbounded_mouse_drag = nullptr;
         PFN_get_clipboard_string get_clipboard_string = nullptr;
         PFN_set_clipboard_string set_clipboard_string = nullptr;
         PFN_construct_window_backend construct_backend = nullptr;
@@ -96,6 +99,7 @@ namespace auik::detail
     AUIK_EXPORT void on_char_event(u32 char_code);
     AUIK_EXPORT void flush_frame_changes();
     AUIK_EXPORT void reset_event_state();
+    AUIK_EXPORT void cancel_unbounded_mouse_drag();
     AUIK_EXPORT void on_hover_id_updated(const ElementID &prev_hover_id, const ElementID &hover_id);
     AUIK_EXPORT void deregister_widget_shortcuts(u32 widget_id);
     inline void *get_window_handle(WindowContext *window_ctx)
@@ -108,6 +112,13 @@ namespace auik::detail
     {
         assert(window_ctx && "auik window context is not initialized");
         window_ctx->set_cursor(id, window_ctx);
+    }
+
+    inline amal::vec2 set_unbounded_mouse_drag(bool enabled, WindowContext *window_ctx)
+    {
+        assert(window_ctx && "auik window context is not initialized");
+        return window_ctx->set_unbounded_mouse_drag ? window_ctx->set_unbounded_mouse_drag(enabled, window_ctx)
+                                                    : amal::vec2{};
     }
 
     inline acul::string get_clipboard_string(WindowContext *window_ctx)

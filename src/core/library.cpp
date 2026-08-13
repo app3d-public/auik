@@ -209,11 +209,7 @@ namespace auik
             if (!widget) return false;
             assert(widget->viewport() && "Root widget viewport is not assigned");
             if (widget->viewport() != viewport) return false;
-            if (widget->parent())
-            {
-                widget->update_layout(false);
-                return false;
-            }
+            assert(!widget->parent() && "Root widget must not have a parent");
             widget->update_layout_min_size();
             const bool is_window = widget->get_rect().id.tag_id == AUIK_TAG_WINDOW;
             if (!is_window) widget->set_position({layout_rect.x, layout_rect.y});
@@ -346,10 +342,11 @@ namespace auik
         }
 
         // DrawDataID values index a stream, so they become stale as soon as that stream is cleared.
-        // Reset the complete root tree before recording new payload into the empty streams.
         static void reset_all_draw_records(detail::Context &ctx)
         {
             for (Widget *widget : ctx.widget_tree)
+                if (widget) widget->reset_draw_records();
+            for (Widget *widget : ctx.transient_cache)
                 if (widget) widget->reset_draw_records();
         }
 
@@ -513,6 +510,7 @@ namespace auik
         ctx.widget_create_options = create_info.widget_create_options;
         detail::init_atlas_state(ctx.atlas_state);
         ctx.raw_mouse_mode = false;
+        if (ctx.window_ctx) ctx.window_ctx->is_unbound_mode = false;
         ctx.frames_in_flight = create_info.frames_in_flight;
         ctx.max_textures_size = create_info.max_textures_size;
         auto &io = ctx.io;
@@ -640,7 +638,7 @@ namespace auik
         for (Widget *widget : widgets)
         {
             const auto it = ctx.id_map.find(widget->id());
-            if (it != ctx.id_map.end() && it->second == widget) widget->update_style();
+            if (it != ctx.id_map.end() && it->second == widget) widget->update_style_invalidated();
         }
         ctx.dirty_flags &= ~DirtyFlagBits::styles;
         ctx.dirty_flags &= ~DirtyFlagBits::fast_update;
@@ -754,7 +752,9 @@ namespace auik
     bool destroy_viewport_group(ViewportGroup *viewport) { return destroy_viewport(viewport); }
 
     amal::vec4 get_widget_viewport_rect(const Widget *widget)
-    { return get_viewport_rect(widget ? widget->viewport() : get_main_viewport()); }
+    {
+        return get_viewport_rect(widget ? widget->viewport() : get_main_viewport());
+    }
 
     void set_main_viewport(Viewport *viewport)
     {
@@ -868,7 +868,7 @@ namespace auik
         ctx.widget_tree.push_back(widget);
         if (widget->widget_flags & WidgetFlagBits::attachable) widget->on_attach();
         rebuild_root_widget_depths();
-        widget->update_style();
+        widget->update_style_invalidated();
     }
 
     AUIK_EXPORT void mark_locale_changed()
@@ -895,6 +895,7 @@ namespace auik
                 ctx.io.clicked_id = {};
             if (ctx.io.drag_id && ctx.id_map.find(ctx.io.drag_id.widget_id) == ctx.id_map.end())
             {
+                detail::cancel_unbounded_mouse_drag();
                 ctx.io.drag_id = {};
                 ctx.io.drag_key_flags = {};
             }
@@ -952,23 +953,25 @@ namespace auik
     AUIK_EXPORT void push_widget_to_transient_cache(Widget *widget)
     {
         assert(widget && "widget is null");
+        if (widget->is_transient()) return;
         auto &ctx = detail::get_context();
-        for (Widget *cached_widget : ctx.transient_cache)
-        {
-            if (cached_widget != widget) continue;
-            return;
-        }
-
         ctx.transient_cache.push_back(widget);
+        detail::WidgetStateAccess::set_transient(widget, true);
     }
 
     AUIK_EXPORT bool erase_widget_from_transient_cache(Widget *widget)
     {
         assert(widget && "widget is null");
+        if (!widget->is_transient()) return false;
         auto &transient_cache = detail::get_context().transient_cache;
         auto it = std::find(transient_cache.begin(), transient_cache.end(), widget);
         if (it == transient_cache.end()) return false;
         transient_cache.erase(it);
+
+        if (widget->is_attached()) widget->invalidate_draw_commands(DrawReasonBits::external);
+        widget->invalidate_draw_commands(DrawReasonBits::transient);
+        detail::WidgetStateAccess::set_transient(widget, false);
+        detail::get_context().dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
         return true;
     }
 

@@ -17,7 +17,7 @@ namespace auik
                                 u32 style_tag);
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
-        AUIK_EXPORT void update_layout_min_size() override;
+        AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void rebuild_clip_rects() override;
@@ -94,8 +94,7 @@ namespace auik
         return acul::alloc<ImageButton>(id, image, image_size, size, widget_flags, AUIK_STYLE_TAG_IMAGE_BUTTON);
     }
 
-    inline ImageButton *make_styled_image(u32 id, Image *image, u32 style_tag,
-                                          amal::vec2 image_size = {0.0f, 0.0f},
+    inline ImageButton *make_styled_image(u32 id, Image *image, u32 style_tag, amal::vec2 image_size = {0.0f, 0.0f},
                                           amal::vec2 size = AUIK_SIZE_INHERIT)
     {
         constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::configurable;

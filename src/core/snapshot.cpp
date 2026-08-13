@@ -76,7 +76,7 @@ namespace auik
             if (!root) return;
             if (!root->viewport()) root->attach_to_viewport(get_main_viewport());
             if (root->widget_flags & WidgetFlagBits::attachable) root->on_attach();
-            root->update_style();
+            root->update_style_invalidated();
         }
     } // namespace
 
@@ -115,6 +115,7 @@ namespace auik
         ctx.active_id = 0u;
         ctx.hover_id = {};
         ctx.io.clicked_id = {};
+        detail::cancel_unbounded_mouse_drag();
         ctx.io.drag_id = {};
         ctx.io.drag_key_flags = {};
         ctx.dirty_flags |=

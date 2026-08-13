@@ -26,6 +26,7 @@ namespace auik
             ModelBinding *model_binding() const { return _value_model_binding; }
             AUIK_EXPORT void set_postfix(StringView value);
             const acul::string &postfix() const { return _postfix; }
+            AUIK_EXPORT acul::string input_postfix() const;
             void set_speed(f32 value) { _speed = value; }
             f32 speed() const { return _speed; }
             AUIK_EXPORT void set_limits(T min_value, T max_value);
@@ -38,6 +39,7 @@ namespace auik
             AUIK_EXPORT void on_drag(const amal::vec2 &delta, KeyPressState state) override;
             AUIK_EXPORT void on_key(Key key, KeyPressState state, KeyMode mods) override;
             AUIK_EXPORT void on_char_input(u32 char_code, u32 count) override;
+            AUIK_EXPORT bool allows_unbounded_drag() const override;
 
         protected:
             AUIK_EXPORT void sync_text_from_value();
@@ -47,7 +49,7 @@ namespace auik
             AUIK_EXPORT void sync_text_presentation_from_value();
             AUIK_EXPORT bool parse_text_value(T &out) const;
             AUIK_EXPORT bool should_draw_caret() const override;
-            AUIK_EXPORT void set_value_internal(T value, bool manual_change);
+            AUIK_EXPORT void set_value_internal(T value, bool manual_change, bool sync_model = true);
 
             T _value = T(0);
             ModelBinding *_value_model_binding = nullptr;

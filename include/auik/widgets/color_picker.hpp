@@ -19,7 +19,7 @@ namespace auik
     public:
         AUIK_EXPORT CircleColorPicker(u32 id, const amal::vec4 &value, f32 inline_width, WidgetFlags widget_flags);
         AUIK_EXPORT StyleUpdateFlags update_style() override;
-        AUIK_EXPORT void update_layout_min_size() override;
+        AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void rebuild_clip_rects() override;
@@ -92,7 +92,7 @@ namespace auik
                                         WidgetFlags widget_flags);
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
-        AUIK_EXPORT void update_layout_min_size() override;
+        AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void rebuild_clip_rects() override;
@@ -161,7 +161,7 @@ namespace auik
         AUIK_EXPORT SquareColorPicker(u32 id, const amal::vec4 &value, f32 inline_width, WidgetFlags widget_flags);
         AUIK_EXPORT ~SquareColorPicker() override;
         AUIK_EXPORT StyleUpdateFlags update_style() override;
-        AUIK_EXPORT void update_layout_min_size() override;
+        AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void rebuild_clip_rects() override;

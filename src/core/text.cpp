@@ -1,6 +1,6 @@
 #include <auik/auik.hpp>
 #include <auik/detail/text.hpp>
-#include <harfbuzz/hb-ft.h>
+#include <harfbuzz/hb.h>
 
 namespace auik
 {
@@ -195,22 +195,14 @@ namespace auik
                 out.text_end = end;
                 if (start >= end) return true;
 
-                auto *face = TextFontAccess::face(font, size_px);
-                if (!face) return false;
-
+                auto *hb_font = TextFontAccess::shaping_font(font, size_px);
+                if (!hb_font) return false;
                 hb_buffer_t *buffer = hb_buffer_create();
                 if (!buffer) return false;
 
                 hb_buffer_add_utf8(buffer, text.c_str(), static_cast<int>(text.size()),
                                    static_cast<unsigned int>(start), static_cast<int>(end - start));
                 hb_buffer_guess_segment_properties(buffer);
-
-                hb_font_t *hb_font = hb_ft_font_create_referenced(face);
-                if (!hb_font)
-                {
-                    hb_buffer_destroy(buffer);
-                    return false;
-                }
 
                 hb_shape(hb_font, buffer, nullptr, 0);
 
@@ -229,7 +221,6 @@ namespace auik
 
                 if (!glyph_indices.empty()) TextFontAccess::load_glyph_indices(font, size_px, glyph_indices);
 
-                hb_font_destroy(hb_font);
                 hb_buffer_destroy(buffer);
                 return true;
             }
@@ -286,7 +277,6 @@ namespace auik
                     const f32 y_advance = static_cast<f32>(run.positions[i].y_advance) / g_hb_scale;
 
                     ShapedGlyph shaped{};
-                    shaped.glyph = glyph;
                     shaped.glyph_index = glyph_index;
                     shaped.cluster = run.infos[i].cluster;
                     shaped.pen = {pen_x + x_offset, line_y + out.ascender - y_offset};
@@ -329,7 +319,7 @@ namespace auik
                     for (u32 i = 0; i < line.glyph_count; ++i)
                     {
                         const auto &shaped = layout.glyphs[line.glyph_offset + i];
-                        const Glyph *glyph = shaped.glyph;
+                        const Glyph *glyph = TextFontAccess::find_glyph_by_index(font, size_px, shaped.glyph_index);
                         amal::vec2 glyph_offset = shaped.rect.offset;
 
                         if (glyph && glyph->empty) continue;
@@ -364,20 +354,25 @@ namespace auik
                 return true;
             }
 
+            static bool append_shaped_run(TextLayoutResult &out, Font &font, u32 size_px, const ShapedRun &run,
+                                          f32 line_y)
+            {
+                TextLine line{};
+                line.glyph_offset = static_cast<u32>(out.glyphs.size());
+                line.text_start = run.text_start;
+                line.text_end = run.text_end;
+                append_run_to_line(out, font, size_px, run, line_y, 0.0f, line);
+                line.glyph_count = static_cast<u32>(out.glyphs.size()) - line.glyph_offset;
+                finalize_line(out, line, line_y);
+                return true;
+            }
+
             static bool append_shaped_line(TextLayoutResult &out, Font &font, u32 size_px, const acul::string &text,
                                            size_t start, size_t end, f32 line_y)
             {
                 ShapedRun run;
                 if (!shape_range(font, size_px, text, start, end, run)) return false;
-
-                TextLine line{};
-                line.glyph_offset = static_cast<u32>(out.glyphs.size());
-                line.text_start = start;
-                line.text_end = end;
-                append_run_to_line(out, font, size_px, run, line_y, 0.0f, line);
-                line.glyph_count = static_cast<u32>(out.glyphs.size()) - line.glyph_offset;
-                finalize_line(out, line, line_y);
-                return true;
+                return append_shaped_run(out, font, size_px, run, line_y);
             }
 
             static bool append_ellipsized_line(TextLayoutResult &out, Font &font, u32 size_px, const acul::string &text,
@@ -545,11 +540,12 @@ namespace auik
                 if (config.max_width > 0.0f && run.width > config.max_width &&
                     text_overflow_mode(config.flags) == TextOverflowMode::clip)
                 {
+                    out.truncated = true;
                     f32 trimmed_width = 0.0f;
                     const size_t trim_end = trim_run_to_width(run, config.max_width, trimmed_width);
                     return append_shaped_line(out, font, size_px, utf8_text, 0, trim_end, 0.0f);
                 }
-                return append_shaped_line(out, font, size_px, utf8_text, 0, utf8_text.size(), 0.0f);
+                return append_shaped_run(out, font, size_px, run, 0.0f);
             }
 
             out.truncated = true;

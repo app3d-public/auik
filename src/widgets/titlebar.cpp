@@ -77,7 +77,7 @@ namespace auik
         const StyleState next_state = active ? StyleState::active : (hover ? StyleState::hover : StyleState::normal);
         if (!button->set_style_state(next_state)) return;
 
-        const StyleUpdateFlags flags = button->update_style();
+        const StyleUpdateFlags flags = button->update_style_invalidated();
         if (flags & StyleUpdateFlagBits::layout)
         {
             if (state.titlebar) state.titlebar->update_layout(false);
@@ -113,7 +113,9 @@ namespace auik
     }
 
     static inline f32 snap_titlebar_size_from(f32 offset, f32 size)
-    { return amal::max(amal::round(offset + size) - offset, 0.0f); }
+    {
+        return amal::max(amal::round(offset + size) - offset, 0.0f);
+    }
 
     Titlebar::Titlebar(u32 id, WidgetFlags widget_flags)
         : Widget(id, widget_flags, EventFlagBits::none, {{0.0f, 0.0f}, AUIK_SIZE_INHERIT}, AUIK_TAG_TITLEBAR)
@@ -242,17 +244,17 @@ namespace auik
         for (auto *child : _children)
         {
             if (!child) continue;
-            out |= child->update_style();
+            out |= child->update_style_invalidated();
         }
         for (auto *button : _caption_buttons)
         {
             if (!button) continue;
-            out |= button->update_style();
+            out |= button->update_style_invalidated();
         }
         return out;
     }
 
-    void Titlebar::update_layout_min_size()
+    void Titlebar::update_layout_min_size_force()
     {
         const f32 resolved_height = _state && _state->height > 0.0f ? _state->height : AUIK_TITLEBAR_HEIGHT_DEFAULT;
         set_required_size({size().x, resolved_height});
@@ -262,7 +264,7 @@ namespace auik
     {
         ensure_icon_widget();
         ensure_caption_buttons();
-        if (!min_size_known) update_layout_min_size();
+        if (layout_measure_required(min_size_known)) update_layout_min_size_force();
         const auto display = get_display_size();
         const f32 resolved_height = _state && _state->height > 0.0f ? _state->height : AUIK_TITLEBAR_HEIGHT_DEFAULT;
         const f32 resolved_width = size().x > 0.0f ? size().x : display.x;
@@ -285,7 +287,7 @@ namespace auik
                 button_x -= caption_button_size.x;
                 button->set_position({button_x, position().y});
                 button->set_size(caption_button_size);
-                button->update_style();
+                button->update_style_invalidated();
                 button->update_layout(true);
                 _caption_buttons_width += caption_button_size.x;
             }
@@ -523,7 +525,7 @@ namespace auik
                 const StyleState button_state =
                     active ? StyleState::active : (hover ? StyleState::hover : StyleState::normal);
                 button->set_style_state(button_state);
-                button->update_style();
+                button->update_style_invalidated();
             }
             DrawCtx button_ctx = ctx;
             button_ctx.is_hit_allowed = false;

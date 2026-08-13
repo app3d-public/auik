@@ -18,7 +18,7 @@ namespace auik
         }
 
         StyleUpdateFlags update_style() override { return StyleUpdateFlagBits::none; }
-        AUIK_EXPORT void update_layout_min_size() override;
+        AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void rebuild_clip_rects() override;
         AUIK_EXPORT void reset_draw_records() override;
@@ -58,7 +58,7 @@ namespace auik
         }
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
-        AUIK_EXPORT void update_layout_min_size() override;
+        AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void rebuild_clip_rects() override;
         AUIK_EXPORT void reset_draw_records() override;

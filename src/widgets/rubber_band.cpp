@@ -66,11 +66,11 @@ namespace auik
         return resolve_style_selector(_style, id(), parent_id, style_state());
     }
 
-    void RubberBand::update_layout_min_size() { set_required_size({0.0f, 0.0f}); }
+    void RubberBand::update_layout_min_size_force() { set_required_size({0.0f, 0.0f}); }
 
     void RubberBand::update_layout(bool min_size_known)
     {
-        if (!min_size_known) update_layout_min_size();
+        if (layout_measure_required(min_size_known)) update_layout_min_size_force();
 
         if (parent())
         {

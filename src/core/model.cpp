@@ -3,6 +3,8 @@
 
 namespace auik
 {
+    static void clear_model_pipeline_cache(ModelDB *db);
+
     AUIK_EXPORT ModelField *find_model_field(ModelRecord &record, ModelFieldID field_id)
     {
         for (auto *field : record.fields)
@@ -79,6 +81,7 @@ namespace auik
                                              PFN_destroy_model_pipeline destroy)
     {
         if (!db || id == 0u || !pipeline || find_model_pipeline(db, id)) return false;
+        pipeline->id = id;
         db->pipelines.emplace(id, ModelDB::PipelineEntry{id, pipeline, destroy});
         db->synced = false;
         return true;
@@ -153,11 +156,9 @@ namespace auik
         models.clear();
 
         _pipeline_allocation_pool.clear();
-        _pipeline_cache_pool.clear();
-        _pipeline_cache_entries.clear();
+        clear_model_pipeline_cache(this);
         _pipeline_allocation_input_stride = 0u;
         _pipeline_allocation_count = 0u;
-        _pipeline_cache_pool_used = 0u;
         _pipeline_cache_scope_depth = 0u;
         synced = false;
     }
@@ -175,8 +176,9 @@ namespace auik
     static void clear_model_pipeline_cache(ModelDB *db)
     {
         if (!db) return;
+        for (auto &entry : db->_pipeline_cache_entries)
+            if (entry.destroy) entry.destroy(entry.data);
         db->_pipeline_cache_entries.clear();
-        db->_pipeline_cache_pool_used = 0u;
     }
 
     AUIK_EXPORT void begin_model_pipeline_cache(ModelDB *db)
@@ -200,50 +202,6 @@ namespace auik
         return nullptr;
     }
 
-    AUIK_EXPORT const void *find_model_pipeline_cache_value(const ModelDB *db, const ModelPipelineCacheKey &key,
-                                                            u32 expected_size)
-    {
-        const auto *entry = find_model_pipeline_cache_entry(db, key);
-        if (!entry || !entry->data) return nullptr;
-        if (expected_size != 0u && entry->size != expected_size) return nullptr;
-        return entry->data;
-    }
-
-    AUIK_EXPORT const void *store_model_pipeline_cache_external(ModelDB *db, const ModelPipelineCacheKey &key,
-                                                                const void *data, u32 size)
-    {
-        if (!model_pipeline_cache_active(db) || !data || size == 0u) return data;
-        if (const void *cached = find_model_pipeline_cache_value(db, key, size)) return cached;
-        db->_pipeline_cache_entries.push_back(ModelPipelineCacheEntry{key, data, size, 0u, false});
-        return data;
-    }
-
-    AUIK_EXPORT void *alloc_model_pipeline_cache_value(ModelDB *db, const ModelPipelineCacheKey &key, u32 size)
-    {
-        if (!model_pipeline_cache_active(db) || size == 0u) return nullptr;
-        if (const void *cached = find_model_pipeline_cache_value(db, key, size)) return const_cast<void *>(cached);
-        const u32 offset = db->_pipeline_cache_pool_used;
-        const u32 next_size = offset + size;
-        if (db->_pipeline_cache_pool.size() < next_size) db->_pipeline_cache_pool.resize(next_size);
-        void *data = db->_pipeline_cache_pool.data() + offset;
-        db->_pipeline_cache_pool_used = next_size;
-        db->_pipeline_cache_entries.push_back(ModelPipelineCacheEntry{key, data, size, offset, true});
-        return data;
-    }
-
-    AUIK_EXPORT void cancel_model_pipeline_cache_value(ModelDB *db, const ModelPipelineCacheKey &key)
-    {
-        if (!model_pipeline_cache_active(db)) return;
-        for (size_t i = 0; i < db->_pipeline_cache_entries.size(); ++i)
-        {
-            const auto &entry = db->_pipeline_cache_entries[i];
-            if (!(entry.key == key)) continue;
-            if (entry.owned && entry.pool_offset + entry.size == db->_pipeline_cache_pool_used)
-                db->_pipeline_cache_pool_used = entry.pool_offset;
-            db->_pipeline_cache_entries.erase(db->_pipeline_cache_entries.begin() + i);
-            return;
-        }
-    }
     AUIK_EXPORT bool is_model_binding_valid(const ModelBinding &binding)
     {
         return binding.db && binding.db->synced && find_model(binding.db, binding.model_id) != nullptr;
@@ -463,36 +421,7 @@ namespace auik
         const void *src = field ? field->data() : nullptr;
         if (!src || !dst) return false;
 
-        if (!model_pipeline_cache_active(db)) return process_model_pipeline(db, access.pipeline, src, dst);
-
-        const ModelPipelineCacheKey source_key{model_id, access.record_id, access.field_id, nullptr};
-        const void *current_src = store_model_pipeline_cache_external(db, source_key, src, field->size());
-        u32 current_size = field->size();
-        for (ModelPipelineNode *node = access.pipeline; node; node = node->next)
-        {
-            if (!node->process || node->src_size != current_size || node->dst_size == 0u) return false;
-
-            const ModelPipelineCacheKey key{model_id, access.record_id, access.field_id, node};
-            if (const void *cached = find_model_pipeline_cache_value(db, key, node->dst_size))
-            {
-                current_src = cached;
-                current_size = node->dst_size;
-                continue;
-            }
-
-            void *current_dst = alloc_model_pipeline_cache_value(db, key, node->dst_size);
-            if (!current_dst) return false;
-            if (!node->process(node->data, current_src, current_dst))
-            {
-                cancel_model_pipeline_cache_value(db, key);
-                return false;
-            }
-            current_src = current_dst;
-            current_size = node->dst_size;
-        }
-        if (!current_src || current_size == 0u) return false;
-        std::memcpy(dst, current_src, current_size);
-        return true;
+        return process_model_pipeline(db, access.pipeline, src, dst);
     }
 
     AUIK_EXPORT bool process_model_field_access_reverse(ModelDB *db, ModelID model_id, const ModelFieldAccess &access,

@@ -338,8 +338,8 @@ namespace auik
             set_style_state(state);
             StyleUpdateFlags flags = resolve_style_selector(_style, id(), parent_id, style_state());
             const auto &style = get_theme()->get_style(_style.id);
-            flags |= _title->update_style();
-            if (_menu) flags |= _menu->update_style();
+            flags |= _title->update_style_invalidated();
+            if (_menu) flags |= _menu->update_style_invalidated();
             if (_resolved_text_color != style.text_color())
             {
                 _resolved_text_color = style.text_color();
@@ -549,6 +549,12 @@ namespace auik
         _content_block->reset_scroll_offset();
     }
 
+    void Window::erase_children(size_t first, size_t count)
+    {
+        if (!_content_block) return;
+        _content_block->erase_children(first, count);
+    }
+
     void Window::add_child(Widget *child, ChildLayoutFlags layout)
     {
         assert(child && "child is null");
@@ -705,11 +711,7 @@ namespace auik
     {
         if (!parent()) detail::setup_root_window(this);
         Widget::on_attach();
-        if (_content_block)
-        {
-            for (auto *child : _content_block->children)
-                if (child && (child->widget_flags & WidgetFlagBits::attachable)) child->on_attach();
-        }
+        if (_content_block && !_content_block->is_attached()) _content_block->on_attach();
         if (auto *menu = window_menu_widget(*this); menu && (menu->widget_flags & WidgetFlagBits::attachable))
             menu->on_attach();
         install_header_menu_suffix();
@@ -738,12 +740,14 @@ namespace auik
         if (_default_header_menu && owns_popup_menu_tree(*this) &&
             (_default_header_menu->widget_flags & WidgetFlagBits::attachable))
             _default_header_menu->on_detach();
-        if (_content_block)
-        {
-            for (auto *child : _content_block->children)
-                if (child && (child->widget_flags & WidgetFlagBits::attachable)) child->on_detach();
-        }
+        if (_content_block && _content_block->is_attached()) _content_block->on_detach();
         Widget::on_detach();
+    }
+
+    void Window::on_change(ChangeEvent &event)
+    {
+        if (!_content_block || event.target != id()) return;
+        _content_block->on_change(event);
     }
 
     void Window::draw(DrawCtx &ctx)
@@ -941,9 +945,13 @@ namespace auik
         out |= resolve_style_selector(_window_style, id(), 0u, style_state());
         const Style &window_style = resolved_window_style();
         _min_size = {window_style.min_width(), window_style.min_height()};
-        if (_content_block) _content_block->set_content_padding(window_style.padding());
-        if (_content_block) out |= _content_block->update_style();
-        if (_menu) out |= _menu->update_style();
+        if (_content_block && _content_block->content_padding() != window_style.padding())
+        {
+            _content_block->set_content_padding(window_style.padding());
+            _content_block->invalidate_layout_measure();
+        }
+        if (_content_block) out |= _content_block->update_style_invalidated();
+        if (_menu) out |= _menu->update_style_invalidated();
 
         if ((window_flags & WindowFlagBits::decorated) && !_header)
             _header = acul::alloc<WindowHeader>(this, _title, window_flags & WindowFlagBits::movable);
@@ -951,7 +959,7 @@ namespace auik
         {
             if (window_flags & WindowFlagBits::movable) _header->widget_flags |= WidgetFlagBits::hittable;
             else _header->widget_flags &= ~WidgetFlagBits::hittable;
-            out |= _header->update_style();
+            out |= _header->update_style_invalidated();
         }
         else
         {
@@ -963,7 +971,7 @@ namespace auik
         }
         sync_header_popup_menu();
 
-        if (_rubber_band) out |= _rubber_band->update_style();
+        if (_rubber_band) out |= _rubber_band->update_style_invalidated();
         return out;
     }
 
@@ -1019,7 +1027,7 @@ namespace auik
         if (_content_block) _content_block->reset_draw_records();
     }
 
-    void Window::update_layout_min_size()
+    void Window::update_layout_min_size_force()
     {
         f32 menu_height = 0.0f;
         if (auto *classic_menu = window_menu_bar(*this);
@@ -1039,7 +1047,7 @@ namespace auik
     void Window::update_layout(bool min_size_known)
     {
         clear_window_frame_hitbox_flag(*this);
-        if (!min_size_known) update_layout_min_size();
+        if (layout_measure_required(min_size_known)) update_layout_min_size_force();
         if (!parent() && !(window_flags & WindowFlagBits::docked) && !is_root_viewport_managed(this))
         {
             if (_auto_size.x || _auto_size.y)
@@ -1149,12 +1157,18 @@ namespace auik
         if (auto *classic_menu = window_menu_bar(*this);
             classic_menu && owns_classic_menu_bar_tree(*this) && classic_menu->is_visible())
         {
+            const bool menu_width_changed = classic_menu->size().x != size().x;
             classic_menu->set_layout_size({size().x, 0.0f});
-            classic_menu->update_layout_min_size();
+            // The normal measure pass already populated required_size(). Only a changed
+            // wrapping width can invalidate that result between measure and arrange.
+            if (menu_width_changed)
+            {
+                classic_menu->invalidate_layout_measure();
+                classic_menu->update_layout_min_size();
+            }
             menu_height = classic_menu->required_size().y;
         }
 
-        if (_content_block) _content_block->update_layout_min_size();
         const amal::vec2 children_min_size = _content_block ? _content_block->required_size() : amal::vec2{0.0f, 0.0f};
         const f32 header_height = get_window_header_height(_header, *this);
         set_required_size({children_min_size.x, header_height + menu_height + children_min_size.y});
@@ -1207,7 +1221,7 @@ namespace auik
             _content_block->set_clip_id(clip_id());
             _content_block->set_position({position().x, body_top_y});
             _content_block->set_layout_size({size().x, body_height});
-            _content_block->update_layout(false);
+            _content_block->update_layout(true);
         }
 
         if (window_flags & WindowFlagBits::scrollable)
@@ -1509,7 +1523,7 @@ namespace auik
 
         const bool self_needs_layout = needs_layout_on_active(*self_window);
         add_render_command<detail::FocusEventTraits>(self_window, [self_window, self_needs_layout]() {
-            auto flags = self_window->update_style();
+            auto flags = self_window->update_style_invalidated();
             if (self_needs_layout)
             {
                 self_window->update_layout(true);
@@ -1524,7 +1538,7 @@ namespace auik
         {
             const bool top_needs_layout = needs_layout_on_active(*top_window);
             add_render_command<detail::FocusEventTraits>(top_window, [top_window, top_needs_layout]() {
-                auto flags = top_window->update_style();
+                auto flags = top_window->update_style_invalidated();
                 if (top_needs_layout)
                 {
                     top_window->update_layout(true);

@@ -6,37 +6,39 @@ namespace auik
                                                    ChildLayoutFlags layout)
     {
         amal::vec2 pos = bounds.offset;
-        if (layout & ChildLayoutFlagBits::aright)
-            pos.x += amal::max(bounds.size.x - size.x, 0.0f);
+        if (layout & ChildLayoutFlagBits::aright) pos.x += amal::max(bounds.size.x - size.x, 0.0f);
         else if (layout & ChildLayoutFlagBits::hcenter)
             pos.x += amal::floor(amal::max(bounds.size.x - size.x, 0.0f) * 0.5f);
 
-        if (layout & ChildLayoutFlagBits::bottom)
-            pos.y += amal::max(bounds.size.y - size.y, 0.0f);
+        if (layout & ChildLayoutFlagBits::bottom) pos.y += amal::max(bounds.size.y - size.y, 0.0f);
         else if (layout & ChildLayoutFlagBits::vcenter)
             pos.y += amal::floor(amal::max(bounds.size.y - size.y, 0.0f) * 0.5f);
         return pos;
     }
 
     DockLayout::DockLayout(u32 id, const amal::vec2 &inline_size, WidgetFlags widget_flags)
-        : Widget(id, widget_flags, EventFlagBits::none, {{0.0f, 0.0f}, inline_size}, AUIK_TAG_DOCK_LAYOUT),
-          _dock(this)
+        : Widget(id, widget_flags, EventFlagBits::none, {{0.0f, 0.0f}, inline_size}, AUIK_TAG_DOCK_LAYOUT), _dock(this)
     {
     }
 
     DockLayout::~DockLayout() { clear(); }
 
-    DockLayoutNodeID DockLayout::create_split(DockLayoutNodeID parent, amal::axis axis,
-                                              DockLayoutNodeSettings settings)
-    { return _dock.create_split(parent, axis, settings); }
+    DockLayoutNodeID DockLayout::create_split(DockLayoutNodeID parent, amal::axis axis, DockLayoutNodeSettings settings)
+    {
+        return _dock.create_split(parent, axis, settings);
+    }
 
     DockLayoutNodeID DockLayout::create_leaf(DockLayoutNodeID parent, DockLayoutNodeSettings settings)
-    { return _dock.create_leaf(parent, settings); }
+    {
+        return _dock.create_leaf(parent, settings);
+    }
 
     void DockLayout::set_split_axis(DockLayoutNodeID node, amal::axis axis) { _dock.set_split_axis(node, axis); }
 
     void DockLayout::set_node_settings(DockLayoutNodeID node, DockLayoutNodeSettings settings)
-    { _dock.set_node_settings(node, settings); }
+    {
+        _dock.set_node_settings(node, settings);
+    }
 
     void DockLayout::add_child(DockLayoutNodeID node, Widget *child, ChildLayoutFlags layout)
     {
@@ -57,15 +59,15 @@ namespace auik
     {
         StyleUpdateFlags flags = StyleUpdateFlagBits::none;
         for (Item &item : _dock.items())
-            if (item.widget && item.widget->is_visible()) flags |= item.widget->update_style();
+            if (item.widget && item.widget->is_visible()) flags |= item.widget->update_style_invalidated();
         return flags;
     }
 
-    void DockLayout::update_layout_min_size() { set_required_size(_dock.measure(root_node())); }
+    void DockLayout::update_layout_min_size_force() { set_required_size(_dock.measure(root_node())); }
 
     void DockLayout::update_layout(bool min_size_known)
     {
-        if (!min_size_known) update_layout_min_size();
+        if (layout_measure_required(min_size_known)) update_layout_min_size_force();
         set_layout_size(resolve_layout_size_from_required());
         Widget::update_layout(true);
         set_clip_id(parent() ? parent()->content_clip_id() : clip_id());
@@ -146,7 +148,7 @@ namespace auik
         if (!owner || !item.widget) return;
         item.widget->set_parent(owner);
         item.widget->set_focus_parent(owner);
-        item.widget->update_style();
+        item.widget->update_style_invalidated();
         if (detail::get_context().id_map.find(owner->id()) != detail::get_context().id_map.end() &&
             (item.widget->widget_flags & WidgetFlagBits::attachable))
             item.widget->on_attach();

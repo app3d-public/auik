@@ -97,13 +97,24 @@ namespace auik
 
     static f32 snap_textbox_scroll_offset(f32 value) { return amal::round(value); }
 
-    static void apply_textbox_text_extras(Text &text, const Style &style)
+    static bool apply_textbox_text_extras(Text &text, const Style &style)
     {
-        if (const auto *text_extra = style.text_settings())
+        const auto *text_extra = style.text_settings();
+        if (!text_extra) return false;
+
+        bool changed = false;
+        const bool multiline = text_extra->wrap == TextWrapMode::word;
+        if (text.multiline() != multiline)
         {
-            text.set_multiline(text_extra->wrap == TextWrapMode::word);
-            text.set_overflow_mode(text_extra->overflow);
+            text.set_multiline(multiline);
+            changed = true;
         }
+        if (text.overflow_mode() != text_extra->overflow)
+        {
+            text.set_overflow_mode(text_extra->overflow);
+            changed = true;
+        }
+        return changed;
     }
 
     static void draw_text_drag_icon(DrawCtx &ctx, DrawDataID (&draw_ids)[AUIK_TEXTBOX_SELECTION_DRAG_DOT_COUNT],
@@ -215,14 +226,14 @@ namespace auik
             flags |= resolve_style_selector(_edit->selection_style, id(), parent_id, StyleState::normal);
             flags |= resolve_style_selector(_edit->drag_icon_style, id(), parent_id, StyleState::normal);
         }
-        if (_scrollbar_y) flags |= _scrollbar_y->update_style();
+        if (_scrollbar_y) flags |= _scrollbar_y->update_style_invalidated();
         _text.set_style_tag(style_tag());
-        _text.update_style();
-        apply_textbox_text_extras(_text, style);
+        _text.update_style_invalidated();
+        if (apply_textbox_text_extras(_text, style)) _text.invalidate_layout_measure();
         if (_placeholder)
         {
-            _placeholder->update_style();
-            apply_textbox_text_extras(*_placeholder, style);
+            _placeholder->update_style_invalidated();
+            if (apply_textbox_text_extras(*_placeholder, style)) _placeholder->invalidate_layout_measure();
         }
         return flags;
     }
@@ -242,7 +253,7 @@ namespace auik
         erase_widget_from_transient_cache(this);
     }
 
-    void Textbox::update_layout_min_size()
+    void Textbox::update_layout_min_size_force()
     {
         _text.update_layout_min_size();
         if (_placeholder) _placeholder->update_layout_min_size();
@@ -269,7 +280,7 @@ namespace auik
 
     void Textbox::update_layout(bool min_size_known)
     {
-        if (!min_size_known) update_layout_min_size();
+        if (layout_measure_required(min_size_known)) update_layout_min_size_force();
 
         const auto &style = get_theme()->get_style(_style.id);
         const auto padding = style.padding();
@@ -326,7 +337,7 @@ namespace auik
         if (has_internal_scrollbar())
         {
             detail::ensure_internal_y_scrollbar(_scrollbar_y, this);
-            _scrollbar_y->update_style();
+            _scrollbar_y->update_style_invalidated();
             amal::vec2 scrollbar_range{};
             assign_next_depth(_text.depth_range(), scrollbar_range);
             _scrollbar_y->update_depth(scrollbar_range);
@@ -572,7 +583,7 @@ namespace auik
             const f32 center_y = _text.position().y + glyph.pen.y - layout.ascender + line_h * 0.5f;
             push_dot({{amal::round(center_x - dot_size * 0.5f), amal::round(center_y - dot_size * 0.5f)},
                       {dot_size, dot_size}},
-                     glyph.visible());
+                     !amal::is_rect_empty(glyph.rect));
         }
 
         while (dot_slot < dots.size()) push_dot({_content_pos, {0.0f, 0.0f}}, false);
@@ -650,6 +661,7 @@ namespace auik
 
     void Textbox::on_focus(bool focused)
     {
+        if (!focused) commit_model_value();
         if (!focused && _edit)
         {
             _edit->flags &= ~AUIK_TEXTBOX_CARET_BLINK_TASK_SCHEDULED_BIT;
@@ -1090,16 +1102,27 @@ namespace auik
         add_render_command<detail::CharEventTraits>(this, [this]() { apply_render_update(true); });
     }
 
-    void Textbox::set_value_internal(const acul::string &value)
+    void Textbox::sync_value()
     {
-        _value = value;
         sync_text_presentation();
-        if (_model_binding) set_model_binding_value<acul::string>(*_model_binding, _value);
 
         auto &cursor = _edit_state.primary_cursor();
         cursor.cursor = static_cast<int>(this->value().size());
         cursor.select_start = cursor.cursor;
         cursor.select_end = cursor.cursor;
+    }
+
+    void Textbox::commit_model_value()
+    {
+        if (!_model_binding || is_read_only()) return;
+        acul::string model_value{};
+        if (read_model_binding_value(*_model_binding, model_value) && model_value == _value) return;
+        if (set_model_binding_value<acul::string>(*_model_binding, _value)) return;
+        if (read_model_binding_value(*_model_binding, model_value) && model_value != _value)
+        {
+            set_value(model_value);
+            sync_value();
+        }
     }
 
     void Textbox::set_model_binding(ModelBinding *binding)
@@ -1109,38 +1132,26 @@ namespace auik
         if (!_model_binding) return;
         _model_binding->on_field_change = [this](ModelRecordID, ModelFieldID) {
             acul::string value{};
-            if (read_model_binding_value(*_model_binding, value))
+            if (read_model_binding_value(*_model_binding, value) && value != this->value())
             {
                 set_value(value);
+                sync_value();
                 add_render_command([this]() { apply_render_update(true); });
             }
         };
         attach_model_binding(*_model_binding);
         acul::string value{};
-        if (read_model_binding_value(*_model_binding, value)) set_value(value);
+        if (read_model_binding_value(*_model_binding, value) && value != this->value())
+        {
+            set_value(value);
+            sync_value();
+        }
     }
 
-    void Textbox::sync_text_presentation() { _text.set_text(make_textbox_presentation(_value, text_flags)); }
-
-    void Textbox::set_placeholder(StringView value)
+    void Textbox::sync_text_presentation()
     {
-        if (!value.str || value.str[0] == '\0')
-        {
-            if (!_placeholder) return;
-            acul::release(_placeholder);
-            _placeholder = nullptr;
-        }
-        else if (_placeholder)
-        {
-            _placeholder->set_text(value);
-        }
-        else
-        {
-            _placeholder = acul::alloc<Text>(AUIK_TAG_TEXT, value, amal::vec2{0.0f, 0.0f}, WidgetFlagBits::visible);
-            _placeholder->set_style_tag(AUIK_STYLE_TAG_PLACEHOLDER);
-            _placeholder->set_parent(this);
-            _placeholder->set_overflow_mode(TextOverflowMode::clip);
-        }
+        _text.set_text(make_textbox_presentation(_value, text_flags));
+        _text.invalidate_layout_measure();
     }
 
     void Textbox::reset_caret_blink()

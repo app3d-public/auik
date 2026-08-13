@@ -363,16 +363,16 @@ namespace auik
             return _model_has_items;
         }
 
-        void update_layout_min_size() override
+        void update_layout_min_size_force() override
         {
             _button.update_style(id(), parent() ? parent()->id() : 0u, resolve_button_state());
-            _button.update_layout_min_size({0.0f, 0.0f}, true);
+            _button.update_layout_min_size_force({0.0f, 0.0f}, true);
             set_required_size(_button.required_size());
         }
 
         void update_layout(bool min_size_known) override
         {
-            if (!min_size_known) update_layout_min_size();
+            if (layout_measure_required(min_size_known)) update_layout_min_size_force();
             layout_button(bounds(), clip_id());
         }
 
@@ -392,7 +392,7 @@ namespace auik
         {
             StyleUpdateFlags out = StyleUpdateFlagBits::none;
             out |= _button.update_style(id(), parent() ? parent()->id() : 0u, resolve_button_state());
-            if (_menu) out |= _menu->update_style();
+            if (_menu) out |= _menu->update_style_invalidated();
             return out;
         }
 
@@ -653,7 +653,7 @@ namespace auik
             _menu->attach_to_viewport(this->viewport());
             _menu->set_position({0.0f, 0.0f});
             _menu->set_layout_size({0.0f, 0.0f});
-            _menu->update_style();
+            _menu->update_style_invalidated();
             _menu->update_layout_min_size();
             attach_menu_for_popup();
         }
@@ -665,7 +665,7 @@ namespace auik
             _menu->set_focus_parent(this);
             _menu->pop_suffix_group();
             _menu->set_selected_enabled(true);
-            _menu->update_style();
+            _menu->update_style_invalidated();
             _menu->update_layout_min_size();
             attach_menu_for_popup();
 
@@ -909,7 +909,7 @@ namespace auik
         window->window_flags &= ~(WindowFlagBits::movable | WindowFlagBits::resizable);
         window->reset_clip_rect_records();
         if (auto *menu = window->take_menu_widget()) window->set_menu_widget(menu);
-        window->update_style();
+        window->update_style_invalidated();
         auto &map = detail::get_context().id_map;
         const bool dockspace_attached = map.find(id()) != map.end();
         if (dockspace_attached && (window->widget_flags & WidgetFlagBits::attachable))
@@ -1003,7 +1003,7 @@ namespace auik
         add_widget_to_root(extracted);
         const auto viewport = get_widget_viewport_rect(extracted);
         extracted->set_root_viewport_origin({viewport.x, viewport.y});
-        extracted->update_style();
+        extracted->update_style_invalidated();
         extracted->update_layout(false);
         extracted->rebuild_clip_rects();
         focus_widget(extracted);
@@ -1233,10 +1233,10 @@ namespace auik
         {
             auto &node = _nodes[node_id];
             update_node_style_cache(node_id, node);
-            if (node.tabbar) out |= node.tabbar->update_style();
-            if (node.menu) out |= node.menu->update_style();
+            if (node.tabbar) out |= node.tabbar->update_style_invalidated();
+            if (node.menu) out |= node.menu->update_style_invalidated();
             for (auto *window : node.windows)
-                if (window) out |= window->update_style();
+                if (window) out |= window->update_style_invalidated();
         }
         return out;
     }
@@ -1275,7 +1275,7 @@ namespace auik
                     if (!is_tabbar_drag_escape(node->tabbar, drag_id.element_id)) return;
                     if (handle_tabbar_drag_escape(node_id, drag_id.element_id)) e.prevent_default();
                 });
-            node.tabbar->update_style();
+            node.tabbar->update_style_invalidated();
             node.tabbar->update_depth(is_valid_depth_range(_tabbar_depth_range)
                                           ? _tabbar_depth_range
                                           : make_dockspace_tabbar_depth_range(this->depth_range()));
@@ -1322,7 +1322,7 @@ namespace auik
             node.tabbar->set_item_user_data(static_cast<u32>(i), node.windows[i]);
         if (node.record_active_window && node.active_window_index < node.tabbar->child_size())
             node.tabbar->set_selected_silent(node.tabbar->item_element_id(static_cast<u32>(node.active_window_index)));
-        node.tabbar->update_style();
+        node.tabbar->update_style_invalidated();
         node.tabbar->update_depth(is_valid_depth_range(_tabbar_depth_range)
                                       ? _tabbar_depth_range
                                       : make_dockspace_tabbar_depth_range(this->depth_range()));
@@ -1623,7 +1623,7 @@ namespace auik
         return required;
     }
 
-    void Dockspace::update_layout_min_size()
+    void Dockspace::update_layout_min_size_force()
     {
         const amal::vec2 root_required = measure_node(root_node());
         set_required_size(root_required);
@@ -2162,7 +2162,7 @@ namespace auik
 
     void Dockspace::update_layout(bool min_size_known)
     {
-        if (!min_size_known) update_layout_min_size();
+        if (layout_measure_required(min_size_known)) update_layout_min_size_force();
 
         if (parent())
         {
@@ -2404,7 +2404,7 @@ namespace auik
         detail::set_style_selector(header_id, StyleState::active);
         ctx.frame_cache.drag_widget_id = extracted->id();
         extracted->begin_external_move_drag();
-        extracted->update_style();
+        extracted->update_style_invalidated();
         extracted->update_layout(false);
         extracted->rebuild_clip_rects();
         extracted->back_hit_depth();

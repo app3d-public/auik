@@ -73,6 +73,11 @@ namespace auik
         AUIK_EXPORT ~Window() override;
 
         AUIK_EXPORT void clear_children();
+        AUIK_EXPORT void erase_children(size_t first, size_t count);
+        void erase_children_from(size_t first)
+        {
+            if (_content_block) _content_block->erase_children_from(first);
+        }
         AUIK_EXPORT void add_child(Widget *child, ChildLayoutFlags layout = default_child_layout_flags());
         AUIK_EXPORT void add_children(const acul::vector<Widget *> &new_children);
         AUIK_EXPORT void
@@ -150,7 +155,7 @@ namespace auik
         AUIK_EXPORT virtual void update_depth(const amal::vec2 &depth_range) override;
         AUIK_EXPORT virtual void back_hit_depth() override;
         AUIK_EXPORT virtual void restore_hit_depth() override;
-        AUIK_EXPORT virtual void update_layout_min_size() override;
+        AUIK_EXPORT virtual void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         inline void sync_widget_flags() override
         {
@@ -182,6 +187,13 @@ namespace auik
         u32 _window_style_tag = AUIK_STYLE_TAG_WINDOW;
         StyleSelector _window_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_WINDOW};
 
+    protected:
+        // Window subclasses may extend attach/detach while preserving the base window tree lifecycle.
+        AUIK_EXPORT virtual void on_attach() override;
+        AUIK_EXPORT virtual void on_detach() override;
+        AUIK_EXPORT virtual void on_change(ChangeEvent &event) override;
+
+    private:
         AUIK_EXPORT virtual bool accepts_focus_on_mouse_press(ElementID hit_id) const override;
         virtual u16 content_clip_id() const override { return clip_id(); }
         virtual amal::vec4 get_content_clip_rect() const override
@@ -191,8 +203,6 @@ namespace auik
             if (clip_id() != 0xFFFFu) return get_clip_rect(clip_id());
             return get_main_viewport_rect();
         }
-        AUIK_EXPORT virtual void on_attach() override;
-        AUIK_EXPORT virtual void on_detach() override;
         void sync_window_event_flags(bool scroll, bool hover);
         void sync_rubber_band();
         void commit_rubber_band();

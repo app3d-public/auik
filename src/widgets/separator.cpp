@@ -39,7 +39,7 @@ namespace auik
         return resolve_style_selector(_style, id(), parent() ? parent()->id() : 0u, style_state());
     }
 
-    void Separator::update_layout_min_size()
+    void Separator::update_layout_min_size_force()
     {
         const auto &style = get_theme()->get_style(_style.id);
         const amal::vec4 margin = orient_offsets(style.margin(), _axis);
@@ -51,7 +51,7 @@ namespace auik
 
     void Separator::update_layout(bool min_size_known)
     {
-        if (!min_size_known) update_layout_min_size();
+        if (layout_measure_required(min_size_known)) update_layout_min_size_force();
         const auto &style = get_theme()->get_style(_style.id);
         const amal::vec4 margin = orient_offsets(style.margin(), _axis);
         const amal::vec4 padding = orient_offsets(style.padding(), _axis);

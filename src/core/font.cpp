@@ -6,6 +6,8 @@
 #include <auik/widgets/image.hpp>
 #include <fontconfig/fontconfig.h>
 #include <freetype/freetype.h>
+#include <harfbuzz/hb-ft.h>
+#include <harfbuzz/hb-ot.h>
 
 namespace auik
 {
@@ -252,11 +254,15 @@ namespace auik
     Font::Font(Font &&other) noexcept
         : _info(std::move(other._info)),
           _face(other._face),
+          _hb_face(other._hb_face),
           _face_index(other._face_index),
+          _load_flags(other._load_flags),
+          _render_mode(other._render_mode),
           _active_size_px(other._active_size_px),
-          _glyphs(std::move(other._glyphs))
+          _sizes(std::move(other._sizes))
     {
         other._face = nullptr;
+        other._hb_face = nullptr;
         other._face_index = 0;
         other._active_size_px = 0;
     }
@@ -268,11 +274,15 @@ namespace auik
         clear();
         _info = std::move(other._info);
         _face = other._face;
+        _hb_face = other._hb_face;
         _face_index = other._face_index;
+        _load_flags = other._load_flags;
+        _render_mode = other._render_mode;
         _active_size_px = other._active_size_px;
-        _glyphs = std::move(other._glyphs);
+        _sizes = std::move(other._sizes);
 
         other._face = nullptr;
+        other._hb_face = nullptr;
         other._face_index = 0;
         other._active_size_px = 0;
         return *this;
@@ -298,13 +308,27 @@ namespace auik
             return false;
         }
 
+        _hb_face = hb_ft_face_create_referenced(_face);
+        if (!_hb_face)
+        {
+            clear();
+            return false;
+        }
+
         _info.path = path;
         return true;
     }
 
     void Font::clear()
     {
-        _glyphs.clear();
+        for (auto &size : _sizes)
+            if (size.hb_font) hb_font_destroy(size.hb_font);
+        _sizes.clear();
+        if (_hb_face)
+        {
+            hb_face_destroy(_hb_face);
+            _hb_face = nullptr;
+        }
         if (_face)
         {
             FT_Done_Face(_face);
@@ -323,52 +347,77 @@ namespace auik
         return true;
     }
 
+    u32 Font::find_size_id(u32 size_px) const
+    {
+        for (u32 i = 0; i < _sizes.size(); ++i)
+            if (_sizes[i].size_px == size_px) return i;
+        return invalid_size_id;
+    }
+
+    u32 Font::ensure_size_id(u32 size_px)
+    {
+        if (!_hb_face || size_px == 0) return invalid_size_id;
+        const u32 existing = find_size_id(size_px);
+        if (existing != invalid_size_id) return existing;
+
+        hb_font_t *hb_font = hb_font_create(_hb_face);
+        if (!hb_font) return invalid_size_id;
+        hb_ot_font_set_funcs(hb_font);
+        const int scale = static_cast<int>(size_px * 64u);
+        hb_font_set_scale(hb_font, scale, scale);
+        hb_font_set_ppem(hb_font, size_px, size_px);
+
+        FontSizeData data{};
+        data.size_px = size_px;
+        data.hb_font = hb_font;
+        _sizes.push_back(std::move(data));
+        return static_cast<u32>(_sizes.size() - 1u);
+    }
+
     GlyphCache *Font::find_cache(u32 size_px)
     {
-        auto it = _glyphs.find(size_px);
-        return it != _glyphs.end() ? &it->second : nullptr;
+        const u32 id = find_size_id(size_px);
+        return id != invalid_size_id ? &_sizes[id].glyphs : nullptr;
     }
 
     const GlyphCache *Font::find_cache(u32 size_px) const
     {
-        auto it = _glyphs.find(size_px);
-        return it != _glyphs.end() ? &it->second : nullptr;
+        const u32 id = find_size_id(size_px);
+        return id != invalid_size_id ? &_sizes[id].glyphs : nullptr;
     }
-
-    GlyphCache &Font::ensure_cache(u32 size_px) { return _glyphs[size_px]; }
 
     void Font::set_load_flags(FontLoadFlags flags)
     {
         _load_flags = flags;
-        _glyphs.clear();
+        for (auto &size : _sizes) size.glyphs.clear();
         _active_size_px = 0;
     }
 
     void Font::add_load_flags(FontLoadFlags flags)
     {
         _load_flags |= flags;
-        _glyphs.clear();
+        for (auto &size : _sizes) size.glyphs.clear();
         _active_size_px = 0;
     }
 
     void Font::remove_load_flags(FontLoadFlags flags)
     {
         _load_flags &= ~flags;
-        _glyphs.clear();
+        for (auto &size : _sizes) size.glyphs.clear();
         _active_size_px = 0;
     }
 
     void Font::set_render_mode(FontRenderMode mode)
     {
         _render_mode = mode;
-        _glyphs.clear();
+        for (auto &size : _sizes) size.glyphs.clear();
         _active_size_px = 0;
     }
 
     size_t Font::glyph_count() const
     {
         size_t total = 0;
-        for (const auto &cache : _glyphs) total += cache.second.size();
+        for (const auto &size : _sizes) total += size.glyphs.size();
         return total;
     }
 
@@ -385,7 +434,9 @@ namespace auik
 
         acul::vector<PreparedGlyph> prepared;
         bool loaded_any = false;
-        auto &cache = ensure_cache(size_px);
+        const u32 size_id = ensure_size_id(size_px);
+        if (size_id == invalid_size_id) return false;
+        auto &cache = _sizes[size_id].glyphs;
 
         auto release_prepared = [&]() {
             for (auto &item : prepared)
@@ -479,6 +530,12 @@ namespace auik
         return font._face;
     }
 
+    hb_font_t *detail::TextFontAccess::shaping_font(Font &font, u32 size_px)
+    {
+        const u32 id = font.ensure_size_id(size_px);
+        return id != Font::invalid_size_id ? font._sizes[id].hb_font : nullptr;
+    }
+
     Glyph *detail::TextFontAccess::find_glyph_by_index(Font &font, u32 size_px, u32 glyph_index)
     {
         auto *cache = font.find_cache(size_px);
@@ -501,7 +558,9 @@ namespace auik
 
         acul::vector<PreparedGlyph> prepared;
         prepared.reserve(glyph_indices.size());
-        auto &cache = font.ensure_cache(size_px);
+        const u32 size_id = font.ensure_size_id(size_px);
+        if (size_id == Font::invalid_size_id) return false;
+        auto &cache = font._sizes[size_id].glyphs;
 
         auto is_pending = [&](u32 glyph_index) {
             for (const auto &item : prepared)

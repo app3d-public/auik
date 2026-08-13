@@ -16,7 +16,7 @@ namespace auik
                               u32 style_tag = AUIK_STYLE_TAG_SEPARATOR);
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
-        AUIK_EXPORT void update_layout_min_size() override;
+        AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void rebuild_clip_rects() override;
@@ -62,5 +62,5 @@ namespace auik
     {
         extern AUIK_EXPORT const umbf::streams::Stream h_separator;
         extern AUIK_EXPORT const umbf::streams::Stream v_separator;
-    }
+    } // namespace streams
 } // namespace auik

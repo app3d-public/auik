@@ -8,7 +8,8 @@
 namespace auik
 {
     Checkbox::Checkbox(u32 id, bool value, WidgetFlags widget_flags)
-        : Widget(id, widget_flags, EventFlagBits::click, {{0.0f, 0.0f}, {0.0f, 0.0f}}, AUIK_TAG_CHECKBOX),
+        : Widget(id, widget_flags, EventFlagBits::click, {{0.0f, 0.0f}, {0.0f, 0.0f}},
+                 AUIK_STYLE_TAG_CHECKBOX),
           _value(value),
           _checkmark_rect(detail::make_rect_data(AUIK_TAG_CHECKBOX_CHECKMARK, AUIK_TAG_CHECKBOX_CHECKMARK))
     {
@@ -42,7 +43,7 @@ namespace auik
         return resolve_style_selector(_style, id(), parent_id, style_state());
     }
 
-    void Checkbox::update_layout_min_size()
+    void Checkbox::update_layout_min_size_force()
     {
         ensure_checkmark_resource();
 
@@ -68,7 +69,7 @@ namespace auik
 
     void Checkbox::update_layout(bool min_size_known)
     {
-        if (!min_size_known) update_layout_min_size();
+        if (layout_measure_required(min_size_known)) update_layout_min_size_force();
 
         ensure_checkmark_resource();
 
@@ -190,27 +191,34 @@ namespace auik
         if (!_model_binding) return;
         _model_binding->on_field_change = [this](ModelRecordID, ModelFieldID) {
             bool value = false;
-            if (read_model_binding_value(*_model_binding, value)) set_value(value);
+            if (read_model_binding_value(*_model_binding, value) && value != this->value())
+            {
+                set_value(value);
+                sync_value();
+            }
         };
         attach_model_binding(*_model_binding);
         bool value = false;
-        if (read_model_binding_value(*_model_binding, value)) set_value(value);
+        if (read_model_binding_value(*_model_binding, value) && value != this->value())
+        {
+            set_value(value);
+            sync_value();
+        }
     }
 
-    void Checkbox::set_value(bool new_value)
+    void Checkbox::sync_value()
     {
-        if (_value == new_value) return;
-        _value = new_value;
-        if (!mark_changed()) redraw_external(has_draw_record());
+        if (_style.id == Theme::STYLE_ID_INVALID) return;
+        if (!dispatch_change()) redraw_external(has_draw_record());
     }
 
     void Checkbox::on_click(MouseKey key, KeyPressState state, u32 click_count)
     {
         (void)click_count;
         if (key != MouseKey::left || state != KeyPressState::press) return;
-        _value = !_value;
+        set_value(!value());
         if (_model_binding) set_model_binding_value<bool>(*_model_binding, _value);
-        const bool prevented = mark_changed();
+        const bool prevented = dispatch_change();
         if (!prevented)
             add_render_command<detail::ClickEventTraits>(this, [this]() { redraw_external(has_draw_record()); });
     }

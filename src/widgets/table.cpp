@@ -216,9 +216,10 @@ namespace auik
         }
 
         auto *model = find_model(_model_binding->db, _model_binding->model_id);
-        clear();
+        Rows rows;
         if (model)
         {
+            rows.reserve(_model_binding->records.size());
             u32 row_index = 0u;
             for (ModelRecordID record_id : _model_binding->records)
             {
@@ -234,10 +235,11 @@ namespace auik
                     row.reserve(widgets.size());
                     for (auto *widget : widgets) row.push_back(make_table_cell(widget));
                 }
-                add_row(std::move(row));
+                rows.push_back(std::move(row));
                 ++row_index;
             }
         }
+        set_rows(std::move(rows));
     }
 
     void Table::add_row(Row row)
@@ -693,7 +695,7 @@ namespace auik
             if (!cell || !cell->is_visible()) return;
             const auto &element = cell->get_rect().id;
             cell->set_style_state(transition.current_id == element ? transition.current_state : StyleState::normal);
-            out |= cell->update_style();
+            out |= cell->update_style_invalidated();
         };
         for (auto *cell : _header) update_cell(cell);
         for (auto &row : _rows)
@@ -701,7 +703,7 @@ namespace auik
         return out;
     }
 
-    void Table::update_layout_min_size()
+    void Table::update_layout_min_size_force()
     {
         _column_count = resolve_column_count();
         _layout_metrics.assign(amal::max(_column_count, _rows.size()), {});
@@ -754,7 +756,7 @@ namespace auik
 
     void Table::update_layout(bool min_size_known)
     {
-        if (!min_size_known) update_layout_min_size();
+        if (layout_measure_required(min_size_known)) update_layout_min_size_force();
 
         const auto &style = get_theme()->get_style(_style.id);
         const amal::vec4 margin = style.margin();
@@ -794,7 +796,6 @@ namespace auik
                                                     clip_id(), next_depth(detail::depth_work_range(depth_range())), 0u,
                                                     static_cast<u32>(index));
         }
-
         if (has_header())
         {
             f32 header_h = 0.0f;
@@ -842,7 +843,6 @@ namespace auik
             }
             cursor_y += row_h;
         }
-
         auto *theme = get_theme();
         const StyleID resize_style_id =
             _resize_border_style.id != Theme::STYLE_ID_INVALID
@@ -1043,7 +1043,6 @@ namespace auik
                 }
             }
         }
-
         const amal::vec4 content_clip = get_content_clip_rect();
         for (auto *cell : _header)
         {
@@ -1195,6 +1194,12 @@ namespace auik
         _column_count = resolve_column_count();
         sync_cell_parents();
         update_depth(depth_range());
+        if (detail::g_context)
+        {
+            const auto &id_map = detail::get_context().id_map;
+            const auto it = id_map.find(id());
+            if (it != id_map.end() && it->second == this) update_style_invalidated();
+        }
     }
 
     void Table::clear_cells(bool invalidate_draw)
@@ -1248,12 +1253,9 @@ namespace auik
 
     void Table::invalidate_layout()
     {
+        invalidate_layout_measure();
         auto &ctx = detail::get_context();
-        ctx.dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
-        auto *layout_parent = parent();
-        if (!layout_parent) return;
-        layout_parent->update_layout(false);
-        layout_parent->update_draw_commands(DrawReasonBits::layout);
+        ctx.dirty_flags |= DirtyFlagBits::layout | DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
         mark_host_refresh_request();
     }
 

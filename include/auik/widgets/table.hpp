@@ -259,7 +259,7 @@ namespace auik
         AUIK_EXPORT bool is_resize_border_hovered(size_t element_id) const;
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
-        AUIK_EXPORT void update_layout_min_size() override;
+        AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void rebuild_clip_rects() override;
@@ -332,8 +332,7 @@ namespace auik
 
     inline Table::Cell make_table_cell(Widget *child = nullptr)
     {
-        auto *cell = acul::alloc<DrawBlock>(AUIK_TAG_TABLE_CELL,
-                                            WidgetFlagBits::visible | WidgetFlagBits::configurable,
+        auto *cell = acul::alloc<DrawBlock>(AUIK_TAG_TABLE_CELL, WidgetFlagBits::visible | WidgetFlagBits::configurable,
                                             AUIK_STYLE_TAG_TABLE_CELL);
         cell->set_scrollbars_enabled(false, false);
         if (child) cell->add_child(child);

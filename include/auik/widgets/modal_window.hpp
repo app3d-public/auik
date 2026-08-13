@@ -80,7 +80,7 @@ namespace auik
         int prevent_close_count() const { return _prevent_close_count; }
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
-        AUIK_EXPORT void update_layout_min_size() override;
+        AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void reset_clip_rect_records() override;
@@ -135,7 +135,9 @@ namespace auik
     };
 
     inline ModalWindow *make_modal_window(u32 id, const acul::string &title = "", const amal::rect &bounds = {})
-    { return acul::alloc<ModalWindow>(id, title, bounds, WindowFlagBits::movable, WidgetFlagBits::visible); }
+    {
+        return acul::alloc<ModalWindow>(id, title, bounds, WindowFlagBits::movable, WidgetFlagBits::visible);
+    }
 
     inline ModalQueue *make_modal_queue(u32 id)
     {

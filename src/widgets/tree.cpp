@@ -171,11 +171,23 @@ namespace auik
             _model_binding->presenter.data = nullptr;
             _model_binding->presenter.present_record = present_model_text_record;
         }
-        _model_binding->on_records = [this](const ModelRecordsEvent &) { rebuild_from_model_binding(); };
-        _model_binding->on_field_change = [this](ModelRecordID, ModelFieldID) { rebuild_from_model_binding(); };
+        _model_binding->on_records = [this](const ModelRecordsEvent &) { request_model_rebuild(); };
+        _model_binding->on_field_change = [this](ModelRecordID, ModelFieldID) { request_model_rebuild(); };
         attach_model_binding(*_model_binding);
         rebuild_model_binding_records(*_model_binding);
         rebuild_from_model_binding();
+    }
+
+    void Tree::request_model_rebuild()
+    {
+        if (_model_rebuild_pending) return;
+        _model_rebuild_pending = true;
+        const u32 widget_id = id();
+        add_render_command([this, widget_id]() {
+            if (get_widget_by_id(widget_id) != this) return;
+            _model_rebuild_pending = false;
+            rebuild_from_model_binding();
+        });
     }
 
     size_t Tree::node_from_widget(const Widget *widget) const
@@ -188,8 +200,7 @@ namespace auik
     {
         const size_t origin_node = event.origin.element_id;
         const bool reorder_drag = reorder() && _reorder_handle_tag != 0u &&
-                                  event.origin.tag_id == _reorder_handle_tag &&
-                                  origin_node < _nodes.size();
+                                  event.origin.tag_id == _reorder_handle_tag && origin_node < _nodes.size();
         if (!reorder_drag) return false;
         event.prevent_default();
         if (event.state == KeyPressState::press)
@@ -365,8 +376,8 @@ namespace auik
         out |= resolve_style_selector(_alternating_row_style, _alternating_row_style.tag_id, id(), StyleState::normal);
         out |= resolve_style_selector(_line_style, _line_style.tag_id, id(), StyleState::normal);
         out |= resolve_style_selector(_collapse_icon_style, _collapse_icon_style.tag_id, id(), StyleState::normal);
-        out |= resolve_style_selector(_reorder_indicator_style, _reorder_indicator_style.tag_id, id(),
-                                      StyleState::normal);
+        out |=
+            resolve_style_selector(_reorder_indicator_style, _reorder_indicator_style.tag_id, id(), StyleState::normal);
         const auto is_local_element_tag = [this](u32 tag_id) {
             return tag_id == signature() || tag_id == AUIK_TAG_TABLE_CELL || tag_id == AUIK_TAG_TABLE_TREE_ARROW ||
                    tag_id == AUIK_TAG_TABLE_RESIZE_BORDER_V;
@@ -383,19 +394,18 @@ namespace auik
             {
                 if (!cell) continue;
                 cell->set_style_state(transition.current_id == cell->get_rect().id ? transition.current_state
-                                                                                    : StyleState::normal);
+                                                                                   : StyleState::normal);
                 for (auto *child : cell->children)
                     if (child)
-                        child->set_style_state(transition.current_id == child->get_rect().id
-                                                   ? transition.current_state
-                                                   : StyleState::normal);
-                out |= cell->update_style();
+                        child->set_style_state(transition.current_id == child->get_rect().id ? transition.current_state
+                                                                                             : StyleState::normal);
+                out |= cell->update_style_invalidated();
             }
         ensure_arrow_resources();
         return out;
     }
 
-    void Tree::update_layout_min_size()
+    void Tree::update_layout_min_size_force()
     {
         rebuild_visible_nodes();
         ensure_arrow_resources();
@@ -467,7 +477,7 @@ namespace auik
 
     void Tree::update_layout(bool min_size_known)
     {
-        if (!min_size_known) update_layout_min_size();
+        if (layout_measure_required(min_size_known)) update_layout_min_size_force();
 
         const auto &style = get_theme()->get_style(_style.id);
         const amal::vec4 margin = style.margin();
@@ -619,8 +629,8 @@ namespace auik
                 add_line({{own_line_x, row_top},
                           {line_thickness, amal::max(amal::min(arrow_top, own_bottom) - row_top, 0.0f)}});
                 if (!node_is_last_sibling(node))
-                    add_line({{own_line_x, arrow_bottom},
-                              {line_thickness, amal::max(own_bottom - arrow_bottom, 0.0f)}});
+                    add_line(
+                        {{own_line_x, arrow_bottom}, {line_thickness, amal::max(own_bottom - arrow_bottom, 0.0f)}});
             }
             else
             {
@@ -641,10 +651,10 @@ namespace auik
                                            : tree_icon_center_x(arrow_slot_x + arrow_slot_w, arrow_slot_w, icon_style);
                 const f32 line_x = amal::round(child_axis - half_line);
                 const f32 row_bottom = amal::round(cursor_y + row_h);
-                const f32 line_top = node_icon_centers_valid[node]
-                                         ? amal::round(node_icon_bounds[node].offset.y + node_icon_bounds[node].size.y +
-                                                       connector_gap)
-                                         : row_mid_y;
+                const f32 line_top =
+                    node_icon_centers_valid[node]
+                        ? amal::round(node_icon_bounds[node].offset.y + node_icon_bounds[node].size.y + connector_gap)
+                        : row_mid_y;
                 add_line({{line_x, line_top}, {line_thickness, amal::max(row_bottom - line_top, 0.0f)}});
             }
             cursor_y += row_h;
@@ -855,11 +865,12 @@ namespace auik
         if (key == MouseKey::left && state == KeyPressState::press && hover_id.widget_id == id() &&
             hover_id.tag_id == AUIK_TAG_TABLE_TREE_ARROW)
         {
-            add_render_command<detail::ClickEventTraits>(
-                this, [this, node = static_cast<size_t>(hover_id.element_id)]() {
-                    if (node >= _nodes.size() || !node_has_children(node)) return;
-                    set_node_expanded(node, !_nodes[node].expanded);
-                });
+            add_render_command<detail::ClickEventTraits>(this,
+                                                         [this, node = static_cast<size_t>(hover_id.element_id)]() {
+                                                             if (node >= _nodes.size() || !node_has_children(node))
+                                                                 return;
+                                                             set_node_expanded(node, !_nodes[node].expanded);
+                                                         });
             mark_host_refresh_request();
             return;
         }
@@ -882,8 +893,7 @@ namespace auik
             }
         }
         if (_on_background_click && !row_hit && event.target.widget_id == id() &&
-            event.target.tag_id != AUIK_TAG_TABLE_TREE_ARROW &&
-            event.target.tag_id != AUIK_TAG_TABLE_RESIZE_BORDER_V)
+            event.target.tag_id != AUIK_TAG_TABLE_TREE_ARROW && event.target.tag_id != AUIK_TAG_TABLE_RESIZE_BORDER_V)
             _on_background_click(event);
     }
 
@@ -1245,9 +1255,8 @@ namespace auik
         {
             size_t parent = parent_nodes[index];
             bool cyclic = false;
-            for (size_t steps = 0u; parent != invalid_node && parent < parent_nodes.size() &&
-                                      steps < parent_nodes.size();
-                 ++steps)
+            for (size_t steps = 0u;
+                 parent != invalid_node && parent < parent_nodes.size() && steps < parent_nodes.size(); ++steps)
             {
                 if (parent == index)
                 {
@@ -1321,11 +1330,13 @@ namespace auik
         {
             const f32 third = row_bounds.size.y / 3.0f;
             const f32 local_y = point.y - row_bounds.offset.y;
-            out.zone = local_y < third ? ReorderZone::before
-                                      : local_y < third * 2.0f ? ReorderZone::child : ReorderZone::after;
+            out.zone = local_y < third          ? ReorderZone::before
+                       : local_y < third * 2.0f ? ReorderZone::child
+                                                : ReorderZone::after;
         }
-        else out.zone = point.y < row_bounds.offset.y + row_bounds.size.y * 0.5f ? ReorderZone::before
-                                                                                  : ReorderZone::after;
+        else
+            out.zone =
+                point.y < row_bounds.offset.y + row_bounds.size.y * 0.5f ? ReorderZone::before : ReorderZone::after;
 
         if (out.zone == ReorderZone::child)
         {
@@ -1409,8 +1420,8 @@ namespace auik
     {
         if (!_reorder_target && _reorder_indicator_visual.rect.bounds.size.x <= 0.0f) return;
         _reorder_target = {};
-        _reorder_indicator_visual.rect = detail::make_rect_data(
-            id(), AUIK_STYLE_TAG_TREE_REORDER_INDICATOR, {{0.0f, 0.0f}, {0.0f, 0.0f}}, clip_id());
+        _reorder_indicator_visual.rect = detail::make_rect_data(id(), AUIK_STYLE_TAG_TREE_REORDER_INDICATOR,
+                                                                {{0.0f, 0.0f}, {0.0f, 0.0f}}, clip_id());
         if (!detail::g_context) return;
         update_draw_commands(DrawReasonBits::external);
         detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
@@ -1533,7 +1544,7 @@ namespace auik
                     cell->set_parent(this);
                     cell->set_focus_parent(this);
                     if (cell->id() == AUIK_TAG_TABLE_CELL) cell->set_style_tag(_cell_style.tag_id);
-                    cell->update_style();
+                    cell->update_style_invalidated();
                     if (attached) attach_tree_cell(cell, this);
                 }
             }
@@ -1541,6 +1552,7 @@ namespace auik
 
     void Tree::invalidate_layout()
     {
+        invalidate_layout_measure();
         auto &ctx = detail::get_context();
         ctx.dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
         auto *layout_parent = parent();
@@ -1566,8 +1578,8 @@ namespace auik
     {
         if (!reorder() || !_reorder_target)
         {
-            _reorder_indicator_visual.rect = detail::make_rect_data(
-                id(), AUIK_STYLE_TAG_TREE_REORDER_INDICATOR, {{0.0f, 0.0f}, {0.0f, 0.0f}}, clip_id());
+            _reorder_indicator_visual.rect = detail::make_rect_data(id(), AUIK_STYLE_TAG_TREE_REORDER_INDICATOR,
+                                                                    {{0.0f, 0.0f}, {0.0f, 0.0f}}, clip_id());
             return;
         }
 
@@ -1608,14 +1620,13 @@ namespace auik
         const f32 thickness = is_size_concrete(requested_height) ? amal::max(requested_height, 1.0f) : 1.0f;
         const f32 line_x = row_bounds.offset.x + static_cast<f32>(_reorder_target.depth) * depth_width;
         const f32 right = bounds().offset.x + bounds().size.x;
-        const f32 boundary_y = _reorder_target.zone == ReorderZone::before
-                                   ? row_bounds.offset.y
-                                   : row_bounds.offset.y + row_bounds.size.y;
+        const f32 boundary_y =
+            _reorder_target.zone == ReorderZone::before ? row_bounds.offset.y : row_bounds.offset.y + row_bounds.size.y;
         const f32 line_y = amal::max(amal::round(boundary_y - thickness), bounds().offset.y);
-        _reorder_indicator_visual.rect = detail::make_rect_data(
-            id(), AUIK_STYLE_TAG_TREE_REORDER_INDICATOR,
-            {{amal::round(line_x), line_y}, {amal::max(right - line_x, 0.0f), thickness}}, clip_id(),
-            next_depth(detail::depth_foreground_range(depth_range())));
+        _reorder_indicator_visual.rect =
+            detail::make_rect_data(id(), AUIK_STYLE_TAG_TREE_REORDER_INDICATOR,
+                                   {{amal::round(line_x), line_y}, {amal::max(right - line_x, 0.0f), thickness}},
+                                   clip_id(), next_depth(detail::depth_foreground_range(depth_range())));
     }
 
     StyleUpdateFlags Tree::update_resize_indicator()
@@ -1858,8 +1869,7 @@ namespace auik
         constexpr u32 g_persistent_tree_flags = AUIK_TABLE_TREE_FLAG_ALTERNATING_ROWS |
                                                 AUIK_TABLE_TREE_FLAG_COLUMN_RESIZABLE |
                                                 AUIK_TABLE_TREE_FLAG_COLUMN_SIZE_OVERRIDES |
-                                                AUIK_TABLE_TREE_FLAG_REORDER |
-                                                AUIK_TABLE_TREE_FLAG_REORDER_INHERIT;
+                                                AUIK_TABLE_TREE_FLAG_REORDER | AUIK_TABLE_TREE_FLAG_REORDER_INHERIT;
 
         void write_column_settings(acul::bin_stream &stream, const TableColumnSettings &settings)
         {
@@ -1884,7 +1894,9 @@ namespace auik
         }
 
         bool is_configurable_cell(DrawBlock *cell)
-        { return cell && (cell->widget_flags & WidgetFlagBits::configurable); }
+        {
+            return cell && (cell->widget_flags & WidgetFlagBits::configurable);
+        }
 
         bool node_has_configurable_widgets(const TableTree &tree, size_t node_i)
         {
@@ -2097,8 +2109,7 @@ namespace auik
                 .write(tree->line_style_tag())
                 .write(tree->collapse_icon_style_tag())
                 .write(tree->indent_width())
-                .write(tree->tree_flags() & (AUIK_TABLE_TREE_FLAG_ALTERNATING_ROWS |
-                                             AUIK_TABLE_TREE_FLAG_REORDER |
+                .write(tree->tree_flags() & (AUIK_TABLE_TREE_FLAG_ALTERNATING_ROWS | AUIK_TABLE_TREE_FLAG_REORDER |
                                              AUIK_TABLE_TREE_FLAG_REORDER_INHERIT));
 
             const auto &nodes = tree->nodes();

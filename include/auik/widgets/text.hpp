@@ -44,7 +44,7 @@ namespace auik
         }
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
-        AUIK_EXPORT void update_layout_min_size() override;
+        AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void update_depth(const amal::vec2 &depth_range) override;
@@ -174,7 +174,7 @@ namespace auik
 
     private:
         bool apply_model_binding_value();
-        bool rebuild_text_buffers(const amal::vec2 &bounds_size);
+        bool rebuild_text_buffers(const amal::vec2 &bounds_size, bool reuse_layout);
     };
 
     class EText : public Text
@@ -188,7 +188,7 @@ namespace auik
 
         AUIK_EXPORT void sync_widget_flags() override;
         AUIK_EXPORT StyleUpdateFlags update_style() override;
-        AUIK_EXPORT void update_layout_min_size() override;
+        AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void reset_draw_records() override;
         AUIK_EXPORT void draw(DrawCtx &ctx) override;

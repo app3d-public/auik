@@ -76,8 +76,8 @@ namespace auik
 
     ProgressBar::ProgressBar(u32 id, f32 value, f32 min_value, f32 max_value, f32 size, amal::axis axis,
                              WidgetFlags widget_flags)
-        : Widget(id, widget_flags, EventFlagBits::change,
-                 {{0.0f, 0.0f}, make_progress_bar_style_size(size, axis)}, AUIK_STYLE_TAG_PROGRESS_BAR),
+        : Widget(id, widget_flags, EventFlagBits::change, {{0.0f, 0.0f}, make_progress_bar_style_size(size, axis)},
+                 AUIK_STYLE_TAG_PROGRESS_BAR),
           _min_value(min_value),
           _max_value(max_value),
           _axis(axis)
@@ -90,8 +90,8 @@ namespace auik
         _change_from_value = _value;
     }
 
-    ProgressBar::ProgressBar(u32 id, ModelBinding *binding, f32 min_value, f32 max_value, f32 size,
-                             amal::axis axis, WidgetFlags widget_flags)
+    ProgressBar::ProgressBar(u32 id, ModelBinding *binding, f32 min_value, f32 max_value, f32 size, amal::axis axis,
+                             WidgetFlags widget_flags)
         : ProgressBar(id, 0.0f, min_value, max_value, size, axis, widget_flags)
     {
         set_model_binding(binding);
@@ -111,15 +111,14 @@ namespace auik
         bool redraw_changed = false;
         if (_track_style.id == Theme::STYLE_ID_INVALID)
         {
-            const auto flags = resolve_style_selector(_track_style, _track_style.tag_id, parent_id,
-                                                      StyleState::normal);
+            const auto flags = resolve_style_selector(_track_style, _track_style.tag_id, parent_id, StyleState::normal);
             if (flags & StyleUpdateFlagBits::redraw) redraw_changed = true;
             out |= flags;
         }
         if (_active_style.id == Theme::STYLE_ID_INVALID)
         {
-            const auto flags = resolve_style_selector(_active_style, _active_style.tag_id, parent_id,
-                                                      StyleState::normal);
+            const auto flags =
+                resolve_style_selector(_active_style, _active_style.tag_id, parent_id, StyleState::normal);
             if (flags & StyleUpdateFlagBits::redraw) redraw_changed = true;
             out |= flags;
         }
@@ -127,7 +126,7 @@ namespace auik
         return out;
     }
 
-    void ProgressBar::update_layout_min_size()
+    void ProgressBar::update_layout_min_size_force()
     {
         const auto &track_style = get_theme()->get_style(_track_style.id);
         const amal::vec4 margin = track_style.margin();
@@ -137,7 +136,7 @@ namespace auik
 
     void ProgressBar::update_layout(bool min_size_known)
     {
-        if (!min_size_known) update_layout_min_size();
+        if (layout_measure_required(min_size_known)) update_layout_min_size_force();
 
         const auto &style = get_theme()->get_style(_track_style.id);
         const amal::vec2 layout_origin = position();
@@ -146,8 +145,7 @@ namespace auik
         amal::vec2 body_size = {amal::max(size().x - margin.x - margin.z, 0.0f),
                                 amal::max(size().y - margin.y - margin.w, 0.0f)};
         if (fill_width()) body_size.x = amal::max(body_size.x, min_required.x - margin.x - margin.z);
-        else if (!is_width_fixed())
-            body_size.x = amal::max(body_size.x, min_required.x - margin.x - margin.z);
+        else if (!is_width_fixed()) body_size.x = amal::max(body_size.x, min_required.x - margin.x - margin.z);
         else body_size.x = amal::max(body_size.x, min_required.x - margin.x - margin.z);
         if (!fill_height() && !is_height_fixed()) body_size.y = min_required.y - margin.y - margin.w;
         else body_size.y = amal::max(body_size.y, min_required.y - margin.y - margin.w);
@@ -226,10 +224,7 @@ namespace auik
         mark_host_refresh_request();
     }
 
-    f32 ProgressBar::clamped_value(f32 value) const
-    {
-        return amal::clamp(value, _min_value, _max_value);
-    }
+    f32 ProgressBar::clamped_value(f32 value) const { return amal::clamp(value, _min_value, _max_value); }
 
     f32 ProgressBar::value_factor(f32 value) const
     {

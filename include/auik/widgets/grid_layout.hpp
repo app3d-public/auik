@@ -36,7 +36,7 @@ namespace auik
         AUIK_EXPORT void set_resize_helper_style_tag(u32 tag_id);
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
-        AUIK_EXPORT void update_layout_min_size() override;
+        AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void reset_clip_rect_records() override;
@@ -92,8 +92,7 @@ namespace auik
         bool _row_resizable = false;
     };
 
-    inline GridLayout *make_grid_layout(u32 id, size_t rows, size_t columns,
-                                        amal::vec2 inline_size = AUIK_SIZE_INHERIT)
+    inline GridLayout *make_grid_layout(u32 id, size_t rows, size_t columns, amal::vec2 inline_size = AUIK_SIZE_INHERIT)
     {
         return acul::alloc<GridLayout>(id, rows, columns, inline_size,
                                        WidgetFlagBits::visible | WidgetFlagBits::attachable |

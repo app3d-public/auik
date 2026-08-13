@@ -25,7 +25,9 @@ namespace auik
         }
 
         static inline f32 clamp_axis(f32 value, f32 min_value, f32 max_value)
-        { return amal::max(min_value, amal::min(value, max_value)); }
+        {
+            return amal::max(min_value, amal::min(value, max_value));
+        }
     } // namespace
 
     Tooltip::Tooltip(u32 id)
@@ -37,7 +39,6 @@ namespace auik
         _text.set_parent(this);
         _text.set_style_tag(AUIK_STYLE_TAG_TOOLTIP);
         unset_visible();
-        sync_widget_flags();
     }
 
     void Tooltip::reset_source_state()
@@ -61,6 +62,7 @@ namespace auik
         _anchor_x = x;
         _text_source = text_source;
         _text.set_text(*text_source);
+        _text.invalidate_layout_measure();
         set_visible();
         sync_widget_flags();
         update_style();
@@ -91,18 +93,22 @@ namespace auik
     StyleUpdateFlags Tooltip::update_style()
     {
         auto flags = resolve_style_selector(_style, id(), 0, style_state());
-        flags |= _text.update_style();
+        flags |= _text.update_style_invalidated();
         return flags;
     }
 
-    void Tooltip::update_layout_min_size()
+    void Tooltip::update_layout_min_size_force()
     {
         const auto &style = get_theme()->get_style(_style.id);
         const amal::vec2 display = get_display_size();
         const f32 max_outer_width = amal::max(display.x - AUIK_TOOLTIP_SCREEN_PADDING * 2.0f, 0.0f);
         const amal::vec4 padding = style.padding();
         const f32 max_text_width = amal::max(max_outer_width - padding.x - padding.z, 1.0f);
-        _text.set_max_width(max_text_width);
+        if (_text.max_width() != max_text_width)
+        {
+            _text.set_max_width(max_text_width);
+            _text.invalidate_layout_measure();
+        }
 
         if (!_text_source || _text_source->empty())
         {
@@ -117,7 +123,7 @@ namespace auik
 
     void Tooltip::update_layout(bool min_size_known)
     {
-        if (!min_size_known) update_layout_min_size();
+        if (layout_measure_required(min_size_known)) update_layout_min_size_force();
 
         Widget::update_layout(true);
         const amal::vec2 display = get_display_size();

@@ -49,7 +49,9 @@ namespace auik
     static inline bool should_own_full_clip_rect(const Tabbar &tabbar) { return tabbar.is_fixed() || !tabbar.parent(); }
 
     static inline bool is_content_width_constrained(const Tabbar &tabbar)
-    { return tabbar.required_size().x > 0.0f && tabbar.size().x + 0.5f < tabbar.required_size().x; }
+    {
+        return tabbar.required_size().x > 0.0f && tabbar.size().x + 0.5f < tabbar.required_size().x;
+    }
 
     static inline bool should_own_content_clip_rect(const Tabbar &tabbar)
     {
@@ -58,7 +60,9 @@ namespace auik
     }
 
     static inline amal::vec2 snap_drag_visual_position(const amal::vec2 &position)
-    { return {amal::round(position.x), amal::round(position.y)}; }
+    {
+        return {amal::round(position.x), amal::round(position.y)};
+    }
 
     static inline amal::vec2 resolve_drag_visual_position(const Widget &widget, const amal::vec2 &base,
                                                           const amal::vec2 &candidate, const amal::vec2 &size)
@@ -76,7 +80,9 @@ namespace auik
     }
 
     static inline f32 dominant_scroll_axis(const amal::vec2 &delta)
-    { return amal::abs(delta.x) > amal::abs(delta.y) ? delta.x : delta.y; }
+    {
+        return amal::abs(delta.x) > amal::abs(delta.y) ? delta.x : delta.y;
+    }
 
     static inline bool is_tabbar_item_hovered(u32 widget_id, u32 item_tag_id, u32 element_id)
     {
@@ -162,7 +168,9 @@ namespace auik
     Tabbar::Tabbar(u32 id, const acul::vector<StringView> &items, TabbarFlags tab_flags, WidgetFlags widget_flags,
                    amal::vec2 inline_size)
         : Tabbar(id, tab_flags, widget_flags, inline_size)
-    { set_items(items); }
+    {
+        set_items(items);
+    }
 
     Tabbar::Tabbar(u32 id, TabbarFlags tab_flags, WidgetFlags widget_flags, amal::vec2 inline_size)
         : Widget(id, widget_flags, make_tab_bar_event_flags(tab_flags), {{0.0f, 0.0f}, inline_size}, AUIK_TAG_TABBAR),
@@ -292,7 +300,7 @@ namespace auik
                 item.change_icon->set_focus_parent(this);
                 item.change_icon->get_rect().id = make_element_id(id(), AUIK_TAG_TABBAR_CHANGE_ICON, item.element_id);
                 item.change_icon->set_rect_tag_id(AUIK_TAG_TABBAR_CHANGE_ICON);
-                item.change_icon->update_style();
+                item.change_icon->update_style_invalidated();
             }
             sync_changed_from_model_binding();
         }
@@ -311,7 +319,7 @@ namespace auik
         item.tab->set_style_tag(_item_style_tag);
         item.tab->set_selected_style_tag(_selected_item_style_tag);
         item.tab->set_focus_parent(this);
-        item.tab->update_style();
+        item.tab->update_style_invalidated();
 
         if (_on_changed_icon_create)
         {
@@ -322,7 +330,7 @@ namespace auik
                 item.change_icon->set_focus_parent(this);
                 item.change_icon->get_rect().id = make_element_id(id(), AUIK_TAG_TABBAR_CHANGE_ICON, element_id);
                 item.change_icon->set_rect_tag_id(AUIK_TAG_TABBAR_CHANGE_ICON);
-                item.change_icon->update_style();
+                item.change_icon->update_style_invalidated();
             }
         }
 
@@ -335,7 +343,7 @@ namespace auik
             item.close_button->set_parent(this);
             item.close_button->get_rect().id = make_element_id(id(), AUIK_TAG_CLOSE_BUTTON, element_id);
             item.close_button->set_focus_parent(this);
-            item.close_button->update_style();
+            item.close_button->update_style_invalidated();
         }
         return item;
     }
@@ -585,7 +593,10 @@ namespace auik
     void Tabbar::set_items(const acul::vector<StringView> &items)
     {
         const bool had_items = !_items.empty() || (_popup && !_popup->children.empty());
-        if (had_items) { invalidate_draw_commands(DrawReasonBits::layout); }
+        if (had_items)
+        {
+            invalidate_draw_commands(DrawReasonBits::layout);
+        }
         if (_popup) _popup->clear_children();
         for (auto &item : _items) release_item(item);
         _items.clear();
@@ -825,7 +836,7 @@ namespace auik
         const bool selected_changed = tab->selected() != selected;
         const bool state_changed = tab->set_style_state(resolve_tab_item_state(index, transition));
         tab->set_selected(selected);
-        StyleUpdateFlags out = tab->update_style();
+        StyleUpdateFlags out = tab->update_style_invalidated();
         if (state_changed || selected_changed) out |= StyleUpdateFlagBits::redraw;
         return out;
     }
@@ -839,7 +850,7 @@ namespace auik
             transition.current_id.element_id == _items[index].element_id)
             close_state = transition.current_state;
         const bool state_changed = _items[index].close_button->set_style_state(close_state);
-        StyleUpdateFlags out = _items[index].close_button->update_style();
+        StyleUpdateFlags out = _items[index].close_button->update_style_invalidated();
         if (state_changed) out |= StyleUpdateFlagBits::redraw;
         return out;
     }
@@ -853,7 +864,7 @@ namespace auik
             transition.current_id.element_id == _items[index].element_id)
             icon_state = transition.current_state;
         const bool state_changed = _items[index].change_icon->set_style_state(icon_state);
-        StyleUpdateFlags out = _items[index].change_icon->update_style();
+        StyleUpdateFlags out = _items[index].change_icon->update_style_invalidated();
         if (state_changed) out |= StyleUpdateFlagBits::redraw;
         return out;
     }
@@ -871,7 +882,7 @@ namespace auik
             state = transition.current_state;
         const bool state_changed = child->set_style_state(state);
         child->set_selected(selected);
-        StyleUpdateFlags out = child->update_style();
+        StyleUpdateFlags out = child->update_style_invalidated();
         if (state_changed || selected_changed) out |= StyleUpdateFlagBits::redraw;
         return out;
     }
@@ -946,7 +957,7 @@ namespace auik
 
         if (_popup)
         {
-            out |= _popup->update_style();
+            out |= _popup->update_style_invalidated();
             if (local_hover_transition && transition_targets_popup_item)
             {
                 const u32 prev_index = find_index_by_element_id(transition.prev_id.element_id);
@@ -966,7 +977,7 @@ namespace auik
     {
         if (!_overflow_button) return {0.0f, 0.0f};
         ensure_overflow_icon_resources();
-        _overflow_button->update_layout_min_size({0.0f, 0.0f}, true);
+        _overflow_button->update_layout_min_size_force({0.0f, 0.0f}, true);
         return _overflow_button->required_size();
     }
 
@@ -1020,7 +1031,7 @@ namespace auik
         return required;
     }
 
-    void Tabbar::update_layout_min_size()
+    void Tabbar::update_layout_min_size_force()
     {
         const auto &style = get_theme()->get_style(_style.id);
         const amal::vec4 margin = style.margin();
@@ -1055,7 +1066,7 @@ namespace auik
 
     void Tabbar::update_layout(bool min_size_known)
     {
-        if (!min_size_known) update_layout_min_size();
+        if (layout_measure_required(min_size_known)) update_layout_min_size_force();
 
         const auto &style = get_theme()->get_style(_style.id);
         const amal::vec4 margin = style.margin();
@@ -1194,8 +1205,14 @@ namespace auik
             amal::vec2 close_required{0.0f, 0.0f};
             auto *change_icon = i < _items.size() ? _items[i].change_icon : nullptr;
             auto *close_button = i < _items.size() ? _items[i].close_button : nullptr;
-            if (change_icon) { change_required = change_icon->required_size(); }
-            if (close_button && closable()) { close_required = close_button->required_size(); }
+            if (change_icon)
+            {
+                change_required = change_icon->required_size();
+            }
+            if (close_button && closable())
+            {
+                close_required = close_button->required_size();
+            }
             const amal::vec2 slot_required{amal::max(change_required.x, close_required.x),
                                            amal::max(change_required.y, close_required.y)};
             const bool fits_popup = cursor_x + required.x <= visible_tabs_right;
@@ -1416,7 +1433,10 @@ namespace auik
             auto *tab = _items[i].tab;
             if (tab) tab->update_depth(tab_range);
             if (i < _items.size() && _items[i].change_icon) _items[i].change_icon->update_depth(control_range);
-            if (i < _items.size() && _items[i].close_button) { _items[i].close_button->update_depth(control_range); }
+            if (i < _items.size() && _items[i].close_button)
+            {
+                _items[i].close_button->update_depth(control_range);
+            }
         }
         if (_overflow_button) _overflow_button->update_depth(control_range);
         if (_popup) _popup->update_depth(get_tab_popup_depth_range());
@@ -2146,7 +2166,7 @@ namespace auik
         _popup->window_flags = (get_popup_window_flags() | WindowFlagBits::docked) & ~WindowFlagBits::scrollable;
         _popup->set_visible();
         _popup->sync_widget_flags();
-        _popup->update_style();
+        _popup->update_style_invalidated();
 
         const auto &popup_style = get_theme()->get_style(
             get_theme()->get_resolved_style(AUIK_STYLE_TAG_TABBAR_POPUP, _popup->id(), 0, StyleState::normal));

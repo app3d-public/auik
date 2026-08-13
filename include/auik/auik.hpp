@@ -11,6 +11,8 @@
 
 struct FT_LibraryRec_;
 struct FT_FaceRec_;
+struct hb_face_t;
+struct hb_font_t;
 
 #define AUIK_ICON_CHEVRON_RIGHT 0x87DCB881u
 #define AUIK_ICON_CHEVRON_DOWN  0xE5275EADu
@@ -217,7 +219,9 @@ namespace auik
     inline void next_frame(void *sync_ctx)
     {
         auto &ctx = detail::get_context();
-        detail::update_hover_id(ctx.gpu_ctx, sync_ctx);
+        // Hiding/capturing the native cursor may generate a synthetic leave. Keep the last real hovered element
+        // stable until the explicit unbound session restores the cursor.
+        if (!ctx.window_ctx->is_unbound_mode) detail::update_hover_id(ctx.gpu_ctx, sync_ctx);
         if (ctx.gpu_ctx && ctx.gpu_ctx->clear_clip_rects_reallocated)
             ctx.gpu_ctx->clear_clip_rects_reallocated(ctx.gpu_ctx, ctx.frame_id);
         detail::new_window_frame(ctx.window_ctx);
@@ -267,6 +271,11 @@ namespace auik
     inline void set_raw_mouse_mode(bool value) { detail::get_context().raw_mouse_mode = value; }
 
     inline bool is_raw_mouse_mode() { return detail::get_context().raw_mouse_mode; }
+
+    // Explicit relative-mouse session for tool interactions.
+    AUIK_EXPORT bool begin_unbound_drag();
+    AUIK_EXPORT void end_unbound_drag();
+    inline bool is_unbound_drag() { return detail::get_window_context()->is_unbound_mode; }
 
     inline HostWindowState get_host_window_state() { return detail::get_window_context()->host_state; }
 
@@ -508,18 +517,29 @@ namespace auik
     private:
         friend struct detail::TextFontAccess;
 
+        struct FontSizeData
+        {
+            u32 size_px = 0;
+            hb_font_t *hb_font = nullptr;
+            GlyphCache glyphs;
+        };
+
+        static constexpr u32 invalid_size_id = std::numeric_limits<u32>::max();
+
         bool ensure_size_px(u32 size_px);
+        u32 find_size_id(u32 size_px) const;
+        u32 ensure_size_id(u32 size_px);
         GlyphCache *find_cache(u32 size_px);
         const GlyphCache *find_cache(u32 size_px) const;
-        GlyphCache &ensure_cache(u32 size_px);
 
         FontInfo _info;
         FT_Face _face = nullptr;
+        hb_face_t *_hb_face = nullptr;
         int _face_index = 0;
         FontLoadFlags _load_flags = FontLoadFlagBits::none;
         FontRenderMode _render_mode = FontRenderMode::normal;
         u32 _active_size_px = 0;
-        acul::hashmap<u32, GlyphCache> _glyphs;
+        acul::vector<FontSizeData> _sizes;
     };
 
     AUIK_EXPORT bool load_fonts(FontRegistry &fonts, const acul::vector<acul::string> &search_dirs = {});

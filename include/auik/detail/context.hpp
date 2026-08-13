@@ -563,6 +563,7 @@ namespace auik
     }
 
     inline const amal::vec2 &get_mouse_pos() { return detail::get_io().mouse_pos; }
+    inline void set_mouse_pos(const amal::vec2 &position) { detail::get_io().mouse_pos = position; }
 
     inline const amal::vec2 &get_display_size() { return detail::get_io().display_size; }
 
