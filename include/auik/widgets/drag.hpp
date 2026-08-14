@@ -6,6 +6,7 @@
 #define AUIK_TAG_DRAG_INT    0x000EB95Cu
 #define AUIK_TAG_DRAG_FLOAT  0x8054A4DAu
 #define AUIK_TAG_DRAG_DOUBLE 0x73F0FEACu
+#define AUIK_DRAG_SPEED_DYNAMIC -1.0f
 
 namespace auik
 {
@@ -60,6 +61,7 @@ namespace auik
             f64 _drag_origin_value = 0.0;
             f64 _drag_delta_steps = 0.0;
             f64 _drag_value = 0.0;
+            f64 _active_speed = 1.0;
             T _last_value{};
             T _presented_value{};
             u8 _interaction_flags = 0u;

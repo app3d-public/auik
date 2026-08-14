@@ -685,6 +685,9 @@ namespace auik
 
             auto &ctx = detail::get_context();
             if (ctx.dirty_flags & detail::layout_update_dirty_mask) return;
+            const f32 old_scroll_x = _content_scroll.x;
+            if (update_content_scroll_x_for_cursor() && old_scroll_x != _content_scroll.x)
+                _text.translate({old_scroll_x - _content_scroll.x, 0.0f});
             rebuild_selection_rect_cache();
             redraw_all_commands();
         });
@@ -1411,7 +1414,8 @@ namespace auik
     bool Textbox::update_content_scroll_x_for_cursor()
     {
         const f32 old_scroll_x = _content_scroll.x;
-        if (accepts_newline() || value().empty() || _edit_state.cursors.empty())
+        const bool editing = detail::get_context().focus_id == id() && should_draw_caret();
+        if (!editing || accepts_newline() || value().empty() || _edit_state.cursors.empty())
         {
             _content_scroll.x = 0.0f;
             return old_scroll_x != _content_scroll.x;

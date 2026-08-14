@@ -968,6 +968,14 @@ namespace auik
         if (it == transient_cache.end()) return false;
         transient_cache.erase(it);
 
+        if (detail::get_context().dirty_flags & DirtyFlagBits::destroying)
+        {
+            // Destruction only needs to sever the cache reference. Invalidating an attached transient widget here
+            // would issue draw work while the widget tree and the resolved theme pool are being torn down.
+            detail::WidgetStateAccess::set_transient(widget, false);
+            return true;
+        }
+
         if (widget->is_attached()) widget->invalidate_draw_commands(DrawReasonBits::external);
         widget->invalidate_draw_commands(DrawReasonBits::transient);
         detail::WidgetStateAccess::set_transient(widget, false);

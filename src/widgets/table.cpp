@@ -9,6 +9,13 @@
 
 namespace auik
 {
+    struct Table::ModelData
+    {
+        ModelBinding *binding = nullptr;
+        acul::vector<ModelRecordID> record_ids;
+        acul::hashmap<ModelRecordID, size_t> record_rows;
+    };
+
     static inline bool has_table_flag(u32 flags, u32 flag) { return (flags & flag) != 0u; }
 
     static inline void set_table_flag(u32 &flags, u32 flag, bool value)
@@ -152,16 +159,23 @@ namespace auik
 
     Table::~Table()
     {
-        if (_model_binding)
+        if (_model_data)
         {
-            _model_binding->on_records = nullptr;
-            detach_model_binding(*_model_binding);
+            _model_data->binding->on_records = nullptr;
+            _model_data->binding->on_field_change = nullptr;
+            detach_model_binding(*_model_data->binding);
+            acul::release(_model_data);
         }
         clear_cells(false);
     }
 
     void Table::clear()
     {
+        if (_model_data)
+        {
+            _model_data->record_ids.clear();
+            _model_data->record_rows.clear();
+        }
         clear_cells();
         _cell_style_tags.clear();
         set_table_flag(_table_flags, AUIK_TABLE_FLAG_ROW_SIZE_OVERRIDES, false);
@@ -172,27 +186,169 @@ namespace auik
 
     void Table::set_model_binding(ModelBinding *binding, acul::vector<ModelFieldID> field_ids)
     {
-        if (_model_binding)
+        if (_model_data)
         {
-            _model_binding->on_records = nullptr;
-            _model_binding->on_field_change = nullptr;
-            detach_model_binding(*_model_binding);
+            _model_data->binding->on_records = nullptr;
+            _model_data->binding->on_field_change = nullptr;
+            detach_model_binding(*_model_data->binding);
+            acul::release(_model_data);
+            _model_data = nullptr;
         }
-        _model_binding = binding;
-        if (!_model_binding) return;
+        if (!binding) return;
+        _model_data = acul::alloc<ModelData>();
+        _model_data->binding = binding;
 
-        _model_binding->presenter.field_ids = std::move(field_ids);
-        if (_model_binding->presenter.field_ids.empty()) _model_binding->presenter.field_ids.push_back(1u);
-        if (!_model_binding->presenter.present_record)
+        binding->presenter.field_ids = std::move(field_ids);
+        if (binding->presenter.field_ids.empty()) binding->presenter.field_ids.push_back(1u);
+        if (!binding->presenter.present_record)
         {
-            _model_binding->presenter.data = nullptr;
-            _model_binding->presenter.present_record = present_model_text_record;
+            binding->presenter.data = nullptr;
+            binding->presenter.present_record = present_model_text_record;
         }
-        _model_binding->on_records = [this](const ModelRecordsEvent &) { rebuild_from_model_binding(); };
-        _model_binding->on_field_change = [this](ModelRecordID, ModelFieldID) { rebuild_from_model_binding(); };
-        attach_model_binding(*_model_binding);
-        rebuild_model_binding_records(*_model_binding);
+        binding->on_records = [this](const ModelRecordsEvent &event) { defer_model_records(event); };
+        binding->on_field_change = [this](ModelRecordID record_id, ModelFieldID) {
+            defer_model_record_refresh(record_id);
+        };
+        attach_model_binding(*binding);
+        rebuild_model_binding_records(*binding);
         rebuild_from_model_binding();
+    }
+
+    void Table::defer_model_records(ModelRecordsEvent event)
+    {
+        if (!_model_data) return;
+        auto *expected = _model_data;
+        const u32 widget_id = id();
+        add_render_command([this, widget_id, expected, event]() {
+            if (get_widget_by_id(widget_id) != this || _model_data != expected) return;
+            apply_model_records(event);
+        });
+    }
+
+    void Table::defer_model_record_refresh(ModelRecordID record_id)
+    {
+        if (!_model_data || record_id == AUIK_MODEL_RECORD_ID_INVALID) return;
+        auto *expected = _model_data;
+        const u32 widget_id = id();
+        add_render_command([this, widget_id, expected, record_id]() {
+            if (get_widget_by_id(widget_id) != this || _model_data != expected) return;
+            refresh_model_record(record_id);
+        });
+    }
+
+    void Table::apply_model_records(const ModelRecordsEvent &event)
+    {
+        if (!_model_data || !is_model_binding_valid(*_model_data->binding))
+        {
+            clear();
+            return;
+        }
+
+        if (event.op == ModelRecordsOp::create &&
+            _model_data->record_rows.find(event.record_id) != _model_data->record_rows.end())
+            return;
+        if ((event.op == ModelRecordsOp::destroy || event.op == ModelRecordsOp::move) &&
+            _model_data->record_rows.find(event.record_id) == _model_data->record_rows.end())
+            return;
+
+        // The binding has already consumed the event and contains the final record order. Reconcile against it so
+        // create/destroy only allocate or release affected rows, while move/order preserve their existing widgets.
+        auto *binding = _model_data->binding;
+        auto old_rows = std::move(_rows);
+        auto old_ids = std::move(_model_data->record_ids);
+        acul::hashmap<ModelRecordID, size_t> old_indices;
+        old_indices.reserve(old_ids.size());
+        for (size_t index = 0u; index < old_ids.size(); ++index) old_indices[old_ids[index]] = index;
+        acul::vector<bool> reused(old_rows.size(), false);
+
+        Rows rows;
+        rows.reserve(binding->records.size());
+        for (size_t index = 0u; index < binding->records.size(); ++index)
+        {
+            const ModelRecordID record_id = binding->records[index];
+            const auto old = old_indices.find(record_id);
+            if (old != old_indices.end() && old->second < old_rows.size())
+            {
+                reused[old->second] = true;
+                rows.push_back(std::move(old_rows[old->second]));
+            }
+            else
+            {
+                Row row;
+                present_model_record(index, row);
+                rows.push_back(std::move(row));
+            }
+        }
+
+        for (size_t index = 0u; index < old_rows.size(); ++index)
+        {
+            if (reused[index]) continue;
+            for (auto *cell : old_rows[index]) detach_table_cell(cell);
+            release_table_row(old_rows[index]);
+        }
+
+        _rows = std::move(rows);
+        _model_data->record_ids = binding->records;
+        _model_data->record_rows.clear();
+        _model_data->record_rows.reserve(binding->records.size());
+        for (size_t index = 0u; index < binding->records.size(); ++index)
+            _model_data->record_rows[binding->records[index]] = index;
+        rebuild_cells();
+        invalidate_layout();
+    }
+
+    bool Table::present_model_record(size_t record_index, Row &row)
+    {
+        row.clear();
+        if (!_model_data) return false;
+        auto *binding = _model_data->binding;
+        if (record_index >= binding->records.size()) return false;
+        auto *model = find_model(binding->db, binding->model_id);
+        if (!model) return false;
+        auto *record = model->find_record(binding->records[record_index]);
+        if (!record) return false;
+
+        const auto &field_ids = binding->presenter.field_ids;
+        acul::vector<Widget *> widgets(field_ids.size(), nullptr);
+        binding->presenter.present_record(binding, *record, static_cast<u32>(record_index), widgets.data(),
+                                          static_cast<u32>(widgets.size()), binding->presenter.data);
+        row.reserve(widgets.size());
+        for (auto *widget : widgets) row.push_back(make_table_cell(widget));
+        return true;
+    }
+
+    void Table::refresh_model_record(ModelRecordID record_id)
+    {
+        if (!_model_data) return;
+        auto *binding = _model_data->binding;
+        if (!is_model_binding_valid(*binding) || record_id == AUIK_MODEL_RECORD_ID_INVALID) return;
+
+        const auto found = _model_data->record_rows.find(record_id);
+        if (found == _model_data->record_rows.end() || found->second >= _rows.size() ||
+            found->second >= binding->records.size() || binding->records[found->second] != record_id)
+        {
+            if (std::find(binding->records.begin(), binding->records.end(), record_id) != binding->records.end())
+                defer_model_record_refresh(record_id);
+            return;
+        }
+        auto &old_row = _rows[found->second];
+        for (auto *cell : old_row)
+        {
+            if (!cell) continue;
+            cell->invalidate_draw_commands(DrawReasonBits::layout);
+            detach_table_cell(cell);
+            cell->set_parent(nullptr);
+            cell->set_focus_parent(nullptr);
+        }
+        release_table_row(old_row, false);
+
+        // Rows presented from the same model record normally reuse stable widget IDs. Do not construct the new row
+        // until the previous widgets have been detached and destroyed.
+        Row row;
+        present_model_record(found->second, row);
+        old_row = std::move(row);
+        rebuild_cells();
+        invalidate_layout();
     }
 
     void Table::set_rows(Rows rows)
@@ -209,35 +365,25 @@ namespace auik
 
     void Table::rebuild_from_model_binding()
     {
-        if (!_model_binding || !is_model_binding_valid(*_model_binding))
+        if (!_model_data || !is_model_binding_valid(*_model_data->binding))
         {
+            if (_model_data) _model_data->record_rows.clear();
             set_rows({});
             return;
         }
 
-        auto *model = find_model(_model_binding->db, _model_binding->model_id);
+        auto *binding = _model_data->binding;
         Rows rows;
-        if (model)
+        rows.reserve(binding->records.size());
+        _model_data->record_ids = binding->records;
+        _model_data->record_rows.clear();
+        _model_data->record_rows.reserve(binding->records.size());
+        for (size_t record_index = 0u; record_index < binding->records.size(); ++record_index)
         {
-            rows.reserve(_model_binding->records.size());
-            u32 row_index = 0u;
-            for (ModelRecordID record_id : _model_binding->records)
-            {
-                auto *record = model->find_record(record_id);
-                Row row;
-                if (record)
-                {
-                    const auto &field_ids = _model_binding->presenter.field_ids;
-                    acul::vector<Widget *> widgets(field_ids.size(), nullptr);
-                    _model_binding->presenter.present_record(_model_binding, *record, row_index, widgets.data(),
-                                                             static_cast<u32>(widgets.size()),
-                                                             _model_binding->presenter.data);
-                    row.reserve(widgets.size());
-                    for (auto *widget : widgets) row.push_back(make_table_cell(widget));
-                }
-                rows.push_back(std::move(row));
-                ++row_index;
-            }
+            _model_data->record_rows[binding->records[record_index]] = record_index;
+            Row row;
+            present_model_record(record_index, row);
+            rows.push_back(std::move(row));
         }
         set_rows(std::move(rows));
     }

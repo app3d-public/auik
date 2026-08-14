@@ -14,6 +14,14 @@
 
 namespace auik
 {
+    struct Tree::ModelData
+    {
+        ModelBinding *binding = nullptr;
+        acul::vector<ModelRecordID> record_ids;
+        acul::hashmap<ModelRecordID, size_t> record_nodes;
+        ModelFieldID parent_field_id = AUIK_TREE_PARENT_FIELD;
+    };
+
     static inline bool valid_tree_rect_size(const amal::vec2 &size) { return size.x > 0.0f && size.y > 0.0f; }
 
     static inline detail::TableColumnLayoutSettings to_layout_settings(const TableColumnSettings &settings)
@@ -127,10 +135,12 @@ namespace auik
 
     Tree::~Tree()
     {
-        if (_model_binding)
+        if (_model_data)
         {
-            _model_binding->on_records = nullptr;
-            detach_model_binding(*_model_binding);
+            _model_data->binding->on_records = nullptr;
+            _model_data->binding->on_field_change = nullptr;
+            detach_model_binding(*_model_data->binding);
+            acul::release(_model_data);
         }
         release_arrow_animations();
         clear_cells(false);
@@ -139,6 +149,11 @@ namespace auik
 
     void Tree::clear()
     {
+        if (_model_data)
+        {
+            _model_data->record_ids.clear();
+            _model_data->record_nodes.clear();
+        }
         clear_cells();
         clear_nodes();
         release_arrow_animations();
@@ -150,43 +165,62 @@ namespace auik
     {
         acul::vector<ModelFieldID> fields;
         fields.push_back(1u);
-        set_model_binding(binding, std::move(fields));
+        set_model_binding(binding, std::move(fields), AUIK_TREE_PARENT_FIELD);
     }
 
-    void Tree::set_model_binding(ModelBinding *binding, acul::vector<ModelFieldID> field_ids)
+    void Tree::set_model_binding(ModelBinding *binding, acul::vector<ModelFieldID> field_ids,
+                                 ModelFieldID parent_field_id)
     {
-        if (_model_binding)
+        if (_model_data)
         {
-            _model_binding->on_records = nullptr;
-            _model_binding->on_field_change = nullptr;
-            detach_model_binding(*_model_binding);
+            _model_data->binding->on_records = nullptr;
+            _model_data->binding->on_field_change = nullptr;
+            detach_model_binding(*_model_data->binding);
+            acul::release(_model_data);
+            _model_data = nullptr;
         }
-        _model_binding = binding;
-        if (!_model_binding) return;
+        if (!binding) return;
+        _model_data = acul::alloc<ModelData>();
+        _model_data->binding = binding;
+        _model_data->parent_field_id = parent_field_id;
 
-        _model_binding->presenter.field_ids = std::move(field_ids);
-        if (_model_binding->presenter.field_ids.empty()) _model_binding->presenter.field_ids.push_back(1u);
-        if (!_model_binding->presenter.present_record)
+        binding->presenter.field_ids = std::move(field_ids);
+        if (binding->presenter.field_ids.empty()) binding->presenter.field_ids.push_back(1u);
+        if (!binding->presenter.present_record)
         {
-            _model_binding->presenter.data = nullptr;
-            _model_binding->presenter.present_record = present_model_text_record;
+            binding->presenter.data = nullptr;
+            binding->presenter.present_record = present_model_text_record;
         }
-        _model_binding->on_records = [this](const ModelRecordsEvent &) { request_model_rebuild(); };
-        _model_binding->on_field_change = [this](ModelRecordID, ModelFieldID) { request_model_rebuild(); };
-        attach_model_binding(*_model_binding);
-        rebuild_model_binding_records(*_model_binding);
+        binding->on_records = [this](const ModelRecordsEvent &event) { defer_model_records(event); };
+        binding->on_field_change = [this](ModelRecordID record_id, ModelFieldID field_id) {
+            if (_model_data && field_id == _model_data->parent_field_id)
+                defer_model_records(ModelRecordsEvent{ModelRecordsOp::reset});
+            else defer_model_record_refresh(record_id);
+        };
+        attach_model_binding(*binding);
+        rebuild_model_binding_records(*binding);
         rebuild_from_model_binding();
     }
 
-    void Tree::request_model_rebuild()
+    void Tree::defer_model_records(ModelRecordsEvent event)
     {
-        if (_model_rebuild_pending) return;
-        _model_rebuild_pending = true;
+        if (!_model_data) return;
+        auto *expected = _model_data;
         const u32 widget_id = id();
-        add_render_command([this, widget_id]() {
-            if (get_widget_by_id(widget_id) != this) return;
-            _model_rebuild_pending = false;
-            rebuild_from_model_binding();
+        add_render_command([this, widget_id, expected, event]() {
+            if (get_widget_by_id(widget_id) != this || _model_data != expected) return;
+            apply_model_records(event);
+        });
+    }
+
+    void Tree::defer_model_record_refresh(ModelRecordID record_id)
+    {
+        if (!_model_data || record_id == AUIK_MODEL_RECORD_ID_INVALID) return;
+        auto *expected = _model_data;
+        const u32 widget_id = id();
+        add_render_command([this, widget_id, expected, record_id]() {
+            if (get_widget_by_id(widget_id) != this || _model_data != expected) return;
+            refresh_model_record(record_id);
         });
     }
 
@@ -1183,25 +1217,256 @@ namespace auik
         _widget_nodes.clear();
     }
 
-    void Tree::rebuild_from_model_binding()
+    bool Tree::present_model_record(size_t record_index, DrawBlock *&label, Row &cells,
+                                    ModelRecordID *parent_record_id)
     {
-        if (!_model_binding || !is_model_binding_valid(*_model_binding))
+        label = nullptr;
+        cells.clear();
+        if (!_model_data) return false;
+        auto *binding = _model_data->binding;
+        if (record_index >= binding->records.size()) return false;
+        auto *model = find_model(binding->db, binding->model_id);
+        if (!model) return false;
+        const ModelRecordID record_id = binding->records[record_index];
+        auto *record = model->find_record(record_id);
+        if (!record) return false;
+
+        if (parent_record_id)
+        {
+            *parent_record_id = AUIK_MODEL_RECORD_ID_INVALID;
+            read_model_binding_value(*binding, record_id, _model_data->parent_field_id, *parent_record_id);
+        }
+
+        const auto &field_ids = binding->presenter.field_ids;
+        acul::vector<Widget *> widgets(field_ids.size(), nullptr);
+        binding->presenter.present_record(binding, *record, static_cast<u32>(record_index), widgets.data(),
+                                          static_cast<u32>(widgets.size()), binding->presenter.data);
+        label = widgets.empty() ? nullptr : dynamic_cast<DrawBlock *>(widgets[0]);
+        if (!label) label = wrap_tree_cell(widgets.empty() ? nullptr : widgets[0]);
+        if (supports_columns() && widgets.size() > 1u)
+        {
+            cells.reserve(widgets.size() - 1u);
+            for (size_t index = 1u; index < widgets.size(); ++index) cells.push_back(wrap_tree_cell(widgets[index]));
+        }
+        return true;
+    }
+
+    void Tree::apply_model_records(const ModelRecordsEvent &event)
+    {
+        if (!_model_data || !is_model_binding_valid(*_model_data->binding))
         {
             clear();
             return;
         }
 
-        auto *model = find_model(_model_binding->db, _model_binding->model_id);
+        if (event.op == ModelRecordsOp::create &&
+            _model_data->record_nodes.find(event.record_id) != _model_data->record_nodes.end())
+            return;
+        if ((event.op == ModelRecordsOp::destroy || event.op == ModelRecordsOp::move) &&
+            _model_data->record_nodes.find(event.record_id) == _model_data->record_nodes.end())
+            return;
+
+        // ModelBinding applies the payload before notifying the widget. Keep matching nodes alive and reconcile their
+        // order against the resulting binding; only genuinely created or destroyed records change widget ownership.
+        auto *binding = _model_data->binding;
+        clear_cells();
+        release_arrow_animations();
+        auto old_nodes = std::move(_nodes);
+        auto old_cells = std::move(_node_cells);
+        auto old_ids = std::move(_model_data->record_ids);
+
+        acul::hashmap<ModelRecordID, size_t> old_indices;
+        old_indices.reserve(old_ids.size());
+        for (size_t index = 0u; index < old_ids.size(); ++index) old_indices[old_ids[index]] = index;
+        acul::vector<bool> reused(old_nodes.size(), false);
+
+        _nodes.clear();
+        _node_cells.clear();
+        _nodes.reserve(binding->records.size());
+        _node_cells.reserve(binding->records.size());
+        for (size_t index = 0u; index < binding->records.size(); ++index)
+        {
+            const ModelRecordID record_id = binding->records[index];
+            const auto old = old_indices.find(record_id);
+            if (old != old_indices.end() && old->second < old_nodes.size() && old->second < old_cells.size())
+            {
+                reused[old->second] = true;
+                auto node = std::move(old_nodes[old->second]);
+                node.parent = invalid_node;
+                _nodes.push_back(std::move(node));
+                _node_cells.push_back(std::move(old_cells[old->second]));
+                continue;
+            }
+
+            DrawBlock *label = nullptr;
+            Row cells;
+            if (!present_model_record(index, label, cells)) label = wrap_tree_cell(nullptr);
+            Node node{};
+            node.label = label;
+            _nodes.push_back(node);
+            _node_cells.push_back(std::move(cells));
+        }
+
+        for (size_t index = 0u; index < old_nodes.size(); ++index)
+        {
+            if (reused[index]) continue;
+            if (old_nodes[index].label) acul::release(old_nodes[index].label);
+            if (index < old_cells.size())
+                for (auto *cell : old_cells[index])
+                    if (cell) acul::release(cell);
+        }
+
+        _model_data->record_ids = binding->records;
+        _model_data->record_nodes.clear();
+        _model_data->record_nodes.reserve(binding->records.size());
+        _widget_nodes.clear();
+        for (size_t index = 0u; index < _nodes.size(); ++index)
+        {
+            _model_data->record_nodes[binding->records[index]] = index;
+            auto &node = _nodes[index];
+            node.hierarchy_anchor = nullptr;
+            if (node.label)
+            {
+                if (_hierarchy_anchor_tag != 0u)
+                    for (auto *child : node.label->children)
+                        if (child && child->get_rect().id.tag_id == _hierarchy_anchor_tag)
+                        {
+                            node.hierarchy_anchor = child;
+                            break;
+                        }
+                _widget_nodes[node.label] = index;
+            }
+            for (auto *cell : _node_cells[index])
+                if (cell) _widget_nodes[cell] = index;
+        }
+
+        for (size_t index = 0u; index < _nodes.size(); ++index)
+        {
+            ModelRecordID parent_id = AUIK_MODEL_RECORD_ID_INVALID;
+            read_model_binding_value(*binding, binding->records[index], _model_data->parent_field_id, parent_id);
+            const auto parent = _model_data->record_nodes.find(parent_id);
+            if (parent != _model_data->record_nodes.end() && parent->second != index)
+                _nodes[index].parent = parent->second;
+        }
+
+        // Ignore cyclic parent chains just as the initial model build does.
+        for (size_t index = 0u; index < _nodes.size(); ++index)
+        {
+            size_t parent = _nodes[index].parent;
+            for (size_t steps = 0u; parent != invalid_node && steps < _nodes.size(); ++steps)
+            {
+                if (parent == index)
+                {
+                    _nodes[index].parent = invalid_node;
+                    break;
+                }
+                parent = parent < _nodes.size() ? _nodes[parent].parent : invalid_node;
+            }
+        }
+
+        rebuild_visible_nodes();
+        rebuild_cells();
+        invalidate_layout();
+    }
+
+    void Tree::refresh_model_record(ModelRecordID record_id)
+    {
+        if (!_model_data) return;
+        auto *binding = _model_data->binding;
+        if (!is_model_binding_valid(*binding) || record_id == AUIK_MODEL_RECORD_ID_INVALID) return;
+
+        acul::vector<size_t> visible_rows(_nodes.size(), invalid_node);
+        for (size_t row = 0u; row < _visible_nodes.size(); ++row)
+            if (_visible_nodes[row] < visible_rows.size()) visible_rows[_visible_nodes[row]] = row;
+
+        const auto record_it = _model_data->record_nodes.find(record_id);
+        if (record_it == _model_data->record_nodes.end()) return;
+        const size_t node = record_it->second;
+        if (node >= _nodes.size() || node >= _node_cells.size() || node >= binding->records.size() ||
+            binding->records[node] != record_id)
+        {
+            if (std::find(binding->records.begin(), binding->records.end(), record_id) != binding->records.end())
+                defer_model_record_refresh(record_id);
+            return;
+        }
+
+        auto *old_label = _nodes[node].label;
+        Row old_cells = std::move(_node_cells[node]);
+        auto detach_old = [this](DrawBlock *cell) {
+            if (!cell) return;
+            cell->invalidate_draw_commands(DrawReasonBits::layout);
+            detach_tree_cell(cell);
+            cell->set_parent(nullptr);
+            cell->set_focus_parent(nullptr);
+            _widget_nodes.erase(cell);
+        };
+        detach_old(old_label);
+        for (auto *cell : old_cells) detach_old(cell);
+
+        if (old_label) acul::release(old_label);
+        for (auto *cell : old_cells)
+            if (cell) acul::release(cell);
+
+        // Presenter-created widgets use stable IDs. The previous row must be fully detached and destroyed before the
+        // replacement is constructed; otherwise both widget trees temporarily own the same IDs and destruction of
+        // the old Textbox can clear state belonging to its replacement.
+        DrawBlock *label = nullptr;
+        Row cells;
+        if (!present_model_record(node, label, cells) || !label) label = wrap_tree_cell(nullptr);
+
+        _nodes[node].label = label;
+        _nodes[node].hierarchy_anchor = nullptr;
+        _node_cells[node] = std::move(cells);
+        if (_hierarchy_anchor_tag != 0u)
+            for (auto *child : label->children)
+                if (child && child->get_rect().id.tag_id == _hierarchy_anchor_tag)
+                {
+                    _nodes[node].hierarchy_anchor = child;
+                    break;
+                }
+        _widget_nodes[label] = node;
+        for (auto *cell : _node_cells[node])
+            if (cell) _widget_nodes[cell] = node;
+
+        const size_t visible_row = node < visible_rows.size() ? visible_rows[node] : invalid_node;
+        if (visible_row != invalid_node)
+        {
+            if (visible_row < _cells.size())
+            {
+                auto &visible_cells = _cells[visible_row];
+                if (!visible_cells.empty()) visible_cells[0] = label;
+                for (size_t column = 1u; column < visible_cells.size(); ++column)
+                    visible_cells[column] =
+                        column - 1u < _node_cells[node].size() ? _node_cells[node][column - 1u] : nullptr;
+            }
+        }
+
+        sync_cell_parents();
+        update_depth(depth_range());
+        invalidate_layout();
+    }
+
+    void Tree::rebuild_from_model_binding()
+    {
+        if (!_model_data || !is_model_binding_valid(*_model_data->binding))
+        {
+            if (_model_data) _model_data->record_nodes.clear();
+            clear();
+            return;
+        }
+
+        auto *binding = _model_data->binding;
+        auto *model = find_model(binding->db, binding->model_id);
         clear();
         acul::vector<ModelRecordID> parent_records;
         if (!model) return;
-        parent_records.reserve(_model_binding->records.size());
-        acul::hashmap<ModelRecordID, size_t> record_nodes;
-        record_nodes.reserve(_model_binding->records.size());
+        parent_records.reserve(binding->records.size());
+        _model_data->record_ids = binding->records;
+        _model_data->record_nodes.reserve(binding->records.size());
 
-        for (size_t record_index = 0u; record_index < _model_binding->records.size(); ++record_index)
+        for (size_t record_index = 0u; record_index < binding->records.size(); ++record_index)
         {
-            const ModelRecordID record_id = _model_binding->records[record_index];
+            const ModelRecordID record_id = binding->records[record_index];
             auto *record = model->find_record(record_id);
             if (!record)
             {
@@ -1211,23 +1476,10 @@ namespace auik
             }
 
             ModelRecordID parent_record_id = AUIK_MODEL_RECORD_ID_INVALID;
-            if (!read_model_binding_value(*_model_binding, record_id, _parent_field_id, parent_record_id))
-                parent_record_id = AUIK_MODEL_RECORD_ID_INVALID;
-
-            const auto &field_ids = _model_binding->presenter.field_ids;
-            acul::vector<Widget *> widgets(field_ids.size(), nullptr);
-            _model_binding->presenter.present_record(_model_binding, *record, static_cast<u32>(record_index),
-                                                     widgets.data(), static_cast<u32>(widgets.size()),
-                                                     _model_binding->presenter.data);
-            DrawBlock *label = widgets.empty() ? nullptr : dynamic_cast<DrawBlock *>(widgets[0]);
-            if (!label) label = wrap_tree_cell(widgets.empty() ? nullptr : widgets[0]);
+            DrawBlock *label = nullptr;
             Row cells;
-            if (supports_columns() && widgets.size() > 1u)
-            {
-                cells.reserve(widgets.size() - 1u);
-                for (size_t index = 1u; index < widgets.size(); ++index)
-                    cells.push_back(wrap_tree_cell(widgets[index]));
-            }
+            if (!present_model_record(record_index, label, cells, &parent_record_id))
+                label = wrap_tree_cell(nullptr);
 
             const size_t node = add_node(label, std::move(cells), invalid_node);
             if (_hierarchy_anchor_tag != 0u)
@@ -1237,7 +1489,7 @@ namespace auik
                         _nodes[node].hierarchy_anchor = child;
                         break;
                     }
-            record_nodes[record_id] = node;
+            _model_data->record_nodes[record_id] = node;
             _widget_nodes[label] = node;
             for (auto *cell : _node_cells[node])
                 if (cell) _widget_nodes[cell] = node;
@@ -1248,8 +1500,8 @@ namespace auik
         for (size_t index = 0u; index < _nodes.size(); ++index)
         {
             if (parent_records[index] == AUIK_MODEL_RECORD_ID_INVALID) continue;
-            const auto parent = record_nodes.find(parent_records[index]);
-            if (parent != record_nodes.end()) parent_nodes[index] = parent->second;
+            const auto parent = _model_data->record_nodes.find(parent_records[index]);
+            if (parent != _model_data->record_nodes.end()) parent_nodes[index] = parent->second;
         }
         for (size_t index = 0u; index < _nodes.size(); ++index)
         {

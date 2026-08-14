@@ -174,6 +174,7 @@ namespace auik
             amal::vec2 min_size{80.0f, 80.0f};
             size_t active_window_index = static_cast<size_t>(-1);
             bool record_active_window = false;
+            bool content_collapsed = false;
         };
 
         struct ResizeHelperVisual
@@ -215,11 +216,13 @@ namespace auik
         void layout_node(DockNodeID node, const amal::rect &bounds);
         void layout_leaf_window(Node &node, Window *window);
         void layout_leaf_window_fast(Node &node, Window *window);
+        void sync_node_window_visibility(Node &node);
         bool prepare_active_window(Node &node, bool force_record, bool record_pass);
         bool sync_active_windows(DockNodeID node, bool record_pass);
         void sync_node_tabbar(DockNodeID node_id, Node &node);
         bool fit_node_to_required_width(DockNodeID node, bool allow_shrink);
         void handle_tabbar_changed(DockNodeID node_id, TabbarChangeReason reason);
+        void handle_tabbar_click(DockNodeID node_id, ClickEvent &event);
         bool handle_tabbar_drag_escape(DockNodeID node_id, u32 element_id);
         size_t selected_window_index(const Node &node) const;
         bool resize_helper_accepts_drop(const ResizeHelperVisual &helper) const;

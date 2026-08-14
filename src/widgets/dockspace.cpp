@@ -1260,6 +1260,7 @@ namespace auik
             node.tabbar->set_selected_item_style_tag(AUIK_STYLE_TAG_DOCK_TAB_ITEM_SELECTED);
             node.tabbar->set_focus_parent(this);
             node.tabbar->bind()
+                .on_click([this, node_id](ClickEvent &event) { handle_tabbar_click(node_id, event); })
                 .on_change([this, node_id](ChangeEvent &) {
                     auto *node = get_node(node_id);
                     if (!node || !node->tabbar) return;
@@ -1574,15 +1575,16 @@ namespace auik
         {
             if (needs_node_tab_panel(*node)) sync_node_tabbar(node_id, *node);
             const size_t selected_index = selected_window_index(*node);
-            for (size_t i = 0; i < node->windows.size(); ++i)
-            {
-                auto *window = node->windows[i];
-                if (!window) continue;
-                const bool active = i == selected_index;
-                if (!active) continue;
-                window->update_layout_min_size();
-                required = amal::max(required, window->required_size());
-            }
+            if (!node->content_collapsed)
+                for (size_t i = 0; i < node->windows.size(); ++i)
+                {
+                    auto *window = node->windows[i];
+                    if (!window) continue;
+                    const bool active = i == selected_index;
+                    if (!active) continue;
+                    window->update_layout_min_size();
+                    required = amal::max(required, window->required_size());
+                }
             if (needs_node_tab_panel(*node) && node->tabbar)
             {
                 if (_tab_panel_style.id == Theme::STYLE_ID_INVALID) update_style();
@@ -1600,8 +1602,10 @@ namespace auik
                 }
                 const amal::vec4 padding = get_theme()->get_style(_tab_panel_style.id).padding();
                 const amal::vec2 chrome_required = node->tabbar->required_size();
+                const f32 chrome_height = amal::max(chrome_required.y, menu_h) + padding.y + padding.w;
                 required.x = amal::max(required.x, chrome_required.x + menu_w + padding.x + padding.z);
-                required.y += amal::max(chrome_required.y, menu_h) + padding.y + padding.w;
+                if (node->content_collapsed) required.y = chrome_height;
+                else required.y += chrome_height;
             }
         }
 
@@ -1614,7 +1618,7 @@ namespace auik
                 {
                     const amal::axis axis = parent_node->axis;
                     const f32 style_size = axis_size(node->style_size, axis);
-                    if (is_size_concrete(style_size))
+                    if (is_size_concrete(style_size) && !(node->content_collapsed && axis == amal::axis::y))
                         set_axis_size(required, axis, amal::max(axis_size(required, axis), style_size));
                 }
             }
@@ -1647,6 +1651,21 @@ namespace auik
         window->rebuild_clip_rects();
     }
 
+    void Dockspace::sync_node_window_visibility(Node &node)
+    {
+        const size_t selected_index = selected_window_index(node);
+        for (size_t i = 0; i < node.windows.size(); ++i)
+        {
+            auto *window = node.windows[i];
+            if (!window) continue;
+            const bool visible = !node.content_collapsed && i == selected_index;
+            if (window->is_visible() == visible) continue;
+            if (visible) window->set_visible();
+            else window->unset_visible();
+            window->sync_widget_flags();
+        }
+    }
+
     bool Dockspace::prepare_active_window(Node &node, bool force_record, bool record_pass)
     {
         if (node.windows.empty())
@@ -1656,6 +1675,7 @@ namespace auik
             return false;
         }
         const size_t selected_index = selected_window_index(node);
+        sync_node_window_visibility(node);
         bool changed = false;
 
         if (node.active_window_index != selected_index)
@@ -1681,7 +1701,7 @@ namespace auik
             const bool active = i == selected_index;
             if (!active) continue;
 
-            layout_leaf_window(node, window);
+            if (!node.content_collapsed) layout_leaf_window(node, window);
             if (force_record)
             {
                 window->invalidate_draw_commands(DrawReasonBits::layout);
@@ -1956,18 +1976,20 @@ namespace auik
             }
             else clear_node_chrome(*node);
 
+            if (node->content_collapsed) node->content_bounds.size.y = 0.0f;
             const size_t selected_index = selected_window_index(*node);
-            for (size_t i = 0; i < node->windows.size(); ++i)
-            {
-                auto *window = node->windows[i];
-                if (!window) continue;
-                const bool active = i == selected_index;
-                if (active)
+            if (!node->content_collapsed)
+                for (size_t i = 0; i < node->windows.size(); ++i)
                 {
-                    if (fast_update) layout_leaf_window_fast(*node, window);
-                    else layout_leaf_window(*node, window);
+                    auto *window = node->windows[i];
+                    if (!window) continue;
+                    const bool active = i == selected_index;
+                    if (active)
+                    {
+                        if (fast_update) layout_leaf_window_fast(*node, window);
+                        else layout_leaf_window(*node, window);
+                    }
                 }
-            }
             if (!node->windows.empty() && node->active_window_index == static_cast<size_t>(-1))
                 node->active_window_index = selected_index;
             return;
@@ -2027,6 +2049,8 @@ namespace auik
             else if (i + 1u < node->children.size()) helpers_sum += helper_slot_size(i, i + 1u, false);
         }
         auto child_axis_min_size = [axis = node->axis](const Node &child) {
+            if (child.content_collapsed && axis == amal::axis::y)
+                return amal::ceil(axis_size(child.required_size, axis));
             const f32 settings_min = axis_size(child.min_size, axis);
             const f32 style_size = axis_size(child.style_size, axis);
             if (is_size_fill(style_size)) return amal::ceil(settings_min);
@@ -2055,12 +2079,14 @@ namespace auik
             const f32 minimum = child_axis_min_size(*child);
             const f32 agreed_size = axis_size(child->settings.size, node->axis);
             const f32 style_size = axis_size(child->style_size, node->axis);
-            if (agreed_size > 0.0f) child_basis_sizes[i] = agreed_size;
+            if (child->content_collapsed && node->axis == amal::axis::y) child_basis_sizes[i] = minimum;
+            else if (agreed_size > 0.0f) child_basis_sizes[i] = agreed_size;
             else if (is_size_concrete(style_size)) child_basis_sizes[i] = style_size;
             else child_basis_sizes[i] = minimum;
 
             child_min_sizes[i] = minimum;
-            child_fill[i] = agreed_size <= 0.0f && is_size_fill(style_size);
+            child_fill[i] = !(child->content_collapsed && node->axis == amal::axis::y) && agreed_size <= 0.0f &&
+                            is_size_fill(style_size);
             child_main_sizes[i] = amal::ceil(amal::max(child_basis_sizes[i], minimum));
             if (child_fill[i])
             {
@@ -2134,7 +2160,7 @@ namespace auik
             }
 
             f32 child_main = child_main_sizes[i];
-            if (i + 1u == node->children.size())
+            if (i + 1u == node->children.size() && !(child->content_collapsed && node->axis == amal::axis::y))
             {
                 const f32 remaining_to_edge = axis_size(node->bounds.offset, node->axis) + main_available - cursor;
                 if (remaining_to_edge >= 0.0f) child_main = remaining_to_edge;
@@ -2337,6 +2363,38 @@ namespace auik
         update_draw_commands(DrawReasonBits::layout | DrawReasonBits::record);
         rerecord_root_widgets_after(this);
         if (ctx.dirty_flags & DirtyFlagBits::clip_rect) sync_clip_rect_cache();
+    }
+
+    void Dockspace::handle_tabbar_click(DockNodeID node_id, ClickEvent &event)
+    {
+        if (event.key != MouseKey::left || event.state != KeyPressState::press) return;
+        auto *node = get_node(node_id);
+        if (!node || !node->tabbar || event.target.widget_id != node->tabbar->id() ||
+            event.target.tag_id != node->tabbar->item_style_tag())
+            return;
+
+        const bool collapse = event.click_count >= 2u;
+        const bool expand = node->content_collapsed && !collapse;
+        if (!collapse && !expand) return;
+        if (collapse)
+        {
+            const size_t selected = selected_window_index(*node);
+            if (selected < node->windows.size() && node->windows[selected])
+                node->windows[selected]->invalidate_draw_commands(DrawReasonBits::layout);
+        }
+        node->content_collapsed = collapse ? true : false;
+        sync_node_window_visibility(*node);
+        if (expand) node->record_active_window = true;
+
+        const u32 dockspace_id = id();
+        add_render_command<detail::ClickEventTraits>(this, [dockspace_id]() {
+            auto *widget = get_widget_by_id(dockspace_id);
+            if (!widget || widget->signature() != AUIK_TAG_DOCKSPACE) return;
+            auto *dockspace = static_cast<Dockspace *>(widget);
+            dockspace->update_layout_sync(true, false);
+            rerecord_root_widgets_after(dockspace);
+        });
+        mark_host_refresh_request();
     }
 
     bool Dockspace::handle_tabbar_drag_escape(DockNodeID node_id, u32 element_id)
@@ -2655,7 +2713,7 @@ namespace auik
             if (needs_node_tab_panel(*node)) draw_node_tab_panel(ctx, node_id, *node);
             return;
         }
-        if (selected_index < node->windows.size())
+        if (!node->content_collapsed && selected_index < node->windows.size())
         {
             const bool force_record = node->record_active_window && !(ctx.reason & DrawReasonBits::invalidate);
             draw_window(selected_index, node->windows[selected_index], false, force_record);

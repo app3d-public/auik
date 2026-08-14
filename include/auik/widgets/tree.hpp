@@ -71,8 +71,6 @@ namespace auik
 
         AUIK_EXPORT void clear();
         AUIK_EXPORT void set_model_binding(ModelBinding *binding);
-        void set_parent_field_id(ModelFieldID field_id) { _parent_field_id = field_id; }
-        ModelFieldID parent_field_id() const { return _parent_field_id; }
         void on_background_click(BackgroundClickCallback callback) { _on_background_click = std::move(callback); }
         void on_reorder_begin(ReorderBeginCallback callback) { _on_reorder_begin = std::move(callback); }
         void on_reorder(ReorderCallback callback) { _on_reorder = std::move(callback); }
@@ -160,7 +158,8 @@ namespace auik
         AUIK_EXPORT bool is_resize_border_hovered(size_t element_id) const;
         const acul::vector<acul::point2D<f32>> &size_overrides() const { return _size_overrides; }
         AUIK_EXPORT void set_size_overrides(acul::vector<acul::point2D<f32>> values, bool column_overrides);
-        AUIK_EXPORT void set_model_binding(ModelBinding *binding, acul::vector<ModelFieldID> field_ids);
+        AUIK_EXPORT void set_model_binding(ModelBinding *binding, acul::vector<ModelFieldID> field_ids,
+                                           ModelFieldID parent_field_id = AUIK_TREE_PARENT_FIELD);
         const Row &node_cells_impl(size_t node) const
         {
             static const Row empty;
@@ -209,9 +208,16 @@ namespace auik
         void update_own_layout();
         void update_reorder_indicator_layout();
         StyleUpdateFlags update_resize_indicator();
-        void request_model_rebuild();
+        void defer_model_records(ModelRecordsEvent event);
+        void defer_model_record_refresh(ModelRecordID record_id);
+        void apply_model_records(const ModelRecordsEvent &event);
+        void refresh_model_record(ModelRecordID record_id);
+        bool present_model_record(size_t record_index, DrawBlock *&label, Row &cells,
+                                  ModelRecordID *parent_record_id = nullptr);
         void rebuild_from_model_binding();
         bool dispatch_reorder_drag(DragEvent &event);
+
+        struct ModelData;
 
         void ensure_arrow_resources();
         ArrowAnimation *find_arrow_animation(size_t node);
@@ -256,9 +262,7 @@ namespace auik
         size_t _column_count = 0u;
         f32 _indent_width = 16.0f;
         ReorderTarget _reorder_target{};
-        ModelBinding *_model_binding = nullptr;
-        bool _model_rebuild_pending = false;
-        ModelFieldID _parent_field_id = AUIK_TREE_PARENT_FIELD;
+        ModelData *_model_data = nullptr;
         BackgroundClickCallback _on_background_click = nullptr;
         ReorderBeginCallback _on_reorder_begin = nullptr;
         ReorderCallback _on_reorder = nullptr;
@@ -282,9 +286,10 @@ namespace auik
             return Tree::add_node(label, std::move(cells), parent);
         }
         const Row &node_cells(size_t node) const { return Tree::node_cells_impl(node); }
-        void set_model_binding(ModelBinding *binding, acul::vector<ModelFieldID> field_ids)
+        void set_model_binding(ModelBinding *binding, acul::vector<ModelFieldID> field_ids,
+                               ModelFieldID parent_field_id = AUIK_TREE_PARENT_FIELD)
         {
-            Tree::set_model_binding(binding, std::move(field_ids));
+            Tree::set_model_binding(binding, std::move(field_ids), parent_field_id);
         }
 
         void set_default_column_settings(TableColumnSettings settings) { Tree::set_default_column_settings(settings); }

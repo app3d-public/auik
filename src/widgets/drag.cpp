@@ -1,3 +1,4 @@
+#include <charconv>
 #include <acul/string/utils.hpp>
 #include <auik/auik.hpp>
 #include <auik/widgets/drag.hpp>
@@ -5,20 +6,18 @@
 
 namespace auik
 {
-    static f64 round_float_noise(f64 value)
+    template <typename T>
+    static acul::string format_display_float(T value)
     {
-        if (!std::isfinite(value)) return value;
-        const f64 scale = 100000.0;
-        value = std::round(value * scale) / scale;
-        return value == 0.0 ? 0.0 : value;
-    }
+        if (value == static_cast<T>(0)) return "0";
 
-    static acul::string format_display_float(f64 value)
-    {
-        acul::string out = acul::format("%.5f", value);
-        while (!out.empty() && out.back() == '0') out.pop_back();
-        if (!out.empty() && out.back() == '.') out.pop_back();
-        return out.empty() || out == "-0" ? acul::string("0") : out;
+        char buffer[64]{};
+        const auto result = std::to_chars(std::begin(buffer), std::end(buffer), value);
+        if (result.ec == std::errc{}) return acul::string(buffer, result.ptr);
+
+        // All supported standard libraries provide floating-point to_chars. Keep a deterministic fallback for
+        // platforms that report an implementation error instead of exposing binary floating-point noise.
+        return acul::format("%.6g", static_cast<f64>(value));
     }
 
     template <typename T>
@@ -36,22 +35,61 @@ namespace auik
     }
 
     template <typename T>
+    static f64 normalize_decimal_noise(f64 value)
+    {
+        if constexpr (std::is_integral_v<T>) return value;
+        if (!std::isfinite(value)) return value;
+
+        // Values stored in binary floating point often lie a fraction of an ULP away from the decimal value that
+        // produced them (350.65f -> 350.649993...). Recover that decimal before applying drag steps. This is adaptive
+        // to the magnitude and precision of T; unlike a fixed five-decimal rounding it does not turn 350.65 into
+        // 350.64999 or discard meaningful precision from small values.
+        // A value may pass through several f32 operations before returning to a control (for example,
+        // degrees -> radians -> degrees). Allow a few ULPs so the accumulated conversion error is still recovered
+        // as the original decimal value, without imposing a fixed number of displayed decimal places.
+        constexpr f64 max_accumulated_error_ulps = 4.0;
+        const f64 tolerance = max_accumulated_error_ulps * static_cast<f64>(std::numeric_limits<T>::epsilon()) *
+                              amal::max(amal::abs(value), 1.0);
+        f64 scale = 1.0;
+        for (int digits = 0; digits < std::numeric_limits<T>::max_digits10; ++digits)
+        {
+            const f64 scaled = value * scale;
+            if (!std::isfinite(scaled)) break;
+            const f64 rounded = std::round(scaled) / scale;
+            if (amal::abs(value - rounded) <= tolerance) return rounded == 0.0 ? 0.0 : rounded;
+            scale *= 10.0;
+        }
+        return value;
+    }
+
+    template <typename T>
     static T cast_relative_stepped_drag_value(f64 origin, f64 step_count, f64 speed)
     {
         if constexpr (std::is_integral_v<T>) return cast_drag_value<T>(origin + step_count * speed);
         else
         {
-            const f64 step = amal::abs(speed);
-            f64 value = origin + step_count * speed;
-            if (step > 0.0 && std::isfinite(step))
-            {
-                const f64 offset = origin - amal::trunc(origin / step) * step;
-                const f64 snapped = offset + amal::round((value - offset) / step) * step;
-                if (amal::abs(snapped) < step * 1e-6) value = 0.0;
-                else value = snapped;
-            }
+            origin = normalize_decimal_noise<T>(origin);
+            speed = normalize_decimal_noise<T>(speed);
+            const f64 value = normalize_decimal_noise<T>(origin + step_count * speed);
             return cast_drag_value<T>(value);
         }
+    }
+
+    template <typename T>
+    static f64 resolve_drag_speed(T value, f32 speed)
+    {
+        if (speed != AUIK_DRAG_SPEED_DYNAMIC) return static_cast<f64>(speed);
+
+        const f64 magnitude = amal::abs(static_cast<f64>(value));
+        if (!std::isfinite(magnitude) || magnitude == 0.0)
+        {
+            if constexpr (std::is_integral_v<T>) return 1.0;
+            else return 0.01;
+        }
+
+        const f64 dynamic_speed = std::pow(10.0, std::floor(std::log10(magnitude)) - 2.0);
+        if constexpr (std::is_integral_v<T>) return amal::max(dynamic_speed, 1.0);
+        else return dynamic_speed;
     }
 
     namespace detail
@@ -112,6 +150,8 @@ namespace auik
         template <typename T>
         void Draggable<T>::set_value_internal(T value, bool manual_change, bool sync_model)
         {
+            if constexpr (std::is_floating_point_v<T>)
+                value = cast_drag_value<T>(normalize_decimal_noise<T>(static_cast<f64>(value)));
             value = clamp_value(value, _min_value, _max_value);
             const T prev_value = this->value();
             if (prev_value == value && !manual_change) return;
@@ -286,6 +326,7 @@ namespace auik
             {
                 clear_drag_interaction_flag(_interaction_flags, drag_interaction_drag_active);
                 _drag_delta_steps = 0.0;
+                _active_speed = resolve_drag_speed(value(), _speed);
                 return;
             }
             if (state == KeyPressState::release)
@@ -308,7 +349,7 @@ namespace auik
             }
             _drag_delta_steps += static_cast<f64>(delta.x);
             const T next_value =
-                clamp_value(cast_relative_stepped_drag_value<T>(_drag_origin_value, _drag_delta_steps, _speed),
+                clamp_value(cast_relative_stepped_drag_value<T>(_drag_origin_value, _drag_delta_steps, _active_speed),
                             _min_value, _max_value);
             _drag_value = static_cast<f64>(next_value);
             set_value(next_value);
@@ -374,19 +415,17 @@ namespace auik
         template <typename T>
         void Draggable<T>::step_value(f64 delta)
         {
-            const T next_value = cast_relative_stepped_drag_value<T>(static_cast<f64>(value()), delta, _speed);
+            const T next_value = cast_relative_stepped_drag_value<T>(static_cast<f64>(value()), delta,
+                                                                     resolve_drag_speed(value(), _speed));
             set_value(clamp_value(next_value, _min_value, _max_value));
         }
 
         template <typename T>
         acul::string Draggable<T>::format_value(T value) const
         {
-            f64 display_value = static_cast<f64>(value);
-            if constexpr (!std::is_integral_v<T>) display_value = round_float_noise(display_value);
-
             acul::string out;
-            if constexpr (std::is_integral_v<T>) out = acul::to_string(static_cast<int>(std::llround(display_value)));
-            else out = format_display_float(display_value);
+            if constexpr (std::is_integral_v<T>) out = acul::to_string(static_cast<int>(value));
+            else out = format_display_float(value);
 
             out += _postfix;
             return out;
