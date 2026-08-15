@@ -167,8 +167,7 @@ namespace auik
 
     static inline bool is_root_viewport_managed(const Widget *widget)
     {
-        (void)widget;
-        return false;
+        return widget && !widget->parent() && widget->get_rect().id.tag_id == AUIK_TAG_VIEWPORT_WINDOW;
     }
 
     static inline amal::vec2 get_min_pos(const Widget *widget)
@@ -1041,7 +1040,8 @@ namespace auik
         const amal::vec2 children_min_size = _content_block ? _content_block->required_size() : amal::vec2{0.0f, 0.0f};
 
         const f32 header_height = get_window_header_height(_header, *this);
-        set_required_size({children_min_size.x, header_height + menu_height + children_min_size.y});
+        set_required_size(
+            amal::max(_min_size, amal::vec2{children_min_size.x, header_height + menu_height + children_min_size.y}));
     }
 
     void Window::update_layout(bool min_size_known)
@@ -1088,7 +1088,8 @@ namespace auik
             const amal::vec2 children_min_size =
                 _content_block ? _content_block->required_size() : amal::vec2{0.0f, 0.0f};
             const f32 header_height = get_window_header_height(_header, *this);
-            set_required_size({children_min_size.x, header_height + menu_height + children_min_size.y});
+            set_required_size(amal::max(
+                _min_size, amal::vec2{children_min_size.x, header_height + menu_height + children_min_size.y}));
 
             const f32 header_top_y = position().y;
             const f32 header_bottom_y =
@@ -1171,7 +1172,8 @@ namespace auik
 
         const amal::vec2 children_min_size = _content_block ? _content_block->required_size() : amal::vec2{0.0f, 0.0f};
         const f32 header_height = get_window_header_height(_header, *this);
-        set_required_size({children_min_size.x, header_height + menu_height + children_min_size.y});
+        set_required_size(
+            amal::max(_min_size, amal::vec2{children_min_size.x, header_height + menu_height + children_min_size.y}));
 
         const f32 header_top_y = position().y;
         const f32 header_bottom_y =

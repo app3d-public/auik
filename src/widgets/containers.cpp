@@ -526,7 +526,15 @@ namespace auik
             }
             child->set_parent(nullptr);
             child->set_focus_parent(nullptr);
-            acul::release(child);
+            if (detail::g_context && !destroying)
+            {
+                // Structural callbacks already queued for this child must observe
+                // the detached state before its storage is released. A forced
+                // disposal runs after the current queue wave and therefore after
+                // every callback that could have been queued while it was attached.
+                detail::get_context().disposal_queue.emplace([child]() { acul::release(child); }, true);
+            }
+            else acul::release(child);
         }
         children.erase(children.begin() + first, children.begin() + last);
         _explicit_child_layouts.erase(_explicit_child_layouts.begin() + first, _explicit_child_layouts.begin() + last);
@@ -819,7 +827,8 @@ namespace auik
     {
         Widget::on_attach();
         for (auto *child : children)
-            if (child && !child->is_attached() && (child->widget_flags & WidgetFlagBits::attachable)) child->on_attach();
+            if (child && !child->is_attached() && (child->widget_flags & WidgetFlagBits::attachable))
+                child->on_attach();
     }
 
     void Block::on_detach()
@@ -832,19 +841,21 @@ namespace auik
     void Block::on_change(ChangeEvent &event)
     {
         if (event.target != id() || !is_attached()) return;
-        if (!add_render_command([this]() {
-            if (!is_attached()) return;
-            for (auto *child : children)
-                if (child && !child->is_attached() && (child->widget_flags & WidgetFlagBits::attachable))
-                    child->on_attach();
+        if (!add_render_command(
+                [this]() {
+                    if (!is_attached()) return;
+                    for (auto *child : children)
+                        if (child && !child->is_attached() && (child->widget_flags & WidgetFlagBits::attachable))
+                            child->on_attach();
 
-            Widget *layout_target = resolve_parent_layout_update_target(this);
-            if (!layout_target) layout_target = this;
-            layout_target->update_layout(false);
-            rebuild_root_widget_depths();
-            layout_target->update_draw_commands(DrawReasonBits::layout);
-            detail::get_context().dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
-        }))
+                    Widget *layout_target = resolve_parent_layout_update_target(this);
+                    if (!layout_target) layout_target = this;
+                    layout_target->update_layout(false);
+                    rebuild_root_widget_depths();
+                    layout_target->update_draw_commands(DrawReasonBits::layout);
+                    detail::get_context().dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
+                },
+                true))
             return;
         event.prevent_default();
     }

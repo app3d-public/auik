@@ -168,7 +168,7 @@ namespace auik
     template <class Traits, class F>
     inline bool add_render_command(Widget *widget, F &&fn);
     template <class F>
-    inline bool add_render_command(F &&fn);
+    inline bool add_render_command(F &&fn, bool force = false);
     template <class F>
     inline u64 schedule_delayed_host_task(u64 owner_id, f64 due_time, F &&fn);
 
@@ -358,11 +358,11 @@ namespace auik
     }
 
     template <class F>
-    inline bool add_render_command(F &&fn)
+    inline bool add_render_command(F &&fn, bool force)
     {
         auto &ctx = detail::get_context();
         if (ctx.dirty_flags & DirtyFlagBits::destroying) return false;
-        ctx.disposal_queue.emplace(std::forward<F>(fn));
+        ctx.disposal_queue.emplace(std::forward<F>(fn), force);
         mark_host_refresh_request();
         return true;
     }
