@@ -87,6 +87,30 @@ namespace auik
             return required;
         }
 
+        static void request_combo_label_refresh(Widget *combo, Text *label)
+        {
+            if (!combo || !label) return;
+            label->invalidate_layout_measure();
+            if (!detail::g_context) return;
+            auto &ctx = detail::get_context();
+            const auto attached = ctx.id_map.find(combo->id());
+            if (attached == ctx.id_map.end() || attached->second != combo) return;
+
+            const u32 combo_id = combo->id();
+            Widget *expected_combo = combo;
+            Text *expected_label = label;
+            add_render_command([combo_id, expected_combo, expected_label]() {
+                auto &ctx = detail::get_context();
+                const auto current = ctx.id_map.find(combo_id);
+                if (current == ctx.id_map.end() || current->second != expected_combo) return;
+
+                expected_label->update_layout(false);
+                expected_combo->update_draw_commands(DrawReasonBits::layout);
+                ctx.dirty_flags |= DirtyFlagBits::redraw;
+                mark_host_refresh_request();
+            });
+        }
+
     } // namespace
 
     Combobox::Combobox(u32 id, const acul::vector<StringView> &items, u32 selected_index, amal::vec2 inline_size,
@@ -671,13 +695,13 @@ namespace auik
         if (!_popup || _selected_index >= _popup->children.size())
         {
             _label->set_text(acul::string{});
-            _label->invalidate_layout_measure();
+            request_combo_label_refresh(this, _label);
             return;
         }
         auto *item = static_cast<detail::Selectable *>(_popup->children[_selected_index]);
         if (!item) _label->set_text(acul::string{});
         else _label->set_text(*item);
-        _label->invalidate_layout_measure();
+        request_combo_label_refresh(this, _label);
     }
 
     void Combobox::update_popup_layout()
@@ -1231,13 +1255,13 @@ namespace auik
             auto *item = static_cast<detail::Selectable *>(_popup->children[_selected_indices[0]]);
             if (!item) _label->set_text(_placeholder);
             else _label->set_text(*item);
-            _label->invalidate_layout_measure();
+            request_combo_label_refresh(this, _label);
             return;
         }
 
         if (_translated_placeholder) _label->set_text(StringView{_placeholder_literal.c_str(), true});
         else _label->set_text(_placeholder);
-        _label->invalidate_layout_measure();
+        request_combo_label_refresh(this, _label);
     }
 
     void MultipleCombobox::update_popup_layout()

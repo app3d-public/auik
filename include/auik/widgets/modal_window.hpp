@@ -34,7 +34,7 @@ namespace auik
     };
 
     template <typename... Args>
-    acul::vector<ModalButton> make_modal_btn_list(Args &&...args)
+    acul::vector<ModalButton> make_modal_button_list(Args &&...args)
     {
         acul::vector<ModalButton> v;
         (v.emplace_back(std::forward<Args>(args)), ...);

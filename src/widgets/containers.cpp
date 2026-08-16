@@ -146,7 +146,7 @@ namespace auik
                     row_width = 0.0f;
                     row_height = 0.0f;
                 }
-                const f32 child_width = wrap_enabled && child->fill_width() ? amal::max(wrap_width, req.x) : req.x;
+                const f32 child_width = wrap_enabled && child->fill_width() ? wrap_width : req.x;
                 max_width = amal::max(max_width, child_width);
                 total_height += req.y;
             }
@@ -945,7 +945,7 @@ namespace auik
     f32 DrawBlock::resolved_inline_spacing() const
     {
         const auto *style = draw_style();
-        return style ? amal::max(style->inline_spacing(), 0.0f) : 0.0f;
+        return style ? amal::max(style->inline_spacing(), 0.0f) : Block::resolved_inline_spacing();
     }
 
     void DrawBlock::sync_draw_bounds()
@@ -2261,7 +2261,9 @@ namespace auik
                                                           content_margin.y + content_margin.w + content_padding.y +
                                                               content_padding.w + content_required.y}
                                              : amal::vec2{0.0f, 0.0f};
-        const f32 resolved_w = fill_width() ? 0.0f : amal::max(header_w, content_outer.x);
+        // Stretch controls the arranged width, but the intrinsic width must still describe
+        // the content. Fit-content ancestors and horizontal overflow detection both rely on it.
+        const f32 resolved_w = amal::max(header_w, content_outer.x);
         set_required_size({margin.x + margin.z + resolved_w, margin.y + margin.w + header_h + content_outer.y});
     }
 

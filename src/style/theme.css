@@ -12,7 +12,7 @@
 
 .global {
     color: var(--color-text);
-    font-family: var(--system-font);
+    font-family: font(0);
     font-size: 9pt;
     margin: 5px 0px;
     inline-spacing: 4px;
@@ -352,8 +352,30 @@
     background-color: var(--color-surface-light);
 }
 
+.accent-text-button {
+    min-width: 60px;
+    width: fit-content;
+    height: fit-content;
+    padding: 4px 10px;
+    text-align: center;
+    background-color: var(--color-accent);
+    border-radius: 3px;
+}
+
+.accent-text-button:hover {
+    background-color: var(--color-accent-hover);
+}
+
+.accent-text-button:active {
+    background-color: var(--color-accent);
+}
+
 .transparent-button {
-    padding: 4px 14px;
+    min-width: 60px;
+    width: fit-content;
+    height: fit-content;
+    text-align: center;
+    padding: 4px 10px;
     border-radius: 3px;
 }
 
@@ -367,8 +389,7 @@
 
 .modal-title {
     padding: 0px;
-    font-family: var(--system-font-bold);
-    font-size: calc(14px * var(--dpi));
+    font-family: font(1);
 }
 
 .modal-header {
@@ -380,6 +401,8 @@
 }
 
 .modal-icon {
+    width: fit-content;
+    height: fit-content;
     margin-right: 22px;
     margin-bottom: 22px;
 }

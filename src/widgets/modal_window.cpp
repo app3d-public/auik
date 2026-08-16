@@ -273,7 +273,7 @@ namespace auik
         if (!is_attached()) return;
         update_layout(false);
         update_active_modal_depth();
-        update_draw_commands(DrawReasonBits::layout | DrawReasonBits::record);
+        update_draw_commands(DrawReasonBits::layout);
     }
 
     void ModalQueue::invalidate_modal_draw_commands()
@@ -690,7 +690,8 @@ namespace auik
         for (u32 i = 0; i < message.buttons.size(); ++i)
         {
             const bool is_last_button = i + 1u == message.buttons.size();
-            const u32 button_style = is_last_button ? AUIK_STYLE_TAG_TEXT_BUTTON : AUIK_STYLE_TAG_TRANSPARENT_BUTTON;
+            const u32 button_style =
+                is_last_button ? AUIK_STYLE_TAG_ACCENT_TEXT_BUTTON : AUIK_STYLE_TAG_TRANSPARENT_BUTTON;
             auto *button = acul::alloc<TextButton>(
                 AUIK_MODAL_BUTTON_ID, message.buttons[i].first, amal::vec2{AUIK_SIZE_X_INHERIT, AUIK_SIZE_Y_INHERIT},
                 MODAL_INTERNAL_HITTABLE_WIDGET_FLAGS, EventFlagBits::none, button_style);

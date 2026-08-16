@@ -265,6 +265,16 @@ namespace auik
         return local;
     }
 
+    static inline f32 resolve_fit_window_height(f32 window_top, f32 header_height, f32 menu_height,
+                                                f32 content_height, bool has_header, bool has_menu)
+    {
+        const f32 header_bottom = has_header ? snap_layout_start(window_top + header_height) : window_top;
+        const f32 menu_bottom = has_menu ? snap_layout_start(header_bottom + menu_height) : header_bottom;
+        const f32 body_top = snap_layout_start(menu_bottom);
+        const f32 body_bottom = snap_layout_start(body_top + content_height);
+        return amal::max(body_bottom - window_top, 0.0f);
+    }
+
     class WindowHeader final : public Widget
     {
     public:
@@ -949,6 +959,11 @@ namespace auik
             _content_block->set_content_padding(window_style.padding());
             _content_block->invalidate_layout_measure();
         }
+        if (_content_block && _content_block->inline_spacing() != window_style.inline_spacing())
+        {
+            _content_block->set_inline_spacing(window_style.inline_spacing());
+            _content_block->invalidate_layout_measure();
+        }
         if (_content_block) out |= _content_block->update_style_invalidated();
         if (_menu) out |= _menu->update_style_invalidated();
 
@@ -1071,6 +1086,27 @@ namespace auik
         }
         if (!parent() && !(window_flags & WindowFlagBits::docked))
             set_position(resolve_root_widget_position(this, size(), !_move_drag_active));
+
+        // A fit-content window is measured as header + menu + content, while arrange snaps
+        // every boundary to the pixel grid. Account for that snapping here so the body never
+        // ends up fractionally smaller than the content and spuriously enables a scrollbar.
+        if (!parent() && !(window_flags & WindowFlagBits::docked) && _auto_size.y &&
+            is_size_fit(style_size().y))
+        {
+            auto *classic_menu = window_menu_bar(*this);
+            const bool layout_menu_bar =
+                classic_menu && owns_classic_menu_bar_tree(*this) && classic_menu->is_visible();
+            const f32 menu_height = layout_menu_bar ? classic_menu->required_size().y : 0.0f;
+            const f32 header_height = get_window_header_height(_header, *this);
+            const f32 content_height = _content_block ? _content_block->required_size().y : 0.0f;
+            const f32 fit_height = resolve_fit_window_height(position().y, header_height, menu_height, content_height,
+                                                             _header != nullptr, layout_menu_bar);
+            const amal::vec4 viewport = get_widget_viewport_rect(this);
+            auto next_size = size();
+            next_size.y = amal::clamp(amal::max(next_size.y, fit_height), amal::min(_min_size.y, viewport.w),
+                                      viewport.w);
+            set_layout_size(next_size);
+        }
 
         if (detail::is_fast_layout_update())
         {

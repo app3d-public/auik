@@ -11,9 +11,6 @@
 #include <auik/symbol_export.h>
 #include <auik/widget_tags.hpp>
 
-#define AUIK_THEME_FONT_REGULAR 0
-#define AUIK_THEME_FONT_BOLD    1
-
 #define AUIK_SIZE_X_MIN_FIT         0x0
 #define AUIK_SIZE_Y_MIN_FIT         AUIK_SIZE_X_MIN_FIT
 #define AUIK_SIZE_MIN_FIT           {AUIK_SIZE_X_MIN_FIT, AUIK_SIZE_Y_MIN_FIT}

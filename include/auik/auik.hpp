@@ -21,6 +21,10 @@ struct hb_font_t;
 #define AUIK_ICON_CLOSE         0xBF822112u
 #define AUIK_ICON_MENU          0xDDD65C07u
 #define AUIK_HITBOX_PAD         4.0f
+#define AUIK_FONT_WEIGHT_NORMAL 80
+#define AUIK_FONT_WEIGHT_BOLD   200
+#define AUIK_FONT_SLANT_NORMAL  0
+#define AUIK_FONT_SLANT_ITALIC  100
 
 namespace auik
 {
@@ -127,6 +131,8 @@ namespace auik
 
     // Root widget ownership and focus management.
     AUIK_EXPORT void rebuild_root_widget_depths();
+    // Lays out and records a dynamically attached root. A fitted viewport change expands the refresh scope.
+    AUIK_EXPORT void mark_widget_attached_to_tree(Widget *widget);
     AUIK_EXPORT void add_widget_to_root(Widget *widget, DepthZone zone = DepthZone::work);
     AUIK_EXPORT void mark_locale_changed();
     AUIK_EXPORT bool remove_widget_from_root_unsync(Widget *widget);
@@ -474,6 +480,18 @@ namespace auik
         return get_font_info_by_family(fonts, family, family);
     }
 
+    inline FontInfo *get_font_info_by_family(const FontRegistry &fonts, const acul::string &family, int weight,
+                                             int slant = AUIK_FONT_SLANT_NORMAL)
+    {
+        auto it = fonts[family];
+        if (it == fonts.cend()) return nullptr;
+        auto &font_list = it->second;
+        const auto found = std::find_if(font_list.begin(), font_list.end(), [weight, slant](const FontInfo &font) {
+            return font.weight == weight && font.slant == slant;
+        });
+        return found != font_list.end() ? const_cast<FontInfo *>(&(*found)) : nullptr;
+    }
+
     class Font
     {
     public:
@@ -555,6 +573,14 @@ namespace auik
     inline bool load_font(const FontRegistry &fonts, Font &dst, const acul::string &family)
     {
         return load_font(fonts, dst, family, family);
+    }
+
+    inline bool load_font(const FontRegistry &fonts, Font &dst, const acul::string &family, int weight,
+                          int slant = AUIK_FONT_SLANT_NORMAL)
+    {
+        FontInfo *font_info = get_font_info_by_family(fonts, family, weight, slant);
+        if (!font_info) return false;
+        return dst.load(*font_info);
     }
 
     inline f32 pt_to_px(f32 pt, f32 dpi)

@@ -24,10 +24,8 @@ except ImportError as exc:
 CLASS_RE = re.compile(r"\.([A-Za-z_][A-Za-z0-9_-]*)")
 STATE_RE = re.compile(r":(hover|active|focus)\b")
 SIGN_RE = re.compile(r"0x[0-9A-Fa-f]+")
-VIRTUAL_VARIABLES = {"--system-font", "--system-font-bold", "--dpi"}
+VIRTUAL_VARIABLES = {"--dpi"}
 VIRTUAL_VALUES = {
-    "--system-font": "fonts[AUIK_THEME_FONT_REGULAR]",
-    "--system-font-bold": "fonts[AUIK_THEME_FONT_BOLD]",
     "--dpi": "dpi",
 }
 STYLE_STATES = {
@@ -302,6 +300,14 @@ def resolve_function(token, variables: dict[str, str]) -> str:
 
     if name == "calc":
         return resolve_calc(args, variables)
+
+    if name == "font":
+        if len(args) != 1 or args[0].type != "number":
+            raise ValueError("font() expects one non-negative integer index")
+        index = float(args[0].value)
+        if index < 0 or not index.is_integer():
+            raise ValueError("font() expects one non-negative integer index")
+        return f"fonts[{int(index)}]"
 
     if name in ("rgb", "rgba"):
         channels = split_commas(args)

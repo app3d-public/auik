@@ -867,8 +867,60 @@ namespace auik
         else widget->emplace_user_data_head<detail::RootWidgetUserData>(AUIK_UD_ROOT_DATA, zone);
         ctx.widget_tree.push_back(widget);
         if (widget->widget_flags & WidgetFlagBits::attachable) widget->on_attach();
-        rebuild_root_widget_depths();
+        if (detail::as_counted_root_window(widget))
+        {
+            const u32 lane_index = ctx.root_window_count;
+            assert(lane_index < 32u && "Max root window depth lanes exceeded");
+            widget->update_depth(detail::get_root_depth_range(zone, static_cast<int>(lane_index)));
+        }
+        else
+        {
+            rebuild_root_widget_depths();
+        }
         widget->update_style_invalidated();
+    }
+
+    AUIK_EXPORT void mark_widget_attached_to_tree(Widget *widget)
+    {
+        if (!widget || !widget->is_attached()) return;
+        assert(!widget->parent() && "Dynamically attached widget must be a root widget");
+        auto &ctx = detail::get_context();
+        if (ctx.dirty_flags & DirtyFlagBits::destroying) return;
+
+        widget->invalidate_layout_measure();
+        widget->reset_external_draw_cull_state();
+        auto *viewport = widget->viewport();
+        assert(viewport && "Root widget viewport is not assigned");
+
+        const amal::vec4 viewport_rect = get_viewport_rect(viewport);
+        update_root_widget_layout(widget, viewport, viewport_rect);
+
+        bool viewport_changed = false;
+        if (viewport != get_main_viewport() && viewport->fit_content &&
+            widget->get_rect().id.tag_id != AUIK_TAG_WINDOW && widget->is_visible())
+        {
+            const amal::rect widget_rect = widget->bounds();
+            const amal::vec2 content_extent{
+                amal::max(widget_rect.offset.x + widget_rect.size.x - viewport_rect.x, 0.0f),
+                amal::max(widget_rect.offset.y + widget_rect.size.y - viewport_rect.y, 0.0f)};
+            const amal::vec2 next_size = amal::max(amal::vec2{viewport_rect.z, viewport_rect.w}, content_extent);
+            viewport_changed = next_size != viewport->rect.size;
+            if (viewport_changed) viewport->rect.size = next_size;
+        }
+
+        if (viewport_changed)
+        {
+            // A fitted viewport participates in its parent viewport layout. Re-run the regular layout cycle so
+            // dependent viewports and their root widgets are adapted together.
+            ctx.dirty_flags |= DirtyFlagBits::layout | DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
+        }
+        else
+        {
+            widget->rebuild_clip_rects();
+            widget->update_draw_commands(DrawReasonBits::layout | DrawReasonBits::record);
+            ctx.dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
+        }
+        mark_host_refresh_request();
     }
 
     AUIK_EXPORT void mark_locale_changed()

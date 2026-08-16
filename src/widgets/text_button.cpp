@@ -70,6 +70,8 @@ namespace auik
             if (min_size.y <= 0.0f) min_size.y = content_min_height;
         }
         if (min_size.x > 0.0f) min_size.x = amal::max(min_size.x, content_min_width);
+        min_size.x = amal::max(min_size.x, style.min_width());
+        min_size.y = amal::max(min_size.y, style.min_height());
         set_required_size({min_size.x + margin.x + margin.z, min_size.y + margin.y + margin.w});
     }
 
