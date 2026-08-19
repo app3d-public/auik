@@ -344,11 +344,16 @@ namespace auik
 
         AUIK_EXPORT void on_hover_id_updated(const ElementID &prev_hover, const ElementID &hover)
         {
+            // The GPU picker is sampled whenever a frame is rendered, including frames caused by unrelated host
+            // events. Re-dispatching an unchanged hover queues deferred leave/enter events, which wake the host
+            // again and create a self-sustaining render loop.
+            if (prev_hover == hover) return;
+
             auto &ctx = get_context();
+            ctx.last_hover_id = prev_hover;
             const bool is_dragging = ctx.io.mouse_down && ctx.io.drag_id;
             const u32 prev_widget_id = prev_hover.widget_id;
             const u32 widget_id = hover.widget_id;
-            const bool widget_changed = prev_widget_id != widget_id;
             const bool selector_changed =
                 !is_dragging && detail::set_style_selector(hover, hover ? StyleState::hover : StyleState::normal);
             auto dispatch_hover = [&](u32 id, HoverState state) {
@@ -381,12 +386,8 @@ namespace auik
                                                               ? detail::set_style_selector({}, StyleState::normal)
                                                               : false);
 
-                if (drag_widget_changed)
-                {
-                    if (prev_widget) dispatch_hover(prev_hover.widget_id, HoverState::leave);
-                    if (widget) dispatch_hover(hover.widget_id, HoverState::enter);
-                }
-                else if (widget) dispatch_hover(hover.widget_id, HoverState::active);
+                if (prev_widget) dispatch_hover(prev_hover.widget_id, HoverState::leave);
+                if (widget) dispatch_hover(hover.widget_id, HoverState::enter);
 
                 if (drag_selector_changed)
                 {
@@ -399,18 +400,14 @@ namespace auik
 
             if (!is_dragging)
             {
-                if (widget_changed)
-                {
-                    dispatch_hover(prev_widget_id, HoverState::leave);
-                    dispatch_hover(widget_id, HoverState::enter);
-                }
+                dispatch_hover(prev_widget_id, HoverState::leave);
+                dispatch_hover(widget_id, HoverState::enter);
                 if (selector_changed)
                 {
                     enqueue_style_refresh_by_id<detail::HoverEventTraits>(ctx, prev_widget_id);
                     if (widget_id != prev_widget_id)
                         enqueue_style_refresh_by_id<detail::HoverEventTraits>(ctx, widget_id);
                 }
-                if (!widget_changed && hover) dispatch_hover(widget_id, HoverState::active);
                 if (prev_hover != hover || selector_changed) mark_host_refresh_request();
             }
         }
@@ -531,6 +528,7 @@ namespace auik
             io.active_mouse_buttons = {};
             io.active_mods = KeyMode{};
             ctx.active_id = 0;
+            ctx.last_hover_id = prev_hover;
             ctx.hover_id = {};
             detail::reset_style_selector();
             if (prev_active_id)
@@ -856,9 +854,21 @@ namespace auik
             const ElementID drag_id = io.drag_id;
             const ElementID hover_id = ctx.hover_id;
 
+            const u32 pending_drag_widget_id = frame_cache.drag_widget_id;
+            const amal::vec2 pending_drag_delta = frame_cache.drag_delta;
+
             frame_cache.drag_widget_id = 0;
             frame_cache.drag_delta = {0.0f, 0.0f};
             frame_cache.changes &= ~FrameChangesBits::drag_delta;
+
+            // Raw relative movement is accumulated until sync_frame(). Mouse-up may arrive first, so apply the
+            // final delta before drop/release instead of losing the last input sample.
+            if (pending_drag_widget_id == drag_id.widget_id && pending_drag_delta != amal::vec2{0.0f})
+            {
+                auto pending_it = ctx.id_map.find(pending_drag_widget_id);
+                if (pending_it != ctx.id_map.end() && pending_it->second->has_event_handler(EventFlagBits::drag))
+                    pending_it->second->dispatch_drag(pending_drag_delta, KeyPressState::repeat);
+            }
 
             auto it = ctx.id_map.find(hover_id.widget_id);
             if (drag_id && hover_id && it != ctx.id_map.end() && it->second->has_event_handler(EventFlagBits::drop) &&

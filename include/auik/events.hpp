@@ -275,8 +275,7 @@ namespace auik
     enum class HoverState : i8
     {
         leave = 0,
-        enter = 1,
-        active = 2
+        enter = 1
     };
 
     struct HoverEvent : EventBase

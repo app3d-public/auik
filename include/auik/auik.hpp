@@ -213,12 +213,14 @@ namespace auik
         if (!ctx.disposal_queue.is_main_queue_empty()) ctx.disposal_queue.flush_main_queue();
         if (!ctx.transient_cache.empty() && !(ctx.dirty_flags & detail::layout_update_dirty_mask))
         {
-            ctx.dirty_flags |= DirtyFlagBits::redraw;
+            bool has_visible_transient = false;
             for (Widget *widget : ctx.transient_cache)
             {
-                if (!widget) continue;
+                if (!widget || !widget->is_visible()) continue;
+                has_visible_transient = true;
                 widget->update_draw_commands(DrawReasonBits::transient);
             }
+            if (has_visible_transient) ctx.dirty_flags |= DirtyFlagBits::redraw;
         }
     }
 

@@ -196,6 +196,7 @@ namespace auik
             acul::vector<TextureID> textures;
             acul::hashmap<u64, u32> texture_bind_slots;
             ElementID hover_id{};
+            ElementID last_hover_id{};
             StyleSelectorTransition style_selector{};
             u32 active_id = 0;
             u32 focus_id = 0;

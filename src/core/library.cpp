@@ -533,6 +533,7 @@ namespace auik
         frame_cache.char_code = 0;
         frame_cache.char_repeat_count = 0;
         ctx.hover_id = {};
+        ctx.last_hover_id = {};
         detail::reset_style_selector();
         ctx.active_id = 0;
         ctx.focus_id = 0;

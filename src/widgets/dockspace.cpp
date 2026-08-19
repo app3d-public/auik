@@ -2055,7 +2055,10 @@ namespace auik
             const f32 style_size = axis_size(child.style_size, axis);
             if (is_size_fill(style_size)) return amal::ceil(settings_min);
             if (is_size_fit(style_size))
-                return amal::ceil(amal::max(settings_min, axis_size(child.required_size, axis)));
+            {
+                const bool placed = axis_size(child.bounds.size, axis) > 0.0f;
+                return amal::ceil(amal::max(settings_min, placed ? 0.0f : axis_size(child.required_size, axis)));
+            }
             if (is_size_concrete(style_size)) return amal::ceil(amal::max(settings_min, style_size));
             return amal::ceil(amal::max(settings_min, axis_size(child.required_size, axis)));
         };
@@ -2170,6 +2173,9 @@ namespace auik
             if (node->axis == amal::axis::x)
                 child_bounds = {{cursor, node->bounds.offset.y}, {child_main, cross_available}};
             else child_bounds = {{node->bounds.offset.x, cursor}, {cross_available, child_main}};
+            if (is_size_fit(axis_size(child->style_size, node->axis)) &&
+                axis_size(child->bounds.size, node->axis) <= 0.0f)
+                set_axis_size(child->settings.size, node->axis, child_main);
             layout_node(node->children[i], child_bounds);
             cursor = axis_size(_nodes[node->children[i]].bounds.offset, node->axis) +
                      axis_size(_nodes[node->children[i]].bounds.size, node->axis);
@@ -2852,7 +2858,12 @@ namespace auik
             const f32 settings_min = axis_size(child->min_size, helper->axis);
             const f32 style_size = axis_size(child->style_size, helper->axis);
             if (is_size_fill(style_size)) return amal::ceil(settings_min);
-            if (helper->axis == amal::axis::x && is_size_fit(style_size)) return amal::ceil(settings_min);
+            if (is_size_fit(style_size))
+            {
+                const bool placed = axis_size(child->bounds.size, helper->axis) > 0.0f;
+                return amal::ceil(
+                    amal::max(settings_min, placed ? 0.0f : axis_size(child->required_size, helper->axis)));
+            }
             if (is_size_concrete(style_size)) return amal::ceil(amal::max(settings_min, style_size));
             const f32 required_min = axis_size(child->required_size, helper->axis);
             return amal::ceil(amal::max(settings_min, required_min));

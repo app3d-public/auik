@@ -672,6 +672,9 @@ namespace auik
         }
         virtual void on_attach()
         {
+            // State changed before attachment has no live draw/event side effects. Commit that state as the
+            // synchronization baseline so the first change made after attachment is detected correctly.
+            _synced_widget_flags = widget_flags;
             _widget_state_flags |= WidgetStateFlagBits::attached;
             // Embedded implementation widgets participate in the live tree without owning an id-map entry.
             if (!(widget_flags & WidgetFlagBits::attachable)) return;
@@ -706,7 +709,8 @@ namespace auik
         {
             HoverEvent e{};
             e.state = state;
-            e.target = detail::get_style_selector_id();
+            const auto &ctx = detail::get_context();
+            e.target = state == HoverState::leave ? ctx.last_hover_id : ctx.hover_id;
             if (_user_bind && _user_bind->on_hover_fn)
             {
                 _user_bind->on_hover_fn(e);

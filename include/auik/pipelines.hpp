@@ -7,6 +7,7 @@
 #define AUIK_HAS_BORDER_BIT            0x1
 #define AUIK_HAS_RADIUS_BIT            0x2
 #define AUIK_HAS_CHECKER_BIT           0x4
+#define AUIK_INVERT_RADIUS_BIT          0x8
 #define AUIK_TEXTURE_INSTANCE_TINT_BIT 0x1
 
 namespace auik

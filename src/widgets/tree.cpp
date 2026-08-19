@@ -934,21 +934,11 @@ namespace auik
     void Tree::on_hover(HoverState state)
     {
         auto &ctx = detail::get_context();
-        const auto transition = detail::get_widget_style_selector_transition(id());
         if (state == HoverState::leave)
         {
-            if (auto *target = element_widget(transition.prev_id)) target->dispatch_hover(HoverState::leave);
+            if (auto *target = element_widget(ctx.last_hover_id)) target->dispatch_hover(HoverState::leave);
         }
-        else if (state == HoverState::enter)
-        {
-            if (auto *target = element_widget(transition.current_id)) target->dispatch_hover(HoverState::enter);
-        }
-        else if (transition.prev_id != transition.current_id)
-        {
-            if (auto *target = element_widget(transition.prev_id)) target->dispatch_hover(HoverState::leave);
-            if (auto *target = element_widget(transition.current_id)) target->dispatch_hover(HoverState::enter);
-        }
-        else if (auto *target = element_widget(transition.current_id)) target->dispatch_hover(state);
+        else if (auto *target = element_widget(ctx.hover_id)) target->dispatch_hover(HoverState::enter);
 
         detail::CursorID::enum_type cursor = detail::CursorID::arrow;
         bool resize_border_state = state == HoverState::leave;
@@ -1003,15 +993,11 @@ namespace auik
             _resizing_column = drag_id.element_id;
             detail::resize_table_size_points(_resize_size_basis, _column_count);
             if (detail::has_table_flag(_tree_flags, AUIK_TABLE_TREE_FLAG_COLUMN_SIZE_OVERRIDES))
-            {
                 for (size_t column = 0; column < _column_count; ++column)
                     _resize_size_basis[column].x = column < _size_overrides.size() ? _size_overrides[column].x : 0.0f;
-            }
             else
-            {
                 for (size_t column = 0; column < _column_count; ++column)
                     _resize_size_basis[column].x = _layout_metrics[column].x.value;
-            }
             detail::set_window_cursor(detail::CursorID::resize_ew, detail::get_context().window_ctx);
             return;
         }
@@ -1217,8 +1203,7 @@ namespace auik
         _widget_nodes.clear();
     }
 
-    bool Tree::present_model_record(size_t record_index, DrawBlock *&label, Row &cells,
-                                    ModelRecordID *parent_record_id)
+    bool Tree::present_model_record(size_t record_index, DrawBlock *&label, Row &cells, ModelRecordID *parent_record_id)
     {
         label = nullptr;
         cells.clear();
@@ -1478,8 +1463,7 @@ namespace auik
             ModelRecordID parent_record_id = AUIK_MODEL_RECORD_ID_INVALID;
             DrawBlock *label = nullptr;
             Row cells;
-            if (!present_model_record(record_index, label, cells, &parent_record_id))
-                label = wrap_tree_cell(nullptr);
+            if (!present_model_record(record_index, label, cells, &parent_record_id)) label = wrap_tree_cell(nullptr);
 
             const size_t node = add_node(label, std::move(cells), invalid_node);
             if (_hierarchy_anchor_tag != 0u)

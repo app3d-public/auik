@@ -45,10 +45,10 @@ Auik is distributed as a CMake project and is intended to be integrated as a sub
 
 ### Bundled submodules
 The following dependencies are included as git submodules and must be checked out when cloning:
-- [acbt](https://repos.homedatasrv.ru/app3d/acbt)
-- [acul](https://repos.homedatasrv.ru/app3d/acul)
-- [amal](https://repos.homedatasrv.ru/app3d/amal)
-- [umbf](https://repos.homedatasrv.ru/app3d/umbf)
+- [acbt](https://repos.wusikijeronii.me/app3d/acbt)
+- [acul](https://repos.wusikijeronii.me/app3d/acul)
+- [amal](https://repos.wusikijeronii.me/app3d/amal)
+- [umbf](https://repos.wusikijeronii.me/app3d/umbf)
 
 The following dependencies must be installed on your system:
 - [Python 3](https://www.python.org/)
@@ -64,6 +64,7 @@ Auik itself generates the built-in style and variable ids required by the public
 
 ```cmake
 add_subdirectory(modules/auik)
+```
 
 Call `compile_auik_css_theme()` even when the host application only wants the default theme:
 
@@ -83,13 +84,13 @@ The host application is responsible for compiling the generated files into its o
 Auik uses external platform and rendering bindings.
 
 ### GPU bindings
-- [auik-gbe-agrb](https://repos.homedatasrv.ru/app3d/auik-gbe-agrb) - Agrb (Vulkan) rendering backend
+- [auik-gbe-agrb](https://repos.wusikijeronii.me/app3d/auik-gbe-agrb) - Agrb (Vulkan) rendering backend
 
 ### Window bindings
-- [auik-wbe-awin](https://repos.homedatasrv.ru/app3d/auik-wbe-awin) - Awin window system integration
+- [auik-wbe-awin](https://repos.wusikijeronii.me/app3d/auik-wbe-awin) - Awin window system integration
 
 ## Demo
-Auik provides an optional [auik-demo](https://repos.homedatasrv.ru/app3d/auik-demo) module containing a ready-to-use demo window built entirely from standard Auik widgets.
+Auik provides an optional [auik-demo](https://repos.wusikijeronii.me/app3d/auik-demo) module containing a ready-to-use demo window built entirely from standard Auik widgets.
 
 ## License
 This project is licensed under the  [MIT License](LICENSE).

@@ -114,6 +114,7 @@ namespace auik
         ctx.focus_id = 0u;
         ctx.active_id = 0u;
         ctx.hover_id = {};
+        ctx.last_hover_id = {};
         ctx.io.clicked_id = {};
         detail::cancel_unbounded_mouse_drag();
         ctx.io.drag_id = {};
