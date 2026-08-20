@@ -165,7 +165,7 @@ namespace auik
             auto &ctx = detail::get_context();
             if (ctx.dirty_flags & DirtyFlagBits::destroying) return;
 
-            if (!widget->is_visible() || widget->is_disabled())
+            if (!widget->is_visible())
             {
                 auto belongs_to_widget = [widget, &ctx](u32 id) {
                     if (!id) return false;
