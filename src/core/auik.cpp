@@ -161,9 +161,19 @@ namespace auik
         if (ctx.dirty_flags & DirtyFlagBits::destroying) return;
 
         Widget *widget = this;
-        ctx.disposal_queue.emplace([widget]() {
+        ctx.disposal_queue.emplace([widget, visible_changed]() {
             auto &ctx = detail::get_context();
             if (ctx.dirty_flags & DirtyFlagBits::destroying) return;
+
+            Widget *refresh_owner = widget;
+            if (visible_changed)
+            {
+                if (auto *layout_owner = resolve_parent_layout_update_target(widget, true))
+                {
+                    layout_owner->update_layout(false);
+                    refresh_owner = layout_owner;
+                }
+            }
 
             if (!widget->is_visible())
             {
@@ -191,15 +201,21 @@ namespace auik
             }
 
             widget->reset_external_draw_cull_state();
+            if (!widget->is_visible() && widget->is_attached())
+                widget->invalidate_draw_commands(DrawReasonBits::external);
             if (widget->is_visible())
             {
-                if (widget->is_attached()) widget->update_draw_commands(DrawReasonBits::external);
+                if (refresh_owner->is_attached())
+                    refresh_owner->update_draw_commands(visible_changed ? DrawReasonBits::layout
+                                                                       : DrawReasonBits::external);
                 if (widget->is_transient()) widget->update_draw_commands(DrawReasonBits::transient);
             }
             else
             {
-                if (widget->is_attached()) widget->invalidate_draw_commands(DrawReasonBits::external);
+                if (refresh_owner != widget && refresh_owner->is_attached())
+                    refresh_owner->update_draw_commands(DrawReasonBits::layout);
                 if (widget->is_transient()) widget->invalidate_draw_commands(DrawReasonBits::transient);
+                if (widget->parent()) widget->set_position(AUIK_POS_UNDEFINED);
             }
             ctx.dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
         });
@@ -449,13 +465,6 @@ namespace auik
             return nullptr;
         }
 
-        static inline bool is_modifier_key(Key key)
-        {
-            return key == Key::lshift || key == Key::rshift || key == Key::lcontrol || key == Key::rcontrol ||
-                   key == Key::lalt || key == Key::ralt || key == Key::lsuper || key == Key::rsuper ||
-                   key == Key::caps_lock || key == Key::num_lock;
-        }
-
         static inline KeyMode build_active_shortcut_mods(const IO &io)
         {
             KeyMode mods = KeyModeBits::enum_type(0);
@@ -616,7 +625,7 @@ namespace auik
             auto &ctx = get_context();
             auto &io = ctx.io;
             io.active_mods = mods;
-            if (!is_modifier_key(key))
+            if (key < Key::caps_lock)
             {
                 if (state == KeyPressState::release) io.active_keys.erase(key);
                 else io.active_keys.insert(key);

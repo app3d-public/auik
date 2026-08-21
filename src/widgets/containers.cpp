@@ -444,8 +444,7 @@ namespace auik
         }
 
         static void collect_layer_children(const acul::vector<Widget *> &children,
-                                           const acul::vector<ChildLayoutFlags> &layouts,
-                                           const acul::vector<BlockChildLayer> &layers, BlockChildLayer layer,
+                                           const acul::vector<ChildLayoutFlags> &layouts, DepthZone layer,
                                            acul::vector<Widget *> &out_children,
                                            acul::vector<ChildLayoutFlags> &out_layouts)
         {
@@ -453,35 +452,33 @@ namespace auik
             out_layouts.clear();
             for (size_t i = 0u; i < children.size(); ++i)
             {
-                const BlockChildLayer child_layer = i < layers.size() ? layers[i] : BlockChildLayer::work;
-                if (child_layer != layer) continue;
-                out_children.push_back(children[i]);
+                auto *child = children[i];
+                if (!child || child->get_depth_zone() != layer) continue;
+                out_children.push_back(child);
                 out_layouts.push_back(i < layouts.size() ? layouts[i] : default_child_layout_flags());
             }
         }
 
         static amal::vec2 compute_layer_children_required_size(const acul::vector<Widget *> &children,
                                                                const acul::vector<ChildLayoutFlags> &layouts,
-                                                               const acul::vector<BlockChildLayer> &layers,
-                                                               BlockChildLayer layer, f32 inline_spacing_x,
-                                                               f32 wrap_width, bool refresh_min_size)
+                                                               DepthZone layer, f32 inline_spacing_x, f32 wrap_width,
+                                                               bool refresh_min_size)
         {
             acul::vector<Widget *> layer_children;
             acul::vector<ChildLayoutFlags> layer_layouts;
-            collect_layer_children(children, layouts, layers, layer, layer_children, layer_layouts);
+            collect_layer_children(children, layouts, layer, layer_children, layer_layouts);
             return compute_children_layout_required_size(layer_children, layer_layouts, inline_spacing_x, wrap_width,
                                                          refresh_min_size);
         }
 
         static void layout_layer_children(Widget *layout_owner, const acul::vector<Widget *> &children,
-                                          const acul::vector<ChildLayoutFlags> &layouts,
-                                          const acul::vector<BlockChildLayer> &layers, BlockChildLayer layer,
+                                          const acul::vector<ChildLayoutFlags> &layouts, DepthZone layer,
                                           const amal::rect &content_rect, f32 inline_spacing_x,
                                           f32 fill_available_width)
         {
             acul::vector<Widget *> layer_children;
             acul::vector<ChildLayoutFlags> layer_layouts;
-            collect_layer_children(children, layouts, layers, layer, layer_children, layer_layouts);
+            collect_layer_children(children, layouts, layer, layer_children, layer_layouts);
             // The owning Block measured this subtree before arrange. Keep propagating the
             // min_size_known contract instead of starting a second recursive measure pass.
             layout_child_widgets(layout_owner, layer_children, layer_layouts, content_rect, inline_spacing_x,
@@ -489,14 +486,13 @@ namespace auik
         }
 
         static void layout_layer_children_fast_update(const acul::vector<Widget *> &children,
-                                                      const acul::vector<ChildLayoutFlags> &layouts,
-                                                      const acul::vector<BlockChildLayer> &layers,
-                                                      BlockChildLayer layer, const amal::rect &content_rect,
-                                                      f32 inline_spacing_x, f32 fill_available_width)
+                                                      const acul::vector<ChildLayoutFlags> &layouts, DepthZone layer,
+                                                      const amal::rect &content_rect, f32 inline_spacing_x,
+                                                      f32 fill_available_width)
         {
             acul::vector<Widget *> layer_children;
             acul::vector<ChildLayoutFlags> layer_layouts;
-            collect_layer_children(children, layouts, layers, layer, layer_children, layer_layouts);
+            collect_layer_children(children, layouts, layer, layer_children, layer_layouts);
             layout_child_widgets_fast_update(layer_children, layer_layouts, content_rect, inline_spacing_x,
                                              fill_available_width);
         }
@@ -539,35 +535,34 @@ namespace auik
         children.erase(children.begin() + first, children.begin() + last);
         _explicit_child_layouts.erase(_explicit_child_layouts.begin() + first, _explicit_child_layouts.begin() + last);
         _child_layouts.erase(_child_layouts.begin() + first, _child_layouts.begin() + last);
-        _child_layers.erase(_child_layers.begin() + first, _child_layers.begin() + last);
         if (!destroying) dispatch_change();
     }
 
     void Block::add_child(Widget *child, ChildLayoutFlags layout)
     {
-        add_child_to_layer(child, layout, BlockChildLayer::work);
+        add_child_to_layer(child, layout, DepthZone::work);
     }
 
     void Block::add_child_to_background(Widget *child, ChildLayoutFlags layout)
     {
-        add_child_to_layer(child, layout, BlockChildLayer::background);
+        add_child_to_layer(child, layout, DepthZone::background);
     }
 
     void Block::add_child_to_foreground(Widget *child, ChildLayoutFlags layout)
     {
-        add_child_to_layer(child, layout, BlockChildLayer::foreground);
+        add_child_to_layer(child, layout, DepthZone::foreground);
     }
 
-    void Block::add_child_to_layer(Widget *child, ChildLayoutFlags layout, BlockChildLayer layer)
+    void Block::add_child_to_layer(Widget *child, ChildLayoutFlags layout, DepthZone layer)
     {
         assert(child && "child is null");
+        child->set_depth_zone(layer);
         child->set_parent(this);
         child->set_focus_parent(parent() && id() == parent()->id() ? parent() : this);
         child->update_style_invalidated();
         children.push_back(child);
         _explicit_child_layouts.push_back(layout);
         _child_layouts.push_back(layout);
-        _child_layers.push_back(layer);
         invalidate_layout_measure();
         dispatch_change();
     }
@@ -634,24 +629,31 @@ namespace auik
 
     amal::vec2 Block::compute_content_min_size()
     {
-        return detail::compute_layer_children_required_size(
-            children, _child_layouts, _child_layers, BlockChildLayer::work, resolved_inline_spacing(), 0.0f, true);
+        return detail::compute_layer_children_required_size(children, _child_layouts, DepthZone::work,
+                                                            resolved_inline_spacing(), 0.0f, true);
     }
 
     void Block::layout_children(const amal::rect &content_rect)
     {
-        detail::layout_layer_children(this, children, _child_layouts, _child_layers, BlockChildLayer::background,
-                                      content_rect, resolved_inline_spacing(), content_rect.size.x);
-        detail::layout_layer_children(this, children, _child_layouts, _child_layers, BlockChildLayer::work,
-                                      content_rect, resolved_inline_spacing(), content_rect.size.x);
-        detail::layout_layer_children(this, children, _child_layouts, _child_layers, BlockChildLayer::foreground,
-                                      content_rect, resolved_inline_spacing(), content_rect.size.x);
+        detail::layout_layer_children(this, children, _child_layouts, DepthZone::background, content_rect,
+                                      resolved_inline_spacing(), content_rect.size.x);
+        detail::layout_layer_children(this, children, _child_layouts, DepthZone::work, content_rect,
+                                      resolved_inline_spacing(), content_rect.size.x);
+        detail::layout_layer_children(this, children, _child_layouts, DepthZone::foreground, content_rect,
+                                      resolved_inline_spacing(), content_rect.size.x);
     }
 
     void Block::update_layout_min_size_force() { update_layout_min_size_with(zero_vec4(), zero_vec4()); }
 
     void Block::update_layout_min_size_with(const amal::vec4 &margin, const amal::vec4 &padding)
     {
+        // Overlay layers do not contribute to the Block's required size, but their own
+        // measurements must still be current before arrange. Otherwise a child that has
+        // just become visible is aligned using its stale (usually zero) required size.
+        (void)detail::compute_layer_children_required_size(children, _child_layouts, DepthZone::background,
+                                                           resolved_inline_spacing(), 0.0f, true);
+        (void)detail::compute_layer_children_required_size(children, _child_layouts, DepthZone::foreground,
+                                                           resolved_inline_spacing(), 0.0f, true);
         const amal::vec2 content_required = compute_content_min_size();
         amal::vec2 required{margin.x + margin.z + padding.x + padding.z + content_required.x,
                             margin.y + margin.w + padding.y + padding.w + content_required.y};
@@ -677,13 +679,11 @@ namespace auik
             Widget::update_layout(true);
             set_clip_id(content_clip_id());
             const amal::rect content_rect{position(), size()};
-            detail::layout_layer_children_fast_update(children, _child_layouts, _child_layers,
-                                                      BlockChildLayer::background, content_rect,
+            detail::layout_layer_children_fast_update(children, _child_layouts, DepthZone::background, content_rect,
                                                       resolved_inline_spacing(), size().x);
-            detail::layout_layer_children_fast_update(children, _child_layouts, _child_layers, BlockChildLayer::work,
-                                                      content_rect, resolved_inline_spacing(), size().x);
-            detail::layout_layer_children_fast_update(children, _child_layouts, _child_layers,
-                                                      BlockChildLayer::foreground, content_rect,
+            detail::layout_layer_children_fast_update(children, _child_layouts, DepthZone::work, content_rect,
+                                                      resolved_inline_spacing(), size().x);
+            detail::layout_layer_children_fast_update(children, _child_layouts, DepthZone::foreground, content_rect,
                                                       resolved_inline_spacing(), size().x);
             return;
         }
@@ -754,19 +754,17 @@ namespace auik
     u32 Block::get_depth_requirement() const
     {
         u32 requirement = 1u;
-        auto add_layer = [&](BlockChildLayer layer) {
+        auto add_layer = [&](DepthZone layer) {
             for (size_t i = 0u; i < children.size(); ++i)
             {
-                const BlockChildLayer child_layer = i < _child_layers.size() ? _child_layers[i] : BlockChildLayer::work;
-                if (child_layer != layer) continue;
                 auto *child = children[i];
-                if (!child || !child->is_visible()) continue;
+                if (!child || child->get_depth_zone() != layer || !child->is_visible()) continue;
                 requirement += amal::max(child->get_depth_requirement(), 1u);
             }
         };
-        add_layer(BlockChildLayer::background);
-        add_layer(BlockChildLayer::work);
-        add_layer(BlockChildLayer::foreground);
+        add_layer(DepthZone::background);
+        add_layer(DepthZone::work);
+        add_layer(DepthZone::foreground);
         return requirement;
     }
 
@@ -775,19 +773,18 @@ namespace auik
         Widget::update_depth(depth_range);
         DepthCursor cursor(this->depth_range(), get_depth_requirement());
         cursor.next(1u);
-        auto update_layer = [&](BlockChildLayer layer) {
+        auto update_layer = [&](DepthZone layer) {
             for (size_t i = 0u; i < children.size(); ++i)
             {
                 auto *child = children[i];
                 if (!child || !child->is_visible()) continue;
-                const BlockChildLayer child_layer = i < _child_layers.size() ? _child_layers[i] : BlockChildLayer::work;
-                if (child_layer != layer) continue;
+                if (child->get_depth_zone() != layer) continue;
                 child->update_depth(cursor.next(depth_requirement_of(child)));
             }
         };
-        update_layer(BlockChildLayer::background);
-        update_layer(BlockChildLayer::work);
-        update_layer(BlockChildLayer::foreground);
+        update_layer(DepthZone::background);
+        update_layer(DepthZone::work);
+        update_layer(DepthZone::foreground);
     }
 
     void Block::back_hit_depth()
@@ -808,19 +805,18 @@ namespace auik
     {
         if (!is_visible() && !(ctx.reason & DrawReasonBits::invalidate)) return;
         const amal::vec4 content_clip = get_content_clip_rect();
-        auto draw_layer = [&](BlockChildLayer layer) {
+        auto draw_layer = [&](DepthZone layer) {
             for (size_t i = 0u; i < children.size(); ++i)
             {
                 auto *child = children[i];
                 if (!child || (!child->is_visible() && !(ctx.reason & DrawReasonBits::invalidate))) continue;
-                const BlockChildLayer child_layer = i < _child_layers.size() ? _child_layers[i] : BlockChildLayer::work;
-                if (child_layer != layer) continue;
+                if (child->get_depth_zone() != layer) continue;
                 detail::draw_child_in_clip(child, ctx, content_clip);
             }
         };
-        draw_layer(BlockChildLayer::background);
-        draw_layer(BlockChildLayer::work);
-        draw_layer(BlockChildLayer::foreground);
+        draw_layer(DepthZone::background);
+        draw_layer(DepthZone::work);
+        draw_layer(DepthZone::foreground);
     }
 
     void Block::on_attach()
@@ -1147,15 +1143,15 @@ namespace auik
             const amal::vec2 layout_view_size{need_scroll_x ? amal::max(_scroll_content_size.x, _scroll_view_size.x)
                                                             : _scroll_view_size.x,
                                               _scroll_view_size.y};
-            detail::layout_layer_children_fast_update(children, _child_layouts, _child_layers,
-                                                      BlockChildLayer::background, {content_pos, _scroll_view_size},
-                                                      resolved_inline_spacing(), _scroll_view_size.x);
-            detail::layout_layer_children_fast_update(children, _child_layouts, _child_layers, BlockChildLayer::work,
+            detail::layout_layer_children_fast_update(children, _child_layouts, DepthZone::background,
+                                                      {content_pos, _scroll_view_size}, resolved_inline_spacing(),
+                                                      _scroll_view_size.x);
+            detail::layout_layer_children_fast_update(children, _child_layouts, DepthZone::work,
                                                       {content_pos - _content_offset, layout_view_size},
                                                       resolved_inline_spacing(), _scroll_view_size.x);
-            detail::layout_layer_children_fast_update(children, _child_layouts, _child_layers,
-                                                      BlockChildLayer::foreground, {content_pos, _scroll_view_size},
-                                                      resolved_inline_spacing(), _scroll_view_size.x);
+            detail::layout_layer_children_fast_update(children, _child_layouts, DepthZone::foreground,
+                                                      {content_pos, _scroll_view_size}, resolved_inline_spacing(),
+                                                      _scroll_view_size.x);
             return;
         }
 
@@ -1193,7 +1189,7 @@ namespace auik
         // container's wrapping with the cached child sizes; measuring every child again here
         // duplicated the full subtree traversal performed before arrange.
         amal::vec2 children_layout_size = detail::compute_layer_children_required_size(
-            children, _child_layouts, _child_layers, BlockChildLayer::work, resolved_inline_spacing(), 0.0f, false);
+            children, _child_layouts, DepthZone::work, resolved_inline_spacing(), 0.0f, false);
         bool need_scroll_y = scroll_y_enabled && children_layout_size.y > available_size.y;
         bool need_scroll_x = scroll_x_enabled && children_layout_size.x > available_size.x;
         for (int i = 0; i < 2; ++i)
@@ -1201,8 +1197,7 @@ namespace auik
             const f32 viewport_w = amal::max(available_size.x - (need_scroll_y ? bar_w : 0.0f), 0.0f);
             const f32 viewport_h = amal::max(available_size.y - (need_scroll_x ? bar_h : 0.0f), 0.0f);
             children_layout_size = detail::compute_layer_children_required_size(
-                children, _child_layouts, _child_layers, BlockChildLayer::work, resolved_inline_spacing(), viewport_w,
-                false);
+                children, _child_layouts, DepthZone::work, resolved_inline_spacing(), viewport_w, false);
             const bool next_y = scroll_y_enabled && children_layout_size.y > viewport_h;
             const bool next_x = scroll_x_enabled && children_layout_size.x > viewport_w;
             if (next_y == need_scroll_y && next_x == need_scroll_x) break;
@@ -1236,16 +1231,15 @@ namespace auik
         amal::vec2 layout_view_size{need_scroll_x ? amal::max(_scroll_content_size.x, _scroll_view_size.x)
                                                   : _scroll_view_size.x,
                                     _scroll_view_size.y};
-        detail::layout_layer_children(this, children, _child_layouts, _child_layers, BlockChildLayer::background,
+        detail::layout_layer_children(this, children, _child_layouts, DepthZone::background,
                                       {content_pos, _scroll_view_size}, resolved_inline_spacing(), _scroll_view_size.x);
-        detail::layout_layer_children(this, children, _child_layouts, _child_layers, BlockChildLayer::work,
+        detail::layout_layer_children(this, children, _child_layouts, DepthZone::work,
                                       {content_pos - _content_offset, layout_view_size}, resolved_inline_spacing(),
                                       _scroll_view_size.x);
-        detail::layout_layer_children(this, children, _child_layouts, _child_layers, BlockChildLayer::foreground,
+        detail::layout_layer_children(this, children, _child_layouts, DepthZone::foreground,
                                       {content_pos, _scroll_view_size}, resolved_inline_spacing(), _scroll_view_size.x);
-        const amal::vec2 laid_out_children_size =
-            detail::compute_layer_children_required_size(children, _child_layouts, _child_layers, BlockChildLayer::work,
-                                                         resolved_inline_spacing(), layout_view_size.x, false);
+        const amal::vec2 laid_out_children_size = detail::compute_layer_children_required_size(
+            children, _child_layouts, DepthZone::work, resolved_inline_spacing(), layout_view_size.x, false);
         const amal::vec2 laid_out_scroll_content_size =
             with_scroll_trailing_padding(laid_out_children_size, need_scroll_x, need_scroll_y);
         if (laid_out_scroll_content_size != pre_layout_children_size)
@@ -1258,18 +1252,15 @@ namespace auik
                 const f32 viewport_w = amal::max(available_size.x - (refined_need_y ? bar_w : 0.0f), 0.0f);
                 const f32 viewport_h = amal::max(available_size.y - (refined_need_x ? bar_h : 0.0f), 0.0f);
                 const f32 layout_w = refined_need_x ? amal::max(children_layout_size.x, viewport_w) : viewport_w;
-                detail::layout_layer_children(this, children, _child_layouts, _child_layers,
-                                              BlockChildLayer::background, {content_pos, _scroll_view_size},
-                                              resolved_inline_spacing(), viewport_w);
-                detail::layout_layer_children(this, children, _child_layouts, _child_layers, BlockChildLayer::work,
+                detail::layout_layer_children(this, children, _child_layouts, DepthZone::background,
+                                              {content_pos, _scroll_view_size}, resolved_inline_spacing(), viewport_w);
+                detail::layout_layer_children(this, children, _child_layouts, DepthZone::work,
                                               {content_pos - _content_offset, {layout_w, viewport_h}},
                                               resolved_inline_spacing(), viewport_w);
-                detail::layout_layer_children(this, children, _child_layouts, _child_layers,
-                                              BlockChildLayer::foreground, {content_pos, _scroll_view_size},
-                                              resolved_inline_spacing(), viewport_w);
+                detail::layout_layer_children(this, children, _child_layouts, DepthZone::foreground,
+                                              {content_pos, _scroll_view_size}, resolved_inline_spacing(), viewport_w);
                 children_layout_size = detail::compute_layer_children_required_size(
-                    children, _child_layouts, _child_layers, BlockChildLayer::work, resolved_inline_spacing(), layout_w,
-                    false);
+                    children, _child_layouts, DepthZone::work, resolved_inline_spacing(), layout_w, false);
                 const bool next_y = scroll_y_enabled && children_layout_size.y > viewport_h;
                 const bool next_x = scroll_x_enabled && children_layout_size.x > viewport_w;
                 if (next_y == refined_need_y && next_x == refined_need_x) break;
@@ -1295,13 +1286,13 @@ namespace auik
             layout_view_size = {need_scroll_x ? amal::max(_scroll_content_size.x, _scroll_view_size.x)
                                               : _scroll_view_size.x,
                                 _scroll_view_size.y};
-            detail::layout_layer_children(this, children, _child_layouts, _child_layers, BlockChildLayer::background,
+            detail::layout_layer_children(this, children, _child_layouts, DepthZone::background,
                                           {content_pos, _scroll_view_size}, resolved_inline_spacing(),
                                           _scroll_view_size.x);
-            detail::layout_layer_children(this, children, _child_layouts, _child_layers, BlockChildLayer::work,
+            detail::layout_layer_children(this, children, _child_layouts, DepthZone::work,
                                           {content_pos - _content_offset, layout_view_size}, resolved_inline_spacing(),
                                           _scroll_view_size.x);
-            detail::layout_layer_children(this, children, _child_layouts, _child_layers, BlockChildLayer::foreground,
+            detail::layout_layer_children(this, children, _child_layouts, DepthZone::foreground,
                                           {content_pos, _scroll_view_size}, resolved_inline_spacing(),
                                           _scroll_view_size.x);
         }
@@ -1444,19 +1435,18 @@ namespace auik
         const amal::vec2 bg_range = cursor.next(1u);
         _bg_rect.depth = next_depth(bg_range);
         _bg_rect.hit_depth = _bg_rect.depth;
-        auto update_layer = [&](BlockChildLayer layer) {
+        auto update_layer = [&](DepthZone layer) {
             for (size_t i = 0u; i < children.size(); ++i)
             {
                 auto *child = children[i];
                 if (!child || !child->is_visible()) continue;
-                const BlockChildLayer child_layer = i < _child_layers.size() ? _child_layers[i] : BlockChildLayer::work;
-                if (child_layer != layer) continue;
+                if (child->get_depth_zone() != layer) continue;
                 child->update_depth(cursor.next(depth_requirement_of(child)));
             }
         };
-        update_layer(BlockChildLayer::background);
-        update_layer(BlockChildLayer::work);
-        update_layer(BlockChildLayer::foreground);
+        update_layer(DepthZone::background);
+        update_layer(DepthZone::work);
+        update_layer(DepthZone::foreground);
         if (_scrollbar_x && _scrollbar_x->is_visible())
             _scrollbar_x->update_depth(cursor.next(_scrollbar_x->get_depth_requirement()));
         if (_scrollbar_y && _scrollbar_y->is_visible())
@@ -1673,7 +1663,6 @@ namespace auik
             acul::release(child);
         }
         _children.clear();
-        _child_layers.clear();
         _active_index = 0u;
     }
 
@@ -1683,32 +1672,32 @@ namespace auik
         static_cast<WidgetRef *>(child)->set_ref_active(active);
     }
 
-    void WidgetStack::add_layer_child(Widget *child, BlockChildLayer layer)
+    void WidgetStack::add_layer_child(Widget *child, DepthZone layer)
     {
         assert(child && "child is null");
         child->set_parent(this);
         child->set_focus_parent(parent() && id() == parent()->id() ? parent() : this);
         child->update_style_invalidated();
+        child->set_depth_zone(layer);
         _children.push_back(child);
-        _child_layers.push_back(layer);
-        if (layer == BlockChildLayer::work && active_child() == child) set_child_ref_active(child, true);
+        if (layer == DepthZone::work && active_child() == child) set_child_ref_active(child, true);
         invalidate_layout_measure();
     }
 
-    void WidgetStack::add_child(Widget *child) { add_layer_child(child, BlockChildLayer::work); }
+    void WidgetStack::add_child(Widget *child) { add_layer_child(child, DepthZone::work); }
 
-    void WidgetStack::add_child_to_background(Widget *child) { add_layer_child(child, BlockChildLayer::background); }
+    void WidgetStack::add_child_to_background(Widget *child) { add_layer_child(child, DepthZone::background); }
 
-    void WidgetStack::add_child_to_foreground(Widget *child) { add_layer_child(child, BlockChildLayer::foreground); }
+    void WidgetStack::add_child_to_foreground(Widget *child) { add_layer_child(child, DepthZone::foreground); }
 
     Widget *WidgetStack::active_child() const
     {
         size_t work_index = 0u;
         for (size_t i = 0u; i < _children.size(); ++i)
         {
-            const auto layer = i < _child_layers.size() ? _child_layers[i] : BlockChildLayer::work;
-            if (layer != BlockChildLayer::work) continue;
-            if (work_index == _active_index) return _children[i];
+            auto *child = _children[i];
+            if (!child || child->get_depth_zone() != DepthZone::work) continue;
+            if (work_index == _active_index) return child;
             ++work_index;
         }
         return nullptr;
@@ -1721,8 +1710,7 @@ namespace auik
         for (size_t i = 0u; i < _children.size(); ++i)
         {
             if (_children[i] != child) continue;
-            const auto layer = i < _child_layers.size() ? _child_layers[i] : BlockChildLayer::work;
-            return layer != BlockChildLayer::work || is_active_child(child);
+            return child->get_depth_zone() != DepthZone::work || is_active_child(child);
         }
         return true;
     }
@@ -1732,8 +1720,8 @@ namespace auik
         size_t work_count = 0u;
         for (size_t i = 0u; i < _children.size(); ++i)
         {
-            const auto layer = i < _child_layers.size() ? _child_layers[i] : BlockChildLayer::work;
-            if (layer == BlockChildLayer::work) ++work_count;
+            auto *child = _children[i];
+            if (child && child->get_depth_zone() == DepthZone::work) ++work_count;
         }
         if (index >= work_count || index == _active_index) return;
         set_child_ref_active(active_child(), false);
@@ -1765,20 +1753,18 @@ namespace auik
         {
             auto *child = _children[i];
             if (!child || !child->is_visible()) continue;
-            const auto layer = i < _child_layers.size() ? _child_layers[i] : BlockChildLayer::work;
-            if (layer == BlockChildLayer::work) continue;
+            if (child->get_depth_zone() == DepthZone::work) continue;
             child->update_layout_min_size();
         }
     }
 
-    void WidgetStack::update_layer_layout(BlockChildLayer layer)
+    void WidgetStack::update_layer_layout(DepthZone layer)
     {
         for (size_t i = 0u; i < _children.size(); ++i)
         {
             auto *child = _children[i];
             if (!child || !child->is_visible()) continue;
-            const auto child_layer = i < _child_layers.size() ? _child_layers[i] : BlockChildLayer::work;
-            if (child_layer != layer) continue;
+            if (child->get_depth_zone() != layer) continue;
             child->set_position(position());
             child->set_layout_size(size());
             child->update_layout(true);
@@ -1791,14 +1777,14 @@ namespace auik
         set_layout_size(resolve_layout_size_from_required());
         Widget::update_layout(true);
         set_clip_id(content_clip_id());
-        update_layer_layout(BlockChildLayer::background);
+        update_layer_layout(DepthZone::background);
         if (auto *child = active_child())
         {
             child->set_position(position());
             child->set_layout_size(size());
             child->update_layout(true);
         }
-        update_layer_layout(BlockChildLayer::foreground);
+        update_layer_layout(DepthZone::foreground);
     }
 
     void WidgetStack::translate(const amal::vec2 &delta)
@@ -1810,8 +1796,8 @@ namespace auik
         {
             auto *child = _children[i];
             if (!child || child == active_child()) continue;
-            const auto layer = i < _child_layers.size() ? _child_layers[i] : BlockChildLayer::work;
-            if (layer != BlockChildLayer::background && layer != BlockChildLayer::foreground) continue;
+            const auto zone = child->get_depth_zone();
+            if (zone != DepthZone::background && zone != DepthZone::foreground) continue;
             child->translate(delta);
         }
     }
@@ -1824,8 +1810,8 @@ namespace auik
         {
             auto *child = _children[i];
             if (!child || child == active_child()) continue;
-            const auto layer = i < _child_layers.size() ? _child_layers[i] : BlockChildLayer::work;
-            if (layer != BlockChildLayer::background && layer != BlockChildLayer::foreground) continue;
+            const auto zone = child->get_depth_zone();
+            if (zone != DepthZone::background && zone != DepthZone::foreground) continue;
             child->reset_clip_rect_records();
         }
     }
@@ -1837,16 +1823,14 @@ namespace auik
         {
             auto *child = _children[i];
             if (!child || !child->is_visible()) continue;
-            const auto layer = i < _child_layers.size() ? _child_layers[i] : BlockChildLayer::work;
-            if (layer == BlockChildLayer::background) child->rebuild_clip_rects();
+            if (child->get_depth_zone() == DepthZone::background) child->rebuild_clip_rects();
         }
         if (auto *child = active_child()) child->rebuild_clip_rects();
         for (size_t i = 0u; i < _children.size(); ++i)
         {
             auto *child = _children[i];
             if (!child || !child->is_visible()) continue;
-            const auto layer = i < _child_layers.size() ? _child_layers[i] : BlockChildLayer::work;
-            if (layer == BlockChildLayer::foreground) child->rebuild_clip_rects();
+            if (child->get_depth_zone() == DepthZone::foreground) child->rebuild_clip_rects();
         }
     }
 
@@ -1858,8 +1842,8 @@ namespace auik
         {
             auto *child = _children[i];
             if (!child || child == active_child()) continue;
-            const auto layer = i < _child_layers.size() ? _child_layers[i] : BlockChildLayer::work;
-            if (layer != BlockChildLayer::background && layer != BlockChildLayer::foreground) continue;
+            const auto zone = child->get_depth_zone();
+            if (zone != DepthZone::background && zone != DepthZone::foreground) continue;
             child->reset_draw_records();
         }
     }
@@ -1867,20 +1851,18 @@ namespace auik
     u32 WidgetStack::get_depth_requirement() const
     {
         u32 requirement = 1u;
-        auto add_layer = [&](BlockChildLayer layer) {
+        auto add_layer = [&](DepthZone layer) {
             for (size_t i = 0u; i < _children.size(); ++i)
             {
-                const auto child_layer = i < _child_layers.size() ? _child_layers[i] : BlockChildLayer::work;
-                if (child_layer != layer) continue;
                 auto *child = _children[i];
-                if (!child || !child->is_visible()) continue;
-                if (layer == BlockChildLayer::work && child != active_child()) continue;
+                if (!child || child->get_depth_zone() != layer || !child->is_visible()) continue;
+                if (layer == DepthZone::work && child != active_child()) continue;
                 requirement += amal::max(child->get_depth_requirement(), 1u);
             }
         };
-        add_layer(BlockChildLayer::background);
-        add_layer(BlockChildLayer::work);
-        add_layer(BlockChildLayer::foreground);
+        add_layer(DepthZone::background);
+        add_layer(DepthZone::work);
+        add_layer(DepthZone::foreground);
         return requirement;
     }
 
@@ -1889,20 +1871,19 @@ namespace auik
         Widget::update_depth(depth_range);
         DepthCursor cursor(this->depth_range(), get_depth_requirement());
         cursor.next(1u);
-        auto update_layer = [&](BlockChildLayer layer) {
+        auto update_layer = [&](DepthZone layer) {
             for (size_t i = 0u; i < _children.size(); ++i)
             {
                 auto *child = _children[i];
                 if (!child || !child->is_visible()) continue;
-                const auto child_layer = i < _child_layers.size() ? _child_layers[i] : BlockChildLayer::work;
-                if (child_layer != layer) continue;
-                if (layer == BlockChildLayer::work && child != active_child()) continue;
+                if (child->get_depth_zone() != layer) continue;
+                if (layer == DepthZone::work && child != active_child()) continue;
                 child->update_depth(cursor.next(amal::max(child->get_depth_requirement(), 1u)));
             }
         };
-        update_layer(BlockChildLayer::background);
-        update_layer(BlockChildLayer::work);
-        update_layer(BlockChildLayer::foreground);
+        update_layer(DepthZone::background);
+        update_layer(DepthZone::work);
+        update_layer(DepthZone::foreground);
     }
 
     void WidgetStack::back_hit_depth()
@@ -1913,8 +1894,8 @@ namespace auik
         {
             auto *child = _children[i];
             if (!child || child == active_child()) continue;
-            const auto layer = i < _child_layers.size() ? _child_layers[i] : BlockChildLayer::work;
-            if (layer != BlockChildLayer::background && layer != BlockChildLayer::foreground) continue;
+            const auto zone = child->get_depth_zone();
+            if (zone != DepthZone::background && zone != DepthZone::foreground) continue;
             child->back_hit_depth();
         }
     }
@@ -1927,8 +1908,8 @@ namespace auik
         {
             auto *child = _children[i];
             if (!child || child == active_child()) continue;
-            const auto layer = i < _child_layers.size() ? _child_layers[i] : BlockChildLayer::work;
-            if (layer != BlockChildLayer::background && layer != BlockChildLayer::foreground) continue;
+            const auto zone = child->get_depth_zone();
+            if (zone != DepthZone::background && zone != DepthZone::foreground) continue;
             child->restore_hit_depth();
         }
     }
@@ -1936,20 +1917,19 @@ namespace auik
     void WidgetStack::draw(DrawCtx &ctx)
     {
         if (!is_visible() && !(ctx.reason & DrawReasonBits::invalidate)) return;
-        auto draw_layer = [&](BlockChildLayer layer) {
+        auto draw_layer = [&](DepthZone layer) {
             for (size_t i = 0u; i < _children.size(); ++i)
             {
                 auto *child = _children[i];
                 if (!child || (!child->is_visible() && !(ctx.reason & DrawReasonBits::invalidate))) continue;
-                const auto child_layer = i < _child_layers.size() ? _child_layers[i] : BlockChildLayer::work;
-                if (child_layer != layer) continue;
-                if (layer == BlockChildLayer::work && child != active_child()) continue;
+                if (child->get_depth_zone() != layer) continue;
+                if (layer == DepthZone::work && child != active_child()) continue;
                 detail::draw_child_in_clip(child, ctx, get_content_clip_rect());
             }
         };
-        draw_layer(BlockChildLayer::background);
+        draw_layer(DepthZone::background);
         if (auto *child = active_child()) detail::draw_child_in_clip(child, ctx, get_content_clip_rect());
-        draw_layer(BlockChildLayer::foreground);
+        draw_layer(DepthZone::foreground);
     }
 
     void WidgetStack::on_attach()
@@ -2730,20 +2710,18 @@ namespace auik
         struct StackChildData
         {
             umbf::Block *block = nullptr;
-            BlockChildLayer layer = BlockChildLayer::work;
+            DepthZone layer = DepthZone::work;
         };
 
         acul::vector<StackChildData> collect_stack_children(const WidgetStack &stack)
         {
             acul::vector<StackChildData> out;
             const auto &children = stack.children();
-            const auto &layers = stack.child_layers();
             for (size_t child_i = 0u; child_i < children.size(); ++child_i)
             {
                 auto *child = children[child_i];
                 if (!child || !(child->widget_flags & WidgetFlagBits::configurable)) continue;
-                const auto layer = child_i < layers.size() ? layers[child_i] : BlockChildLayer::work;
-                out.push_back({child, layer});
+                out.push_back({child, child->get_depth_zone()});
             }
             return out;
         }
@@ -2774,13 +2752,13 @@ namespace auik
             u32 child_count = 0u;
             stream.read(active_index).read(child_count);
 
-            acul::vector<BlockChildLayer> layers;
+            acul::vector<DepthZone> layers;
             layers.reserve(child_count);
             for (u32 child_i = 0u; child_i < child_count; ++child_i)
             {
-                u32 layer = static_cast<u32>(BlockChildLayer::work);
+                u32 layer = static_cast<u32>(DepthZone::work);
                 stream.read(layer);
-                layers.push_back(static_cast<BlockChildLayer>(layer));
+                layers.push_back(static_cast<DepthZone>(layer));
             }
 
             acul::vector<umbf::Block *> children;
@@ -2791,15 +2769,15 @@ namespace auik
             for (u32 child_i = 0u; child_i < child_count; ++child_i)
             {
                 auto *child = static_cast<Widget *>(children[child_i]);
-                switch (child_i < layers.size() ? layers[child_i] : BlockChildLayer::work)
+                switch (child_i < layers.size() ? layers[child_i] : DepthZone::work)
                 {
-                    case BlockChildLayer::background:
+                    case DepthZone::background:
                         widget->add_child_to_background(child);
                         break;
-                    case BlockChildLayer::foreground:
+                    case DepthZone::foreground:
                         widget->add_child_to_foreground(child);
                         break;
-                    case BlockChildLayer::work:
+                    case DepthZone::work:
                     default:
                         widget->add_child(child);
                         break;

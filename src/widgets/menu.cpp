@@ -710,7 +710,8 @@ namespace auik
             if (!item) continue;
             append_root_tab(item);
         }
-        const u32 prev_selected = selected_id();
+        const auto selected = selected_ids();
+        const u32 prev_selected = selected.empty() ? 0u : selected[0];
         const u32 prev_selected_index = find_index_by_element_id(prev_selected);
         if (prev_selected_index < _items.size() && _items[prev_selected_index].tab)
             _items[prev_selected_index].tab->set_selected(false);

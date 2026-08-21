@@ -1111,7 +1111,8 @@ namespace auik
         if (!node->tabbar || insert_index >= node->tabbar->child_size()) return true;
         const u32 element_id = node->tabbar->item_element_id(insert_index);
         if (element_id == 0u) return true;
-        node->tabbar->set_selected_silent(element_id);
+        node->tabbar->set_selected(element_id);
+        node->tabbar->update_style_invalidated();
         fit_node_to_required_width(node_id, false);
         update_depth(this->depth_range());
         update_layout_sync(true);
@@ -1303,8 +1304,10 @@ namespace auik
             for (size_t i = 0; i < node.windows.size() && i < node.tabbar->child_size(); ++i)
                 node.tabbar->set_item_user_data(static_cast<u32>(i), node.windows[i]);
             if (node.record_active_window && node.active_window_index < node.tabbar->child_size())
-                node.tabbar->set_selected_silent(
-                    node.tabbar->item_element_id(static_cast<u32>(node.active_window_index)));
+            {
+                node.tabbar->set_selected(node.tabbar->item_element_id(static_cast<u32>(node.active_window_index)));
+                node.tabbar->update_style_invalidated();
+            }
             return;
         }
 
@@ -1322,7 +1325,7 @@ namespace auik
         for (size_t i = 0; i < node.windows.size() && i < node.tabbar->child_size(); ++i)
             node.tabbar->set_item_user_data(static_cast<u32>(i), node.windows[i]);
         if (node.record_active_window && node.active_window_index < node.tabbar->child_size())
-            node.tabbar->set_selected_silent(node.tabbar->item_element_id(static_cast<u32>(node.active_window_index)));
+            node.tabbar->set_selected(node.tabbar->item_element_id(static_cast<u32>(node.active_window_index)));
         node.tabbar->update_style_invalidated();
         node.tabbar->update_depth(is_valid_depth_range(_tabbar_depth_range)
                                       ? _tabbar_depth_range
@@ -1524,7 +1527,12 @@ namespace auik
     size_t Dockspace::selected_window_index(const Node &node) const
     {
         if (!node.tabbar || node.windows.empty()) return 0u;
-        return amal::min(static_cast<size_t>(node.tabbar->selected_index()), node.windows.size() - 1u);
+        const auto selected_ids = node.tabbar->selected_ids();
+        if (selected_ids.empty()) return 0u;
+        for (u32 index = 0u; index < node.tabbar->child_size(); ++index)
+            if (node.tabbar->item_element_id(index) == selected_ids[0])
+                return amal::min(static_cast<size_t>(index), node.windows.size() - 1u);
+        return 0u;
     }
 
     amal::vec2 Dockspace::measure_node(DockNodeID node_id)

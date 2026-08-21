@@ -1540,10 +1540,12 @@ namespace auik
         }
         if (index >= count) return;
 
+        const DepthZone depth_zone = self_window->get_depth_zone();
         u32 top_index = count;
         for (u32 i = count; i > 0u; --i)
         {
-            if (!as_root_window(tree[i - 1u])) continue;
+            auto *candidate = as_root_window(tree[i - 1u]);
+            if (!candidate || candidate->get_depth_zone() != depth_zone) continue;
             top_index = i - 1u;
             break;
         }

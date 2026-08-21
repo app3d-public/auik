@@ -189,16 +189,23 @@ namespace auik
         bool movable() const { return _tab_flags & TabbarFlagBits::movable; }
         bool closable() const { return _tab_flags & TabbarFlagBits::closable; }
 
-        AUIK_EXPORT u32 selected_index() const;
-        AUIK_EXPORT u32 selected_id() const;
-        acul::vector<u32> selected_ids() const;
+        AUIK_EXPORT acul::vector<u32> selected_ids() const;
         AUIK_EXPORT void set_selected(u32 element_id);
         AUIK_EXPORT void set_selected(const acul::vector<u32> &element_ids);
-        AUIK_EXPORT void set_selected_silent(u32 element_id);
         AUIK_EXPORT bool is_selected(u32 element_id) const;
         AUIK_EXPORT bool is_changed(u32 element_id) const;
         AUIK_EXPORT void close_item(u32 element_id);
         TabbarChangeReason change_reason() const { return _change_reason; }
+        u32 change_element_id() const { return _change_element_id; }
+        bool mark_changed(TabbarChangeReason reason, u32 element_id = 0u)
+        {
+            _change_reason = reason;
+            _change_element_id = element_id;
+            const bool prevented = Widget::mark_changed();
+            if (prevented) _change_reason = TabbarChangeReason::none;
+            return prevented;
+        }
+        bool mark_changed() { return mark_changed(TabbarChangeReason::selection); }
         AUIK_EXPORT u32 insertion_index_at(const amal::vec2 &point) const;
         const amal::vec2 &drag_grab_offset() const { return _drag_grab_offset; }
         bool has_drag_grab_offset() const { return _drag_grab_offset_valid; }
@@ -240,14 +247,6 @@ namespace auik
         virtual StyleState resolve_tab_item_state(u32 index,
                                                   const detail::WidgetStyleSelectorTransition &transition) const;
         virtual bool auto_select_first_item() const { return true; }
-        bool mark_changed(TabbarChangeReason reason)
-        {
-            _change_reason = reason;
-            const bool prevented = Widget::mark_changed();
-            if (prevented) _change_reason = TabbarChangeReason::none;
-            return prevented;
-        }
-        bool mark_changed() { return mark_changed(TabbarChangeReason::selection); }
         AUIK_EXPORT StyleUpdateFlags update_item_state(u32 index,
                                                        const detail::WidgetStyleSelectorTransition &transition);
         AUIK_EXPORT StyleUpdateFlags update_tab_item_style(u32 index,
@@ -277,7 +276,6 @@ namespace auik
         detail::PopupTrigger *_overflow_button = nullptr;
         Window *_popup = nullptr;
         const TabbarFlags _tab_flags;
-        u32 _selected_index = 0u;
         u32 _visible_count = 0u;
         u32 _overflow_start = 0u;
         u32 _next_element_id = 1u;
@@ -293,6 +291,7 @@ namespace auik
         f32 _scroll_offset = 0.0f;
         f32 _content_width = 0.0f;
         TabbarChangeReason _change_reason = TabbarChangeReason::none;
+        u32 _change_element_id = 0u;
         u32 _item_style_tag = AUIK_STYLE_TAG_TABBAR_ITEM;
         u32 _selected_item_style_tag = AUIK_STYLE_TAG_TABBAR_ITEM_SELECTED;
         u32 _popup_item_style_tag = AUIK_STYLE_TAG_TABBAR_POPUP_ITEM;

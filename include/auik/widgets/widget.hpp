@@ -13,7 +13,6 @@
 #include "../viewport.hpp"
 
 #define AUIK_UD_CUSTOM_DATA     0xFFFFu
-#define AUIK_UD_ROOT_DATA       0xFFFEu
 #define AUIK_UD_LOCALE_LITERAL  0xFFFCu
 #define AUIK_WIDGET_SIGN_IGNORE 0xA087D252u
 
@@ -50,6 +49,10 @@ namespace auik
     constexpr inline bool is_size_static_layout(f32 value) { return is_size_concrete(value) && value > 0.0f; }
 
     constexpr inline bool is_size_dynamic(f32 value) { return is_size_min_fit(value) || value >= AUIK_SIZE_X_FILL; }
+    constexpr inline bool is_position_undefined(const amal::vec2 &position)
+    {
+        return position.x == AUIK_POS_UNDEFINED_VALUE || position.y == AUIK_POS_UNDEFINED_VALUE;
+    }
 
     constexpr inline bool is_size_dynamic(const amal::vec2 &size)
     {
@@ -183,11 +186,6 @@ namespace auik
         void (*destroy)(void *) = nullptr;
         WidgetUserData *pNext = nullptr;
     };
-
-    namespace detail
-    {
-        using RootWidgetUserData = DepthZone;
-    }
 
     constexpr inline DrawReasonFlags get_draw_reason_from_style_update(StyleUpdateFlags flags)
     {
@@ -392,7 +390,11 @@ namespace auik
         inline bool is_attached() const { return _widget_state_flags & WidgetStateFlagBits::attached; }
         inline bool is_transient() const { return _widget_state_flags & WidgetStateFlagBits::transient; }
         inline Widget *parent() const { return _parent; }
-        inline void set_parent(Widget *parent) { _parent = parent; }
+        inline void set_parent(Widget *parent)
+        {
+            _parent = parent;
+            if (_parent && !is_visible()) set_position(AUIK_POS_UNDEFINED);
+        }
         inline Widget *focus_parent() const { return _focus_parent; }
         inline void set_focus_parent(Widget *parent) { _focus_parent = parent; }
         inline detail::RectData &get_rect() { return _rect; }
@@ -411,6 +413,8 @@ namespace auik
 
         inline f32 get_z_order() const { return _rect.depth; }
         inline const amal::vec2 &depth_range() const { return _depth_range; }
+        inline DepthZone get_depth_zone() const { return _depth_zone; }
+        inline void set_depth_zone(DepthZone zone) { _depth_zone = zone; }
         inline amal::rect bounds() { return _rect.bounds; }
         inline const amal::rect &bounds() const { return _rect.bounds; }
         inline amal::vec2 &position() { return _rect.bounds.offset; }
@@ -898,6 +902,7 @@ namespace auik
         u32 _id;
         Widget *_parent = nullptr;
         Widget *_focus_parent = nullptr;
+        DepthZone _depth_zone = DepthZone::work;
         amal::vec2 _depth_range{0.0f, 1.0f};
         amal::vec2 _root_viewport_origin{0.0f, 0.0f};
         amal::vec2 _inline_size = AUIK_SIZE_INHERIT;
@@ -961,26 +966,6 @@ namespace auik
             }
         };
 
-        inline RootWidgetUserData *root_widget_user_data(Widget *widget)
-        {
-            auto *head = widget ? widget->user_data_head() : nullptr;
-            if (!head || head->tag_id != AUIK_UD_ROOT_DATA) return nullptr;
-            return static_cast<RootWidgetUserData *>(head->handle);
-        }
-
-        inline const RootWidgetUserData *root_widget_user_data(const Widget *widget)
-        {
-            auto *head = widget ? widget->user_data_head() : nullptr;
-            if (!head || head->tag_id != AUIK_UD_ROOT_DATA) return nullptr;
-            return static_cast<const RootWidgetUserData *>(head->handle);
-        }
-
-        inline DepthZone root_widget_depth_zone(const Widget *widget)
-        {
-            auto *data = root_widget_user_data(widget);
-            return data ? *data : DepthZone::work;
-        }
-
         AUIK_EXPORT void setup_root_window(Widget *widget);
         AUIK_EXPORT void teardown_root_window(Widget *widget);
     } // namespace detail
@@ -1032,11 +1017,26 @@ namespace auik
         return has_widget_state_style(widget, state) ? state : StyleState::normal;
     }
 
-    inline Widget *resolve_parent_layout_update_target(Widget *widget)
+    inline Widget *resolve_parent_layout_update_target(Widget *widget, bool visibility_change = false)
     {
         if (!widget) return nullptr;
-        Widget *target = widget->parent() ? widget->parent() : widget;
-        while (target->parent() && !target->is_fixed()) target = target->parent();
+        auto *parent = widget->parent();
+        if (!parent) return widget;
+
+        const auto source_zone = widget->get_depth_zone();
+        if (parent->get_depth_zone() != source_zone)
+        {
+            if (visibility_change && is_position_undefined(widget->position())) return parent;
+            return widget;
+        }
+
+        Widget *target = parent;
+        while (target->parent() && !target->is_fixed())
+        {
+            auto *next = target->parent();
+            if (next->get_depth_zone() != source_zone) break;
+            target = next;
+        }
         return target;
     }
 

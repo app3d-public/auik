@@ -155,6 +155,13 @@ namespace auik
         mark_host_refresh_request();
     }
 
+    static inline void invalidate_item_draw_records(Tabbar::Item &item)
+    {
+        if (item.tab) item.tab->invalidate_draw_commands(DrawReasonBits::layout);
+        if (item.change_icon) item.change_icon->invalidate_draw_commands(DrawReasonBits::layout);
+        if (item.close_button) item.close_button->invalidate_draw_commands(DrawReasonBits::layout);
+    }
+
     Tabbar::Tabbar(u32 id, acul::vector<acul::string> items, TabbarFlags tab_flags, WidgetFlags widget_flags,
                    amal::vec2 inline_size)
         : Tabbar(id, tab_flags, widget_flags, inline_size)
@@ -358,12 +365,7 @@ namespace auik
 
     void Tabbar::sync_items()
     {
-        if (_items.empty())
-        {
-            _selected_index = 0u;
-            return;
-        }
-        if (_selected_index >= _items.size()) _selected_index = static_cast<u32>(_items.size() - 1u);
+        if (_items.empty()) return;
         u32 first_selected_index = static_cast<u32>(-1);
         for (u32 i = 0; i < _items.size(); ++i)
         {
@@ -374,13 +376,11 @@ namespace auik
         }
         if (first_selected_index == static_cast<u32>(-1))
         {
-            if (auto_select_first_item() && _selected_index < _items.size() && _items[_selected_index].tab)
+            if (auto_select_first_item() && _items[0].tab)
             {
-                _items[_selected_index].tab->set_selected(true);
-                first_selected_index = _selected_index;
+                _items[0].tab->set_selected(true);
             }
         }
-        else _selected_index = first_selected_index;
 
         const auto transition = detail::get_widget_style_selector_transition(id());
         for (u32 i = 0; i < _items.size(); ++i)
@@ -450,10 +450,15 @@ namespace auik
             if (field_id == TABBAR_MODEL_SELECTED_FIELD_ID)
             {
                 const bool selected = read_tabbar_model_selected(*_model_binding, record_id);
-                if (selected) set_selected_silent(_items[index].element_id);
+                if (selected) set_selected(_items[index].element_id);
                 else if (_items[index].tab) _items[index].tab->set_selected(false);
                 const auto transition = detail::get_widget_style_selector_transition(id());
-                update_item_state(index, transition);
+                if (selected)
+                {
+                    for (u32 item_index = 0u; item_index < _items.size(); ++item_index)
+                        update_item_state(item_index, transition);
+                }
+                else update_item_state(index, transition);
                 refresh_layout_owner(*this);
                 return;
             }
@@ -523,10 +528,15 @@ namespace auik
                     const bool selected = read_tabbar_model_selected(*_model_binding, event.record_id);
                     const bool changed = read_tabbar_model_changed(*_model_binding, event.record_id);
                     _items[insert_index].changed = changed;
-                    if (selected) set_selected_silent(_items[insert_index].element_id);
+                    if (selected) set_selected(_items[insert_index].element_id);
                     else if (_items[insert_index].tab) _items[insert_index].tab->set_selected(false);
                     const auto transition = detail::get_widget_style_selector_transition(id());
-                    update_item_state(insert_index, transition);
+                    if (selected)
+                    {
+                        for (u32 item_index = 0u; item_index < _items.size(); ++item_index)
+                            update_item_state(item_index, transition);
+                    }
+                    else update_item_state(insert_index, transition);
                 }
                 update_depth(depth_range());
                 break;
@@ -549,20 +559,20 @@ namespace auik
     void Tabbar::sync_selection_from_model_binding()
     {
         if (!_model_binding || !is_model_binding_valid(*_model_binding)) return;
-        u32 selected_index = 0xFFFFFFFFu;
         bool changed = false;
+        bool has_selected = false;
         for (u32 index = 0u; index < _items.size() && index < _model_binding->records.size(); ++index)
         {
             const ModelRecordID record_id = _model_binding->records[index];
-            const bool selected = read_tabbar_model_selected(*_model_binding, record_id);
+            bool selected = read_tabbar_model_selected(*_model_binding, record_id);
+            if (selected && !multiple() && has_selected) selected = false;
+            if (selected) has_selected = true;
             if (_items[index].tab)
             {
                 changed = changed || _items[index].tab->selected() != selected;
                 _items[index].tab->set_selected(selected);
             }
-            if (selected && selected_index == 0xFFFFFFFFu) selected_index = index;
         }
-        if (selected_index != 0xFFFFFFFFu) _selected_index = selected_index;
 
         const auto transition = detail::get_widget_style_selector_transition(id());
         StyleUpdateFlags flags = StyleUpdateFlagBits::none;
@@ -600,11 +610,11 @@ namespace auik
         if (_popup) _popup->clear_children();
         for (auto &item : _items) release_item(item);
         _items.clear();
-        _selected_index = 0u;
         _next_element_id = 1u;
         _drag_element_id = 0u;
         _drag_preview_index = 0u;
         _last_selected_element_id = 0u;
+        _change_element_id = 0u;
         for (u32 i = 0; i < items.size(); ++i)
         {
             const u32 element_id = _next_element_id++;
@@ -619,10 +629,8 @@ namespace auik
         index = amal::min(index, static_cast<u32>(_items.size()));
         const u32 element_id = _next_element_id++;
         _items.insert(_items.begin() + index, create_item(element_id, item));
-        if (_selected_index >= index && _items.size() > 1u) ++_selected_index;
         if (_items.size() == 1u && auto_select_first_item())
         {
-            _selected_index = 0u;
             if (_items[0].tab) _items[0].tab->set_selected(true);
         }
         rebuild_items();
@@ -632,18 +640,17 @@ namespace auik
     {
         if (index >= _items.size()) return;
 
+        invalidate_item_draw_records(_items[index]);
         const bool removed_selected = _items[index].tab && _items[index].tab->selected();
         release_item(_items[index]);
         _items.erase(_items.begin() + index);
-        if (_items.empty()) _selected_index = 0u;
-        else if (removed_selected)
+        if (!_items.empty() && removed_selected && selected_ids().empty() && auto_select_first_item())
         {
-            _selected_index = amal::min(index, static_cast<u32>(_items.size() - 1u));
-            if (auto_select_first_item() && _items[_selected_index].tab)
-                _items[_selected_index].tab->set_selected(true);
+            u32 fallback_index = find_index_by_element_id(_last_selected_element_id);
+            if (fallback_index >= _items.size())
+                fallback_index = amal::min(index, static_cast<u32>(_items.size() - 1u));
+            if (_items[fallback_index].tab) _items[fallback_index].tab->set_selected(true);
         }
-        else if (_selected_index > index) --_selected_index;
-        else if (_selected_index >= _items.size()) _selected_index = static_cast<u32>(_items.size() - 1u);
         rebuild_items();
     }
 
@@ -702,20 +709,6 @@ namespace auik
         if (_style.id != Theme::STYLE_ID_INVALID) refresh_layout_owner(*this);
     }
 
-    u32 Tabbar::selected_index() const
-    {
-        for (u32 i = 0; i < _items.size(); ++i)
-            if (_items[i].tab && _items[i].tab->selected()) return i;
-        return 0u;
-    }
-
-    u32 Tabbar::selected_id() const
-    {
-        const u32 index = selected_index();
-        if (index >= _items.size() || !_items[index].tab || !_items[index].tab->selected()) return 0u;
-        return _items[index].element_id;
-    }
-
     acul::vector<u32> Tabbar::selected_ids() const
     {
         acul::vector<u32> out;
@@ -734,47 +727,17 @@ namespace auik
     {
         const u32 index = find_index_by_element_id(element_id);
         if (index >= _items.size()) return;
-        const u32 prev_selected = selected_id();
-        const auto prev_selected_ids = selected_ids();
-        if (prev_selected == element_id && prev_selected_ids.size() == 1u) return;
-        if (prev_selected != 0u && prev_selected != element_id) _last_selected_element_id = prev_selected;
-        _selected_index = index;
-        for (u32 i = 0; i < _items.size(); ++i)
-            if (_items[i].tab) _items[i].tab->set_selected(i == index);
-        if (mark_changed(TabbarChangeReason::selection)) return;
-        const auto transition = detail::get_widget_style_selector_transition(id());
-        StyleUpdateFlags flags = StyleUpdateFlagBits::none;
-        for (u32 selected_id : prev_selected_ids)
+        if (multiple())
         {
-            if (selected_id == element_id) continue;
-            flags |= update_item_state(find_index_by_element_id(selected_id), transition);
+            if (_items[index].tab) _items[index].tab->set_selected(true);
+            return;
         }
-        flags |= update_item_state(index, transition);
-        refresh_selection_owner(*this, flags);
-    }
-
-    void Tabbar::set_selected_silent(u32 element_id)
-    {
-        const u32 index = find_index_by_element_id(element_id);
-        if (index >= _items.size()) return;
-        const u32 prev_selected = selected_id();
-        const auto prev_selected_ids = selected_ids();
-        if (prev_selected != 0u && prev_selected != element_id) _last_selected_element_id = prev_selected;
-        _selected_index = index;
-        for (u32 i = 0; i < _items.size(); ++i)
-            if (_items[i].tab) _items[i].tab->set_selected(i == index);
-        const auto transition = detail::get_widget_style_selector_transition(id());
-        for (u32 selected_id : prev_selected_ids)
-        {
-            if (selected_id == element_id) continue;
-            update_item_state(find_index_by_element_id(selected_id), transition);
-        }
-        update_item_state(index, transition);
+        for (u32 item_index = 0u; item_index < _items.size(); ++item_index)
+            if (_items[item_index].tab) _items[item_index].tab->set_selected(item_index == index);
     }
 
     void Tabbar::set_selected(const acul::vector<u32> &element_ids)
     {
-        const auto prev_selected_ids = selected_ids();
         for (auto &item : _items)
             if (item.tab) item.tab->set_selected(false);
         for (u32 element_id : element_ids)
@@ -782,33 +745,8 @@ namespace auik
             const u32 index = find_index_by_element_id(element_id);
             if (index >= _items.size() || !_items[index].tab) continue;
             _items[index].tab->set_selected(true);
-            _selected_index = index;
             if (!multiple()) break;
         }
-        const auto next_selected_ids = selected_ids();
-        if (next_selected_ids == prev_selected_ids) return;
-        if (!next_selected_ids.empty()) _last_selected_element_id = next_selected_ids[0];
-        if (mark_changed(TabbarChangeReason::selection)) return;
-        const auto transition = detail::get_widget_style_selector_transition(id());
-        StyleUpdateFlags flags = StyleUpdateFlagBits::none;
-        auto update_changed = [&](u32 element_id) {
-            if (element_id == 0u) return;
-            const u32 index = find_index_by_element_id(element_id);
-            if (index < _items.size()) flags |= update_item_state(index, transition);
-        };
-        for (u32 element_id : prev_selected_ids) update_changed(element_id);
-        for (u32 element_id : next_selected_ids)
-        {
-            bool already_updated = false;
-            for (u32 prev_id : prev_selected_ids)
-            {
-                if (prev_id != element_id) continue;
-                already_updated = true;
-                break;
-            }
-            if (!already_updated) update_changed(element_id);
-        }
-        refresh_selection_owner(*this, flags);
     }
 
     StyleState Tabbar::resolve_tab_item_state(u32 index, const detail::WidgetStyleSelectorTransition &transition) const
@@ -1679,34 +1617,35 @@ namespace auik
     {
         const u32 index = find_index_by_element_id(element_id);
         if (index >= _items.size()) return;
-        const u32 prev_selected = selected_id();
         const auto prev_selected_ids = selected_ids();
+        const u32 prev_selected = prev_selected_ids.empty() ? 0u : prev_selected_ids[0];
         if (!multiple())
         {
             set_selected(element_id);
-            return;
-        }
-
-        const auto mods = detail::get_context().io.active_mods;
-        if (mods & KeyModeBits::alt)
-        {
-            if (_items[index].tab) _items[index].tab->set_selected(false);
-        }
-        else if (mods & KeyModeBits::control)
-        {
-            if (_items[index].tab) _items[index].tab->set_selected(!_items[index].tab->selected());
         }
         else
         {
-            for (u32 i = 0; i < _items.size(); ++i)
-                if (_items[i].tab) _items[i].tab->set_selected(i == index);
+            const auto mods = detail::get_context().io.active_mods;
+            if (mods & KeyModeBits::alt)
+            {
+                if (_items[index].tab) _items[index].tab->set_selected(false);
+            }
+            else if (mods & KeyModeBits::control)
+            {
+                if (_items[index].tab) _items[index].tab->set_selected(!_items[index].tab->selected());
+            }
+            else
+            {
+                for (u32 item_index = 0u; item_index < _items.size(); ++item_index)
+                    if (_items[item_index].tab) _items[item_index].tab->set_selected(item_index == index);
+            }
         }
-        _selected_index = index;
-        if (prev_selected != 0u && prev_selected != selected_id()) _last_selected_element_id = prev_selected;
-        if (_last_selected_element_id == 0u && selected_id() != 0u) _last_selected_element_id = selected_id();
         const auto next_selected_ids = selected_ids();
         if (next_selected_ids == prev_selected_ids) return;
-        if (mark_changed(TabbarChangeReason::selection)) return;
+        const u32 next_selected = next_selected_ids.empty() ? 0u : next_selected_ids[0];
+        if (prev_selected != 0u && prev_selected != next_selected) _last_selected_element_id = prev_selected;
+        if (_last_selected_element_id == 0u && next_selected != 0u) _last_selected_element_id = next_selected;
+        if (mark_changed(TabbarChangeReason::selection, element_id)) return;
         const auto transition = detail::get_widget_style_selector_transition(id());
         StyleUpdateFlags flags = StyleUpdateFlagBits::none;
         auto update_changed = [&](u32 changed_id) {
@@ -1733,37 +1672,25 @@ namespace auik
     {
         const u32 index = find_index_by_element_id(element_id);
         if (index >= _items.size()) return;
-        const u32 prev_selected_index = _selected_index;
-        _selected_index = index;
-        if (mark_changed(TabbarChangeReason::close))
-        {
-            _selected_index = prev_selected_index;
-            return;
-        }
+        if (mark_changed(TabbarChangeReason::close, element_id)) return;
+        invalidate_item_draw_records(_items[index]);
         const bool closed_selected = _items[index].tab && _items[index].tab->selected();
 
         release_item(_items[index]);
         _items.erase(_items.begin() + index);
-        if (_items.empty()) _selected_index = 0u;
-        else
+        if (!_items.empty() && closed_selected && selected_ids().empty() && auto_select_first_item())
         {
-            if (_selected_index >= _items.size()) _selected_index = static_cast<u32>(_items.size() - 1u);
-            if (closed_selected && selected_id() == 0u && auto_select_first_item())
+            const u32 last_index = find_index_by_element_id(_last_selected_element_id);
+            if (last_index < _items.size())
             {
-                const u32 last_index = find_index_by_element_id(_last_selected_element_id);
-                if (last_index < _items.size())
-                {
-                    _selected_index = last_index;
-                    if (_items[_selected_index].tab) _items[_selected_index].tab->set_selected(true);
-                }
-                else
-                {
-                    const u32 fallback_index = index > 0u ? index - 1u : 0u;
-                    _selected_index = amal::min(fallback_index, static_cast<u32>(_items.size() - 1u));
-                    if (_items[_selected_index].tab) _items[_selected_index].tab->set_selected(true);
-                }
+                if (_items[last_index].tab) _items[last_index].tab->set_selected(true);
             }
-            else _selected_index = selected_index();
+            else
+            {
+                const u32 fallback_index =
+                    amal::min(index > 0u ? index - 1u : 0u, static_cast<u32>(_items.size() - 1u));
+                if (_items[fallback_index].tab) _items[fallback_index].tab->set_selected(true);
+            }
         }
         if (_drag_element_id == element_id) end_drag();
         rebuild_items();
@@ -1782,13 +1709,13 @@ namespace auik
         if (from >= _items.size()) return;
         to = amal::min(to, static_cast<u32>(_items.size() - 1u));
         if (from == to) return;
+        const u32 changed_element_id = _items[from].element_id;
         Item item = _items[from];
         _items.erase(_items.begin() + from);
         to = amal::min(to, static_cast<u32>(_items.size()));
         _items.insert(_items.begin() + to, item);
-        _selected_index = selected_index();
         rebuild_items();
-        mark_changed(TabbarChangeReason::reorder);
+        mark_changed(TabbarChangeReason::reorder, changed_element_id);
         refresh_layout_owner(*this);
     }
 
@@ -1978,8 +1905,6 @@ namespace auik
         const Item item_tmp = _items[drag_index];
         _items[drag_index] = _items[neighbor_index];
         _items[neighbor_index] = item_tmp;
-
-        _selected_index = selected_index();
         return true;
     }
 
@@ -2083,8 +2008,9 @@ namespace auik
         {
             const bool had_drag = _drag_element_id != 0u;
             const bool should_snap_layout = _drag_moved && drag_index < _items.size();
+            const u32 changed_element_id = _drag_element_id;
             end_drag();
-            if (should_snap_layout) mark_changed(TabbarChangeReason::reorder);
+            if (should_snap_layout) mark_changed(TabbarChangeReason::reorder, changed_element_id);
             if (should_snap_layout || had_drag)
             {
                 add_render_command<detail::DragEventTraits>(this, [this, should_snap_layout]() {

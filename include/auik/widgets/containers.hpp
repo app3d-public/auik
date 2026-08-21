@@ -14,13 +14,6 @@
 
 namespace auik
 {
-    enum class BlockChildLayer : u8
-    {
-        background,
-        work,
-        foreground
-    };
-
     namespace detail
     {
         amal::vec2 compute_children_layout_required_size(const acul::vector<Widget *> &children,
@@ -98,10 +91,9 @@ namespace auik
         AUIK_EXPORT void refresh_child_layouts();
         acul::vector<ChildLayoutFlags> _explicit_child_layouts;
         acul::vector<ChildLayoutFlags> _child_layouts;
-        acul::vector<BlockChildLayer> _child_layers;
 
     private:
-        AUIK_EXPORT void add_child_to_layer(Widget *child, ChildLayoutFlags layout, BlockChildLayer layer);
+        AUIK_EXPORT void add_child_to_layer(Widget *child, ChildLayoutFlags layout, DepthZone layer);
         amal::vec2 _explicit_size = AUIK_SIZE_FIT;
         f32 _inline_spacing = 0.0f;
     };
@@ -265,7 +257,6 @@ namespace auik
         AUIK_EXPORT bool is_active_child(const Widget *child) const;
         size_t child_count() const { return _children.size(); }
         const acul::vector<Widget *> &children() const { return _children; }
-        const acul::vector<BlockChildLayer> &child_layers() const { return _child_layers; }
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
         AUIK_EXPORT bool accepts_child_style_update(const Widget *child) const override;
@@ -292,11 +283,10 @@ namespace auik
 
     private:
         void set_child_ref_active(Widget *child, bool active);
-        void add_layer_child(Widget *child, BlockChildLayer layer);
-        void update_layer_layout(BlockChildLayer layer);
+        void add_layer_child(Widget *child, DepthZone layer);
+        void update_layer_layout(DepthZone layer);
 
         acul::vector<Widget *> _children;
-        acul::vector<BlockChildLayer> _child_layers;
         size_t _active_index = 0u;
     };
 

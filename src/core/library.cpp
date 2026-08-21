@@ -215,7 +215,7 @@ namespace auik
             if (!is_window) widget->set_position({layout_rect.x, layout_rect.y});
             widget->set_layout_size(resolve_root_layout_size(widget, layout_rect));
             widget->update_layout(true);
-            return !is_window && widget->is_visible() && detail::root_widget_depth_zone(widget) == DepthZone::work;
+            return !is_window && widget->is_visible() && widget->get_depth_zone() == DepthZone::work;
         }
 
         static void __update_root_widgets_layout(Viewport *viewport)
@@ -253,7 +253,7 @@ namespace auik
             widget->set_position(next_pos);
             widget->set_layout_size(next_size);
             widget->update_layout(true);
-            return !is_window && widget->is_visible() && detail::root_widget_depth_zone(widget) == DepthZone::work;
+            return !is_window && widget->is_visible() && widget->get_depth_zone() == DepthZone::work;
         }
 
         static void __update_root_widgets_layout_fast(Viewport *viewport)
@@ -848,7 +848,7 @@ namespace auik
         for (Widget *widget : ctx.widget_tree)
         {
             if (!widget) continue;
-            const DepthZone zone = detail::root_widget_depth_zone(widget);
+            const DepthZone zone = widget->get_depth_zone();
             const u32 zone_index = static_cast<u32>(zone);
             assert(zone_index < 3u && "Invalid root depth zone");
             const int lane_index = ctx.root_depth_counts[zone_index];
@@ -864,13 +864,17 @@ namespace auik
         assert(widget->parent() == nullptr && "Root widget must not have a parent");
         auto &ctx = detail::get_context();
         assert(widget->viewport() && "Root widget viewport is not assigned");
-        if (auto *root_data = detail::root_widget_user_data(widget)) *root_data = zone;
-        else widget->emplace_user_data_head<detail::RootWidgetUserData>(AUIK_UD_ROOT_DATA, zone);
+        widget->set_depth_zone(zone);
         ctx.widget_tree.push_back(widget);
         if (widget->widget_flags & WidgetFlagBits::attachable) widget->on_attach();
         if (detail::as_counted_root_window(widget))
         {
-            const u32 lane_index = ctx.root_window_count;
+            u32 lane_index = 0u;
+            for (Widget *root : ctx.widget_tree)
+            {
+                if (root == widget) break;
+                if (root && root->get_depth_zone() == zone) ++lane_index;
+            }
             assert(lane_index < 32u && "Max root window depth lanes exceeded");
             widget->update_depth(detail::get_root_depth_range(zone, static_cast<int>(lane_index)));
         }
@@ -939,7 +943,6 @@ namespace auik
         {
             if (ctx.widget_tree[i] != widget) continue;
             if (widget->widget_flags & WidgetFlagBits::attachable) widget->on_detach();
-            widget->pop_user_data_head(AUIK_UD_ROOT_DATA);
             ctx.widget_tree.erase(ctx.widget_tree.begin() + i);
             if (ctx.focus_id && ctx.id_map.find(ctx.focus_id) == ctx.id_map.end()) ctx.focus_id = 0u;
             if (ctx.active_id && ctx.id_map.find(ctx.active_id) == ctx.id_map.end()) ctx.active_id = 0u;
