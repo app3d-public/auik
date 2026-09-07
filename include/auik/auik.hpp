@@ -3,6 +3,7 @@
 #include <acul/comparator.hpp>
 #include <acul/disposal_queue.hpp>
 #include <acul/functional/unique_function.hpp>
+#include <acul/op_result.hpp>
 #include "detail/context.hpp"
 #include "detail/events.hpp"
 #include "draw.hpp"
@@ -25,6 +26,13 @@ struct hb_font_t;
 #define AUIK_FONT_WEIGHT_BOLD   200
 #define AUIK_FONT_SLANT_NORMAL  0
 #define AUIK_FONT_SLANT_ITALIC  100
+#define AUIK_OP_DOMAIN          0x1C3D
+
+#define AUIK_OP_CODE_FONT_PATH_EMPTY            1
+#define AUIK_OP_CODE_FREETYPE_NOT_INITIALIZED   2
+#define AUIK_OP_CODE_HARFBUZZ_FACE_CREATE_ERROR 3
+#define AUIK_OP_CODE_FONT_NOT_REGISTERED        4
+#define AUIK_OP_CODE_THEME_CREATE_ERROR         5
 
 namespace auik
 {
@@ -128,6 +136,8 @@ namespace auik
     AUIK_EXPORT void set_cursor(CursorID::enum_type cursor);
     AUIK_EXPORT bool is_widget_focused(const Widget *widget);
     AUIK_EXPORT bool is_widget_hovered(const Widget *widget);
+    AUIK_EXPORT void set_widget_attach_callback(u32 id, acul::unique_function<void(Widget *)> callback);
+    AUIK_EXPORT void set_widget_detach_callback(u32 id, acul::unique_function<void(Widget *)> callback);
 
     // Root widget ownership and focus management.
     AUIK_EXPORT void rebuild_root_widget_depths();
@@ -234,16 +244,19 @@ namespace auik
             ctx.gpu_ctx->clear_clip_rects_reallocated(ctx.gpu_ctx, ctx.frame_id);
         detail::new_window_frame(ctx.window_ctx);
         ctx.frame_id = (ctx.frame_id + 1) % ctx.frames_in_flight;
-        detail::clear_dirty_flags(detail::one_frame_dirty_mask);
+        detail::clear_dirty_flags(detail::frame_end_dirty_mask);
     }
 
     inline void sync_gpu_cache()
     {
         auto &ctx = detail::get_context();
+        const bool texture_bindings_changed = ctx.dirty_flags & DirtyFlagBits::textures;
         if (ctx.dirty_flags & DirtyFlagBits::styles) update_styles();
         if (ctx.dirty_flags & detail::layout_dirty_mask) record_layout_commands();
+        else if (texture_bindings_changed) redraw_all_commands();
         else if (ctx.dirty_flags & DirtyFlagBits::clip_rect) sync_clip_rect_cache();
         if (ctx.dirty_flags & DirtyFlagBits::streams) sync_draw_streams();
+        detail::clear_dirty_flags(detail::gpu_cache_update_dirty_mask);
     }
 
     inline bool is_dirty_render()
@@ -293,52 +306,35 @@ namespace auik
         return pf ? pf->get_frame_rate() : 1.0 / 60.0;
     }
 
+    // Registers the shortcut model in the user-owned model database.
+    AUIK_EXPORT bool setup_shortcut_model(ModelDB *db);
+
     // Global shortcuts are checked after the focused/hovered widget chain.
     template <class F>
-    inline void register_shortcut(const Shortcut &shortcut, F &&fn)
+    inline void register_shortcut(const Shortcut &shortcut, F &&fn, u32 tag = 0u)
     {
-        auto &ctx = detail::get_context();
-        const u64 shortcut_hash =
-            detail::make_shortcut_hash(shortcut.keys, shortcut.mouse, shortcut.mods, AUIK_TAG_GLOBAL);
-        ctx.io.shortcuts[shortcut_hash] = acul::unique_function<void()>(std::forward<F>(fn));
+        detail::register_shortcut_record(shortcut, AUIK_TAG_GLOBAL, tag,
+                                         acul::unique_function<void()>(std::forward<F>(fn)));
     }
 
     // Widget shortcuts participate in chain lookup and are removed through deregister_shortcuts(widget).
     template <class F>
-    inline void register_shortcut(Widget *widget, const Shortcut &shortcut, F &&fn)
+    inline void register_shortcut(Widget *widget, const Shortcut &shortcut, F &&fn, u32 tag = 0u)
     {
-        auto &ctx = detail::get_context();
-        const u64 shortcut_hash =
-            detail::make_shortcut_hash(shortcut.keys, shortcut.mouse, shortcut.mods, widget->id());
-        ctx.io.shortcuts[shortcut_hash] = acul::unique_function<void()>(std::forward<F>(fn));
-        auto &hashes = ctx.io.widget_shortcuts[widget->id()];
-        if (std::find(hashes.begin(), hashes.end(), shortcut_hash) == hashes.end()) hashes.push_back(shortcut_hash);
+        detail::register_shortcut_record(shortcut, widget->id(), tag,
+                                         acul::unique_function<void()>(std::forward<F>(fn)));
         widget->add_event_flags(EventFlagBits::shortcut);
     }
 
     inline void deregister_shortcut(const Shortcut &shortcut)
     {
-        auto &ctx = detail::get_context();
-        const u64 shortcut_hash =
-            detail::make_shortcut_hash(shortcut.keys, shortcut.mouse, shortcut.mods, AUIK_TAG_GLOBAL);
-        ctx.io.shortcuts.erase(shortcut_hash);
+        detail::deregister_shortcut_record(shortcut, AUIK_TAG_GLOBAL);
     }
 
     inline void deregister_shortcut(Widget *widget, const Shortcut &shortcut)
     {
-        auto &ctx = detail::get_context();
-        const u64 shortcut_hash =
-            detail::make_shortcut_hash(shortcut.keys, shortcut.mouse, shortcut.mods, widget->id());
-        ctx.io.shortcuts.erase(shortcut_hash);
-
-        auto hashes_it = ctx.io.widget_shortcuts.find(widget->id());
-        if (hashes_it == ctx.io.widget_shortcuts.end()) return;
-        auto &hashes = hashes_it->second;
-        auto hash_it = std::find(hashes.begin(), hashes.end(), shortcut_hash);
-        if (hash_it != hashes.end()) hashes.erase(hash_it);
-        if (!hashes.empty()) return;
-        ctx.io.widget_shortcuts.erase(hashes_it);
-        widget->remove_event_flags(EventFlagBits::shortcut);
+        detail::deregister_shortcut_record(shortcut, widget->id());
+        if (!detail::has_widget_shortcuts(widget->id())) widget->remove_event_flags(EventFlagBits::shortcut);
     }
 
     inline void deregister_shortcuts(Widget *widget)
@@ -346,6 +342,13 @@ namespace auik
         detail::deregister_widget_shortcuts(widget->id());
         widget->remove_event_flags(EventFlagBits::shortcut);
     }
+
+    // Changes every registration selected by tag.
+    AUIK_EXPORT u32 change_shortcut(u32 tag, const Shortcut &value);
+    // Changes one registration selected by id and tag.
+    AUIK_EXPORT bool change_shortcut(u32 id, u32 tag, const Shortcut &value);
+    // Changes one registration selected by id and its current shortcut.
+    AUIK_EXPORT bool change_shortcut(u32 id, const Shortcut &shortcut, const Shortcut &value);
 
     // Queue UI mutations for the render synchronization point. Immediate traits execute synchronously.
     template <class Traits, class F>
@@ -438,6 +441,7 @@ namespace auik
         acul::string fullname = "";
         int weight = 0;
         int slant = 0;
+        bool text_font = false;
     };
 
     struct Glyph
@@ -460,7 +464,29 @@ namespace auik
 
     using GlyphCache = acul::hashmap<u32, Glyph>;
 
-    using FontRegistry = acul::case_insensitive_map<acul::string, FontInfo>;
+    class FontRegistry : public acul::case_insensitive_map<acul::string, FontInfo>
+    {
+    public:
+        acul::vector<acul::string> text_font_families() const
+        {
+            acul::vector<acul::string> out;
+            for (auto it = cbegin(); it != cend(); ++it)
+            {
+                const auto &[family, faces] = *it;
+                bool has_text_face = false;
+                for (const auto &face : faces)
+                {
+                    if (face.text_font)
+                    {
+                        has_text_face = true;
+                        break;
+                    }
+                }
+                if (has_text_face) out.push_back(family);
+            }
+            return out;
+        }
+    };
 
     inline FontInfo *get_font_info_by_family(const FontRegistry &fonts, const acul::string &family,
                                              const acul::string &fullname)
@@ -508,8 +534,8 @@ namespace auik
         Font(Font &&other) noexcept;
         Font &operator=(Font &&other) noexcept;
 
-        AUIK_EXPORT bool load(const FontInfo &info, int face_index = 0);
-        AUIK_EXPORT bool load(const acul::string &path, int face_index = 0);
+        AUIK_EXPORT acul::op_result load(const FontInfo &info, int face_index = 0);
+        AUIK_EXPORT acul::op_result load(const acul::string &path, int face_index = 0);
         AUIK_EXPORT void clear();
 
         AUIK_EXPORT void set_load_flags(FontLoadFlags flags);
@@ -564,24 +590,26 @@ namespace auik
 
     AUIK_EXPORT bool load_fonts(FontRegistry &fonts, const acul::vector<acul::string> &search_dirs = {});
 
-    inline bool load_font(const FontRegistry &fonts, Font &dst, const acul::string &family,
-                          const acul::string &fullname)
+    AUIK_EXPORT acul::string font_load_error_message(acul::op_result result);
+
+    inline acul::op_result load_font(const FontRegistry &fonts, Font &dst, const acul::string &family,
+                                     const acul::string &fullname)
     {
         FontInfo *font_info = get_font_info_by_family(fonts, family, fullname);
-        if (!font_info) return false;
+        if (!font_info) return {ACUL_OP_OUT_OF_BOUNDS, AUIK_OP_DOMAIN, AUIK_OP_CODE_FONT_NOT_REGISTERED};
         return dst.load(*font_info);
     }
 
-    inline bool load_font(const FontRegistry &fonts, Font &dst, const acul::string &family)
+    inline acul::op_result load_font(const FontRegistry &fonts, Font &dst, const acul::string &family)
     {
         return load_font(fonts, dst, family, family);
     }
 
-    inline bool load_font(const FontRegistry &fonts, Font &dst, const acul::string &family, int weight,
-                          int slant = AUIK_FONT_SLANT_NORMAL)
+    inline acul::op_result load_font(const FontRegistry &fonts, Font &dst, const acul::string &family, int weight,
+                                     int slant = AUIK_FONT_SLANT_NORMAL)
     {
         FontInfo *font_info = get_font_info_by_family(fonts, family, weight, slant);
-        if (!font_info) return false;
+        if (!font_info) return {ACUL_OP_OUT_OF_BOUNDS, AUIK_OP_DOMAIN, AUIK_OP_CODE_FONT_NOT_REGISTERED};
         return dst.load(*font_info);
     }
 

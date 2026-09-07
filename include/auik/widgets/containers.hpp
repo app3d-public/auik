@@ -2,12 +2,14 @@
 
 #include "detail/popup_trigger.hpp"
 #include "detail/scrollbar.hpp"
+#include "scroll.hpp"
 #include "text.hpp"
 
 #define AUIK_TAG_BLOCK                   0x237AFC8Eu
 #define AUIK_TAG_DRAW_BLOCK              0xB2F15B07u
 #define AUIK_TAG_DUMMY                   0xD5A4C970u
 #define AUIK_TAG_COLLAPSE_HEADER         0x565C9C5Eu
+#define AUIK_TAG_COLLAPSE_HEADER_STATE   0xC03CA5C4u
 #define AUIK_TAG_COLLAPSE_HEADER_TRIGGER 0x4ABB6689u
 #define AUIK_TAG_WIDGET_STACK            0xE9A58F31u
 #define AUIK_TAG_WIDGET_REF              0x7C5F435Au
@@ -23,9 +25,17 @@ namespace auik
         AUIK_EXPORT void layout_child_widgets(Widget *layout_owner, const acul::vector<Widget *> &children,
                                               const acul::vector<ChildLayoutFlags> &layouts,
                                               const amal::rect &content_rect, f32 inline_spacing_x);
+
+        struct CollapseHeaderStateData final : public WidgetStateData
+        {
+            bool expanded = true;
+
+            u32 signature() const noexcept override { return AUIK_TAG_COLLAPSE_HEADER_STATE; }
+        };
+
     } // namespace detail
 
-    class Block : public Widget
+    class Block : public Widget, public umbf::Block
     {
     public:
         acul::vector<Widget *> children;
@@ -44,6 +54,8 @@ namespace auik
             if (first < children.size()) erase_children(first, children.size() - first);
         }
         AUIK_EXPORT void add_child(Widget *child, ChildLayoutFlags layout = default_child_layout_flags());
+        AUIK_EXPORT void add_children(const acul::vector<Widget *> &new_children,
+                                      const acul::vector<ChildLayoutFlags> &layouts = {});
         AUIK_EXPORT void add_child_to_background(Widget *child, ChildLayoutFlags layout = default_child_layout_flags());
         AUIK_EXPORT void add_child_to_foreground(Widget *child, ChildLayoutFlags layout = default_child_layout_flags());
         AUIK_EXPORT void set_child_layout(size_t index, ChildLayoutFlags layout);
@@ -62,13 +74,18 @@ namespace auik
         AUIK_EXPORT void reset_clip_rect_records() override;
         AUIK_EXPORT void rebuild_clip_rects() override;
         AUIK_EXPORT void reset_draw_records() override;
+        AUIK_EXPORT void invalidate_style() override;
+        AUIK_EXPORT bool update_locale() override;
+        AUIK_EXPORT void add_state_flags_inherit(WidgetStateFlags flags) override;
+        AUIK_EXPORT void remove_state_flags_inherit(WidgetStateFlags flags) override;
         AUIK_EXPORT u32 get_depth_requirement() const override;
         AUIK_EXPORT void update_depth(const amal::vec2 &depth_range) override;
         AUIK_EXPORT void back_hit_depth() override;
         AUIK_EXPORT void restore_hit_depth() override;
         AUIK_EXPORT void draw(DrawCtx &ctx) override;
         u16 content_clip_id() const override { return parent() ? parent()->content_clip_id() : clip_id(); }
-        u32 signature() const override { return AUIK_TAG_BLOCK; }
+        u32 signature() const noexcept override { return AUIK_TAG_BLOCK; }
+        umbf::Block *as_snapshot_block() noexcept override { return this; }
         amal::vec4 get_content_clip_rect() const override
         {
             return parent() ? parent()->get_content_clip_rect() : get_clip_rect(content_clip_id());
@@ -89,11 +106,19 @@ namespace auik
         AUIK_EXPORT f32 resolved_explicit_height() const;
         AUIK_EXPORT void refresh_child_layout(size_t index);
         AUIK_EXPORT void refresh_child_layouts();
+        void set_content_layout(ChildLayoutFlags value)
+        {
+            if (_content_layout == value) return;
+            _content_layout = value;
+            refresh_child_layouts();
+        }
         acul::vector<ChildLayoutFlags> _explicit_child_layouts;
         acul::vector<ChildLayoutFlags> _child_layouts;
+        ChildLayoutFlags _content_layout = default_child_layout_flags();
 
     private:
         AUIK_EXPORT void add_child_to_layer(Widget *child, ChildLayoutFlags layout, DepthZone layer);
+        bool request_children_update();
         amal::vec2 _explicit_size = AUIK_SIZE_FIT;
         f32 _inline_spacing = 0.0f;
     };
@@ -104,9 +129,7 @@ namespace auik
         {
             none = 0x0,
             clip_ignores_padding_x = 0x1,
-            clip_ignores_padding_y = 0x2,
-            scrollbar_x = 0x4,
-            scrollbar_y = 0x8
+            clip_ignores_padding_y = 0x2
         };
 
         using flag_bitmask = std::true_type;
@@ -114,11 +137,99 @@ namespace auik
 
     using DrawBlockFlags = acul::flags<DrawBlockFlagBits>;
 
-    class DrawBlock : public Block
+    namespace detail
+    {
+        struct BlockScrollData : ScrollData
+        {
+            StyleID style_id = Theme::STYLE_ID_INVALID;
+            Scrollbar *scrollbar_x = nullptr;
+            Scrollbar *scrollbar_y = nullptr;
+            amal::vec4 content_padding{0.0f};
+            bool clip_rect_overridden = false;
+            amal::vec4 clip_rect_override{0.0f};
+            u16 content_clip_id = 0xFFFFu;
+            DrawBlockFlags flags = DrawBlockFlagBits::none;
+            u32 scrollbar_track_style_tag = AUIK_STYLE_TAG_SCROLLBAR_TRACK_INTERNAL;
+            u32 scrollbar_thumb_style_tag = AUIK_STYLE_TAG_SCROLLBAR_THUMB_INTERNAL;
+        };
+
+        class ScrollableBlock : public Block
+        {
+        public:
+            AUIK_EXPORT explicit ScrollableBlock(u32 id, WidgetFlags widget_flags, u32 tag_id);
+            AUIK_EXPORT ~ScrollableBlock() override;
+
+            AUIK_EXPORT StyleUpdateFlags update_style() override;
+            AUIK_EXPORT void update_layout_min_size_force() override;
+            AUIK_EXPORT void update_layout(bool min_size_known) override;
+            AUIK_EXPORT void translate(const amal::vec2 &delta) override;
+            AUIK_EXPORT void reset_clip_rect_records() override;
+            AUIK_EXPORT void rebuild_clip_rects() override;
+            AUIK_EXPORT void reset_draw_records() override;
+            AUIK_EXPORT void invalidate_style() override;
+            AUIK_EXPORT void add_state_flags_inherit(WidgetStateFlags flags) override;
+            AUIK_EXPORT void remove_state_flags_inherit(WidgetStateFlags flags) override;
+            AUIK_EXPORT u32 get_depth_requirement() const override;
+            AUIK_EXPORT void update_depth(const amal::vec2 &depth_range) override;
+            AUIK_EXPORT void back_hit_depth() override;
+            AUIK_EXPORT void restore_hit_depth() override;
+            AUIK_EXPORT void draw(DrawCtx &ctx) override;
+            AUIK_EXPORT void on_scroll(const amal::vec2 &delta) override;
+            AUIK_EXPORT void on_click(MouseKey key, KeyPressState state, u32 click_count) override;
+            AUIK_EXPORT void on_drag(const amal::vec2 &delta, KeyPressState state) override;
+
+            AUIK_EXPORT void set_scrollbar_style_tag(u32 track_tag_id);
+            AUIK_EXPORT void set_scrollbar_style_tags(u32 track_tag_id, u32 thumb_tag_id);
+            void set_content_padding(const amal::vec4 &value) { _scroll.content_padding = value; }
+            amal::vec4 content_padding() const { return _scroll.content_padding; }
+            void set_draw_block_flags(DrawBlockFlags flags) { _scroll.flags = flags; }
+            DrawBlockFlags draw_block_flags() const { return _scroll.flags; }
+            u32 scrollbar_track_style_tag() const { return _scroll.scrollbar_track_style_tag; }
+            u32 scrollbar_thumb_style_tag() const { return _scroll.scrollbar_thumb_style_tag; }
+            AUIK_EXPORT void override_content_clip_rect(const amal::vec4 &rect);
+            bool has_visible_scrollbar_x() const { return _scroll.scrollbar_x && _scroll.scrollbar_x->is_visible(); }
+            bool has_visible_scrollbar_y() const { return _scroll.scrollbar_y && _scroll.scrollbar_y->is_visible(); }
+            void reset_scroll_offset() { _scroll.content_offset = {0.0f, 0.0f}; }
+            AUIK_EXPORT void set_scroll_offset(const amal::vec2 &value);
+            const amal::vec2 &scroll_offset() const { return _scroll.content_offset; }
+            ScrollData *scroll_data() { return &_scroll; }
+            const ScrollData *scroll_data() const { return &_scroll; }
+            u16 content_clip_id() const override { return _scroll.content_clip_id; }
+            amal::vec4 get_content_clip_rect() const override
+            {
+                if (_scroll.content_clip_id != 0xFFFFu) return get_clip_rect(_scroll.content_clip_id);
+                if (clip_id() != 0xFFFFu) return get_clip_rect(clip_id());
+                return parent() ? parent()->get_content_clip_rect() : get_main_viewport_rect();
+            }
+
+        protected:
+            amal::vec2 scroll_content_size() const { return _scroll.content_size; }
+            amal::vec2 scroll_view_size() const { return _scroll.view_size; }
+            amal::vec2 content_offset() const { return _scroll.content_offset; }
+            void set_scroll_style_id(StyleID style_id) { _scroll.style_id = style_id; }
+            StyleID scroll_style_id() const { return _scroll.style_id; }
+
+            AUIK_EXPORT void update_scroll_layout_min_size(const amal::vec4 &margin, const amal::vec4 &padding,
+                                                           const amal::vec2 &style_min);
+            AUIK_EXPORT void update_scroll_layout(bool min_size_known, const amal::vec4 &margin,
+                                                  const amal::vec4 &padding, f32 inline_spacing);
+            AUIK_EXPORT void ensure_scrollbars();
+            AUIK_EXPORT void update_scroll_clip(const amal::vec2 &content_pos, const amal::vec2 &view_size);
+            AUIK_EXPORT void rebuild_scroll_clip_rect();
+            AUIK_EXPORT void rebuild_scroll_clip_rect(const amal::vec4 &padding);
+            AUIK_EXPORT void request_scroll_layout_update(DrawReasonFlags reason);
+            AUIK_EXPORT StyleExtraOverflow scroll_overflow() const;
+            AUIK_EXPORT static void scroll_to_callback(ScrollData &data, amal::axis axis);
+
+            BlockScrollData _scroll{};
+        };
+    } // namespace detail
+
+    class DrawBlock : public detail::ScrollableBlock
     {
     public:
         AUIK_EXPORT explicit DrawBlock(u32 id, WidgetFlags widget_flags, u32 tag_id);
-        AUIK_EXPORT ~DrawBlock() override;
+        ~DrawBlock() override = default;
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
         AUIK_EXPORT void update_layout_min_size_force() override;
@@ -127,78 +238,34 @@ namespace auik
         AUIK_EXPORT void reset_clip_rect_records() override;
         AUIK_EXPORT void rebuild_clip_rects() override;
         AUIK_EXPORT void reset_draw_records() override;
-        AUIK_EXPORT u32 get_depth_requirement() const override;
         AUIK_EXPORT void update_depth(const amal::vec2 &depth_range) override;
-        AUIK_EXPORT void back_hit_depth() override;
-        AUIK_EXPORT void restore_hit_depth() override;
         AUIK_EXPORT void draw(DrawCtx &ctx) override;
-        u32 signature() const override { return AUIK_TAG_DRAW_BLOCK; }
-        AUIK_EXPORT void on_scroll(const amal::vec2 &delta) override;
-        AUIK_EXPORT void on_click(MouseKey key, KeyPressState state, u32 click_count) override;
-        AUIK_EXPORT void on_drag(const amal::vec2 &delta, KeyPressState state) override;
-        AUIK_EXPORT void set_scrollbars_enabled(bool x, bool y);
-        AUIK_EXPORT void set_scrollbar_style_tag(u32 track_tag_id);
-        AUIK_EXPORT void set_scrollbar_style_tags(u32 track_tag_id, u32 thumb_tag_id);
-        void set_content_padding(const amal::vec4 &value) { _content_padding = value; }
-        amal::vec4 content_padding() const { return _content_padding; }
-        void set_draw_block_flags(DrawBlockFlags flags) { _draw_flags = flags; }
-        DrawBlockFlags draw_block_flags() const { return _draw_flags; }
+        u32 signature() const noexcept override { return AUIK_TAG_DRAW_BLOCK; }
         AUIK_EXPORT void set_style_tag(u32 tag_id);
         u32 style_tag() const { return _style_tag_id; }
-        u32 scrollbar_track_style_tag() const { return _scrollbar_track_style_tag; }
-        u32 scrollbar_thumb_style_tag() const { return _scrollbar_thumb_style_tag; }
-        AUIK_EXPORT void override_content_clip_rect(const amal::vec4 &rect);
-        bool has_visible_scrollbar_x() const { return _scrollbar_x && _scrollbar_x->is_visible(); }
-        bool has_visible_scrollbar_y() const { return _scrollbar_y && _scrollbar_y->is_visible(); }
-        void reset_scroll_offset() { _content_offset = {0.0f, 0.0f}; }
-        u16 content_clip_id() const override { return _content_clip_id; }
-        amal::vec4 get_content_clip_rect() const override
-        {
-            if (_content_clip_id != 0xFFFFu) return get_clip_rect(_content_clip_id);
-            if (clip_id() != 0xFFFFu) return get_clip_rect(clip_id());
-            return parent() ? parent()->get_content_clip_rect() : get_main_viewport_rect();
-        }
 
     protected:
-        amal::vec2 scroll_content_size() const { return _scroll_content_size; }
-        amal::vec2 scroll_view_size() const { return _scroll_view_size; }
-        amal::vec2 content_offset() const { return _content_offset; }
-
-    protected:
-        AUIK_EXPORT void ensure_scrollbars();
-        AUIK_EXPORT void update_scroll_clip(const amal::vec2 &content_pos, const amal::vec2 &view_size);
-        AUIK_EXPORT void rebuild_scroll_clip_rect();
-        AUIK_EXPORT void request_scroll_layout_update(DrawReasonFlags reason);
         AUIK_EXPORT f32 resolved_inline_spacing() const override;
         AUIK_EXPORT const Style *draw_style() const;
         AUIK_EXPORT amal::vec4 draw_margin() const;
         AUIK_EXPORT amal::vec4 draw_padding() const;
         AUIK_EXPORT void sync_draw_bounds();
 
-        detail::Scrollbar *_scrollbar_x = nullptr;
-        detail::Scrollbar *_scrollbar_y = nullptr;
         detail::RectData _bg_rect{};
         DrawDataID _bg_draw_id{};
         u32 _style_tag_id = 0u;
+        u32 _border_mask_clear = 0u;
         StyleSelector _style{Theme::STYLE_ID_INVALID, 0u};
-        amal::vec4 _content_padding{0.0f, 0.0f, 0.0f, 0.0f};
-        amal::vec2 _content_offset{0.0f, 0.0f};
-        amal::vec2 _scroll_content_size{0.0f, 0.0f};
-        amal::vec2 _scroll_view_size{0.0f, 0.0f};
-        bool _content_clip_rect_overridden = false;
-        amal::vec4 _content_clip_rect_override{0.0f, 0.0f, 0.0f, 0.0f};
-        u16 _content_clip_id = 0xFFFFu;
-        DrawBlockFlags _draw_flags = DrawBlockFlagBits::scrollbar_x | DrawBlockFlagBits::scrollbar_y;
-        u32 _scrollbar_track_style_tag = AUIK_STYLE_TAG_SCROLLBAR_TRACK_INTERNAL;
-        u32 _scrollbar_thumb_style_tag = AUIK_STYLE_TAG_SCROLLBAR_THUMB_INTERNAL;
+
+        friend class Table;
     };
 
-    class WidgetRef final : public Widget
+    class WidgetRef final : public Widget, public umbf::Block
     {
     public:
         AUIK_EXPORT explicit WidgetRef(Widget *target = nullptr,
                                        WidgetFlags widget_flags = WidgetFlagBits::visible |
-                                                                  WidgetFlagBits::configurable);
+                                                                  WidgetFlagBits::cache_snapshot);
         AUIK_EXPORT ~WidgetRef() override;
 
         AUIK_EXPORT void set_target(Widget *target);
@@ -213,12 +280,15 @@ namespace auik
         AUIK_EXPORT void reset_clip_rect_records() override;
         AUIK_EXPORT void rebuild_clip_rects() override;
         AUIK_EXPORT void reset_draw_records() override;
+        AUIK_EXPORT void invalidate_style() override;
+        AUIK_EXPORT bool update_locale() override;
         AUIK_EXPORT u32 get_depth_requirement() const override;
         AUIK_EXPORT void update_depth(const amal::vec2 &depth_range) override;
         AUIK_EXPORT void back_hit_depth() override;
         AUIK_EXPORT void restore_hit_depth() override;
         AUIK_EXPORT void draw(DrawCtx &ctx) override;
-        u32 signature() const override { return AUIK_TAG_WIDGET_REF; }
+        u32 signature() const noexcept override { return AUIK_TAG_WIDGET_REF; }
+        umbf::Block *as_snapshot_block() noexcept override { return this; }
         AUIK_EXPORT amal::vec2 requested_size() const override;
         u16 content_clip_id() const override { return clip_id(); }
         amal::vec4 get_content_clip_rect() const override
@@ -239,12 +309,12 @@ namespace auik
         amal::vec2 _saved_size{0.0f, 0.0f};
     };
 
-    class WidgetStack final : public Widget
+    class WidgetStack final : public Widget, public umbf::Block
     {
     public:
         AUIK_EXPORT explicit WidgetStack(WidgetFlags widget_flags = WidgetFlagBits::visible |
                                                                     WidgetFlagBits::attachable |
-                                                                    WidgetFlagBits::configurable);
+                                                                    WidgetFlagBits::cache_snapshot);
         AUIK_EXPORT ~WidgetStack() override;
 
         AUIK_EXPORT void clear_children();
@@ -266,6 +336,10 @@ namespace auik
         AUIK_EXPORT void reset_clip_rect_records() override;
         AUIK_EXPORT void rebuild_clip_rects() override;
         AUIK_EXPORT void reset_draw_records() override;
+        AUIK_EXPORT void invalidate_style() override;
+        AUIK_EXPORT bool update_locale() override;
+        AUIK_EXPORT void add_state_flags_inherit(WidgetStateFlags flags) override;
+        AUIK_EXPORT void remove_state_flags_inherit(WidgetStateFlags flags) override;
         AUIK_EXPORT u32 get_depth_requirement() const override;
         AUIK_EXPORT void update_depth(const amal::vec2 &depth_range) override;
         AUIK_EXPORT void back_hit_depth() override;
@@ -273,7 +347,8 @@ namespace auik
         AUIK_EXPORT void draw(DrawCtx &ctx) override;
         AUIK_EXPORT void on_attach() override;
         AUIK_EXPORT void on_detach() override;
-        u32 signature() const override { return AUIK_TAG_WIDGET_STACK; }
+        u32 signature() const noexcept override { return AUIK_TAG_WIDGET_STACK; }
+        umbf::Block *as_snapshot_block() noexcept override { return this; }
         AUIK_EXPORT amal::vec2 requested_size() const override;
         u16 content_clip_id() const override { return parent() ? parent()->content_clip_id() : clip_id(); }
         amal::vec4 get_content_clip_rect() const override
@@ -319,6 +394,8 @@ namespace auik
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void rebuild_clip_rects() override;
         AUIK_EXPORT void reset_draw_records() override;
+        AUIK_EXPORT void invalidate_style() override;
+        AUIK_EXPORT bool update_locale() override;
         AUIK_EXPORT void update_depth(const amal::vec2 &depth_range) override;
         AUIK_EXPORT void back_hit_depth() override;
         AUIK_EXPORT void restore_hit_depth() override;
@@ -326,13 +403,15 @@ namespace auik
         AUIK_EXPORT void on_click(MouseKey key, KeyPressState state, u32 click_count) override;
         AUIK_EXPORT void on_attach() override;
         AUIK_EXPORT void on_detach() override;
-        u32 signature() const override { return AUIK_TAG_COLLAPSE_HEADER; }
+        u32 signature() const noexcept override { return AUIK_TAG_COLLAPSE_HEADER; }
 
     protected:
+        AUIK_EXPORT void on_change(ChangeEvent &event) override;
         AUIK_EXPORT amal::vec2 compute_content_min_size() override;
         AUIK_EXPORT void layout_children(const amal::rect &content_rect) override;
 
     private:
+        void sync_expanded_state();
         u32 current_header_style_tag() const;
         void invalidate_layout();
 
@@ -349,7 +428,7 @@ namespace auik
         bool _expanded = true;
     };
 
-    class Dummy final : public Widget
+    class Dummy final : public Widget, public umbf::Block
     {
     public:
         explicit Dummy(u32 id, amal::vec2 size, WidgetFlags widget_flags)
@@ -361,7 +440,8 @@ namespace auik
         AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         void draw(DrawCtx &) override {}
-        u32 signature() const override { return AUIK_TAG_DUMMY; }
+        u32 signature() const noexcept override { return AUIK_TAG_DUMMY; }
+        umbf::Block *as_snapshot_block() noexcept override { return this; }
         u32 style_tag() const { return _style_tag_id; }
         void set_style_tag(u32 tag_id)
         {
@@ -398,18 +478,20 @@ namespace auik
 
     inline CollapseHeader *make_collapse_header(u32 id, StringView label, bool expanded = true)
     {
-        return acul::alloc<CollapseHeader>(
-            id, label, expanded, WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::hittable,
-            AUIK_STYLE_TAG_COLLAPSE_HEADER);
+        return acul::alloc<CollapseHeader>(id, label, expanded,
+                                           WidgetFlagBits::visible | WidgetFlagBits::attachable |
+                                               WidgetFlagBits::hittable | WidgetFlagBits::cache_snapshot,
+                                           AUIK_STYLE_TAG_COLLAPSE_HEADER);
     }
 
     namespace streams
     {
-        extern AUIK_EXPORT const umbf::streams::Stream block;
-        extern AUIK_EXPORT const umbf::streams::Stream draw_block;
-        extern AUIK_EXPORT const umbf::streams::Stream widget_stack;
-        extern AUIK_EXPORT const umbf::streams::Stream widget_ref;
-        extern AUIK_EXPORT const umbf::streams::Stream collapse_header;
-        extern AUIK_EXPORT const umbf::streams::Stream dummy;
+        extern AUIK_EXPORT const umbf::registry::BlockStream block;
+        extern AUIK_EXPORT const umbf::registry::BlockStream draw_block;
+        extern AUIK_EXPORT const umbf::registry::BlockStream widget_stack;
+        extern AUIK_EXPORT const umbf::registry::BlockStream widget_ref;
+        extern AUIK_EXPORT const umbf::registry::BlockStream collapse_header;
+        extern AUIK_EXPORT const umbf::registry::BlockStream collapse_header_state;
+        extern AUIK_EXPORT const umbf::registry::BlockStream dummy;
     } // namespace streams
 } // namespace auik

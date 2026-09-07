@@ -244,7 +244,11 @@ namespace auik
     {
     }
 
-    ModalQueue::~ModalQueue() { clear_modal(false); }
+    ModalQueue::~ModalQueue()
+    {
+        clear_modal(false);
+        release_pending_entries();
+    }
 
     bool ModalQueue::is_attached() const
     {
@@ -284,6 +288,11 @@ namespace auik
 
     void ModalQueue::request_modal_rebuild()
     {
+        if (_modal)
+        {
+            request_redraw();
+            return;
+        }
         if (!is_attached())
         {
             rebuild_modal();
@@ -302,29 +311,52 @@ namespace auik
     {
         if (!_modal) return;
         if (invalidate_draw) invalidate_modal_draw_commands();
-        _modal->set_queue(nullptr);
+        if (_modal->is_attached()) _modal->on_detach();
+        if (_modal->signature() == AUIK_TAG_MODAL_WINDOW) static_cast<ModalWindow *>(_modal)->set_queue(nullptr);
         acul::release(_modal);
         _modal = nullptr;
         if (invalidate_draw) request_redraw();
     }
 
-    bool ModalQueue::remove_modal(ModalWindow *modal, bool invoke_callback)
+    void ModalQueue::release_pending_entries()
+    {
+        for (auto &entry : _entries)
+            if (entry.widget) acul::release(entry.widget);
+        _entries.clear();
+    }
+
+    void ModalQueue::erase_entry(size_t index)
+    {
+        if (index >= _entries.size()) return;
+        auto &entry = _entries[index];
+        if (entry.prevent_close && _prevent_close_count > 0) --_prevent_close_count;
+        decrement_group_count(entry.group_id);
+        if (entry.widget) acul::release(entry.widget);
+        _entries.erase(_entries.begin() + index);
+    }
+
+    bool ModalQueue::remove_modal(Widget *modal, bool invoke_callback)
     {
         if (!modal || modal != _modal) return false;
         invalidate_modal_draw_commands();
-        if (invoke_callback) modal->invoke_close_callback();
-        modal->set_queue(nullptr);
+        if (invoke_callback && modal->signature() == AUIK_TAG_MODAL_WINDOW)
+            static_cast<ModalWindow *>(modal)->invoke_close_callback();
+        if (invoke_callback && !_entries.empty() && _entries.front().on_close) _entries.front().on_close();
+        if (modal->is_attached()) modal->on_detach();
+        if (modal->signature() == AUIK_TAG_MODAL_WINDOW) static_cast<ModalWindow *>(modal)->set_queue(nullptr);
         _modal = nullptr;
         acul::release(modal);
+        if (!_entries.empty()) erase_entry(0u);
         focus_widget(nullptr);
         request_redraw();
+        rebuild_modal();
         return true;
     }
 
     void ModalQueue::close_all_windows_now()
     {
         clear_modal();
-        _messages.clear();
+        release_pending_entries();
         _group_counts.clear();
         _batch_apply = false;
         _rebuild_pending = false;
@@ -340,11 +372,12 @@ namespace auik
         if (_modal)
         {
             out |= _modal->update_style_invalidated();
-            for (auto *child : _modal->children)
-            {
-                if (!child) continue;
-                out |= child->update_style_invalidated();
-            }
+            if (_modal->signature() == AUIK_TAG_MODAL_WINDOW)
+                for (auto *child : static_cast<ModalWindow *>(_modal)->children)
+                {
+                    if (!child) continue;
+                    out |= child->update_style_invalidated();
+                }
         }
         return out;
     }
@@ -356,7 +389,7 @@ namespace auik
             set_required_size({0.0f, 0.0f});
             return;
         }
-        const auto viewport = get_main_viewport_rect();
+        const auto viewport = get_widget_viewport_rect(this);
         set_required_size({viewport.z, viewport.w});
         active_modal()->update_layout_min_size();
     }
@@ -384,8 +417,8 @@ namespace auik
             if (refined_size == modal_size) break;
             modal_size = refined_size;
         }
-        modal->set_layout_size(modal_size);
         modal->set_size({modal_size.x, AUIK_SIZE_Y_FIT});
+        modal->set_layout_size(modal_size);
 
         const amal::vec2 manager_pos = position();
         const amal::vec2 manager_size = size();
@@ -405,7 +438,7 @@ namespace auik
             Widget::update_layout(true);
             return;
         }
-        const auto viewport = get_main_viewport_rect();
+        const auto viewport = get_widget_viewport_rect(this);
         set_position({viewport.x, viewport.y});
         set_layout_size({viewport.z, viewport.w});
         Widget::update_layout(true);
@@ -452,7 +485,7 @@ namespace auik
     void ModalQueue::update_active_modal_depth()
     {
         if (!active_modal()) return;
-        const amal::vec2 modal_root_range = detail::depth_foreground_range(this->depth_range());
+        const amal::vec2 modal_root_range = detail::get_global_foreground_depth_range();
         _rect.depth = modal_root_range.x;
         _rect.hit_depth = _rect.depth;
         amal::vec2 modal_range{};
@@ -487,7 +520,7 @@ namespace auik
         auto *modal = active_modal();
         if (!modal) return;
 
-        const auto viewport = get_main_viewport_rect();
+        const auto viewport = get_widget_viewport_rect(this);
         const amal::rect backdrop_rect{{viewport.x, viewport.y}, {viewport.z, viewport.w}};
         auto backdrop_hit = get_rect();
         backdrop_hit.bounds = backdrop_rect;
@@ -577,8 +610,46 @@ namespace auik
     {
         if (message.prevent_close) ++_prevent_close_count;
         if (message.group_id != 0u) ++_group_counts[message.group_id];
-        _messages.push_back(std::move(message));
+        ModalEntry entry;
+        entry.prevent_close = message.prevent_close;
+        entry.group_id = message.group_id;
+        entry.message = std::move(message);
+        _entries.push_back(std::move(entry));
         request_modal_rebuild();
+    }
+
+    void ModalQueue::invalidate_style()
+    {
+        Widget::invalidate_style();
+        if (_modal) _modal->invalidate_style();
+    }
+
+    bool ModalQueue::update_locale()
+    {
+        bool changed = Widget::update_locale();
+        if (_modal) changed |= _modal->update_locale();
+        return changed;
+    }
+
+    void ModalQueue::push(ModalWidget &&modal)
+    {
+        if (!modal.widget) return;
+        modal.widget->set_widget_flag(WidgetFlagBits::attachable);
+        if (modal.prevent_close) ++_prevent_close_count;
+        if (modal.group_id != 0u) ++_group_counts[modal.group_id];
+        ModalEntry entry;
+        entry.widget = modal.widget;
+        entry.on_close = std::move(modal.on_close);
+        entry.custom = true;
+        entry.prevent_close = modal.prevent_close;
+        entry.group_id = modal.group_id;
+        _entries.push_back(std::move(entry));
+        request_modal_rebuild();
+    }
+
+    void ModalQueue::close_active_window()
+    {
+        if (_modal) remove_modal(_modal);
     }
 
     void ModalQueue::close_all_windows()
@@ -608,10 +679,26 @@ namespace auik
     void ModalQueue::rebuild_modal()
     {
         _rebuild_pending = false;
-        clear_modal();
-        if (_messages.empty()) return;
+        if (_modal || _entries.empty()) return;
 
-        auto &message = _messages.front();
+        auto &entry = _entries.front();
+        if (entry.custom)
+        {
+            _modal = entry.widget;
+            entry.widget = nullptr;
+            _modal->set_parent(this);
+            _modal->set_focus_parent(this);
+            if (!_modal->viewport()) _modal->set_viewport(viewport());
+            if (_modal->signature() == AUIK_TAG_MODAL_WINDOW) static_cast<ModalWindow *>(_modal)->set_queue(this);
+            _modal->on_attach();
+            _modal->update_style_invalidated();
+            update_active_modal_depth();
+            relayout_modal_draw_commands();
+            focus_widget(_modal);
+            return;
+        }
+
+        auto &message = entry.message;
         f32 modal_width = _modal_width;
 
         auto *modal = acul::alloc<ModalWindow>(AUIK_TAG_MODAL_WINDOW, message.header,
@@ -705,22 +792,29 @@ namespace auik
         modal->update_style_invalidated();
         _modal = modal;
         update_active_modal_depth();
-        focus_widget(this);
         relayout_modal_draw_commands();
+        focus_widget(modal);
     }
 
     void ModalQueue::apply_button(u32 button_index)
     {
-        if (_messages.empty()) return;
-        if (button_index >= _messages.front().buttons.size()) return;
+        if (_entries.empty() || _entries.front().custom) return;
+        if (button_index >= _entries.front().message.buttons.size()) return;
 
-        const u32 active_group_id = _messages.front().group_id;
+        const u32 active_group_id = _entries.front().group_id;
         const bool consume_all = _batch_apply && active_group_id != 0u && group_count(active_group_id) > 1u;
 
-        for (size_t i = 0; i < _messages.size();)
+        bool first = true;
+        for (size_t i = 0; i < _entries.size();)
         {
-            auto &message = _messages[i];
-            const bool consume_message = i == 0u || (consume_all && message.group_id == active_group_id);
+            auto &entry = _entries[i];
+            if (entry.custom)
+            {
+                ++i;
+                continue;
+            }
+            auto &message = entry.message;
+            const bool consume_message = first || (consume_all && entry.group_id == active_group_id);
             if (!consume_message)
             {
                 ++i;
@@ -728,9 +822,7 @@ namespace auik
             }
 
             auto *modal_before_callback = _modal;
-            const size_t message_count_before_callback = _messages.size();
-            const bool prevent_close = message.prevent_close;
-            const u32 message_group_id = message.group_id;
+            const size_t message_count_before_callback = _entries.size();
             if (button_index < message.buttons.size())
             {
                 auto &callback = message.buttons[button_index].second;
@@ -741,13 +833,13 @@ namespace auik
                 close_all_windows_now();
                 return;
             }
-            if (_modal != modal_before_callback || i >= _messages.size() ||
-                _messages.size() != message_count_before_callback)
+            if (_modal != modal_before_callback || i >= _entries.size() ||
+                _entries.size() != message_count_before_callback)
                 return;
 
-            if (prevent_close && _prevent_close_count > 0) --_prevent_close_count;
-            decrement_group_count(message_group_id);
-            _messages.erase(_messages.begin() + i);
+            if (i == 0u) clear_modal();
+            erase_entry(i);
+            first = false;
 
             if (!consume_all) break;
         }
@@ -779,6 +871,6 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::streams::Stream modal_queue{read_modal_queue, write_modal_queue};
+        AUIK_EXPORT const umbf::registry::BlockStream modal_queue{read_modal_queue, write_modal_queue};
     } // namespace streams
 } // namespace auik

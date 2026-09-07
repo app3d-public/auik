@@ -316,14 +316,14 @@ namespace auik
         StyleUpdateFlags out = StyleUpdateFlagBits::none;
         bool track_or_fill_changed = false;
         bool grab_changed = false;
-        if (_track_style.id == Theme::STYLE_ID_INVALID)
+        if (style_selector_needs_resolution(_track_style))
             out |= detail::resolve_style_and_mark_redraw(_track_style, _track_style.tag_id, parent_id,
                                                          StyleState::normal, track_or_fill_changed);
         apply_style_layout(get_theme()->get_style(_track_style.id));
-        if (_fill_style.id == Theme::STYLE_ID_INVALID)
+        if (style_selector_needs_resolution(_fill_style))
             out |= detail::resolve_style_and_mark_redraw(_fill_style, _fill_style.tag_id, parent_id, StyleState::active,
                                                          track_or_fill_changed);
-        if (_grab_style.id == Theme::STYLE_ID_INVALID)
+        if (style_selector_needs_resolution(_grab_style))
             out |= detail::resolve_selector_style_and_mark_redraw(_grab_style, _grab_style.tag_id, parent_id,
                                                                   StyleState::normal, grab_changed);
 
@@ -739,9 +739,9 @@ namespace auik
             return flags;
         };
 
-        if (_track_style.id == Theme::STYLE_ID_INVALID) out |= resolve_track_state(StyleState::normal);
+        if (style_selector_needs_resolution(_track_style)) out |= resolve_track_state(StyleState::normal);
         apply_style_layout(get_theme()->get_style(_track_style.id));
-        if (_grab_style.id == Theme::STYLE_ID_INVALID) out |= resolve_grab_state(StyleState::normal);
+        if (style_selector_needs_resolution(_grab_style)) out |= resolve_grab_state(StyleState::normal);
 
         const auto transition = detail::get_widget_style_selector_transition(id());
         if (transition.prev_id.tag_id == _grab_style.tag_id &&
@@ -1128,9 +1128,9 @@ namespace auik
             return flags;
         };
 
-        if (_track_style.id == Theme::STYLE_ID_INVALID) out |= resolve_track_state(StyleState::normal);
+        if (style_selector_needs_resolution(_track_style)) out |= resolve_track_state(StyleState::normal);
         apply_style_layout(get_theme()->get_style(_track_style.id));
-        if (_grab_style.id == Theme::STYLE_ID_INVALID) out |= resolve_grab_state(StyleState::normal);
+        if (style_selector_needs_resolution(_grab_style)) out |= resolve_grab_state(StyleState::normal);
 
         const auto transition = detail::get_widget_style_selector_transition(id());
         if (transition.prev_id.tag_id == _grab_style.tag_id &&
@@ -1673,12 +1673,13 @@ namespace auik
             return flags;
         };
 
-        if (_track_style.id == Theme::STYLE_ID_INVALID) out |= resolve_track_state(StyleState::normal);
+        if (style_selector_needs_resolution(_track_style)) out |= resolve_track_state(StyleState::normal);
         apply_style_layout(get_theme()->get_style(_track_style.id));
-        if (_fill_style.id == Theme::STYLE_ID_INVALID) out |= resolve_fill_state(StyleState::active);
-        if (_from_grab_style.id == Theme::STYLE_ID_INVALID)
+        if (style_selector_needs_resolution(_fill_style)) out |= resolve_fill_state(StyleState::active);
+        if (style_selector_needs_resolution(_from_grab_style))
             out |= resolve_grab_state(_from_grab_style, StyleState::normal);
-        if (_to_grab_style.id == Theme::STYLE_ID_INVALID) out |= resolve_grab_state(_to_grab_style, StyleState::normal);
+        if (style_selector_needs_resolution(_to_grab_style))
+            out |= resolve_grab_state(_to_grab_style, StyleState::normal);
 
         const auto transition = detail::get_widget_style_selector_transition(id());
         const bool prev_is_grab = transition.prev_id.tag_id == _from_grab_style.tag_id;
@@ -2373,10 +2374,10 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::streams::Stream slider{read_slider, write_slider};
-        AUIK_EXPORT const umbf::streams::Stream gradient_slider{read_gradient_slider, write_gradient_slider};
-        AUIK_EXPORT const umbf::streams::Stream transparency_slider{read_transparency_slider,
-                                                                    write_transparency_slider};
-        AUIK_EXPORT const umbf::streams::Stream range_slider{read_range_slider, write_range_slider};
+        AUIK_EXPORT const umbf::registry::BlockStream slider{read_slider, write_slider};
+        AUIK_EXPORT const umbf::registry::BlockStream gradient_slider{read_gradient_slider, write_gradient_slider};
+        AUIK_EXPORT const umbf::registry::BlockStream transparency_slider{read_transparency_slider,
+                                                                          write_transparency_slider};
+        AUIK_EXPORT const umbf::registry::BlockStream range_slider{read_range_slider, write_range_slider};
     } // namespace streams
 } // namespace auik

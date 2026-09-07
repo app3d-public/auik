@@ -11,7 +11,7 @@
 
 namespace auik
 {
-    class SwitchButton final : public Widget
+    class SwitchButton final : public Widget, public umbf::Block
     {
     public:
         AUIK_EXPORT SwitchButton(u32 id, bool value, WidgetFlags widget_flags);
@@ -27,7 +27,8 @@ namespace auik
         AUIK_EXPORT void restore_hit_depth() override;
         AUIK_EXPORT void draw(DrawCtx &ctx) override;
         AUIK_EXPORT void on_click(MouseKey key, KeyPressState state, u32 click_count) override;
-        u32 signature() const override { return AUIK_TAG_SWITCH_BUTTON; }
+        u32 signature() const noexcept override { return AUIK_TAG_SWITCH_BUTTON; }
+        umbf::Block *as_snapshot_block() noexcept override { return this; }
 
         bool value() const { return _value; }
         AUIK_EXPORT void set_value(bool value);
@@ -57,12 +58,12 @@ namespace auik
     inline SwitchButton *make_switch_button(u32 id, bool value)
     {
         constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
-                                             WidgetFlagBits::configurable | WidgetFlagBits::hittable;
+                                             WidgetFlagBits::cache_snapshot | WidgetFlagBits::hittable;
         return acul::alloc<SwitchButton>(id, value, widget_flags);
     }
 
     namespace streams
     {
-        extern AUIK_EXPORT const umbf::streams::Stream switch_button;
+        extern AUIK_EXPORT const umbf::registry::BlockStream switch_button;
     }
 } // namespace auik

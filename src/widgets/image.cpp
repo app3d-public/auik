@@ -172,7 +172,7 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::streams::Stream image{read_image, write_image};
-        AUIK_EXPORT const umbf::streams::Stream checker_image{read_checker_image, write_checker_image};
+        AUIK_EXPORT const umbf::registry::BlockStream image{read_image, write_image};
+        AUIK_EXPORT const umbf::registry::BlockStream checker_image{read_checker_image, write_checker_image};
     } // namespace streams
 } // namespace auik

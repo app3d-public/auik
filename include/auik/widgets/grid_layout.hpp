@@ -42,6 +42,10 @@ namespace auik
         AUIK_EXPORT void reset_clip_rect_records() override;
         AUIK_EXPORT void rebuild_clip_rects() override;
         AUIK_EXPORT void reset_draw_records() override;
+        AUIK_EXPORT void invalidate_style() override;
+        AUIK_EXPORT bool update_locale() override;
+        AUIK_EXPORT void add_state_flags_inherit(WidgetStateFlags flags) override;
+        AUIK_EXPORT void remove_state_flags_inherit(WidgetStateFlags flags) override;
         AUIK_EXPORT u32 get_depth_requirement() const override;
         AUIK_EXPORT void update_depth(const amal::vec2 &depth_range) override;
         AUIK_EXPORT void draw(DrawCtx &ctx) override;
@@ -51,7 +55,7 @@ namespace auik
         AUIK_EXPORT void on_detach() override;
         u16 content_clip_id() const override { return clip_id(); }
         amal::vec4 get_content_clip_rect() const override { return get_clip_rect(clip_id()); }
-        u32 signature() const override { return AUIK_TAG_GRID_LAYOUT; }
+        u32 signature() const noexcept override { return AUIK_TAG_GRID_LAYOUT; }
 
     private:
         struct ResizeHelper
@@ -96,6 +100,6 @@ namespace auik
     {
         return acul::alloc<GridLayout>(id, rows, columns, inline_size,
                                        WidgetFlagBits::visible | WidgetFlagBits::attachable |
-                                           WidgetFlagBits::configurable | WidgetFlagBits::hittable);
+                                           WidgetFlagBits::cache_snapshot | WidgetFlagBits::hittable);
     }
 } // namespace auik

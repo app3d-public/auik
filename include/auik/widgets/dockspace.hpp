@@ -92,7 +92,7 @@ namespace auik
         return settings;
     }
 
-    class Dockspace final : public Widget
+    class Dockspace final : public Widget, public umbf::Block
     {
         friend struct DockspaceStreamAccess;
 
@@ -135,6 +135,8 @@ namespace auik
         AUIK_EXPORT void reset_clip_rect_records() override;
         AUIK_EXPORT void rebuild_clip_rects() override;
         AUIK_EXPORT void reset_draw_records() override;
+        AUIK_EXPORT void invalidate_style() override;
+        AUIK_EXPORT bool update_locale() override;
         AUIK_EXPORT u32 get_depth_requirement() const override;
         AUIK_EXPORT void update_depth(const amal::vec2 &depth_range) override;
         AUIK_EXPORT void back_hit_depth() override;
@@ -149,7 +151,8 @@ namespace auik
         AUIK_EXPORT bool accepts_drag_hover(ElementID drag_id, ElementID hover_id) const override;
         u16 content_clip_id() const override { return clip_id(); }
         amal::vec4 get_content_clip_rect() const override { return get_clip_rect(clip_id()); }
-        virtual u32 signature() const override { return AUIK_TAG_DOCKSPACE; }
+        virtual u32 signature() const noexcept override { return AUIK_TAG_DOCKSPACE; }
+        umbf::Block *as_snapshot_block() noexcept override { return this; }
 
     private:
         class DockMenu;
@@ -268,7 +271,7 @@ namespace auik
     inline Dockspace *make_dockspace(u32 id)
     {
         return acul::alloc<Dockspace>(id, WidgetFlagBits::visible | WidgetFlagBits::attachable |
-                                              WidgetFlagBits::hittable | WidgetFlagBits::configurable);
+                                              WidgetFlagBits::hittable | WidgetFlagBits::cache_snapshot);
     }
 
     inline Window *make_dock_window(u32 id, Dockspace *dockspace, StringView title = "", const amal::rect &bounds = {})
@@ -281,6 +284,6 @@ namespace auik
 
     namespace streams
     {
-        extern AUIK_EXPORT const umbf::streams::Stream dockspace;
+        extern AUIK_EXPORT const umbf::registry::BlockStream dockspace;
     }
 } // namespace auik

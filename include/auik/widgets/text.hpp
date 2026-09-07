@@ -11,7 +11,7 @@
 
 namespace auik
 {
-    class Text : public Widget
+    class Text : public Widget, public umbf::Block
     {
     public:
         TextFlags text_flags = TextFlagBits::none;
@@ -44,6 +44,7 @@ namespace auik
         }
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
+        AUIK_EXPORT bool update_locale() override;
         AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
@@ -52,7 +53,8 @@ namespace auik
         AUIK_EXPORT void reset_draw_records() override;
         AUIK_EXPORT void invalidate_draw_records();
         AUIK_EXPORT void draw(DrawCtx &ctx) override;
-        u32 signature() const override { return AUIK_TAG_TEXT; }
+        u32 signature() const noexcept override { return AUIK_TAG_TEXT; }
+        umbf::Block *as_snapshot_block() noexcept override { return this; }
 
         AUIK_EXPORT Text *clone(u32 id) const;
 
@@ -198,7 +200,7 @@ namespace auik
         AUIK_EXPORT void on_drag(const amal::vec2 &delta, KeyPressState state) override;
         AUIK_EXPORT void on_key(Key key, KeyPressState state, KeyMode mods) override;
         AUIK_EXPORT void on_char_input(u32 char_code, u32 count) override;
-        u32 signature() const override { return AUIK_TAG_ETEXT; }
+        u32 signature() const noexcept override { return AUIK_TAG_ETEXT; }
 
     private:
         struct ETextEditData *_edit = nullptr;
@@ -241,7 +243,7 @@ namespace auik
                            TextLayoutFlags layout_flags = default_text_layout_flags())
     {
         constexpr WidgetFlags flags =
-            WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::configurable;
+            WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::cache_snapshot;
         auto *out = acul::alloc<Text>(id, text, max_size, flags, layout_flags);
         return out;
     }
@@ -258,7 +260,7 @@ namespace auik
     inline EText *make_etext(u32 id, StringView text = "", amal::vec2 max_size = AUIK_SIZE_FIT)
     {
         constexpr WidgetFlags flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
-                                      WidgetFlagBits::configurable | WidgetFlagBits::hittable |
+                                      WidgetFlagBits::cache_snapshot | WidgetFlagBits::hittable |
                                       WidgetFlagBits::read_only;
         auto *out = acul::alloc<EText>(id, text, max_size, flags, default_text_layout_flags());
         if (text.is_translated) out->set_translated_text_literal(text.str);
@@ -267,7 +269,7 @@ namespace auik
 
     namespace streams
     {
-        extern AUIK_EXPORT const umbf::streams::Stream text;
-        extern AUIK_EXPORT const umbf::streams::Stream etext;
+        extern AUIK_EXPORT const umbf::registry::BlockStream text;
+        extern AUIK_EXPORT const umbf::registry::BlockStream etext;
     } // namespace streams
 } // namespace auik

@@ -199,7 +199,7 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::streams::Stream w_line{read_w_line, write_w_line};
-        AUIK_EXPORT const umbf::streams::Stream w_rect{read_w_rect, write_w_rect};
+        AUIK_EXPORT const umbf::registry::BlockStream w_line{read_w_line, write_w_line};
+        AUIK_EXPORT const umbf::registry::BlockStream w_rect{read_w_rect, write_w_rect};
     } // namespace streams
 } // namespace auik

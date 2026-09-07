@@ -167,10 +167,13 @@ namespace auik
     void ImageButton::rebuild_clip_rects()
     {
         assert(parent() && "ImageButton must have parent");
-        set_clip_id(parent()->content_clip_id());
+        const u16 next_clip_id = parent()->content_clip_id();
+        const bool clip_changed = clip_id() != next_clip_id || _image_rect.clip_id != next_clip_id;
+        set_clip_id(next_clip_id);
+        _image_rect.clip_id = next_clip_id;
+        if (!clip_changed) return;
         DrawDataID *hit_ids[] = {&_bg, &_image_draw};
         invalidate_hit_rect_batch(hit_ids, 2);
-        _image_rect.clip_id = clip_id();
     }
 
     void ImageButton::reset_draw_records()
@@ -267,6 +270,6 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::streams::Stream image_button{read_image_button, write_image_button};
+        AUIK_EXPORT const umbf::registry::BlockStream image_button{read_image_button, write_image_button};
     } // namespace streams
 } // namespace auik

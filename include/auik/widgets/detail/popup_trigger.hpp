@@ -31,6 +31,7 @@ namespace auik::detail
         AUIK_EXPORT void translate(const amal::vec2 &delta);
         AUIK_EXPORT void rebuild_clip_rects(u16 clip_id);
         AUIK_EXPORT void reset_draw_records();
+        void invalidate_style() { _style.id = Theme::STYLE_ID_INVALID; }
         u32 get_depth_requirement() const { return 2u; }
         AUIK_EXPORT void update_depth(const amal::vec2 &depth_range);
         AUIK_EXPORT void back_hit_depth();

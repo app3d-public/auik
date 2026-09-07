@@ -7,6 +7,7 @@
 #include "detail/popup_trigger.hpp"
 #include "detail/selectable.hpp"
 #include "image_button.hpp"
+#include "scroll.hpp"
 #include "widget.hpp"
 
 #define AUIK_TAG_TABBAR             0xECA5E393u
@@ -49,12 +50,12 @@ namespace auik
         constexpr inline TabbarFlags get_tabbar_visual_mask() { return TabbarFlagBits::popup | TabbarFlagBits::scroll; }
         constexpr inline WidgetFlags get_tabbar_widget_flags()
         {
-            return WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::configurable |
+            return WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::cache_snapshot |
                    WidgetFlagBits::hittable;
         }
     } // namespace detail
 
-    class Tabbar : public Widget
+    class Tabbar : public Widget, public umbf::Block
     {
     public:
         AUIK_EXPORT Tabbar(u32 id, TabbarFlags tab_flags, WidgetFlags widget_flags, amal::vec2 inline_size);
@@ -70,6 +71,10 @@ namespace auik
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void reset_clip_rect_records() override;
         AUIK_EXPORT void reset_draw_records() override;
+        AUIK_EXPORT void invalidate_style() override;
+        AUIK_EXPORT bool update_locale() override;
+        AUIK_EXPORT void add_state_flags_inherit(WidgetStateFlags flags) override;
+        AUIK_EXPORT void remove_state_flags_inherit(WidgetStateFlags flags) override;
         AUIK_EXPORT void rebuild_clip_rects() override;
         AUIK_EXPORT u32 get_depth_requirement() const override;
         AUIK_EXPORT void update_depth(const amal::vec2 &depth_range) override;
@@ -194,6 +199,10 @@ namespace auik
         AUIK_EXPORT void set_selected(const acul::vector<u32> &element_ids);
         AUIK_EXPORT bool is_selected(u32 element_id) const;
         AUIK_EXPORT bool is_changed(u32 element_id) const;
+        AUIK_EXPORT bool scroll_to_tab(u32 element_id);
+        AUIK_EXPORT bool tab_scroll_offset(u32 element_id, f32 &offset) const;
+        ScrollData *scroll_data() { return &_scroll; }
+        const ScrollData *scroll_data() const { return &_scroll; }
         AUIK_EXPORT void close_item(u32 element_id);
         TabbarChangeReason change_reason() const { return _change_reason; }
         u32 change_element_id() const { return _change_element_id; }
@@ -215,9 +224,10 @@ namespace auik
         u32 selected_item_style_tag() const { return _selected_item_style_tag; }
         u32 popup_item_style_tag() const { return _popup_item_style_tag; }
         u32 close_button_style_tag() const { return _close_button_style_tag; }
-        f32 scroll_offset() const { return _scroll_offset; }
-        void set_scroll_offset(f32 value) { _scroll_offset = amal::max(value, 0.0f); }
-        virtual u32 signature() const override { return AUIK_TAG_TABBAR; }
+        f32 scroll_offset() const { return _scroll.content_offset.x; }
+        void set_scroll_offset(f32 value) { _scroll.content_offset.x = amal::max(value, 0.0f); }
+        virtual u32 signature() const noexcept override { return AUIK_TAG_TABBAR; }
+        umbf::Block *as_snapshot_block() noexcept override { return this; }
 
     protected:
         AUIK_EXPORT bool draw_transition_targets(DrawCtx &ctx);
@@ -232,6 +242,7 @@ namespace auik
         }
         AUIK_EXPORT void update_overflow_button_style();
         AUIK_EXPORT void clamp_scroll_offset();
+        AUIK_EXPORT static void scroll_to_callback(ScrollData &data, amal::axis axis);
         AUIK_EXPORT void handle_item_click(u32 element_id);
         AUIK_EXPORT u32 find_index_by_element_id(u32 element_id) const;
         AUIK_EXPORT void reorder_item(u32 from, u32 to);
@@ -288,8 +299,7 @@ namespace auik
         bool _drag_grab_offset_valid = false;
         bool _drag_moved = false;
         bool _open = false;
-        f32 _scroll_offset = 0.0f;
-        f32 _content_width = 0.0f;
+        ScrollData _scroll{};
         TabbarChangeReason _change_reason = TabbarChangeReason::none;
         u32 _change_element_id = 0u;
         u32 _item_style_tag = AUIK_STYLE_TAG_TABBAR_ITEM;
@@ -318,7 +328,7 @@ namespace auik
 
     namespace streams
     {
-        extern AUIK_EXPORT const umbf::streams::Stream tab_bar;
-        extern AUIK_EXPORT const umbf::streams::Stream popup_menu;
+        extern AUIK_EXPORT const umbf::registry::BlockStream tabbar;
+        extern AUIK_EXPORT const umbf::registry::BlockStream popup_menu;
     } // namespace streams
 } // namespace auik

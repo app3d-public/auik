@@ -24,7 +24,7 @@ namespace auik
         else flags &= ~flag;
     }
 
-    static inline void resize_size_points(acul::vector<acul::point2D<f32>> &values, size_t size)
+    static inline void resize_size_points(acul::vector<amal::vec2> &values, size_t size)
     {
         const size_t old_size = values.size();
         values.resize(size);
@@ -398,7 +398,12 @@ namespace auik
     void Table::set_cell(size_t row, size_t column, Cell value)
     {
         if (row >= _rows.size()) _rows.resize(row + 1);
-        if (column >= _rows[row].size()) _rows[row].resize(column + 1);
+        if (column >= _rows[row].size())
+        {
+            const size_t old_size = _rows[row].size();
+            _rows[row].resize(column + 1);
+            for (size_t column_i = old_size; column_i < _rows[row].size(); ++column_i) _rows[row][column_i] = nullptr;
+        }
         if (_rows[row][column]) acul::release(_rows[row][column]);
         _rows[row][column] = std::move(value);
         rebuild_cells();
@@ -475,7 +480,7 @@ namespace auik
         invalidate_layout();
     }
 
-    void Table::set_size_overrides(acul::vector<acul::point2D<f32>> values, bool column_overrides, bool row_overrides)
+    void Table::set_size_overrides(acul::vector<amal::vec2> values, bool column_overrides, bool row_overrides)
     {
         _size_overrides = std::move(values);
         set_table_flag(_table_flags, AUIK_TABLE_FLAG_COLUMN_SIZE_OVERRIDES, column_overrides);
@@ -662,7 +667,7 @@ namespace auik
 
         if (has_table_flag(_table_flags, AUIK_TABLE_FLAG_ROW_SIZE_OVERRIDES))
         {
-            acul::vector<acul::point2D<f32>> next_overrides = _size_overrides;
+            acul::vector<amal::vec2> next_overrides = _size_overrides;
             if (next_overrides.size() < order.size()) resize_size_points(next_overrides, order.size());
             for (size_t row = 0; row < order.size(); ++row)
             {
@@ -690,7 +695,7 @@ namespace auik
 
         if (has_table_flag(_table_flags, AUIK_TABLE_FLAG_ROW_SIZE_OVERRIDES))
         {
-            acul::vector<acul::point2D<f32>> next_overrides = _size_overrides;
+            acul::vector<amal::vec2> next_overrides = _size_overrides;
             if (next_overrides.size() < order.size()) resize_size_points(next_overrides, order.size());
             for (size_t row = 0; row < order.size(); ++row)
             {
@@ -747,7 +752,7 @@ namespace auik
 
         if (has_table_flag(_table_flags, AUIK_TABLE_FLAG_COLUMN_SIZE_OVERRIDES))
         {
-            acul::vector<acul::point2D<f32>> next_overrides = _size_overrides;
+            acul::vector<amal::vec2> next_overrides = _size_overrides;
             if (next_overrides.size() < columns_count) resize_size_points(next_overrides, columns_count);
             for (size_t column = 0; column < order.size(); ++column)
             {
@@ -804,7 +809,7 @@ namespace auik
 
         if (has_table_flag(_table_flags, AUIK_TABLE_FLAG_COLUMN_SIZE_OVERRIDES))
         {
-            acul::vector<acul::point2D<f32>> next_overrides = _size_overrides;
+            acul::vector<amal::vec2> next_overrides = _size_overrides;
             if (next_overrides.size() < columns_count) resize_size_points(next_overrides, columns_count);
             for (size_t column = 0; column < order.size(); ++column)
             {
@@ -1067,8 +1072,6 @@ namespace auik
         if (parent() && clip_id() == parent()->content_clip_id()) set_clip_id(0xFFFFu);
         ensure_own_clip_rect(detail::intersect_rects(parent_clip, {position().x, position().y, size().x, size().y}));
         update_cell_clip_rects();
-        update_draw_commands(DrawReasonBits::external);
-        detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
     }
 
     void Table::rebuild_clip_rects()
@@ -1079,9 +1082,20 @@ namespace auik
         update_cell_clip_rects();
     }
 
+    void Table::reset_clip_rect_records()
+    {
+        Widget::reset_clip_rect_records();
+        for (auto *cell : _header)
+            if (cell) cell->reset_clip_rect_records();
+        for (auto &row : _rows)
+            for (auto *cell : row)
+                if (cell) cell->reset_clip_rect_records();
+    }
+
     void Table::reset_draw_records()
     {
         _bg = {};
+        _rounded_mask = {};
         for (auto &visual : _alt_row_visuals) visual.draw = {};
         for (auto &visuals : _resize_border_hit_visuals)
         {
@@ -1096,10 +1110,41 @@ namespace auik
                 if (cell) cell->reset_draw_records();
     }
 
+    void Table::invalidate_style()
+    {
+        Widget::invalidate_style();
+        for (auto *cell : _header)
+            if (cell) cell->invalidate_style();
+        for (auto &row : _rows)
+            for (auto *cell : row)
+                if (cell) cell->invalidate_style();
+    }
+
+    void Table::add_state_flags_inherit(WidgetStateFlags flags)
+    {
+        Widget::add_state_flags_inherit(flags);
+        if ((flags & WidgetStateFlagBits::visible) && !is_visible()) flags &= ~WidgetStateFlagBits::visible;
+        for (auto *cell : _header)
+            if (cell) cell->add_state_flags_inherit(flags);
+        for (auto &row : _rows)
+            for (auto *cell : row)
+                if (cell) cell->add_state_flags_inherit(flags);
+    }
+
+    void Table::remove_state_flags_inherit(WidgetStateFlags flags)
+    {
+        Widget::remove_state_flags_inherit(flags);
+        for (auto *cell : _header)
+            if (cell) cell->remove_state_flags_inherit(flags);
+        for (auto &row : _rows)
+            for (auto *cell : row)
+                if (cell) cell->remove_state_flags_inherit(flags);
+    }
+
     void Table::update_depth(const amal::vec2 &depth_range)
     {
         Widget::update_depth(depth_range);
-        const amal::vec2 content_range = detail::depth_foreground_range(this->depth_range());
+        const amal::vec2 content_range = detail::depth_work_range(this->depth_range());
         for (auto *cell : _header)
         {
             if (!cell || !cell->is_visible()) continue;
@@ -1156,11 +1201,26 @@ namespace auik
 
         if (quads_stream)
         {
+            const Style &table_style = theme->get_style(_style.id);
             QuadsInstanceData bg{};
             bg.rect = bounds();
-            bg.z_order = get_z_order();
-            const bool bg_visible = fill_quads_instance_by_style(theme->get_style(_style.id), clip_id(), bg);
+            bg.z_order = next_depth(detail::depth_background_range(depth_range()));
+            const bool bg_visible = fill_quads_instance_by_style(table_style, clip_id(), bg);
             emit_quads_instance(ctx, quads_stream, _bg, bg, get_rect(), bg_visible, false);
+
+            // Cell backgrounds are independent quads and may cover the table's rounded corners. Draw the inverse of
+            // the rounded shape in front of the content so those corner fragments fail the depth test.
+            QuadsInstanceData rounded_mask = bg;
+            rounded_mask.background_color = 0u;
+            rounded_mask.border_color = 0u;
+            rounded_mask.border_thickness = 0.0f;
+            rounded_mask.z_order = next_depth(detail::depth_foreground_range(depth_range()));
+            rounded_mask.mask &= ~(static_cast<u32>(AUIK_HAS_BORDER_BIT | AUIK_HAS_CHECKER_BIT) << 20u);
+            rounded_mask.mask |= static_cast<u32>(AUIK_INVERT_RADIUS_BIT) << 20u;
+            const bool rounded_mask_visible = (table_style.mask() & detail::StylePropertiesBits::border_radius) &&
+                                              bg.border_radius > 0.0f && table_style.corner_mask() != 0u;
+            emit_quads_instance(ctx, quads_stream, _rounded_mask, rounded_mask, get_rect(), rounded_mask_visible,
+                                false);
 
             for (size_t row = 0; row < _alt_row_visuals.size(); ++row)
             {
@@ -1208,6 +1268,15 @@ namespace auik
     void Table::on_hover(HoverState state)
     {
         auto &ctx = detail::get_context();
+        const ElementID target = state == HoverState::leave ? ctx.last_hover_id : ctx.hover_id;
+        if (target.widget_id == id())
+        {
+            Cell cell = nullptr;
+            if (target.tag_id == AUIK_TAG_TABLE_HEADER_CELL) cell = header_block(target.element_id);
+            else if (target.tag_id == AUIK_TAG_TABLE_CELL && _column_count != 0u)
+                cell = cell_block(target.element_id / _column_count, target.element_id % _column_count);
+            if (cell && cell->has_event_handler(EventFlagBits::hover)) cell->dispatch_hover(state);
+        }
         detail::CursorID::enum_type cursor = detail::CursorID::arrow;
         bool resize_border_state = state == HoverState::leave;
         if (state != HoverState::leave && ctx.hover_id.widget_id == id())
@@ -1230,6 +1299,28 @@ namespace auik
             ctx.dirty_flags |= DirtyFlagBits::redraw;
             mark_host_refresh_request();
         }
+    }
+
+    bool Table::update_locale()
+    {
+        bool changed = Widget::update_locale();
+        for (auto *cell : _header)
+            if (cell) changed |= cell->update_locale();
+        for (auto &row : _rows)
+            for (auto *cell : row)
+                if (cell) changed |= cell->update_locale();
+        return changed;
+    }
+
+    void Table::on_click(MouseKey key, KeyPressState state, u32 click_count)
+    {
+        const ElementID target = detail::get_context().io.clicked_id;
+        if (target.widget_id != id()) return;
+        Cell cell = nullptr;
+        if (target.tag_id == AUIK_TAG_TABLE_HEADER_CELL) cell = header_block(target.element_id);
+        else if (target.tag_id == AUIK_TAG_TABLE_CELL && _column_count != 0u)
+            cell = cell_block(target.element_id / _column_count, target.element_id % _column_count);
+        if (cell && cell->has_event_handler(EventFlagBits::click)) cell->dispatch_click(key, state, click_count);
     }
 
     void Table::on_drag(const amal::vec2 &delta, KeyPressState state)
@@ -1519,13 +1610,21 @@ namespace auik
     {
         const bool attached =
             detail::g_context && detail::get_context().id_map.find(id()) != detail::get_context().id_map.end();
+        const size_t visual_row_count = (has_header() ? 1u : 0u) + _rows.size();
+        auto apply_cell_border_mask = [visual_row_count](DrawBlock &cell, size_t visual_row) {
+            cell._border_mask_clear = 0u;
+            if (visual_row == 0u) cell._border_mask_clear |= AUIK_BORDER_TOP_BIT;
+            if (visual_row + 1u == visual_row_count) cell._border_mask_clear |= AUIK_BORDER_BOTTOM_BIT;
+        };
         for (size_t column = 0u; column < _header.size(); ++column)
         {
             auto *cell = _header[column];
             if (cell)
             {
+                apply_cell_border_mask(*cell, 0u);
                 cell->set_parent(this);
                 cell->set_focus_parent(this);
+                cell->get_rect().id = make_element_id(id(), AUIK_TAG_TABLE_HEADER_CELL, static_cast<u32>(column));
                 if (cell->id() == AUIK_TAG_TABLE_CELL) cell->set_style_tag(_header_cell_style.tag_id);
                 if (attached) attach_table_cell(cell, this);
             }
@@ -1536,8 +1635,10 @@ namespace auik
                 auto *cell = _rows[row][column];
                 if (cell)
                 {
+                    apply_cell_border_mask(*cell, row + (has_header() ? 1u : 0u));
                     cell->set_parent(this);
                     cell->set_focus_parent(this);
+                    cell->get_rect().id = make_element_id(id(), AUIK_TAG_TABLE_CELL, cell_element_id(row, column));
                     if (cell->id() == AUIK_TAG_TABLE_CELL) cell->set_style_tag(resolved_cell_style_tag(row, column));
                     if (attached) attach_table_cell(cell, this);
                 }
@@ -1582,11 +1683,11 @@ namespace auik
         void write_widget_row(acul::bin_stream &stream, const Table::Row &row)
         {
             acul::vector<u32> columns;
-            acul::vector<umbf::Block *> blocks;
+            acul::vector<Widget *> blocks;
             for (size_t column = 0u; column < row.size(); ++column)
             {
                 auto *cell = row[column];
-                if (!cell || !(cell->widget_flags & WidgetFlagBits::configurable)) continue;
+                if (!cell || !(cell->widget_flags & WidgetFlagBits::cache_snapshot)) continue;
                 columns.push_back(static_cast<u32>(column));
                 blocks.push_back(cell);
             }
@@ -1605,17 +1706,48 @@ namespace auik
             columns.resize(cell_count);
             if (!columns.empty()) stream.read(columns.data(), columns.size());
 
-            acul::vector<umbf::Block *> blocks;
+            acul::vector<Widget *> blocks;
             stream.read(blocks);
+            if (blocks.size() != cell_count)
+            {
+                for (auto *block : blocks)
+                    if (block) acul::release(block);
+                throw acul::runtime_error("invalid table cell block count");
+            }
 
             size_t column_count = 0u;
-            for (u32 column : columns) column_count = amal::max(column_count, static_cast<size_t>(column + 1u));
+            for (u32 cell_i = 0u; cell_i < cell_count; ++cell_i)
+            {
+                const u32 column = columns[cell_i];
+                if (column == std::numeric_limits<u32>::max())
+                {
+                    for (auto *block : blocks)
+                        if (block) acul::release(block);
+                    throw acul::runtime_error("Invalid table cell entry");
+                }
+                for (u32 previous_i = 0u; previous_i < cell_i; ++previous_i)
+                {
+                    if (columns[previous_i] == column)
+                    {
+                        for (auto *block : blocks)
+                            if (block) acul::release(block);
+                        throw acul::runtime_error("Duplicate table cell column");
+                    }
+                }
+                column_count = amal::max(column_count, static_cast<size_t>(column) + 1u);
+            }
 
             Table::Row row;
             row.resize(column_count);
+            for (auto &cell : row) cell = nullptr;
             for (u32 cell_i = 0u; cell_i < cell_count; ++cell_i)
             {
-                auto *widget = static_cast<Widget *>(blocks[cell_i]);
+                auto *widget = dynamic_cast<Widget *>(blocks[cell_i]);
+                if (!widget)
+                {
+                    if (blocks[cell_i]) acul::release(blocks[cell_i]);
+                    continue;
+                }
                 row[columns[cell_i]] = widget && widget->signature() == AUIK_TAG_DRAW_BLOCK
                                            ? static_cast<DrawBlock *>(widget)
                                            : make_table_cell(widget);
@@ -1663,32 +1795,32 @@ namespace auik
             u32 row_count = 0u;
             for (const auto &row : table->rows())
             {
-                bool has_configurable = false;
+                bool has_snapshot_cell = false;
                 for (auto *cell : row)
                 {
-                    if (cell && (cell->widget_flags & WidgetFlagBits::configurable))
+                    if (cell && (cell->widget_flags & WidgetFlagBits::cache_snapshot))
                     {
-                        has_configurable = true;
+                        has_snapshot_cell = true;
                         break;
                     }
                 }
-                if (has_configurable) ++row_count;
+                if (has_snapshot_cell) ++row_count;
             }
 
             stream.write(row_count);
             for (size_t row_i = 0u; row_i < table->rows().size(); ++row_i)
             {
                 const auto &row = table->rows()[row_i];
-                bool has_configurable = false;
+                bool has_snapshot_cell = false;
                 for (auto *cell : row)
                 {
-                    if (cell && (cell->widget_flags & WidgetFlagBits::configurable))
+                    if (cell && (cell->widget_flags & WidgetFlagBits::cache_snapshot))
                     {
-                        has_configurable = true;
+                        has_snapshot_cell = true;
                         break;
                     }
                 }
-                if (!has_configurable) continue;
+                if (!has_snapshot_cell) continue;
                 stream.write(static_cast<u32>(row_i));
                 write_widget_row(stream, row);
             }
@@ -1719,7 +1851,7 @@ namespace auik
 
             u32 override_count = 0u;
             stream.read(override_count);
-            acul::vector<acul::point2D<f32>> size_overrides;
+            acul::vector<amal::vec2> size_overrides;
             size_overrides.resize(override_count);
             if (!size_overrides.empty()) stream.read(size_overrides.data(), size_overrides.size());
 
@@ -1753,19 +1885,22 @@ namespace auik
 
             u32 row_count = 0u;
             stream.read(row_count);
+            Table::Rows rows;
             for (u32 row_i = 0u; row_i < row_count; ++row_i)
             {
                 u32 row_index = 0u;
                 stream.read(row_index);
                 auto row = read_widget_row(stream);
-                for (size_t column_i = 0u; column_i < row.size(); ++column_i)
+                if (row_index >= rows.size()) rows.resize(static_cast<size_t>(row_index) + 1u);
+                if (!rows[row_index].empty())
                 {
-                    if (!row[column_i]) continue;
-                    auto *cell = row[column_i];
-                    row[column_i] = nullptr;
-                    table->set_cell(row_index, column_i, cell);
+                    release_table_row(row);
+                    acul::release(table);
+                    throw acul::runtime_error("Duplicate table row index");
                 }
+                rows[row_index] = std::move(row);
             }
+            table->set_rows(std::move(rows));
 
             for (const auto &entry : cell_styles)
                 if (entry.tag_id != 0u) table->set_cell_style_tag(entry.row, entry.column, entry.tag_id);
@@ -1777,7 +1912,7 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::streams::Stream table{read_table, write_table};
+        AUIK_EXPORT const umbf::registry::BlockStream table{read_table, write_table};
     } // namespace streams
 
 } // namespace auik

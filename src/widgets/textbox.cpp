@@ -187,6 +187,7 @@ namespace auik
                                                make_text_layout_flags(TextOverflowMode::clip, text_wrap))),
           _edit(acul::alloc<TextboxEditData>())
     {
+        _scroll.widget = this;
         _text.set_parent(this);
         _text.set_style_mask(g_textbox_content_style_mask);
         if (_placeholder)
@@ -196,12 +197,13 @@ namespace auik
         }
         this->text_flags = text_flags;
         detail::text_edit_initialize_state(&_edit_state, true);
-        register_shortcut(this, Shortcut{.mods = KeyModeBits::control, .keys = {Key::c}},
+        register_shortcut(this, Shortcut{.mods = KeyModeBits::control, .keys = make_shortcut_keys(Key::c)},
                           [this]() { copy_selection_to_clipboard(); });
-        register_shortcut(this, Shortcut{.mods = KeyModeBits::control, .keys = {Key::v}},
+        register_shortcut(this, Shortcut{.mods = KeyModeBits::control, .keys = make_shortcut_keys(Key::v)},
                           [this]() { paste_clipboard_at_cursor(); });
-        register_shortcut(this, Shortcut{.mods = KeyModeBits::control, .keys = {Key::a}}, [this]() { select_all(); });
-        register_shortcut(this, Shortcut{.mods = KeyModeBits::control, .keys = {Key::x}},
+        register_shortcut(this, Shortcut{.mods = KeyModeBits::control, .keys = make_shortcut_keys(Key::a)},
+                          [this]() { select_all(); });
+        register_shortcut(this, Shortcut{.mods = KeyModeBits::control, .keys = make_shortcut_keys(Key::x)},
                           [this]() { cut_selection_to_clipboard(); });
     }
 
@@ -336,7 +338,7 @@ namespace auik
         update_text_content_clip_rect();
         if (has_internal_scrollbar())
         {
-            detail::ensure_internal_y_scrollbar(_scrollbar_y, this);
+            detail::ensure_internal_y_scrollbar(_scrollbar_y, this, &_scroll);
             _scrollbar_y->update_style_invalidated();
             amal::vec2 scrollbar_range{};
             assign_next_depth(_text.depth_range(), scrollbar_range);
@@ -351,6 +353,7 @@ namespace auik
             _text.update_layout(true);
             _text.set_clip_id(text_content_clip_id());
             const f32 content_h = _text.layout_result().size.y;
+            _scroll.set_metrics(content_h, _content_size.y, amal::axis::y);
             const bool need_scrollbar = content_h > _content_size.y && !should_resize_to_content();
             if (need_scrollbar)
             {
@@ -362,8 +365,8 @@ namespace auik
                 _scrollbar_y->configure({scrollbar_x, box_pos.y + track_margin.y},
                                         {bar_w, amal::max(box_size.y - track_margin.y - track_margin.w, 0.0f)},
                                         content_h, _content_size.y);
-                _content_scroll.y = snap_textbox_scroll_offset(_scrollbar_y->scroll_offset());
-                _scrollbar_y->set_scroll_offset(_content_scroll.y);
+                _scroll.content_offset.y = snap_textbox_scroll_offset(_scrollbar_y->scroll_offset());
+                _scrollbar_y->set_scroll_offset(_scroll.content_offset.y);
             }
             else
             {
@@ -371,7 +374,7 @@ namespace auik
                 _scrollbar_y->sync_widget_flags();
                 remove_event_flags(EventFlagBits::scroll);
                 _scrollbar_y->set_scroll_offset(0.0f);
-                _content_scroll.y = 0.0f;
+                _scroll.content_offset.y = 0.0f;
             }
         }
         else if (_scrollbar_y)
@@ -380,14 +383,15 @@ namespace auik
             _scrollbar_y->sync_widget_flags();
             remove_event_flags(EventFlagBits::scroll);
             _scrollbar_y->set_scroll_offset(0.0f);
-            _content_scroll.y = 0.0f;
+            _scroll.content_offset.y = 0.0f;
+            _scroll.set_metrics(0.0f, _content_size.y, amal::axis::y);
         }
         _text.set_position(_content_pos);
         _text.set_layout_size(_content_size);
         _text.set_clip_id(text_content_clip_id());
         _text.update_layout(true);
         update_content_scroll_x_for_cursor();
-        _text.translate({-_content_scroll.x, -_content_scroll.y});
+        _text.translate({-_scroll.content_offset.x, -_scroll.content_offset.y});
         _text.set_clip_id(text_content_clip_id());
         refresh_placeholder_layout();
         rebuild_selection_rect_cache();
@@ -685,9 +689,9 @@ namespace auik
 
             auto &ctx = detail::get_context();
             if (ctx.dirty_flags & detail::layout_update_dirty_mask) return;
-            const f32 old_scroll_x = _content_scroll.x;
-            if (update_content_scroll_x_for_cursor() && old_scroll_x != _content_scroll.x)
-                _text.translate({old_scroll_x - _content_scroll.x, 0.0f});
+            const f32 old_scroll_x = _scroll.content_offset.x;
+            if (update_content_scroll_x_for_cursor() && old_scroll_x != _scroll.content_offset.x)
+                _text.translate({old_scroll_x - _scroll.content_offset.x, 0.0f});
             rebuild_selection_rect_cache();
             redraw_all_commands();
         });
@@ -710,8 +714,7 @@ namespace auik
         {
             if (state != KeyPressState::press) return;
             _drag_scrollbar = nullptr;
-            const amal::vec2 old_scroll = _content_scroll;
-            _scrollbar_y->set_scroll_offset(_content_scroll.y);
+            const amal::vec2 old_scroll = _scroll.content_offset;
             bool is_offset_changed = false;
             if (ctx.hover_id.tag_id == AUIK_TAG_SCROLLBAR_THUMB_Y) _drag_scrollbar = _scrollbar_y;
             else if (ctx.hover_id.tag_id == AUIK_TAG_SCROLLBAR_TRACK_Y)
@@ -719,8 +722,7 @@ namespace auik
                 is_offset_changed = _scrollbar_y->scroll_to_track_click(ctx.io.mouse_pos);
                 _drag_scrollbar = _scrollbar_y;
             }
-            _content_scroll.y = snap_textbox_scroll_offset(_scrollbar_y->scroll_offset());
-            _scrollbar_y->set_scroll_offset(_content_scroll.y);
+            _scrollbar_y->set_scroll_offset(snap_textbox_scroll_offset(_scrollbar_y->scroll_offset()));
             if (is_offset_changed)
             {
                 apply_content_scroll_delta(old_scroll);
@@ -758,11 +760,9 @@ namespace auik
         }
         if (_drag_scrollbar)
         {
-            const amal::vec2 old_scroll = _content_scroll;
-            _scrollbar_y->set_scroll_offset(_content_scroll.y);
+            const amal::vec2 old_scroll = _scroll.content_offset;
             const bool is_offset_changed = _scrollbar_y->scroll_thumb_by_drag_delta(delta);
-            _content_scroll.y = snap_textbox_scroll_offset(_scrollbar_y->scroll_offset());
-            _scrollbar_y->set_scroll_offset(_content_scroll.y);
+            _scrollbar_y->set_scroll_offset(snap_textbox_scroll_offset(_scrollbar_y->scroll_offset()));
             if (is_offset_changed)
             {
                 apply_content_scroll_delta(old_scroll);
@@ -1195,17 +1195,16 @@ namespace auik
     void Textbox::on_scroll(const amal::vec2 &delta)
     {
         if (!_scrollbar_y || !_scrollbar_y->is_visible()) return;
-        const amal::vec2 old_scroll = _content_scroll;
+        const amal::vec2 old_scroll = _scroll.content_offset;
         if (!_scrollbar_y->scroll_by_pixels(-delta.y * static_cast<f32>(AUIK_SCROLL_STEP))) return;
-        _content_scroll.y = snap_textbox_scroll_offset(_scrollbar_y->scroll_offset());
-        _scrollbar_y->set_scroll_offset(_content_scroll.y);
+        _scrollbar_y->set_scroll_offset(snap_textbox_scroll_offset(_scrollbar_y->scroll_offset()));
         apply_content_scroll_delta(old_scroll);
         add_render_command<detail::ScrollEventTraits>(this, [this]() { redraw_after_scroll(); });
     }
 
     void Textbox::apply_content_scroll_delta(const amal::vec2 &old_scroll)
     {
-        const amal::vec2 visual_delta = old_scroll - _content_scroll;
+        const amal::vec2 visual_delta = old_scroll - _scroll.content_offset;
         if (visual_delta.x == 0.0f && visual_delta.y == 0.0f) return;
 
         _text.translate(visual_delta);
@@ -1275,8 +1274,8 @@ namespace auik
         if (layout.lines.empty())
             return point.x < _content_pos.x + _content_size.x * 0.5f ? 0 : static_cast<int>(value().size());
 
-        const f32 local_x = point.x - _content_pos.x + _content_scroll.x;
-        const f32 local_y = point.y - _content_pos.y + _content_scroll.y;
+        const f32 local_x = point.x - _content_pos.x + _scroll.content_offset.x;
+        const f32 local_y = point.y - _content_pos.y + _scroll.content_offset.y;
         u32 line_index = 0;
         f32 best_dist = 3.4e38f;
         for (u32 i = 0; i < layout.lines.size(); ++i)
@@ -1383,8 +1382,8 @@ namespace auik
             line_y = static_cast<f32>(line_index) * line_h + amal::max((line_h - caret_h) * 0.5f, 0.0f);
         }
 
-        return {{amal::round(_content_pos.x + x - _content_scroll.x),
-                 amal::round(_content_pos.y + align_y + line_y - _content_scroll.y)},
+        return {{amal::round(_content_pos.x + x - _scroll.content_offset.x),
+                 amal::round(_content_pos.y + align_y + line_y - _scroll.content_offset.y)},
                 {width, caret_h}};
     }
 
@@ -1398,34 +1397,36 @@ namespace auik
         const f32 layout_h = layout.lines.size() <= 1 ? (accepts_newline() ? line_h : metrics_h) : layout.size.y;
         const f32 align_y = resolve_textbox_align_y_offset(style, _content_size.y, layout_h);
         if (layout.lines.empty())
-            return {{_content_pos.x + x0 - _content_scroll.x,
-                     _content_pos.y + align_y + amal::max((line_h - selection_h) * 0.5f, 0.0f) - _content_scroll.y},
-                    {amal::max(x1 - x0, 0.0f), selection_h}};
+            return {
+                {_content_pos.x + x0 - _scroll.content_offset.x,
+                 _content_pos.y + align_y + amal::max((line_h - selection_h) * 0.5f, 0.0f) - _scroll.content_offset.y},
+                {amal::max(x1 - x0, 0.0f), selection_h}};
         if (line_index >= layout.lines.size()) line_index = static_cast<u32>(layout.lines.size() - 1);
 
         const auto &line = layout.lines[line_index];
         f32 line_y = line.glyph_count > 0 ? layout.glyphs[line.glyph_offset].pen.y - layout.ascender
                                           : static_cast<f32>(line_index) * layout.line_height;
         if (accepts_newline()) line_y += amal::max((line_h - selection_h) * 0.5f, 0.0f);
-        return {{_content_pos.x + x0 - _content_scroll.x, _content_pos.y + align_y + line_y - _content_scroll.y},
+        return {{_content_pos.x + x0 - _scroll.content_offset.x,
+                 _content_pos.y + align_y + line_y - _scroll.content_offset.y},
                 {amal::max(x1 - x0, 0.0f), selection_h}};
     }
 
     bool Textbox::update_content_scroll_x_for_cursor()
     {
-        const f32 old_scroll_x = _content_scroll.x;
+        const f32 old_scroll_x = _scroll.content_offset.x;
         const bool editing = detail::get_context().focus_id == id() && should_draw_caret();
         if (!editing || accepts_newline() || value().empty() || _edit_state.cursors.empty())
         {
-            _content_scroll.x = 0.0f;
-            return old_scroll_x != _content_scroll.x;
+            _scroll.content_offset.x = 0.0f;
+            return old_scroll_x != _scroll.content_offset.x;
         }
 
         const auto &layout = _text.layout_result();
         if (layout.lines.empty() || _content_size.x <= 0.0f)
         {
-            _content_scroll.x = 0.0f;
-            return old_scroll_x != _content_scroll.x;
+            _scroll.content_offset.x = 0.0f;
+            return old_scroll_x != _scroll.content_offset.x;
         }
 
         const int cursor = amal::clamp(_edit_state.primary_cursor().cursor, 0, static_cast<int>(value().size()));
@@ -1433,29 +1434,29 @@ namespace auik
         const u32 line_index = line_index_from_cursor(cursor, edit_cursor.cursor_at_end_of_line);
         const f32 cursor_x = cursor_x_on_line(line_index, cursor);
         const f32 max_scroll = amal::max(layout.size.x - _content_size.x, 0.0f);
-        const f32 right_edge = _content_scroll.x + _content_size.x;
+        const f32 right_edge = _scroll.content_offset.x + _content_size.x;
         const f32 caret_margin = 1.0f;
-        if (cursor_x > right_edge - caret_margin) _content_scroll.x = cursor_x - _content_size.x + caret_margin;
-        if (cursor_x < _content_scroll.x) _content_scroll.x = cursor_x;
-        _content_scroll.x = amal::clamp(_content_scroll.x, 0.0f, max_scroll);
-        return old_scroll_x != _content_scroll.x;
+        if (cursor_x > right_edge - caret_margin) _scroll.content_offset.x = cursor_x - _content_size.x + caret_margin;
+        if (cursor_x < _scroll.content_offset.x) _scroll.content_offset.x = cursor_x;
+        _scroll.content_offset.x = amal::clamp(_scroll.content_offset.x, 0.0f, max_scroll);
+        return old_scroll_x != _scroll.content_offset.x;
     }
 
     bool Textbox::update_content_scroll_y_for_cursor()
     {
-        const f32 old_scroll_y = _content_scroll.y;
+        const f32 old_scroll_y = _scroll.content_offset.y;
         if (!accepts_newline() || !has_internal_scrollbar() || value().empty() || _edit_state.cursors.empty())
         {
-            if (!has_internal_scrollbar()) _content_scroll.y = 0.0f;
-            return old_scroll_y != _content_scroll.y;
+            if (!has_internal_scrollbar()) _scroll.content_offset.y = 0.0f;
+            return old_scroll_y != _scroll.content_offset.y;
         }
 
         const auto &layout = _text.layout_result();
         if (layout.lines.empty() || _content_size.y <= 0.0f)
         {
-            _content_scroll.y = 0.0f;
-            if (_scrollbar_y) _scrollbar_y->set_scroll_offset(_content_scroll.y);
-            return old_scroll_y != _content_scroll.y;
+            _scroll.content_offset.y = 0.0f;
+            if (_scrollbar_y) _scrollbar_y->set_scroll_offset(_scroll.content_offset.y);
+            return old_scroll_y != _scroll.content_offset.y;
         }
 
         const auto &edit_cursor = _edit_state.primary_cursor();
@@ -1470,20 +1471,20 @@ namespace auik
         const auto &line = layout.lines[line_index];
         const f32 line_y = line.glyph_count > 0 ? layout.glyphs[line.glyph_offset].pen.y - layout.ascender
                                                 : static_cast<f32>(line_index) * layout.line_height;
-        const f32 viewport_top = _content_scroll.y;
-        const f32 viewport_bottom = _content_scroll.y + _content_size.y;
+        const f32 viewport_top = _scroll.content_offset.y;
+        const f32 viewport_bottom = _scroll.content_offset.y + _content_size.y;
         const f32 caret_top = align_y + line_y;
         const f32 caret_bottom = caret_top + line_h;
 
-        if (caret_bottom > viewport_bottom) _content_scroll.y += caret_bottom - viewport_bottom;
-        if (caret_top < viewport_top) _content_scroll.y -= viewport_top - caret_top;
+        if (caret_bottom > viewport_bottom) _scroll.content_offset.y += caret_bottom - viewport_bottom;
+        if (caret_top < viewport_top) _scroll.content_offset.y -= viewport_top - caret_top;
 
         const f32 max_scroll =
             _scrollbar_y ? _scrollbar_y->max_scroll() : amal::max(layout.size.y - _content_size.y, 0.0f);
-        _content_scroll.y = snap_textbox_scroll_offset(amal::clamp(_content_scroll.y, 0.0f, max_scroll));
-        _content_scroll.y = amal::clamp(_content_scroll.y, 0.0f, max_scroll);
-        if (_scrollbar_y) _scrollbar_y->set_scroll_offset(_content_scroll.y);
-        return old_scroll_y != _content_scroll.y;
+        _scroll.content_offset.y = snap_textbox_scroll_offset(amal::clamp(_scroll.content_offset.y, 0.0f, max_scroll));
+        _scroll.content_offset.y = amal::clamp(_scroll.content_offset.y, 0.0f, max_scroll);
+        if (_scrollbar_y) _scrollbar_y->set_scroll_offset(_scroll.content_offset.y);
+        return old_scroll_y != _scroll.content_offset.y;
     }
 
     void Textbox::update_text_content_clip_rect()
@@ -1572,7 +1573,7 @@ namespace auik
         _text.set_clip_id(text_content_clip_id());
         _text.update_layout(true);
         update_content_scroll_x_for_cursor();
-        _text.translate({-_content_scroll.x, -_content_scroll.y});
+        _text.translate({-_scroll.content_offset.x, -_scroll.content_offset.y});
         _text.set_clip_id(text_content_clip_id());
         refresh_placeholder_layout();
         rebuild_selection_rect_cache();
@@ -1585,7 +1586,7 @@ namespace auik
         _placeholder->set_layout_size(_content_size);
         _placeholder->set_clip_id(text_content_clip_id());
         _placeholder->update_layout(true);
-        _placeholder->translate({0.0f, -_content_scroll.y});
+        _placeholder->translate({0.0f, -_scroll.content_offset.y});
         _placeholder->set_clip_id(text_content_clip_id());
     }
 
@@ -1617,7 +1618,8 @@ namespace auik
         const bool is_primary = !_edit_state.cursors.empty() && _edit_state.primary_cursor().cursor == cursor;
         const bool at_end = is_primary && _edit_state.primary_cursor().cursor_at_end_of_line;
         const u32 line_index = line_index_from_cursor(cursor, at_end);
-        return {_content_pos.x + cursor_x_on_line(line_index, cursor) - _content_scroll.x, line_screen_y(line_index)};
+        return {_content_pos.x + cursor_x_on_line(line_index, cursor) - _scroll.content_offset.x,
+                line_screen_y(line_index)};
     }
 
     void Textbox::move_cursor_vertical(int dir, bool select)
@@ -1826,8 +1828,9 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::streams::Stream textbox{read_textbox, write_textbox};
-        AUIK_EXPORT const umbf::streams::Stream multiline_textbox{read_multiline_textbox, write_multiline_textbox};
+        AUIK_EXPORT const umbf::registry::BlockStream textbox{read_textbox, write_textbox};
+        AUIK_EXPORT const umbf::registry::BlockStream multiline_textbox{read_multiline_textbox,
+                                                                        write_multiline_textbox};
     } // namespace streams
 
 } // namespace auik

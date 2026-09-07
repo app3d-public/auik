@@ -1,4 +1,5 @@
 #include <auik/widgets/dock_layout.hpp>
+#include "../core/session_stream_utils.hpp"
 
 namespace auik
 {
@@ -102,6 +103,36 @@ namespace auik
             if (item.widget) item.widget->reset_draw_records();
     }
 
+    void DockLayout::invalidate_style()
+    {
+        Widget::invalidate_style();
+        for (Item &item : _dock.items())
+            if (item.widget) item.widget->invalidate_style();
+    }
+
+    bool DockLayout::update_locale()
+    {
+        bool changed = Widget::update_locale();
+        for (Item &item : _dock.items())
+            if (item.widget) changed |= item.widget->update_locale();
+        return changed;
+    }
+
+    void DockLayout::add_state_flags_inherit(WidgetStateFlags flags)
+    {
+        Widget::add_state_flags_inherit(flags);
+        if ((flags & WidgetStateFlagBits::visible) && !is_visible()) flags &= ~WidgetStateFlagBits::visible;
+        for (auto &item : _dock.items())
+            if (item.widget) item.widget->add_state_flags_inherit(flags);
+    }
+
+    void DockLayout::remove_state_flags_inherit(WidgetStateFlags flags)
+    {
+        Widget::remove_state_flags_inherit(flags);
+        for (auto &item : _dock.items())
+            if (item.widget) item.widget->remove_state_flags_inherit(flags);
+    }
+
     u32 DockLayout::get_depth_requirement() const
     {
         u32 requirement = 1u;
@@ -181,5 +212,112 @@ namespace auik
         item.widget->set_layout_size(layout_size);
         item.widget->update_layout(true);
         item.widget->rebuild_clip_rects();
+    }
+
+    struct DockLayoutStreamAccess
+    {
+        static void write_settings(acul::bin_stream &stream, const detail::DockBaseNodeSettings &settings)
+        {
+            stream.write(settings.style_tag).write(settings.size).write(settings.min_size);
+        }
+
+        static detail::DockBaseNodeSettings read_settings(acul::bin_stream &stream)
+        {
+            detail::DockBaseNodeSettings settings{};
+            stream.read(settings.style_tag).read(settings.size).read(settings.min_size);
+            return settings;
+        }
+
+        static void write(acul::bin_stream &stream, umbf::Block *block)
+        {
+            const auto *layout = static_cast<DockLayout *>(block);
+            detail::write_widget_common_data(stream, *layout);
+            const auto &nodes = layout->_dock.nodes();
+            stream.write(static_cast<u32>(nodes.size()));
+            for (const auto &node : nodes)
+            {
+                write_settings(stream, node.settings);
+                stream.write(static_cast<u8>(node.axis))
+                    .write(node.parent)
+                    .write(static_cast<u32>(node.children.size()));
+                if (!node.children.empty()) stream.write(node.children.data(), node.children.size());
+
+                acul::vector<DockLayout::Item> items;
+                acul::vector<Widget *> blocks;
+                for (const auto &item : node.items)
+                {
+                    if (!item.widget || !(item.widget->widget_flags & WidgetFlagBits::cache_snapshot)) continue;
+                    items.push_back(item);
+                    blocks.push_back(item.widget);
+                }
+                stream.write(static_cast<u32>(items.size()));
+                for (const auto &item : items) stream.write(static_cast<u32>(item.layout));
+                stream.write(blocks);
+            }
+        }
+
+        static umbf::Block *read(acul::bin_stream &stream)
+        {
+            const auto common = detail::read_widget_common_data(stream);
+            auto *layout = acul::alloc<DockLayout>(common.id, common.inline_size, WidgetFlags(common.widget_flags));
+            detail::apply_widget_common_data(layout, common);
+            layout->_dock.nodes().clear();
+
+            u32 node_count = 0u;
+            stream.read(node_count);
+            if (node_count == 0u) node_count = 1u;
+            layout->_dock.nodes().resize(node_count);
+            for (u32 node_i = 0u; node_i < node_count; ++node_i)
+            {
+                auto &node = layout->_dock.nodes()[node_i];
+                const auto settings = read_settings(stream);
+                u8 axis = static_cast<u8>(amal::axis::x);
+                stream.read(axis).read(node.parent);
+                node.axis = static_cast<amal::axis>(axis);
+                node.settings = settings;
+                layout->_dock.set_node_settings(node_i, settings);
+                u32 child_count = 0u;
+                stream.read(child_count);
+                node.children.resize(child_count);
+                if (!node.children.empty()) stream.read(node.children.data(), node.children.size());
+
+                u32 item_count = 0u;
+                stream.read(item_count);
+                acul::vector<ChildLayoutFlags> item_layouts;
+                item_layouts.reserve(item_count);
+                for (u32 item_i = 0u; item_i < item_count; ++item_i)
+                {
+                    u32 item_layout = 0u;
+                    stream.read(item_layout);
+                    item_layouts.push_back(ChildLayoutFlags(item_layout));
+                }
+                acul::vector<Widget *> blocks;
+                stream.read(blocks);
+                if (blocks.size() != item_layouts.size())
+                {
+                    for (auto *item : blocks)
+                        if (item) acul::release(item);
+                    acul::release(layout);
+                    throw acul::runtime_error("Invalid dock layout item count");
+                }
+                for (u32 item_i = 0u; item_i < item_count; ++item_i)
+                {
+                    auto *widget = dynamic_cast<Widget *>(blocks[item_i]);
+                    if (!widget)
+                    {
+                        if (blocks[item_i]) acul::release(blocks[item_i]);
+                        continue;
+                    }
+                    layout->_dock.add_item(node_i, DockLayout::Item{widget, item_layouts[item_i]});
+                }
+            }
+            return layout;
+        }
+    };
+
+    namespace streams
+    {
+        AUIK_EXPORT const umbf::registry::BlockStream dock_layout{DockLayoutStreamAccess::read,
+                                                                  DockLayoutStreamAccess::write};
     }
 } // namespace auik

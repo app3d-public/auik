@@ -1,5 +1,6 @@
 #pragma once
 
+#include <acul/bit.hpp>
 #include <acul/enum.hpp>
 #include <acul/hash/hashmap.hpp>
 #include <acul/hash/utils.hpp>
@@ -339,32 +340,49 @@ namespace auik
 
     struct Shortcut
     {
-        u32 id = AUIK_TAG_GLOBAL;
-        KeyMode mods;
-        acul::vector<Key> keys;
-        MouseKeyFlags mouse;
+        KeyMode mods{};
+        acul::u128 keys{};
+        MouseKeyFlags mouse{};
 
-        bool empty() const { return (bool)mods == 0 && keys.empty() && !mouse; }
-
-        bool operator==(const Shortcut &other) const
+        void set_key(Key key, bool value = true)
         {
-            return id == other.id && mods == other.mods && keys == other.keys && mouse == other.mouse;
+            const auto index = static_cast<u16>(key);
+            if (index >= 128u) return;
+            u64 &word = index < 64u ? keys.first : keys.second;
+            const u64 mask = 1ull << (index & 63u);
+            if (value) word |= mask;
+            else word &= ~mask;
         }
+
+        bool has_key(Key key) const
+        {
+            const auto index = static_cast<u16>(key);
+            if (index >= 128u) return false;
+            const u64 word = index < 64u ? keys.first : keys.second;
+            return (word & (1ull << (index & 63u))) != 0u;
+        }
+
+        bool empty() const { return !mods && keys.first == 0u && keys.second == 0u && !mouse; }
+        bool operator==(const Shortcut &) const = default;
     };
+
+    inline acul::u128 make_shortcut_keys(Key key)
+    {
+        Shortcut shortcut{};
+        shortcut.set_key(key);
+        return shortcut.keys;
+    }
 
     namespace detail
     {
-        template <class Keys>
-        inline u64 make_shortcut_hash(const Keys &keys, MouseKeyFlags mouse_keys, KeyMode mods,
-                                      u32 widget_id = AUIK_TAG_GLOBAL)
+        inline u64 make_shortcut_hash(const Shortcut &shortcut, u32 id = AUIK_TAG_GLOBAL)
         {
             size_t result = 0u;
-            acul::hash_combine(result, widget_id);
-            acul::hash_combine(result, static_cast<i16>(mods));
-
-            for (const auto key : keys) acul::hash_combine(result, +key);
-
-            acul::hash_combine(result, static_cast<i16>(mouse_keys));
+            acul::hash_combine(result, id);
+            acul::hash_combine(result, shortcut.keys.first);
+            acul::hash_combine(result, shortcut.keys.second);
+            acul::hash_combine(result, static_cast<i16>(shortcut.mods));
+            acul::hash_combine(result, static_cast<i16>(shortcut.mouse));
 
             return static_cast<u64>(result);
         }

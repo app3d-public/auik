@@ -35,7 +35,7 @@ namespace auik::detail
         else flags &= ~flag;
     }
 
-    inline void resize_table_size_points(acul::vector<acul::point2D<f32>> &values, size_t size)
+    inline void resize_table_size_points(acul::vector<amal::vec2> &values, size_t size)
     {
         const size_t old_size = values.size();
         values.resize(size);

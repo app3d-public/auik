@@ -1,12 +1,171 @@
 #include <auik/auik.hpp>
 #include <auik/detail/context.hpp>
 #include <auik/detail/events.hpp>
+#include <auik/model.hpp>
+#include <cstddef>
 
 #define AUIK_MOUSE_DOUBLE_CLICK_TIME     0.45
 #define AUIK_MOUSE_DOUBLE_CLICK_MAX_DIST 8.0
+#define SHORTCUT_TAG_FIELD_ID            1u
+#define SHORTCUT_ID_FIELD_ID             2u
+#define SHORTCUT_CALLBACK_FIELD_ID       3u
 
 namespace auik
 {
+    namespace
+    {
+        struct ShortcutCallbackField final : ModelField
+        {
+            explicit ShortcutCallbackField(acul::unique_function<void()> value) : callback(std::move(value))
+            {
+                id = SHORTCUT_CALLBACK_FIELD_ID;
+            }
+
+            acul::unique_function<void()> callback;
+
+            void *data() override { return nullptr; }
+            const void *data() const override { return nullptr; }
+            u32 size() const override { return 0u; }
+            void release() override { acul::release(this); }
+        };
+
+        Model *shortcut_model(detail::IO &io)
+        {
+            return io.shortcut_model_db ? find_model(io.shortcut_model_db, io.shortcut_model_id) : nullptr;
+        }
+
+        const Model *shortcut_model(const detail::IO &io)
+        {
+            return io.shortcut_model_db ? find_const_model(io.shortcut_model_db, io.shortcut_model_id) : nullptr;
+        }
+
+        ShortcutCallbackField *shortcut_callback(ModelRecord *record)
+        {
+            return record ? record->as<ShortcutCallbackField>() : nullptr;
+        }
+
+        template <class T>
+        const T *shortcut_field(const ModelRecord &record, ModelFieldID field_id)
+        {
+            const auto *field = find_model_field(record, field_id);
+            return field ? &static_cast<const ModelValueField<T> *>(field)->value : nullptr;
+        }
+
+        void erase_shortcut_record(Model &model, ModelRecordID record_id)
+        {
+            const u32 index = model.record_index(record_id);
+            if (index >= model.records.size()) return;
+            release_model_record_fields(model.records[index]);
+            model.record_indices.erase(record_id);
+            const u32 last = static_cast<u32>(model.records.size() - 1u);
+            if (index != last)
+            {
+                model.records[index] = std::move(model.records[last]);
+                model.record_indices[model.records[index].id] = index;
+            }
+            model.records.erase(model.records.begin() + last);
+        }
+
+        void rebuild_shortcut_record_indices(Model &model)
+        {
+            model.record_indices.clear();
+            for (u32 index = 0u; index < model.records.size(); ++index)
+                model.record_indices.emplace(model.records[index].id, index);
+        }
+
+        u32 change_shortcut_records(Model &model, const acul::vector<ModelRecordID> &record_ids,
+                                    const Shortcut &shortcut)
+        {
+            struct Target
+            {
+                ModelRecordID old_record_id = AUIK_MODEL_RECORD_ID_INVALID;
+                ModelRecordID new_record_id = AUIK_MODEL_RECORD_ID_INVALID;
+            };
+
+            acul::vector<Target> targets;
+            targets.reserve(record_ids.size());
+            acul::hashset<ModelRecordID> selected;
+            selected.reserve(record_ids.size());
+            for (ModelRecordID record_id : record_ids) selected.emplace(record_id);
+
+            for (ModelRecordID record_id : record_ids)
+            {
+                const auto *record = model.find_record(record_id);
+                const auto *id = record ? shortcut_field<u32>(*record, SHORTCUT_ID_FIELD_ID) : nullptr;
+                if (!id) continue;
+                targets.push_back({record_id, detail::make_shortcut_hash(shortcut, *id)});
+            }
+            if (targets.empty()) return 0u;
+
+            for (size_t i = 0u; i < targets.size(); ++i)
+            {
+                for (size_t j = i + 1u; j < targets.size(); ++j)
+                    if (targets[i].new_record_id == targets[j].new_record_id) return 0u;
+                const auto *occupied = model.find_record(targets[i].new_record_id);
+                if (occupied && selected.count(occupied->id) == 0u) return 0u;
+            }
+
+            for (const auto &target : targets)
+            {
+                auto *record = model.find_record(target.old_record_id);
+                if (record) record->id = target.new_record_id;
+            }
+            rebuild_shortcut_record_indices(model);
+            model.dispatch_records(ModelRecordsEvent{ModelRecordsOp::reset});
+            return static_cast<u32>(targets.size());
+        }
+
+        void erase_empty_widget_attach_bind(u32 id)
+        {
+            auto &binds = detail::get_context().widget_attach_binds;
+            auto it = binds.find(id);
+            if (it != binds.end() && !it->second.on_attach && !it->second.on_detach) binds.erase(it);
+        }
+    } // namespace
+
+    bool setup_shortcut_model(ModelDB *db)
+    {
+        auto &io = detail::get_context().io;
+        if (io.shortcut_model_db == db && shortcut_model(io)) return true;
+        if (io.shortcut_model_db && io.shortcut_model_id) unregister_model(io.shortcut_model_db, io.shortcut_model_id);
+        io.shortcut_model_db = nullptr;
+        io.shortcut_model_id = 0u;
+        if (!db) return true;
+
+        Model model{};
+        model.make_record_id_cb = make_generated_model_record_id;
+        const ModelID model_id = make_generated_model_id();
+        if (!register_model(db, model_id, std::move(model), destroy_model_fields)) return false;
+        io.shortcut_model_db = db;
+        io.shortcut_model_id = model_id;
+        sync_model_db(db);
+        return true;
+    }
+
+    void set_widget_attach_callback(u32 id, acul::unique_function<void(Widget *)> callback)
+    {
+        auto &binds = detail::get_context().widget_attach_binds;
+        if (callback) binds[id].on_attach = std::move(callback);
+        else
+        {
+            auto it = binds.find(id);
+            if (it != binds.end()) it->second.on_attach = nullptr;
+            erase_empty_widget_attach_bind(id);
+        }
+    }
+
+    void set_widget_detach_callback(u32 id, acul::unique_function<void(Widget *)> callback)
+    {
+        auto &binds = detail::get_context().widget_attach_binds;
+        if (callback) binds[id].on_detach = std::move(callback);
+        else
+        {
+            auto it = binds.find(id);
+            if (it != binds.end()) it->second.on_detach = nullptr;
+            erase_empty_widget_attach_bind(id);
+        }
+    }
+
     namespace
     {
         bool is_at_drag_boundary(const detail::Context &ctx)
@@ -78,6 +237,8 @@ namespace auik
         _user_data = next;
     }
 
+    void Widget::erase_user_data(u32 tag) { erase_user_data_tag(_user_data, tag); }
+
     void Widget::emplace_user_data_ref_head(u32 tag, void *handle)
     {
         erase_user_data_tag(_user_data, tag);
@@ -125,7 +286,16 @@ namespace auik
 
     void Widget::sync_widget_flags(EventFlags flags)
     {
-        const bool visible_changed = static_cast<bool>(_synced_widget_flags & WidgetFlagBits::visible) != is_visible();
+        const bool logical_visible_changed =
+            static_cast<bool>(_synced_widget_flags & WidgetFlagBits::visible) != is_logically_visible();
+        const bool was_visible = is_visible();
+        if (logical_visible_changed)
+        {
+            if (is_logically_visible() && (!parent() || parent()->is_visible()))
+                add_state_flags_inherit(WidgetStateFlagBits::visible);
+            else remove_state_flags_inherit(WidgetStateFlagBits::visible);
+        }
+        const bool visible_changed = was_visible != is_visible();
         const bool disabled_changed =
             static_cast<bool>(_synced_widget_flags & WidgetFlagBits::disabled) != is_disabled();
         const bool read_only_changed =
@@ -146,7 +316,6 @@ namespace auik
         if (visible_changed)
         {
             invalidate_layout_measure();
-            if (is_attached() && !(ctx.dirty_flags & DirtyFlagBits::destroying)) rebuild_root_widget_depths();
         }
 
         const bool disabled_post_missing = is_disabled() && !_disabled_post_fx;
@@ -173,26 +342,22 @@ namespace auik
                     layout_owner->update_layout(false);
                     refresh_owner = layout_owner;
                 }
+                refresh_owner->update_depth(refresh_owner->depth_range());
             }
 
             if (!widget->is_visible())
             {
-                auto belongs_to_widget = [widget, &ctx](u32 id) {
+                auto is_hidden_widget = [&ctx](u32 id) {
                     if (!id) return false;
                     const auto it = ctx.id_map.find(id);
-                    if (it == ctx.id_map.end()) return false;
-                    for (Widget *node = it->second; node; node = node->parent())
-                        if (node == widget) return true;
-                    return false;
+                    return it != ctx.id_map.end() && !it->second->is_visible();
                 };
-                auto element_belongs_to_widget = [&](ElementID id) {
-                    return id.widget_id && belongs_to_widget(id.widget_id);
-                };
-                if (belongs_to_widget(ctx.focus_id)) ctx.focus_id = 0u;
-                if (belongs_to_widget(ctx.active_id)) ctx.active_id = 0u;
-                if (element_belongs_to_widget(ctx.hover_id)) ctx.hover_id = {};
-                if (element_belongs_to_widget(ctx.io.clicked_id)) ctx.io.clicked_id = {};
-                if (element_belongs_to_widget(ctx.io.drag_id))
+                auto is_hidden_element = [&](ElementID id) { return id.widget_id && is_hidden_widget(id.widget_id); };
+                if (is_hidden_widget(ctx.focus_id)) ctx.focus_id = 0u;
+                if (is_hidden_widget(ctx.active_id)) ctx.active_id = 0u;
+                if (is_hidden_element(ctx.hover_id)) ctx.hover_id = {};
+                if (is_hidden_element(ctx.io.clicked_id)) ctx.io.clicked_id = {};
+                if (is_hidden_element(ctx.io.drag_id))
                 {
                     detail::cancel_unbounded_mouse_drag();
                     ctx.io.drag_id = {};
@@ -207,7 +372,7 @@ namespace auik
             {
                 if (refresh_owner->is_attached())
                     refresh_owner->update_draw_commands(visible_changed ? DrawReasonBits::layout
-                                                                       : DrawReasonBits::external);
+                                                                        : DrawReasonBits::external);
                 if (widget->is_transient()) widget->update_draw_commands(DrawReasonBits::transient);
             }
             else
@@ -476,31 +641,32 @@ namespace auik
 
         static inline bool dispatch_shortcut(Context &ctx)
         {
-            const auto &io = ctx.io;
+            auto &io = ctx.io;
             const KeyMode mods = build_active_shortcut_mods(io);
-            if (!mods && io.active_keys.empty() && !io.active_mouse_buttons) return false;
+            const Shortcut shortcut{.mods = mods, .keys = io.active_keys, .mouse = io.active_mouse_buttons};
+            if (shortcut.empty()) return false;
+            auto *model = shortcut_model(io);
+            if (!model) return false;
             Widget *node = resolve_input_root(ctx);
             while (node)
             {
                 if (node->has_event_handler(EventFlagBits::shortcut))
                 {
-                    const u64 shortcut_hash =
-                        detail::make_shortcut_hash(io.active_keys, io.active_mouse_buttons, mods, node->id());
-                    auto binding = io.shortcuts.find(shortcut_hash);
-                    if (binding != io.shortcuts.end())
+                    const u64 shortcut_hash = detail::make_shortcut_hash(shortcut, node->id());
+                    auto *callback = shortcut_callback(model->find_record(shortcut_hash));
+                    if (callback && callback->callback)
                     {
-                        binding->second();
+                        callback->callback();
                         return true;
                     }
                 }
                 node = node->focus_parent();
             }
 
-            const u64 global_hash =
-                detail::make_shortcut_hash(io.active_keys, io.active_mouse_buttons, mods, AUIK_TAG_GLOBAL);
-            auto global_it = io.shortcuts.find(global_hash);
-            if (global_it == io.shortcuts.end()) return false;
-            global_it->second();
+            const u64 global_hash = detail::make_shortcut_hash(shortcut, AUIK_TAG_GLOBAL);
+            auto *callback = shortcut_callback(model->find_record(global_hash));
+            if (!callback || !callback->callback) return false;
+            callback->callback();
             return true;
         }
 
@@ -533,7 +699,7 @@ namespace auik
             frame_cache.scroll_delta = {0.0f, 0.0f};
             frame_cache.char_code = 0;
             frame_cache.char_repeat_count = 0;
-            io.active_keys.clear();
+            io.active_keys = {};
             io.active_mouse_buttons = {};
             io.active_mods = KeyMode{};
             ctx.active_id = 0;
@@ -627,17 +793,14 @@ namespace auik
             io.active_mods = mods;
             if (key < Key::caps_lock)
             {
-                if (state == KeyPressState::release) io.active_keys.erase(key);
-                else io.active_keys.insert(key);
-            }
-
-            if (state != KeyPressState::release)
-            {
-                if (dispatch_shortcut(ctx)) return;
+                Shortcut active{.keys = io.active_keys};
+                active.set_key(key, state != KeyPressState::release);
+                io.active_keys = active.keys;
             }
 
             Widget *target = resolve_focus_event_target(ctx, EventFlagBits::key_input);
-            if (target) target->dispatch_key(key, state, mods);
+            if (target && target->dispatch_key(key, state, mods)) return;
+            if (state != KeyPressState::release) dispatch_shortcut(ctx);
         }
 
         AUIK_EXPORT void on_char_event(u32 char_code)
@@ -664,14 +827,77 @@ namespace auik
             mark_host_refresh_request();
         }
 
+        AUIK_EXPORT void register_shortcut_record(const Shortcut &shortcut, u32 id, u32 tag,
+                                                  acul::unique_function<void()> callback)
+        {
+            const ModelRecordID record_id = make_shortcut_hash(shortcut, id);
+            auto &io = get_context().io;
+            auto *model = shortcut_model(io);
+            assert(model && "shortcut model is not set up");
+            if (!model) return;
+
+            ModelRecord record{};
+            record.id = record_id;
+            add_model_field(record, make_model_field<u32>(SHORTCUT_TAG_FIELD_ID, tag));
+            add_model_field(record, make_model_field<u32>(SHORTCUT_ID_FIELD_ID, id));
+            auto *callback_field = acul::alloc<ShortcutCallbackField>(std::move(callback));
+            add_model_field(record, callback_field);
+            record.data = callback_field;
+
+            const u32 index = model->record_index(record_id);
+            if (index < model->records.size())
+            {
+                release_model_record_fields(model->records[index]);
+                model->records[index] = std::move(record);
+                return;
+            }
+            model->add_record(std::move(record));
+            io.shortcut_model_db->synced = false;
+            sync_model_db(io.shortcut_model_db);
+        }
+
+        AUIK_EXPORT void deregister_shortcut_record(const Shortcut &shortcut, u32 id)
+        {
+            const ModelRecordID record_id = make_shortcut_hash(shortcut, id);
+            auto &io = get_context().io;
+            if (auto *model = shortcut_model(io))
+            {
+                const bool exists = model->find_record(record_id) != nullptr;
+                erase_shortcut_record(*model, record_id);
+                if (exists)
+                {
+                    io.shortcut_model_db->synced = false;
+                    sync_model_db(io.shortcut_model_db);
+                }
+            }
+        }
+
+        AUIK_EXPORT bool has_widget_shortcuts(u32 widget_id)
+        {
+            const auto &io = get_context().io;
+            const auto *model = shortcut_model(io);
+            if (!model) return false;
+            for (const auto &record : model->records)
+            {
+                const auto *id = shortcut_field<u32>(record, SHORTCUT_ID_FIELD_ID);
+                if (id && *id == widget_id) return true;
+            }
+            return false;
+        }
+
         AUIK_EXPORT void deregister_widget_shortcuts(u32 widget_id)
         {
             if (!widget_id) return;
             auto &io = get_context().io;
-            auto it = io.widget_shortcuts.find(widget_id);
-            if (it == io.widget_shortcuts.end()) return;
-            for (u64 hash : it->second) io.shortcuts.erase(hash);
-            io.widget_shortcuts.erase(it);
+            auto *model = shortcut_model(io);
+            if (!model) return;
+            auto records = mqa::select_model_records(*model, mqa::equal<u32>(SHORTCUT_ID_FIELD_ID, widget_id));
+            for (ModelRecordID record_id : records) erase_shortcut_record(*model, record_id);
+            if (!records.empty())
+            {
+                io.shortcut_model_db->synced = false;
+                sync_model_db(io.shortcut_model_db);
+            }
         }
 
         template <class F>
@@ -1041,6 +1267,36 @@ namespace auik
 
     } // namespace detail
 
+    u32 change_shortcut(u32 tag, const Shortcut &value)
+    {
+        if (tag == 0u) return 0u;
+        auto &io = detail::get_context().io;
+        auto *model = shortcut_model(io);
+        if (!model) return 0u;
+        auto records = mqa::select_model_records(*model, mqa::equal<u32>(SHORTCUT_TAG_FIELD_ID, tag));
+        return change_shortcut_records(*model, records, value);
+    }
+
+    bool change_shortcut(u32 id, u32 tag, const Shortcut &value)
+    {
+        auto &io = detail::get_context().io;
+        auto *model = shortcut_model(io);
+        if (!model || tag == 0u) return false;
+        auto records = mqa::select_model_records(
+            *model, mqa::all(mqa::equal<u32>(SHORTCUT_TAG_FIELD_ID, tag), mqa::equal<u32>(SHORTCUT_ID_FIELD_ID, id)));
+        return change_shortcut_records(*model, records, value) != 0u;
+    }
+
+    bool change_shortcut(u32 id, const Shortcut &shortcut, const Shortcut &value)
+    {
+        auto &io = detail::get_context().io;
+        auto *model = shortcut_model(io);
+        if (!model) return false;
+        const ModelRecordID record_id = detail::make_shortcut_hash(shortcut, id);
+        if (!model->find_record(record_id)) return false;
+        return change_shortcut_records(*model, acul::vector<ModelRecordID>{record_id}, value) != 0u;
+    }
+
     AUIK_EXPORT bool begin_unbound_drag()
     {
         auto &ctx = detail::get_context();
@@ -1155,3 +1411,27 @@ namespace auik
 
     AUIK_EXPORT void focus_widget(Widget *widget) { detail::set_focus_target(detail::get_context(), widget); }
 } // namespace auik
+
+namespace acul
+{
+    template <>
+    bin_stream &bin_stream::write(auik::Widget *widget)
+    {
+        auto *block = widget ? widget->as_snapshot_block() : nullptr;
+        if (!block) write(0ULL);
+        else umbf::write_block_to_stream(*this, *block);
+        return *this;
+    }
+
+    template <>
+    bin_stream &bin_stream::read(auik::Widget *&widget)
+    {
+        widget = nullptr;
+        acul::unique_ptr<umbf::Block> block;
+        if (!umbf::read_block_from_stream(*this, block) || !block) return *this;
+        widget = dynamic_cast<auik::Widget *>(block.get());
+        if (!widget) return *this;
+        block.release();
+        return *this;
+    }
+} // namespace acul

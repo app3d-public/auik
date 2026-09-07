@@ -10,7 +10,6 @@
 
 #define AUIK_TABBAR_POPUP_ITEM_FALLBACK_HEIGHT 24.0f
 #define AUIK_TABBAR_SCROLL_STEP                32.0f
-#define AUIK_DROPDOWN_MIN_VISIBLE_ITEMS        4.0f
 #define TABBAR_MODEL_TEXT_FIELD_ID             0u
 #define TABBAR_MODEL_SELECTED_FIELD_ID         1u
 #define TABBAR_MODEL_CHANGED_FIELD_ID          2u
@@ -28,20 +27,18 @@ namespace auik
     static inline amal::vec2 get_tab_popup_depth_range() { return detail::get_global_foreground_depth_range(); }
 
     static inline DropdownPopupPlacement resolve_dropdown_popup_placement(f32 control_y, f32 control_h, f32 desired_h,
-                                                                          f32 item_h, u32 item_count,
-                                                                          const amal::vec4 &viewport, f32 fallback_h)
+                                                                          f32 min_h, f32 max_h,
+                                                                          const amal::vec4 &viewport)
     {
         const f32 gap = 0.0f;
         const f32 below_space = amal::max(viewport.y + viewport.w - (control_y + control_h + gap), 0.0f);
         const f32 above_space = amal::max(control_y - gap - viewport.y, 0.0f);
-        const bool fits_below = desired_h <= below_space;
-        const f32 safe_item_h = amal::max(item_h, 1.0f);
-        const f32 below_visible_items = amal::floor(below_space / safe_item_h);
-        const f32 min_visible_items = amal::min(AUIK_DROPDOWN_MIN_VISIBLE_ITEMS, static_cast<f32>(item_count));
-        const bool place_above = !fits_below && below_visible_items < min_visible_items && above_space > below_space;
+        const f32 bounded_h = amal::max(amal::min(desired_h, max_h), min_h);
+        const bool fits_below = bounded_h <= below_space;
+        const bool place_above = !fits_below && below_space < min_h && above_space > below_space;
         const f32 available_h = place_above ? above_space : below_space;
-        const bool need_scroll = desired_h > available_h;
-        const f32 popup_h = need_scroll ? available_h : amal::max(desired_h, fallback_h);
+        const f32 popup_h = amal::min(bounded_h, available_h);
+        const bool need_scroll = desired_h > popup_h;
         const f32 popup_y = place_above ? control_y - gap - popup_h + 1.0f : control_y + control_h + gap - 1.0f;
         return {place_above, need_scroll, popup_h, popup_y};
     }
@@ -183,6 +180,8 @@ namespace auik
         : Widget(id, widget_flags, make_tab_bar_event_flags(tab_flags), {{0.0f, 0.0f}, inline_size}, AUIK_TAG_TABBAR),
           _tab_flags(normalize_tab_bar_flags(tab_flags))
     {
+        _scroll.widget = this;
+        _scroll.on_scroll_to = scroll_to_callback;
         if (popup())
         {
             _overflow_button =
@@ -1126,7 +1125,7 @@ namespace auik
             else update_clip_rect(_content_clip_id, tabs_clip);
         }
         else _content_clip_id = 0xFFFFu;
-        f32 cursor_x = content_x - (scroll() ? _scroll_offset : 0.0f);
+        f32 cursor_x = content_x - (scroll() ? _scroll.content_offset.x : 0.0f);
         f32 total_w = 0.0f;
         _visible_count = 0u;
         _overflow_start = static_cast<u32>(_items.size());
@@ -1220,12 +1219,13 @@ namespace auik
             if (i > 0u) total_w += inline_spacing;
         }
 
-        _content_width = total_w;
-        const f32 old_scroll_offset = _scroll_offset;
+        _scroll.content_size.x = total_w;
+        _scroll.view_size.x = amal::max(content_w - popup_reserved, 0.0f);
+        const f32 old_scroll_offset = _scroll.content_offset.x;
         clamp_scroll_offset();
-        if (scroll() && old_scroll_offset != _scroll_offset)
+        if (scroll() && old_scroll_offset != _scroll.content_offset.x)
         {
-            const f32 dx = old_scroll_offset - _scroll_offset;
+            const f32 dx = old_scroll_offset - _scroll.content_offset.x;
             for (auto &item : _items)
             {
                 if (item.tab) item.tab->translate({dx, 0.0f});
@@ -1357,6 +1357,55 @@ namespace auik
         }
         if (_overflow_button) _overflow_button->reset_draw_records();
         if (_popup) _popup->reset_draw_records();
+    }
+
+    void Tabbar::invalidate_style()
+    {
+        Widget::invalidate_style();
+        for (auto &item : _items)
+        {
+            if (item.tab) item.tab->invalidate_style();
+            if (item.change_icon) item.change_icon->invalidate_style();
+            if (item.close_button) item.close_button->invalidate_style();
+        }
+        if (_overflow_button) _overflow_button->invalidate_style();
+        if (_popup) _popup->invalidate_style();
+    }
+
+    bool Tabbar::update_locale()
+    {
+        bool changed = Widget::update_locale();
+        for (auto &item : _items)
+        {
+            if (item.tab) changed |= item.tab->update_locale();
+            if (item.change_icon) changed |= item.change_icon->update_locale();
+            if (item.close_button) changed |= item.close_button->update_locale();
+        }
+        if (_popup) changed |= _popup->update_locale();
+        return changed;
+    }
+
+    void Tabbar::add_state_flags_inherit(WidgetStateFlags flags)
+    {
+        Widget::add_state_flags_inherit(flags);
+        if ((flags & WidgetStateFlagBits::visible) && !is_visible()) flags &= ~WidgetStateFlagBits::visible;
+        for (auto &item : _items)
+        {
+            if (item.tab) item.tab->add_state_flags_inherit(flags);
+            if (item.change_icon) item.change_icon->add_state_flags_inherit(flags);
+            if (item.close_button) item.close_button->add_state_flags_inherit(flags);
+        }
+    }
+
+    void Tabbar::remove_state_flags_inherit(WidgetStateFlags flags)
+    {
+        Widget::remove_state_flags_inherit(flags);
+        for (auto &item : _items)
+        {
+            if (item.tab) item.tab->remove_state_flags_inherit(flags);
+            if (item.change_icon) item.change_icon->remove_state_flags_inherit(flags);
+            if (item.close_button) item.close_button->remove_state_flags_inherit(flags);
+        }
     }
 
     void Tabbar::update_depth(const amal::vec2 &depth_range)
@@ -2056,13 +2105,24 @@ namespace auik
 
     void Tabbar::on_scroll(const amal::vec2 &delta)
     {
+        if (_open && _popup)
+        {
+            const auto mouse = detail::get_context().io.mouse_pos;
+            const auto rect = _popup->bounds();
+            if (mouse.x >= rect.offset.x && mouse.y >= rect.offset.y && mouse.x < rect.offset.x + rect.size.x &&
+                mouse.y < rect.offset.y + rect.size.y)
+            {
+                _popup->dispatch_scroll(delta);
+                return;
+            }
+        }
         if (!scroll()) return;
         const f32 amount = dominant_scroll_axis(delta);
         if (amount == 0.0f) return;
-        const f32 prev_scroll_offset = _scroll_offset;
-        _scroll_offset -= amount * AUIK_TABBAR_SCROLL_STEP;
+        const f32 prev_scroll_offset = _scroll.content_offset.x;
+        _scroll.content_offset.x -= amount * AUIK_TABBAR_SCROLL_STEP;
         clamp_scroll_offset();
-        if (prev_scroll_offset == _scroll_offset) return;
+        if (prev_scroll_offset == _scroll.content_offset.x) return;
         add_render_command<detail::ScrollEventTraits>(this, [this]() {
             update_layout_from_current_bounds(true);
             auto &ctx = detail::get_context();
@@ -2075,12 +2135,41 @@ namespace auik
         mark_host_refresh_request();
     }
 
+    bool Tabbar::scroll_to_tab(u32 element_id)
+    {
+        f32 offset = 0.0f;
+        return tab_scroll_offset(element_id, offset) && _scroll.scroll_to(offset, amal::axis::x);
+    }
+
+    bool Tabbar::tab_scroll_offset(u32 element_id, f32 &offset) const
+    {
+        if (!scroll() || _scroll.view_size.x <= 0.0f) return false;
+        const u32 index = find_index_by_element_id(element_id);
+        if (index >= _items.size() || !_items[index].tab) return false;
+
+        const auto *tab = _items[index].tab;
+        const auto &style = get_theme()->get_style(_style.id);
+        const f32 content_x = position().x + style.padding().x;
+        const f32 item_left = tab->position().x - content_x + _scroll.content_offset.x;
+        const f32 item_right = item_left + tab->size().x;
+        const f32 visible_left = _scroll.content_offset.x;
+        const f32 visible_right = visible_left + _scroll.view_size.x;
+        offset = visible_left;
+        if (item_left < visible_left) offset = item_left;
+        else if (item_right > visible_right) offset = item_right - _scroll.view_size.x;
+        offset = amal::clamp(offset, 0.0f, _scroll.max_offset.x);
+        return true;
+    }
+
     void Tabbar::clamp_scroll_offset()
     {
-        const auto &style = get_theme()->get_style(_style.id);
-        const amal::vec4 padding = style.padding();
-        const f32 max_offset = amal::max(_content_width - amal::max(size().x - padding.x - padding.z, 0.0f), 0.0f);
-        _scroll_offset = amal::clamp(_scroll_offset, 0.0f, max_offset);
+        _scroll.set_metrics(_scroll.content_size.x, _scroll.view_size.x, amal::axis::x);
+    }
+
+    void Tabbar::scroll_to_callback(ScrollData &data, amal::axis axis)
+    {
+        if (axis != amal::axis::x || !data.widget) return;
+        refresh_layout_owner(*static_cast<Tabbar *>(data.widget));
     }
 
     void Tabbar::update_popup_layout()
@@ -2089,7 +2178,7 @@ namespace auik
 
         _popup->set_parent(parent());
         _popup->set_window_style_tag(AUIK_STYLE_TAG_TABBAR_POPUP);
-        _popup->window_flags = (get_popup_window_flags() | WindowFlagBits::docked) & ~WindowFlagBits::scrollable;
+        _popup->window_flags = get_popup_window_flags() | WindowFlagBits::docked;
         _popup->set_visible();
         _popup->sync_widget_flags();
         _popup->update_style_invalidated();
@@ -2097,10 +2186,10 @@ namespace auik
         const auto &popup_style = get_theme()->get_style(
             get_theme()->get_resolved_style(AUIK_STYLE_TAG_TABBAR_POPUP, _popup->id(), 0, StyleState::normal));
         const amal::vec4 popup_padding = popup_style.padding();
+        const f32 min_popup_h = amal::max(popup_style.min_height(), AUIK_TABBAR_POPUP_ITEM_FALLBACK_HEIGHT);
 
         f32 content_width = 0.0f;
         f32 measured_h = popup_padding.y + popup_padding.w;
-        u32 visible_items = 0u;
         for (u32 i = 0; i < _popup->children.size(); ++i)
         {
             auto *child = _popup->children[i];
@@ -2110,7 +2199,6 @@ namespace auik
             else child->unset_visible();
             child->sync_widget_flags();
             if (!visible) continue;
-            ++visible_items;
             if (!child->is_fixed()) child->set_layout_size({0.0f, 0.0f});
             child->update_layout_min_size();
             content_width = amal::max(content_width, child->required_size().x);
@@ -2121,13 +2209,11 @@ namespace auik
         const f32 popup_w = amal::max(content_width + popup_padding.x + popup_padding.z, min_button_width);
         const amal::vec4 viewport = get_widget_viewport_rect(this);
         const f32 desired_h = amal::max(measured_h, AUIK_TABBAR_POPUP_ITEM_FALLBACK_HEIGHT);
-        const f32 content_h = amal::max(measured_h - popup_padding.y - popup_padding.w, 0.0f);
-        const f32 item_h =
-            visible_items > 0u ? content_h / static_cast<f32>(visible_items) : AUIK_TABBAR_POPUP_ITEM_FALLBACK_HEIGHT;
-        const auto placement = resolve_dropdown_popup_placement(
-            position().y, size().y, desired_h, item_h, visible_items, viewport, AUIK_TABBAR_POPUP_ITEM_FALLBACK_HEIGHT);
-        if (placement.need_scroll) _popup->window_flags = get_popup_window_flags() | WindowFlagBits::docked;
-        else _popup->window_flags = (get_popup_window_flags() | WindowFlagBits::docked) & ~WindowFlagBits::scrollable;
+        const f32 max_popup_h = popup_style.max_height() > 0.0f ? amal::max(popup_style.max_height(), min_popup_h)
+                                                                : amal::max(desired_h, min_popup_h);
+        const auto placement =
+            resolve_dropdown_popup_placement(position().y, size().y, desired_h, min_popup_h, max_popup_h, viewport);
+        _popup->window_flags = get_popup_window_flags() | WindowFlagBits::docked;
         _popup->set_position({position().x + size().x - popup_w, placement.y});
         _popup->set_size({popup_w, placement.height});
         _popup->attach_to_viewport(this->viewport());
@@ -2155,6 +2241,8 @@ namespace auik
         if (!popup() || !_popup || _overflow_start >= _items.size()) return;
         if (_open) return;
         _open = true;
+        add_event_flags(EventFlagBits::scroll);
+        sync_widget_flags();
         if (_overflow_button)
         {
             _overflow_button->set_open(true);
@@ -2168,6 +2256,8 @@ namespace auik
     {
         const bool was_open = _open;
         _open = false;
+        if (!scroll()) remove_event_flags(EventFlagBits::scroll);
+        sync_widget_flags();
         if (_overflow_button)
         {
             _overflow_button->set_open(false);
@@ -2198,7 +2288,7 @@ namespace auik
             f32 scroll_offset = 0.0f;
         };
 
-        void write_tab_bar(acul::bin_stream &stream, umbf::Block *block)
+        void write_tabbar(acul::bin_stream &stream, umbf::Block *block)
         {
             auto *widget = static_cast<Tabbar *>(block);
             detail::write_widget_common_data(stream, *widget);
@@ -2220,7 +2310,7 @@ namespace auik
                 .write(widget->scroll_offset());
         }
 
-        TabbarData read_tab_bar_data(acul::bin_stream &stream)
+        TabbarData read_tabbar_data(acul::bin_stream &stream)
         {
             TabbarData out{};
             out.common = detail::read_widget_common_data(stream);
@@ -2248,9 +2338,9 @@ namespace auik
             return out;
         }
 
-        umbf::Block *read_tab_bar(acul::bin_stream &stream)
+        umbf::Block *read_tabbar(acul::bin_stream &stream)
         {
-            const auto data = read_tab_bar_data(stream);
+            const auto data = read_tabbar_data(stream);
             acul::vector<StringView> items;
             items.reserve(data.items.size());
             for (u32 i = 0u; i < data.items.size(); ++i)
@@ -2275,6 +2365,6 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::streams::Stream tab_bar{read_tab_bar, write_tab_bar};
+        AUIK_EXPORT const umbf::registry::BlockStream tabbar{read_tabbar, write_tabbar};
     } // namespace streams
 } // namespace auik

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <acul/pair.hpp>
+#include <acul/point.hpp>
 #include <acul/vector.hpp>
 #include "../model.hpp"
 #include "../theme.hpp"
@@ -39,7 +39,7 @@ namespace auik
         f32 min_width = 0.0f;
     };
 
-    class Table final : public Widget
+    class Table final : public Widget, public umbf::Block
     {
     public:
         using Cell = ::auik::DrawBlock *;
@@ -221,9 +221,8 @@ namespace auik
         AUIK_EXPORT void set_row_resizable(bool value);
         bool row_resizable() const { return (_table_flags & AUIK_TABLE_FLAG_ROW_RESIZABLE) != 0u; }
         u32 table_flags() const { return _table_flags; }
-        const acul::vector<acul::point2D<f32>> &size_overrides() const { return _size_overrides; }
-        AUIK_EXPORT void set_size_overrides(acul::vector<acul::point2D<f32>> values, bool column_overrides,
-                                            bool row_overrides);
+        const acul::vector<amal::vec2> &size_overrides() const { return _size_overrides; }
+        AUIK_EXPORT void set_size_overrides(acul::vector<amal::vec2> values, bool column_overrides, bool row_overrides);
 
         const Row &header() const { return _header; }
         const Rows &rows() const { return _rows; }
@@ -263,18 +262,26 @@ namespace auik
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void rebuild_clip_rects() override;
+        AUIK_EXPORT void reset_clip_rect_records() override;
         AUIK_EXPORT void reset_draw_records() override;
+        AUIK_EXPORT void invalidate_style() override;
+        AUIK_EXPORT bool update_locale() override;
+        AUIK_EXPORT void add_state_flags_inherit(WidgetStateFlags flags) override;
+        AUIK_EXPORT void remove_state_flags_inherit(WidgetStateFlags flags) override;
         AUIK_EXPORT void update_depth(const amal::vec2 &depth_range) override;
         AUIK_EXPORT void back_hit_depth() override;
         AUIK_EXPORT void restore_hit_depth() override;
         AUIK_EXPORT void draw(DrawCtx &ctx) override;
         AUIK_EXPORT void on_hover(HoverState state) override;
+        AUIK_EXPORT void on_click(MouseKey key, KeyPressState state, u32 click_count) override;
         AUIK_EXPORT void on_drag(const amal::vec2 &delta, KeyPressState state) override;
         u16 content_clip_id() const override { return clip_id(); }
         AUIK_EXPORT amal::vec4 get_content_clip_rect() const override;
         AUIK_EXPORT void on_attach() override;
         AUIK_EXPORT void on_detach() override;
-        virtual u32 signature() const override { return AUIK_TAG_TABLE; }
+        u32 get_depth_requirement() const override { return 3u; }
+        virtual u32 signature() const noexcept override { return AUIK_TAG_TABLE; }
+        umbf::Block *as_snapshot_block() noexcept override { return this; }
 
     private:
         using CellVisual = detail::TableCellVisual;
@@ -307,20 +314,21 @@ namespace auik
 
         Row _header;
         Rows _rows;
-        acul::vector<acul::point2D<TrackMetrics>> _layout_metrics;
+        acul::vector<acul::point<TrackMetrics>> _layout_metrics;
         acul::vector<CellVisual> _alt_row_visuals;
         acul::vector<u32> _cell_style_tags;
-        acul::vector<acul::point2D<CellVisual>> _resize_border_hit_visuals;
+        acul::vector<acul::point<CellVisual>> _resize_border_hit_visuals;
         CellVisual _resize_indicator_visual;
         DrawDataID _bg{};
+        DrawDataID _rounded_mask{};
         StyleSelector _style;
         StyleSelector _header_cell_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_TABLE_HEADER_CELL};
         StyleSelector _cell_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_TABLE_CELL};
         StyleSelector _alternating_row_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_TABLE_ROW_ALT};
         StyleSelector _resize_border_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_TABLE_RESIZE_BORDER};
         acul::vector<TableColumnSettings> _column_settings;
-        acul::vector<acul::point2D<f32>> _size_overrides;
-        acul::vector<acul::point2D<f32>> _resize_size_basis;
+        acul::vector<amal::vec2> _size_overrides;
+        acul::vector<amal::vec2> _resize_size_basis;
         TableColumnSettings _default_column_settings{};
         u32 _table_flags = 0u;
         size_t _resizing_column = static_cast<size_t>(-1);
@@ -333,21 +341,23 @@ namespace auik
     inline Table *make_table(u32 id, Table::Rows rows = {}, amal::vec2 inline_size = AUIK_SIZE_INHERIT)
     {
         constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
-                                             WidgetFlagBits::configurable | WidgetFlagBits::hittable;
+                                             WidgetFlagBits::cache_snapshot | WidgetFlagBits::hittable;
         return acul::alloc<Table>(id, std::move(rows), inline_size, widget_flags, AUIK_STYLE_TAG_TABLE);
     }
 
-    inline Table::Cell make_table_cell(Widget *child = nullptr)
+    inline Table::Cell make_table_cell(Widget *child = nullptr,
+                                       WidgetFlags cell_flags = WidgetFlagBits::visible |
+                                                                WidgetFlagBits::cache_snapshot,
+                                       EventFlags cell_event_flags = EventFlagBits::none)
     {
-        auto *cell = acul::alloc<DrawBlock>(AUIK_TAG_TABLE_CELL, WidgetFlagBits::visible | WidgetFlagBits::configurable,
-                                            AUIK_STYLE_TAG_TABLE_CELL);
-        cell->set_scrollbars_enabled(false, false);
+        auto *cell = acul::alloc<DrawBlock>(AUIK_TAG_TABLE_CELL, cell_flags, AUIK_STYLE_TAG_TABLE_CELL);
+        cell->set_event_flags(cell_event_flags);
         if (child) cell->add_child(child);
         return cell;
     }
 
     namespace streams
     {
-        extern AUIK_EXPORT const umbf::streams::Stream table;
+        extern AUIK_EXPORT const umbf::registry::BlockStream table;
     }
 } // namespace auik

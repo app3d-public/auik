@@ -92,8 +92,7 @@ namespace auik::detail
             _animation.tick = &tick_popup_icon_animation;
             _animation.at_finish = &finish_popup_icon_animation;
             _animation.destroy = &destroy_popup_icon_animation;
-            _animation.scale_finish = nullptr;
-            _animation.rotate_finish = nullptr;
+            _animation.on_complete = nullptr;
             return start_animation(_animation, _update_target, this) != nullptr;
         }
 
@@ -416,6 +415,22 @@ namespace auik::detail
     void PopupTrigger::draw(DrawCtx &ctx, bool is_hit_allowed)
     {
         const bool transient = ctx.reason & DrawReasonBits::transient;
+        if (ctx.reason & DrawReasonBits::invalidate)
+        {
+            if (!transient)
+            {
+                QuadsInstanceData bg_data{};
+                emit_quads_instance(ctx, get_primary_quads_stream(), _bg_draw, bg_data, _hit_rect, true,
+                                    is_hit_allowed);
+                if (auto *stream = get_primary_textured_quads_stream())
+                {
+                    TexturesInstanceData icon_data{};
+                    emit_context_draw(ctx, stream, _icon_draw, &icon_data, _hit_rect, false);
+                }
+            }
+            if (_rotate_transient) _rotate_transient->reset_draw_records();
+            return;
+        }
         auto *theme = get_theme();
 
         if (!transient)

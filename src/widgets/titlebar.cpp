@@ -152,7 +152,7 @@ namespace auik
             menu->set_popup_viewport(_menu_popup_viewport);
         }
         _children.push_back(child);
-        if (child->widget_flags & WidgetFlagBits::attachable) child->on_attach();
+        if (is_attached() && (child->widget_flags & WidgetFlagBits::attachable)) child->on_attach();
     }
 
     void Titlebar::add_children(const acul::vector<Widget *> &children)
@@ -336,8 +336,17 @@ namespace auik
                 : 0.0f;
         for (auto &measure : child_measures)
         {
-            if (measure.fill_width) measure.width = measure.required.x + fill_extra_width;
-            else measure.width = measure.required.x;
+            if (!measure.fill_width)
+            {
+                measure.width = measure.required.x;
+                continue;
+            }
+
+            if (fill_children_min_width <= fill_children_width) measure.width = measure.required.x + fill_extra_width;
+            else if (fill_children_min_width > 0.0f)
+                measure.width = fill_children_width * (measure.required.x / fill_children_min_width);
+            else
+                measure.width = fill_child_count > 0u ? fill_children_width / static_cast<f32>(fill_child_count) : 0.0f;
         }
 
         amal::vec2 cursor = position();
@@ -466,6 +475,46 @@ namespace auik
             if (button) button->reset_draw_records();
         for (auto *child : _children)
             if (child) child->reset_draw_records();
+    }
+
+    void Titlebar::invalidate_style()
+    {
+        Widget::invalidate_style();
+        for (auto *button : _caption_buttons)
+            if (button) button->invalidate_style();
+        for (auto *child : _children)
+            if (child) child->invalidate_style();
+    }
+
+    bool Titlebar::update_locale()
+    {
+        bool changed = Widget::update_locale();
+        for (auto *button : _caption_buttons)
+            if (button) changed |= button->update_locale();
+        for (auto *child : _children)
+            if (child) changed |= child->update_locale();
+        return changed;
+    }
+
+    void Titlebar::add_state_flags_inherit(WidgetStateFlags flags)
+    {
+        Widget::add_state_flags_inherit(flags);
+        if ((flags & WidgetStateFlagBits::visible) && !is_visible()) flags &= ~WidgetStateFlagBits::visible;
+        for (auto *child : _children)
+            if (child) child->add_state_flags_inherit(flags);
+        if (_icon) _icon->add_state_flags_inherit(flags);
+        for (auto *button : _caption_buttons)
+            if (button) button->add_state_flags_inherit(flags);
+    }
+
+    void Titlebar::remove_state_flags_inherit(WidgetStateFlags flags)
+    {
+        Widget::remove_state_flags_inherit(flags);
+        for (auto *child : _children)
+            if (child) child->remove_state_flags_inherit(flags);
+        if (_icon) _icon->remove_state_flags_inherit(flags);
+        for (auto *button : _caption_buttons)
+            if (button) button->remove_state_flags_inherit(flags);
     }
 
     void Titlebar::draw(DrawCtx &ctx)
@@ -827,7 +876,7 @@ namespace auik
         const acul::vector<u32> codepoints{0xE921u, 0xE922u, 0xE923u, 0xE8BBu};
         const acul::vector<u32> ids{AUIK_ICON_CAP_MINIMIZE, AUIK_ICON_CAP_MAXIMIZE, AUIK_ICON_CAP_RESTORE,
                                     AUIK_ICON_CAP_CLOSE};
-        if (!font.load(font_info->path)) return false;
+        if (!font.load(font_info->path).success()) return false;
         if (!font.load_glyphs(size, codepoints)) return false;
 
         for (u32 i = 0; i < codepoints.size(); ++i)
@@ -944,11 +993,11 @@ namespace auik
             detail::write_widget_common_data(stream, *titlebar);
             stream.write(titlebar->show_icon()).write(titlebar->leading_count());
 
-            acul::vector<umbf::Block *> children;
+            acul::vector<Widget *> children;
             const auto &source_children = TitlebarStreamAccess::children(*titlebar);
             children.reserve(source_children.size());
             for (auto *child : source_children)
-                if (child && (child->widget_flags & WidgetFlagBits::configurable)) children.push_back(child);
+                if (child && (child->widget_flags & WidgetFlagBits::cache_snapshot)) children.push_back(child);
             stream.write(children);
         }
 
@@ -959,7 +1008,7 @@ namespace auik
             u32 leading_count = 0u;
             stream.read(show_icon).read(leading_count);
 
-            acul::vector<umbf::Block *> children;
+            acul::vector<Widget *> children;
             stream.read(children);
 
             auto *titlebar = acul::alloc<Titlebar>(common.id, WidgetFlags(common.widget_flags));
@@ -967,13 +1016,17 @@ namespace auik
             titlebar->set_show_icon(show_icon);
             titlebar->set_leading_count(leading_count);
             for (auto *child : children)
-                if (child) titlebar->add_child(static_cast<Widget *>(child));
+            {
+                auto *widget = dynamic_cast<Widget *>(child);
+                if (widget) titlebar->add_child(widget);
+                else if (child) acul::release(child);
+            }
             return titlebar;
         }
     } // namespace
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::streams::Stream titlebar{read_titlebar, write_titlebar};
+        AUIK_EXPORT const umbf::registry::BlockStream titlebar{read_titlebar, write_titlebar};
     }
 } // namespace auik

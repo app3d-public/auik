@@ -10,51 +10,17 @@ namespace auik::detail
         return v;
     }
 
-    void ScrollBehavior::set_metrics(f32 content_size, f32 view_size)
-    {
-        const f32 safe_view = amal::max(view_size, 0.0f);
-        max_scroll_px = amal::max(content_size - safe_view, 0.0f);
-        if (max_scroll_px <= 0.0f)
-        {
-            normalized = 0.0f;
-            return;
-        }
-        normalized = amal::clamp(normalized, 0.0f, 1.0f);
-    }
-
-    void ScrollBehavior::set_scroll_offset(f32 offset_px)
-    {
-        if (max_scroll_px <= 0.0f)
-        {
-            normalized = 0.0f;
-            return;
-        }
-        normalized = amal::clamp(offset_px / max_scroll_px, 0.0f, 1.0f);
-    }
-
-    bool ScrollBehavior::scroll_by_pixels(f32 delta_px)
-    {
-        if (max_scroll_px <= 0.0f || delta_px == 0.0f) return false;
-        const f32 old = scroll_offset();
-        const f32 next = amal::clamp(old + delta_px, 0.0f, max_scroll_px);
-        if (next == old) return false;
-        set_scroll_offset(next);
-        return true;
-    }
-
     bool Scrollbar::scroll_to_track_click(const amal::vec2 &mouse_pos)
     {
-        const f32 max_scroll_px = _behavior.max_scroll();
+        const f32 max_scroll_px = max_scroll();
         if (max_scroll_px <= 0.0f) return false;
 
-        if (_behavior.axis == amal::axis::y)
+        if (_axis == amal::axis::y)
         {
             const f32 track_min = position().y;
             const f32 track_len = amal::max(size().y, 1e-6f);
             const f32 t = amal::clamp((mouse_pos.y - track_min) / track_len, 0.0f, 1.0f);
-            const f32 old_offset = _behavior.scroll_offset();
-            _behavior.set_scroll_normalized(t);
-            const bool changed = _behavior.scroll_offset() != old_offset;
+            const bool changed = _scroll->scroll_to(t * max_scroll_px, _axis);
             if (changed) update_thumb_rect();
             return changed;
         }
@@ -62,9 +28,7 @@ namespace auik::detail
         const f32 track_min = position().x;
         const f32 track_len = amal::max(size().x, 1e-6f);
         const f32 t = amal::clamp((mouse_pos.x - track_min) / track_len, 0.0f, 1.0f);
-        const f32 old_offset = _behavior.scroll_offset();
-        _behavior.set_scroll_normalized(t);
-        const bool changed = _behavior.scroll_offset() != old_offset;
+        const bool changed = _scroll->scroll_to(t * max_scroll_px, _axis);
         if (changed) update_thumb_rect();
         return changed;
     }
@@ -79,28 +43,26 @@ namespace auik::detail
     void Scrollbar::begin_thumb_drag(const amal::vec2 &mouse_pos)
     {
         _thumb_drag_grab_offset =
-            (_behavior.axis == amal::axis::y) ? mouse_pos.y - _thumb_rect.bounds.offset.y
+            (_axis == amal::axis::y) ? mouse_pos.y - _thumb_rect.bounds.offset.y
                                               : mouse_pos.x - _thumb_rect.bounds.offset.x;
     }
 
     bool Scrollbar::scroll_thumb_to_mouse_pos(const amal::vec2 &mouse_pos)
     {
-        const f32 max_scroll_px = _behavior.max_scroll();
+        const f32 max_scroll_px = max_scroll();
         if (max_scroll_px <= 0.0f) return false;
 
         auto *theme = get_theme();
         const auto &track_style = theme->get_style(_track_style.id);
         const auto &thumb_style = theme->get_style(_thumb_style.id);
-        const amal::vec4 track_padding = axis_reverse_offsets(track_style.padding(), _behavior.axis);
-        const amal::vec4 thumb_margin = axis_reverse_offsets(thumb_style.margin(), _behavior.axis);
-        const amal::vec4 thumb_padding = axis_reverse_offsets(thumb_style.padding(), _behavior.axis);
+        const amal::vec4 track_padding = axis_reverse_offsets(track_style.padding(), _axis);
+        const amal::vec4 thumb_margin = axis_reverse_offsets(thumb_style.margin(), _axis);
+        const amal::vec4 thumb_padding = axis_reverse_offsets(thumb_style.padding(), _axis);
 
-        const f32 safe_content = amal::max(_content_size, 1.0f);
-        const f32 safe_view = amal::max(_view_size, 0.0f);
+        const f32 safe_content = amal::max(_scroll->content(_axis), 1.0f);
+        const f32 safe_view = amal::max(_scroll->view(_axis), 0.0f);
         const f32 ratio = amal::clamp(safe_view / safe_content, 0.0f, 1.0f);
-        const f32 old_offset = _behavior.scroll_offset();
-
-        if (_behavior.axis == amal::axis::y)
+        if (_axis == amal::axis::y)
         {
             const f32 lane_y = position().y + track_padding.y + thumb_margin.y;
             const f32 lane_h =
@@ -112,8 +74,7 @@ namespace auik::detail
 
             const f32 thumb_y = mouse_pos.y - _thumb_drag_grab_offset;
             const f32 normalized = (thumb_y - lane_y - thumb_padding.y) / thumb_range;
-            _behavior.set_scroll_normalized(normalized);
-            const bool changed = _behavior.scroll_offset() != old_offset;
+            const bool changed = _scroll->scroll_to(normalized * max_scroll_px, _axis);
             if (changed) update_thumb_rect();
             return changed;
         }
@@ -128,30 +89,29 @@ namespace auik::detail
 
         const f32 thumb_x = mouse_pos.x - _thumb_drag_grab_offset;
         const f32 normalized = (thumb_x - lane_x - thumb_padding.x) / thumb_range;
-        _behavior.set_scroll_normalized(normalized);
-        const bool changed = _behavior.scroll_offset() != old_offset;
+        const bool changed = _scroll->scroll_to(normalized * max_scroll_px, _axis);
         if (changed) update_thumb_rect();
         return changed;
     }
 
     bool Scrollbar::scroll_thumb_by_drag_delta(const amal::vec2 &delta)
     {
-        const f32 max_scroll_px = _behavior.max_scroll();
+        const f32 max_scroll_px = max_scroll();
         if (max_scroll_px <= 0.0f) return false;
 
         auto *theme = get_theme();
         const auto &track_style = theme->get_style(_track_style.id);
         const auto &thumb_style = theme->get_style(_thumb_style.id);
-        const amal::vec4 track_padding = axis_reverse_offsets(track_style.padding(), _behavior.axis);
-        const amal::vec4 thumb_margin = axis_reverse_offsets(thumb_style.margin(), _behavior.axis);
+        const amal::vec4 track_padding = axis_reverse_offsets(track_style.padding(), _axis);
+        const amal::vec4 thumb_margin = axis_reverse_offsets(thumb_style.margin(), _axis);
 
-        const f32 safe_content = amal::max(_content_size, 1.0f);
-        const f32 safe_view = amal::max(_view_size, 0.0f);
+        const f32 safe_content = amal::max(_scroll->content(_axis), 1.0f);
+        const f32 safe_view = amal::max(_scroll->view(_axis), 0.0f);
         const f32 ratio = amal::clamp(safe_view / safe_content, 0.0f, 1.0f);
 
         f32 thumb_range = 0.0f;
         f32 delta_axis = 0.0f;
-        if (_behavior.axis == amal::axis::y)
+        if (_axis == amal::axis::y)
         {
             const f32 lane_h =
                 amal::max(size().y - track_padding.y - track_padding.w - thumb_margin.y - thumb_margin.w, 0.0f);
@@ -172,28 +132,25 @@ namespace auik::detail
 
         if (thumb_range <= 0.0f || delta_axis == 0.0f) return false;
         const f32 scroll_delta_px = delta_axis * (max_scroll_px / thumb_range);
-        const bool changed = _behavior.scroll_by_pixels(scroll_delta_px);
+        const bool changed = _scroll->scroll_by(scroll_delta_px, _axis);
         if (changed) update_thumb_rect();
         return changed;
     }
 
     void Scrollbar::set_scroll_normalized(f32 value)
     {
-        const f32 old_offset = _behavior.scroll_offset();
-        _behavior.set_scroll_normalized(value);
-        if (_behavior.scroll_offset() != old_offset) update_thumb_rect();
+        if (_scroll->scroll_to(amal::clamp(value, 0.0f, 1.0f) * max_scroll(), _axis)) update_thumb_rect();
     }
 
     void Scrollbar::set_scroll_offset(f32 offset_px)
     {
-        const f32 old_offset = _behavior.scroll_offset();
-        _behavior.set_scroll_offset(offset_px);
-        if (_behavior.scroll_offset() != old_offset) update_thumb_rect();
+        _scroll->scroll_to(offset_px, _axis);
+        update_thumb_rect();
     }
 
     bool Scrollbar::scroll_by_pixels(f32 delta_px)
     {
-        const bool changed = _behavior.scroll_by_pixels(delta_px);
+        const bool changed = _scroll->scroll_by(delta_px, _axis);
         if (changed) update_thumb_rect();
         return changed;
     }
@@ -201,7 +158,7 @@ namespace auik::detail
     amal::vec4 Scrollbar::get_track_margin() const
     {
         auto *theme = get_theme();
-        return axis_reverse_offsets(theme->get_style(_track_style.id).margin(), _behavior.axis);
+        return axis_reverse_offsets(theme->get_style(_track_style.id).margin(), _axis);
     }
 
     f32 Scrollbar::get_min_track_thickness() const
@@ -209,10 +166,10 @@ namespace auik::detail
         auto *theme = get_theme();
         const auto &track_style = theme->get_style(_track_style.id);
         const auto &thumb_style = theme->get_style(_thumb_style.id);
-        const amal::vec4 track_padding = axis_reverse_offsets(track_style.padding(), _behavior.axis);
-        const amal::vec4 thumb_margin = axis_reverse_offsets(thumb_style.margin(), _behavior.axis);
-        const amal::vec4 thumb_padding = axis_reverse_offsets(thumb_style.padding(), _behavior.axis);
-        if (_behavior.axis == amal::axis::y)
+        const amal::vec4 track_padding = axis_reverse_offsets(track_style.padding(), _axis);
+        const amal::vec4 thumb_margin = axis_reverse_offsets(thumb_style.margin(), _axis);
+        const amal::vec4 thumb_padding = axis_reverse_offsets(thumb_style.padding(), _axis);
+        if (_axis == amal::axis::y)
         {
             const f32 desired_thumb_w = amal::max(thumb_padding.x + thumb_padding.z, 1.0f);
             return amal::max(desired_thumb_w + track_padding.x + track_padding.z + thumb_margin.x + thumb_margin.z,
@@ -226,9 +183,7 @@ namespace auik::detail
     void Scrollbar::configure(const amal::vec2 &track_pos, const amal::vec2 &track_size, f32 content_size,
                               f32 view_size)
     {
-        _content_size = content_size;
-        _view_size = view_size;
-        _behavior.set_metrics(content_size, view_size);
+        _scroll->set_metrics(content_size, view_size, _axis);
         set_position(track_pos);
         set_layout_size(track_size);
         update_thumb_rect();
@@ -239,16 +194,16 @@ namespace auik::detail
         auto *theme = get_theme();
         const auto &track_style = theme->get_style(_track_style.id);
         const auto &thumb_style = theme->get_style(_thumb_style.id);
-        const amal::vec4 track_padding = axis_reverse_offsets(track_style.padding(), _behavior.axis);
-        const amal::vec4 thumb_margin = axis_reverse_offsets(thumb_style.margin(), _behavior.axis);
-        const amal::vec4 thumb_padding = axis_reverse_offsets(thumb_style.padding(), _behavior.axis);
+        const amal::vec4 track_padding = axis_reverse_offsets(track_style.padding(), _axis);
+        const amal::vec4 thumb_margin = axis_reverse_offsets(thumb_style.margin(), _axis);
+        const amal::vec4 thumb_padding = axis_reverse_offsets(thumb_style.padding(), _axis);
 
-        const f32 safe_content = amal::max(_content_size, 1.0f);
-        const f32 safe_view = amal::max(_view_size, 0.0f);
+        const f32 safe_content = amal::max(_scroll->content(_axis), 1.0f);
+        const f32 safe_view = amal::max(_scroll->view(_axis), 0.0f);
         const f32 ratio = amal::clamp(safe_view / safe_content, 0.0f, 1.0f);
-        const f32 scroll_norm = amal::clamp(_behavior.normalized, 0.0f, 1.0f);
+        const f32 scroll_norm = amal::clamp(_scroll->normalized(_axis), 0.0f, 1.0f);
 
-        if (_behavior.axis == amal::axis::y)
+        if (_axis == amal::axis::y)
         {
             const amal::vec2 lane_pos = {position().x + track_padding.x + thumb_margin.x,
                                          position().y + track_padding.y + thumb_margin.y};

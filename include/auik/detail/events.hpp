@@ -5,9 +5,8 @@
 #include <acul/scalars.hpp>
 #include <amal/rect.hpp>
 #include <auik/symbol_export.h>
-#include <umbf/utils.hpp>
+#include <umbf/ext/image/image.hpp>
 #include "../events.hpp"
-
 
 #define AUIK_TAG_HITBOX 0xBF9B2277u
 
@@ -101,6 +100,10 @@ namespace auik::detail
     AUIK_EXPORT void reset_event_state();
     AUIK_EXPORT void cancel_unbounded_mouse_drag();
     AUIK_EXPORT void on_hover_id_updated(const ElementID &prev_hover_id, const ElementID &hover_id);
+    AUIK_EXPORT void register_shortcut_record(const Shortcut &shortcut, u32 id, u32 tag,
+                                              acul::unique_function<void()> callback);
+    AUIK_EXPORT void deregister_shortcut_record(const Shortcut &shortcut, u32 id);
+    AUIK_EXPORT bool has_widget_shortcuts(u32 widget_id);
     AUIK_EXPORT void deregister_widget_shortcuts(u32 widget_id);
     inline void *get_window_handle(WindowContext *window_ctx)
     {

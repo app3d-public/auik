@@ -106,7 +106,7 @@ namespace auik
         AUIK_EXPORT acul::vector<SerializedItem> serialized_items() const;
         AUIK_EXPORT void restore_serialized_items(const acul::vector<u32> &root_ids,
                                                   const acul::vector<SerializedItem> &items);
-        virtual u32 signature() const override { return AUIK_TAG_MENU_BAR; }
+        virtual u32 signature() const noexcept override { return AUIK_TAG_MENU_BAR; }
 
     private:
         friend class PopupMenu;
@@ -228,7 +228,7 @@ namespace auik
         return make_main_menu_bar(id, values);
     }
 
-    class PopupMenu final : public Widget
+    class PopupMenu final : public Widget, public umbf::Block
     {
     public:
         using MenuGroup = MenuBar::MenuGroup;
@@ -316,6 +316,7 @@ namespace auik
         MenuBar *menu_model() const { return _menu; }
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
+        bool update_locale() override { return _menu && _menu->update_locale(); }
         AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void update_depth(const amal::vec2 &depth_range) override;
@@ -333,7 +334,8 @@ namespace auik
         AUIK_EXPORT void on_attach() override;
         AUIK_EXPORT void on_detach() override;
         AUIK_EXPORT u32 get_depth_requirement() const override;
-        virtual u32 signature() const override { return AUIK_TAG_POPUP_MENU; }
+        virtual u32 signature() const noexcept override { return AUIK_TAG_POPUP_MENU; }
+        umbf::Block *as_snapshot_block() noexcept override { return this; }
 
     private:
         bool menu_attached() const
@@ -378,7 +380,7 @@ namespace auik
     inline PopupMenu *make_popup_menu(u32 id, const acul::vector<StringView> &items = {}, bool selected_enabled = false)
     {
         constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
-                                             WidgetFlagBits::configurable | WidgetFlagBits::hittable;
+                                             WidgetFlagBits::cache_snapshot | WidgetFlagBits::hittable;
         return acul::alloc<PopupMenu>(id, items, widget_flags, selected_enabled);
     }
 
@@ -542,7 +544,7 @@ namespace auik
 
     namespace streams
     {
-        extern AUIK_EXPORT const umbf::streams::Stream menu_bar;
-        extern AUIK_EXPORT const umbf::streams::Stream popup_menu;
+        extern AUIK_EXPORT const umbf::registry::BlockStream menu_bar;
+        extern AUIK_EXPORT const umbf::registry::BlockStream popup_menu;
     } // namespace streams
 } // namespace auik

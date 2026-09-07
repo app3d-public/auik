@@ -24,7 +24,7 @@ namespace auik
     {
         constexpr inline WidgetFlags get_slider_widget_flags()
         {
-            return WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::configurable |
+            return WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::cache_snapshot |
                    WidgetFlagBits::hittable;
         }
     } // namespace detail
@@ -118,7 +118,7 @@ namespace auik
                                                 u32 color_count);
     } // namespace detail
 
-    class Slider final : public Widget
+    class Slider final : public Widget, public umbf::Block
     {
     public:
         AUIK_EXPORT Slider(u32 id, f32 value, f32 min_value, f32 max_value, f32 range_start_value, amal::axis axis,
@@ -155,7 +155,8 @@ namespace auik
         AUIK_EXPORT void set_style_tags(u32 track_tag_id, u32 fill_tag_id, u32 grab_tag_id);
         f32 step() const { return _step; }
         AUIK_EXPORT bool has_draw_record() const;
-        virtual u32 signature() const override { return AUIK_TAG_SLIDER; }
+        virtual u32 signature() const noexcept override { return AUIK_TAG_SLIDER; }
+        umbf::Block *as_snapshot_block() noexcept override { return this; }
 
     private:
         f32 _value = 0.0f;
@@ -187,7 +188,7 @@ namespace auik
         bool resolve_range_values(f32 &out_start, f32 &out_end) const;
     };
 
-    class GradientSlider final : public Widget
+    class GradientSlider final : public Widget, public umbf::Block
     {
     public:
         AUIK_EXPORT GradientSlider(u32 id, f32 value, f32 min_value, f32 max_value,
@@ -224,7 +225,8 @@ namespace auik
         AUIK_EXPORT void set_style_tags(u32 track_tag_id, u32 grab_tag_id);
         f32 step() const { return _step; }
         AUIK_EXPORT bool has_draw_record() const;
-        virtual u32 signature() const override { return AUIK_TAG_GRADIENT_SLIDER; }
+        virtual u32 signature() const noexcept override { return AUIK_TAG_GRADIENT_SLIDER; }
+        umbf::Block *as_snapshot_block() noexcept override { return this; }
 
     private:
         f32 _value = 0.0f;
@@ -257,7 +259,7 @@ namespace auik
         amal::vec4 resolve_active_color(f32 factor) const;
     };
 
-    class TransparencySlider final : public Widget
+    class TransparencySlider final : public Widget, public umbf::Block
     {
     public:
         AUIK_EXPORT TransparencySlider(u32 id, f32 value, f32 min_value, f32 max_value, f32 size,
@@ -294,7 +296,8 @@ namespace auik
         amal::axis axis() const { return _axis; }
         AUIK_EXPORT void set_axis(amal::axis axis);
         AUIK_EXPORT bool has_draw_record() const;
-        virtual u32 signature() const override { return AUIK_TAG_TRANSPARENCY_SLIDER; }
+        virtual u32 signature() const noexcept override { return AUIK_TAG_TRANSPARENCY_SLIDER; }
+        umbf::Block *as_snapshot_block() noexcept override { return this; }
 
     private:
         f32 _value = 0.0f;
@@ -332,7 +335,7 @@ namespace auik
         void rebuild_gradient_colors();
     };
 
-    class RangeSlider final : public Widget
+    class RangeSlider final : public Widget, public umbf::Block
     {
     public:
         AUIK_EXPORT RangeSlider(u32 id, f32 from_value, f32 to_value, f32 min_value, f32 max_value, amal::axis axis,
@@ -369,7 +372,8 @@ namespace auik
         AUIK_EXPORT void set_style_tags(u32 track_tag_id, u32 fill_tag_id, u32 from_grab_tag_id, u32 to_grab_tag_id);
         AUIK_EXPORT void set_axis(amal::axis axis);
         AUIK_EXPORT bool has_draw_record() const;
-        virtual u32 signature() const override { return AUIK_TAG_RANGE_SLIDER; }
+        virtual u32 signature() const noexcept override { return AUIK_TAG_RANGE_SLIDER; }
+        umbf::Block *as_snapshot_block() noexcept override { return this; }
 
     private:
         enum class ActiveGrab : u8
@@ -479,9 +483,9 @@ namespace auik
 
     namespace streams
     {
-        extern AUIK_EXPORT const umbf::streams::Stream slider;
-        extern AUIK_EXPORT const umbf::streams::Stream gradient_slider;
-        extern AUIK_EXPORT const umbf::streams::Stream transparency_slider;
-        extern AUIK_EXPORT const umbf::streams::Stream range_slider;
+        extern AUIK_EXPORT const umbf::registry::BlockStream slider;
+        extern AUIK_EXPORT const umbf::registry::BlockStream gradient_slider;
+        extern AUIK_EXPORT const umbf::registry::BlockStream transparency_slider;
+        extern AUIK_EXPORT const umbf::registry::BlockStream range_slider;
     } // namespace streams
 } // namespace auik

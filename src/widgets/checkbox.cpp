@@ -8,8 +8,7 @@
 namespace auik
 {
     Checkbox::Checkbox(u32 id, bool value, WidgetFlags widget_flags)
-        : Widget(id, widget_flags, EventFlagBits::click, {{0.0f, 0.0f}, {0.0f, 0.0f}},
-                 AUIK_STYLE_TAG_CHECKBOX),
+        : Widget(id, widget_flags, EventFlagBits::click, {{0.0f, 0.0f}, {0.0f, 0.0f}}, AUIK_STYLE_TAG_CHECKBOX),
           _value(value),
           _checkmark_rect(detail::make_rect_data(AUIK_TAG_CHECKBOX_CHECKMARK, AUIK_TAG_CHECKBOX_CHECKMARK))
     {
@@ -245,7 +244,7 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::streams::Stream checkbox{read_checkbox, write_checkbox};
+        AUIK_EXPORT const umbf::registry::BlockStream checkbox{read_checkbox, write_checkbox};
     } // namespace streams
 
 } // namespace auik

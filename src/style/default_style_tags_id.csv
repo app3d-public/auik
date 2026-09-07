@@ -67,6 +67,11 @@ scrollbar-track,0x52DEF95A
 scrollbar-track-internal,0xBB5B539B
 selection,0x8CE92FAF
 separator,0x497EB43C
+shortcut,0x8E291280
+shortcut-input,0x34357DB6
+shortcut-input-caret,0x3623ABA9
+shortcut-key,0x5EB2540C
+shortcut-key-text,0x49A2EC73
 slider,0x2B6F51CE
 slider-grab,0x4C03D5B0
 switch-button,0x3AEAF9C7

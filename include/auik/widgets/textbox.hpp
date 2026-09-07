@@ -12,7 +12,7 @@ namespace auik
 {
     struct TextboxEditData;
 
-    class Textbox : public Widget
+    class Textbox : public Widget, public umbf::Block
     {
     public:
         TextFlags text_flags = TextFlagBits::none;
@@ -23,6 +23,12 @@ namespace auik
         AUIK_EXPORT ~Textbox() override;
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
+        bool update_locale() override
+        {
+            bool changed = _text.update_locale();
+            if (_placeholder) changed |= _placeholder->update_locale();
+            return changed;
+        }
         AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
@@ -39,7 +45,8 @@ namespace auik
         AUIK_EXPORT void on_key(Key key, KeyPressState state, KeyMode mods) override;
         AUIK_EXPORT void on_char_input(u32 char_code, u32 count) override;
         AUIK_EXPORT void sync_widget_flags() override;
-        u32 signature() const override { return AUIK_TAG_TEXTBOX; }
+        u32 signature() const noexcept override { return AUIK_TAG_TEXTBOX; }
+        umbf::Block *as_snapshot_block() noexcept override { return this; }
 
         const acul::string &value() const { return _value; }
         void set_value(const acul::string &value) { _value = value; }
@@ -91,9 +98,9 @@ namespace auik
                 if (has_internal_scrollbar())
                 {
                     const size_t text_draw_count = _text.draw_record_count();
-                    const f32 old_scroll_y = _content_scroll.y;
+                    const f32 old_scroll_y = _scroll.content_offset.y;
                     update_layout_from_current_bounds(false);
-                    if (update_content_scroll_y_for_cursor() && old_scroll_y != _content_scroll.y)
+                    if (update_content_scroll_y_for_cursor() && old_scroll_y != _scroll.content_offset.y)
                         update_layout_from_current_bounds(true);
                     rebuild_selection_rect_cache();
                     if (_text.layout_instance_count() < text_draw_count || edit_draw_slots_need_record())
@@ -113,7 +120,7 @@ namespace auik
                 _text.update_layout(false);
                 update_content_scroll_x_for_cursor();
                 update_content_scroll_y_for_cursor();
-                _text.translate(-_content_scroll);
+                _text.translate(-_scroll.content_offset);
                 _text.set_clip_id(text_content_clip_id());
                 refresh_placeholder_layout();
                 detail::unmark_layout_dirty();
@@ -127,10 +134,10 @@ namespace auik
             }
             else
             {
-                const amal::vec2 old_scroll = _content_scroll;
-                if (update_content_scroll_x_for_cursor() && old_scroll.x != _content_scroll.x)
-                    _text.translate({old_scroll.x - _content_scroll.x, 0.0f});
-                if (update_content_scroll_y_for_cursor() && old_scroll.y != _content_scroll.y)
+                const amal::vec2 old_scroll = _scroll.content_offset;
+                if (update_content_scroll_x_for_cursor() && old_scroll.x != _scroll.content_offset.x)
+                    _text.translate({old_scroll.x - _scroll.content_offset.x, 0.0f});
+                if (update_content_scroll_y_for_cursor() && old_scroll.y != _scroll.content_offset.y)
                     update_layout_from_current_bounds(true);
                 rebuild_selection_rect_cache();
                 if (edit_draw_slots_need_record())
@@ -220,7 +227,7 @@ namespace auik
         u16 _content_clip_id = 0xFFFFu;
         detail::Scrollbar *_scrollbar_y = nullptr;
         detail::Scrollbar *_drag_scrollbar = nullptr;
-        amal::vec2 _content_scroll{0.0f, 0.0f};
+        ScrollData _scroll{};
 
     private:
         static int edit_string_len(void *user_data);
@@ -244,7 +251,7 @@ namespace auik
         AUIK_EXPORT void set_can_expand_to_content(bool value);
         bool resize_to_content() const { return can_expand_to_content(); }
         void set_resize_to_content(bool value) { set_can_expand_to_content(value); }
-        u32 signature() const override { return AUIK_TAG_MULTILINE_TEXTBOX; }
+        u32 signature() const noexcept override { return AUIK_TAG_MULTILINE_TEXTBOX; }
 
     protected:
         bool accepts_newline() const override { return true; }
@@ -260,7 +267,7 @@ namespace auik
     {
         return acul::alloc<Textbox>(id, value, inline_size,
                                     WidgetFlagBits::visible | WidgetFlagBits::attachable |
-                                        WidgetFlagBits::configurable | WidgetFlagBits::hittable,
+                                        WidgetFlagBits::cache_snapshot | WidgetFlagBits::hittable,
                                     AUIK_STYLE_TAG_TEXTBOX, text_flags, placeholder);
     }
 
@@ -279,7 +286,7 @@ namespace auik
     {
         return acul::alloc<MultilineTextbox>(id, value, amal::vec2{AUIK_SIZE_X_INHERIT, height}, can_expand_to_content,
                                              WidgetFlagBits::visible | WidgetFlagBits::attachable |
-                                                 WidgetFlagBits::configurable,
+                                                 WidgetFlagBits::cache_snapshot,
                                              text_flags, placeholder);
     }
 
@@ -290,7 +297,7 @@ namespace auik
     {
         return acul::alloc<MultilineTextbox>(id, value, size, can_expand_to_content,
                                              WidgetFlagBits::visible | WidgetFlagBits::attachable |
-                                                 WidgetFlagBits::configurable,
+                                                 WidgetFlagBits::cache_snapshot,
                                              text_flags, placeholder);
     }
 
@@ -309,7 +316,7 @@ namespace auik
 
     namespace streams
     {
-        extern AUIK_EXPORT const umbf::streams::Stream textbox;
-        extern AUIK_EXPORT const umbf::streams::Stream multiline_textbox;
+        extern AUIK_EXPORT const umbf::registry::BlockStream textbox;
+        extern AUIK_EXPORT const umbf::registry::BlockStream multiline_textbox;
     } // namespace streams
 } // namespace auik

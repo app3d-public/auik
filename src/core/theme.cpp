@@ -24,6 +24,7 @@ namespace auik
         if (take & StylePropertiesBits::border_color) out.border_color(d.border_color());
         if (take & StylePropertiesBits::border_radius) out.border_radius(d.border_radius());
         if (take & StylePropertiesBits::border_thickness) out.border_thickness(d.border_thickness());
+        if (take & StylePropertiesBits::border_mask) out.border_mask(d.border_mask());
         if (take & StylePropertiesBits::corner_mask) out.corner_mask(d.corner_mask());
         if (take & StylePropertiesBits::text_size) out.text_size(d.text_size());
         if (take & StylePropertiesBits::font) out.font(d.font());
@@ -32,6 +33,8 @@ namespace auik
         if (take & StylePropertiesBits::height) out.height(d.height());
         if (take & StylePropertiesBits::min_width) out.min_width(d.min_width());
         if (take & StylePropertiesBits::min_height) out.min_height(d.min_height());
+        if (take & StylePropertiesBits::max_width) out.max_width(d.max_width());
+        if (take & StylePropertiesBits::max_height) out.max_height(d.max_height());
         if (take & StylePropertiesBits::extra)
         {
             for (const StyleExtra *extra = d.extra(); extra; extra = extra->next)
@@ -40,6 +43,8 @@ namespace auik
                     out.align_extra(*static_cast<const StyleExtraAlign *>(extra->data));
                 else if (extra->id == AUIK_STYLE_EXTRA_TEXT)
                     out.text_extra(*static_cast<const StyleExtraText *>(extra->data));
+                else if (extra->id == AUIK_STYLE_EXTRA_OVERFLOW)
+                    out.overflow_extra(*static_cast<const StyleExtraOverflow *>(extra->data));
             }
         }
     }
@@ -54,7 +59,7 @@ namespace auik
         u32 chain_count = 0u;
 
         const auto push_chain = [&](const Style *desc, StylePropertyFlags take) {
-            if (!desc || static_cast<u16>(take) == 0u) return;
+            if (!desc || static_cast<u32>(take) == 0u) return;
             assert(chain_count < 8u && "resolved style chain overflow");
             chain[chain_count++] = {desc, take};
         };
@@ -65,14 +70,14 @@ namespace auik
             const auto take_non_inh = desc->mask() & need_non_inh;
             const auto take_inh = desc->mask() & need_inh;
             push_chain(desc, take_non_inh | take_inh);
-            if (static_cast<u16>(take_non_inh) != 0) need_non_inh &= ~take_non_inh;
-            if (static_cast<u16>(take_inh) != 0) need_inh &= ~take_inh;
+            if (static_cast<u32>(take_non_inh) != 0) need_non_inh &= ~take_non_inh;
+            if (static_cast<u32>(take_inh) != 0) need_inh &= ~take_inh;
         };
 
         const auto collect_inheritable_only_desc = [&](const Style *desc) {
             if (!desc) return;
             const auto take_inh = desc->mask() & need_inh;
-            if (static_cast<u16>(take_inh) != 0)
+            if (static_cast<u32>(take_inh) != 0)
             {
                 push_chain(desc, take_inh);
                 need_inh &= ~take_inh;
@@ -98,12 +103,12 @@ namespace auik
                 const auto used_non_inh = prev_non_inh & ~need_non_inh;
                 const auto used_inh = prev_inh & ~need_inh;
                 const auto used = used_non_inh | used_inh;
-                if (static_cast<u16>(used) == 0) return;
+                if (static_cast<u32>(used) == 0) return;
 
                 acul::hash_combine(resolve_seed, source_id);
                 acul::hash_combine(resolve_seed, key);
                 acul::hash_combine(resolve_seed, static_cast<u8>(source_state));
-                acul::hash_combine(resolve_seed, static_cast<u16>(used));
+                acul::hash_combine(resolve_seed, static_cast<u32>(used));
             };
 
             const Style *desc_state = get_desc(key, state);

@@ -6,8 +6,7 @@
 namespace auik
 {
     RadioButton::RadioButton(u32 id, bool value, WidgetFlags widget_flags)
-        : Widget(id, widget_flags, EventFlagBits::click, {{0.0f, 0.0f}, {0.0f, 0.0f}},
-                 AUIK_STYLE_TAG_RADIO_BUTTON),
+        : Widget(id, widget_flags, EventFlagBits::click, {{0.0f, 0.0f}, {0.0f, 0.0f}}, AUIK_STYLE_TAG_RADIO_BUTTON),
           _value(value),
           _indicator_rect(detail::make_rect_data(AUIK_TAG_RADIO_BUTTON_INDICATOR, AUIK_TAG_RADIO_BUTTON_INDICATOR))
     {
@@ -228,7 +227,7 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::streams::Stream radio_button{read_radio_button, write_radio_button};
+        AUIK_EXPORT const umbf::registry::BlockStream radio_button{read_radio_button, write_radio_button};
     } // namespace streams
 
 } // namespace auik

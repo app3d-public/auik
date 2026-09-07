@@ -9,6 +9,7 @@
 #include <acul/string/string.hpp>
 #include <amal/common.hpp>
 #include <amal/vector.hpp>
+#include "../cache.hpp"
 #include "../pending_filter.hpp"
 #include "../viewport.hpp"
 #include "atlas.hpp"
@@ -32,14 +33,12 @@ struct FT_LibraryRec_;
 namespace auik
 {
     using PFN_window_menu_suffix_create = void (*)(class Window *window, class MenuBar *menu);
-    using PFN_widget_attach = void (*)(Widget *widget);
     using PFN_translate_string = const char *(*)(const char *literal);
 
     struct WidgetCreateOptions
     {
         PFN_window_menu_suffix_create window_menu_suffix_create = nullptr;
         int window_menu_type = AUIK_WINDOW_MENU_TYPE_BAR;
-        PFN_widget_attach widget_attach = nullptr;
         PFN_translate_string string_locale = nullptr;
 
         WidgetCreateOptions &set_window_menu_suffix_create(PFN_window_menu_suffix_create value)
@@ -51,12 +50,6 @@ namespace auik
         WidgetCreateOptions &set_window_menu_type(int value)
         {
             window_menu_type = value;
-            return *this;
-        }
-
-        WidgetCreateOptions &set_widget_attach(PFN_widget_attach value)
-        {
-            widget_attach = value;
             return *this;
         }
 
@@ -92,7 +85,6 @@ namespace auik
             textures = 0x100,
             delayed_tasks = 0x200,
             destroying = 0x400,
-            locale = 0x800,
             fast_update = 0x1000,
             styles = 0x2000
         };
@@ -106,13 +98,14 @@ namespace auik
 
     namespace detail
     {
-        inline constexpr DirtyMask one_frame_dirty_mask =
-            static_cast<DirtyMask>(DirtyFlagBits::redraw | DirtyFlagBits::host_update | DirtyFlagBits::hit_rect_update |
-                                   DirtyFlagBits::textures);
+        inline constexpr DirtyMask frame_end_dirty_mask =
+            static_cast<DirtyMask>(DirtyFlagBits::redraw | DirtyFlagBits::host_update);
+        inline constexpr DirtyMask gpu_cache_update_dirty_mask =
+            static_cast<DirtyMask>(DirtyFlagBits::hit_rect_update | DirtyFlagBits::textures);
         inline constexpr DirtyMask layout_update_dirty_mask =
             static_cast<DirtyMask>(DirtyFlagBits::layout | DirtyFlagBits::fast_update);
         inline constexpr DirtyMask layout_dirty_mask =
-            static_cast<DirtyMask>(DirtyFlagBits::layout | DirtyFlagBits::locale | DirtyFlagBits::fast_update);
+            static_cast<DirtyMask>(DirtyFlagBits::layout | DirtyFlagBits::fast_update);
 
         struct SharedBufferSyncState
         {
@@ -152,9 +145,9 @@ namespace auik
             ElementID drag_id{};
             MouseKeyFlags drag_key_flags{};
             bool mouse_down = false;
-            acul::hashmap<u64, acul::unique_function<void()>> shortcuts;
-            acul::hashmap<u32, acul::vector<u64>> widget_shortcuts;
-            acul::hashset<Key> active_keys;
+            ModelDB *shortcut_model_db = nullptr;
+            u64 shortcut_model_id = 0u;
+            acul::u128 active_keys{};
             MouseKeyFlags active_mouse_buttons{};
             KeyMode active_mods = KeyModeBits::enum_type(0);
         };
@@ -177,6 +170,12 @@ namespace auik
             acul::unique_function<void()> fn = nullptr;
         };
 
+        struct WidgetAttachBind
+        {
+            acul::unique_function<void(Widget *)> on_attach = nullptr;
+            acul::unique_function<void(Widget *)> on_detach = nullptr;
+        };
+
         struct StyleSelectorTransition
         {
             ElementID prev_id{};
@@ -191,7 +190,9 @@ namespace auik
             acul::vector<Widget *> widget_tree;
             acul::vector<Widget *> transient_cache;
             acul::hashmap<u32, Widget *> id_map;
+            acul::hashmap<u32, WidgetAttachBind> widget_attach_binds;
             acul::hashmap<u32, Image *> image_cache;
+            acul::hashmap<u32, acul::shared_ptr<WidgetStateData>> global_cache;
             Tooltip *tooltip = nullptr;
             acul::vector<TextureID> textures;
             acul::hashmap<u64, u32> texture_bind_slots;
@@ -336,10 +337,6 @@ namespace auik
             return get_context().widget_create_options.window_menu_suffix_create;
         }
 
-        inline PFN_widget_attach get_default_widget_attach_cb()
-        {
-            return get_context().widget_create_options.widget_attach;
-        }
 
         inline void mark_texture_bindings_mutation()
         {
@@ -421,6 +418,20 @@ namespace auik
             }
             return out;
         }
+
+        inline acul::shared_ptr<WidgetStateData> find_widget_global_cache(u32 widget_id)
+        {
+            const auto &cache = get_context().global_cache;
+            const auto it = cache.find(widget_id);
+            return it == cache.end() ? nullptr : it->second;
+        }
+
+        inline void set_widget_global_cache(u32 widget_id, acul::shared_ptr<WidgetStateData> state)
+        {
+            assert(state && "Widget state is null");
+            state->widget_id = widget_id;
+            get_context().global_cache[widget_id] = std::move(state);
+        }
     } // namespace detail
 
     inline void mark_host_refresh_request()
@@ -431,6 +442,7 @@ namespace auik
     }
 
     AUIK_EXPORT void update_styles();
+    AUIK_EXPORT void invalidate_styles();
 
     inline Theme *get_theme() { return detail::get_context().theme; }
     inline void set_theme(Theme *theme)
@@ -439,11 +451,7 @@ namespace auik
         if (ctx.theme == theme) return;
         const bool replacing_theme = ctx.theme != nullptr;
         ctx.theme = theme;
-        if (replacing_theme)
-        {
-            detail::mark_styles_dirty();
-            update_styles();
-        }
+        if (replacing_theme) invalidate_styles();
     }
 
     inline DrawStream *get_primary_quads_stream()
@@ -523,7 +531,7 @@ namespace auik
         auto *gpu = detail::get_context().gpu_ctx;
         assert(gpu && gpu->push_clip_rect && "GPU clip rect dispatch is not initialized");
         detail::sync_current_clip_rect_frame();
-        const u16 id = gpu->push_clip_rect(gpu, detail::snap_rect_to_pixel_grid(rect));
+        const u16 id = gpu->push_clip_rect(gpu, detail::snap_clip_rect_to_pixel_grid(rect));
         detail::mark_clip_rects_mutation();
         return id;
     }
@@ -533,7 +541,7 @@ namespace auik
         auto *gpu = detail::get_context().gpu_ctx;
         assert(gpu && gpu->update_clip_rect && "GPU clip rect dispatch is not initialized");
         detail::sync_current_clip_rect_frame();
-        gpu->update_clip_rect(gpu, clip_id, detail::snap_rect_to_pixel_grid(rect));
+        gpu->update_clip_rect(gpu, clip_id, detail::snap_clip_rect_to_pixel_grid(rect));
         detail::mark_clip_rects_mutation();
     }
 

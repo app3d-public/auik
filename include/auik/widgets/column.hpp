@@ -12,10 +12,7 @@ namespace auik
     class ColumnBlock : public Block
     {
     public:
-        explicit ColumnBlock(u32 owner_id)
-            : Block(owner_id, WidgetFlagBits::visible, AUIK_TAG_BLOCK)
-        {
-        }
+        explicit ColumnBlock(u32 owner_id) : Block(owner_id, WidgetFlagBits::visible, AUIK_TAG_BLOCK) {}
 
         u16 content_clip_id() const override { return clip_id(); }
         amal::vec4 get_content_clip_rect() const override
@@ -33,7 +30,7 @@ namespace auik
         }
     };
 
-    class Column : public Widget
+    class Column : public Widget, public umbf::Block
     {
     public:
         using ColumnChildren = acul::vector<Widget *>;
@@ -67,6 +64,10 @@ namespace auik
         AUIK_EXPORT void reset_clip_rect_records() override;
         AUIK_EXPORT void rebuild_clip_rects() override;
         AUIK_EXPORT void reset_draw_records() override;
+        AUIK_EXPORT void invalidate_style() override;
+        AUIK_EXPORT bool update_locale() override;
+        AUIK_EXPORT void add_state_flags_inherit(WidgetStateFlags flags) override;
+        AUIK_EXPORT void remove_state_flags_inherit(WidgetStateFlags flags) override;
         AUIK_EXPORT void update_depth(const amal::vec2 &depth_range) override;
         AUIK_EXPORT void back_hit_depth() override;
         AUIK_EXPORT void restore_hit_depth() override;
@@ -75,7 +76,8 @@ namespace auik
         AUIK_EXPORT amal::vec4 get_content_clip_rect() const override;
         AUIK_EXPORT void on_attach() override;
         AUIK_EXPORT void on_detach() override;
-        u32 signature() const override { return AUIK_TAG_COLUMN; }
+        u32 signature() const noexcept override { return AUIK_TAG_COLUMN; }
+        umbf::Block *as_snapshot_block() noexcept override { return this; }
 
     private:
         void add_slot(ColumnChildren children);
@@ -93,12 +95,10 @@ namespace auik
 
     inline Block *make_column_block() { return make_column_block(AUIK_TAG_COLUMN); }
 
-
-    inline Column *make_column(u32 id, Column::ColumnItems columns = {},
-                               amal::vec2 inline_size = AUIK_SIZE_INHERIT)
+    inline Column *make_column(u32 id, Column::ColumnItems columns = {}, amal::vec2 inline_size = AUIK_SIZE_INHERIT)
     {
-        constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
-                                             WidgetFlagBits::configurable;
+        constexpr WidgetFlags widget_flags =
+            WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::cache_snapshot;
         return acul::alloc<Column>(id, std::move(columns), inline_size, widget_flags);
     }
 
@@ -111,6 +111,6 @@ namespace auik
 
     namespace streams
     {
-        extern AUIK_EXPORT const umbf::streams::Stream column;
+        extern AUIK_EXPORT const umbf::registry::BlockStream column;
     }
 } // namespace auik

@@ -486,6 +486,30 @@ def text_overflow_for_value(value: str) -> str:
     raise ValueError(f"Unsupported text-overflow value '{value}'")
 
 
+def overflow_for_value(value: str) -> str:
+    modes = {
+        "visible": "OverflowMode::visible",
+        "hidden": "OverflowMode::hidden",
+        "auto": "OverflowMode::auto_",
+        "scroll": "OverflowMode::scroll",
+    }
+    if value not in modes:
+        raise ValueError(f"Unsupported overflow value '{value}'")
+    return modes[value]
+
+
+def overflow_values(tokens: list, name: str) -> list[str]:
+    words = split_words(tokens)
+    values: list[str] = []
+    for word in words:
+        if len(word) != 1 or word[0].type != "ident":
+            raise ValueError(f"{name} expects overflow keywords")
+        values.append(overflow_for_value(word[0].value.lower()))
+    if not values or len(values) > 2:
+        raise ValueError(f"{name} expects one or two values")
+    return values
+
+
 def declaration_calls(declaration: CssDeclaration, variables: dict[str, str]) -> list[str]:
     name = declaration.name
     tokens = declaration.tokens
@@ -515,6 +539,10 @@ def declaration_calls(declaration: CssDeclaration, variables: dict[str, str]) ->
         return [f"min_width({resolve_value(tokens, variables)})"]
     if name == "min-height":
         return [f"min_height({resolve_value(tokens, variables)})"]
+    if name == "max-width":
+        return [f"max_width({resolve_value(tokens, variables)})"]
+    if name == "max-height":
+        return [f"max_height({resolve_value(tokens, variables)})"]
     if name == "border-radius":
         return resolve_border_radius(tokens, variables)
     if name == "border":
@@ -543,6 +571,13 @@ BOX_SIDE_INDEX = {
     "bottom": 3,
 }
 
+BORDER_SIDE_MASK = {
+    "left": 0x1,
+    "top": 0x2,
+    "right": 0x4,
+    "bottom": 0x8,
+}
+
 
 def update_box_property(style_rule: dict, name: str, tokens: list, variables: dict[str, str]) -> bool:
     ctor = ""
@@ -567,9 +602,39 @@ def update_box_property(style_rule: dict, name: str, tokens: list, variables: di
     return True
 
 
+def update_border_property(style_rule: dict, name: str, tokens: list, variables: dict[str, str]) -> bool:
+    if name != "border" and not name.startswith("border-"):
+        return False
+    if name in ("border-color", "border-thickness", "border-radius"):
+        return False
+
+    if name == "border":
+        border_mask = 0xF
+    else:
+        side = name.removeprefix("border-")
+        if side not in BORDER_SIDE_MASK:
+            return False
+        border_mask = style_rule.get("border_mask", 0) | BORDER_SIDE_MASK[side]
+
+    style_rule["border_mask"] = border_mask
+    calls = resolve_border(tokens, variables)
+    calls.append(f"border_mask(0x{border_mask:X}u)")
+    style_rule["properties"]["border"] = calls
+    return True
+
+
 def update_extra_property(style_rule: dict, declaration: CssDeclaration, variables: dict[str, str]) -> bool:
     name = declaration.name
-    if name not in ("display", "text-align", "vertical-align", "white-space", "text-overflow"):
+    if name not in (
+        "display",
+        "text-align",
+        "vertical-align",
+        "white-space",
+        "text-overflow",
+        "overflow",
+        "overflow-x",
+        "overflow-y",
+    ):
         return False
 
     extras = style_rule.setdefault("extras", {})
@@ -603,6 +668,17 @@ def update_extra_property(style_rule: dict, declaration: CssDeclaration, variabl
             raise ValueError(f"{name} expects a single keyword")
         text = extras.setdefault("text", {})
         text["overflow"] = text_overflow_for_value(value)
+    elif name == "overflow":
+        values = overflow_values(declaration.tokens, name)
+        overflow = extras.setdefault("overflow", {})
+        overflow["x"] = values[0]
+        overflow["y"] = values[-1]
+    elif name in ("overflow-x", "overflow-y"):
+        values = overflow_values(declaration.tokens, name)
+        if len(values) != 1:
+            raise ValueError(f"{name} expects one value")
+        overflow = extras.setdefault("overflow", {})
+        overflow["x" if name == "overflow-x" else "y"] = values[0]
     return True
 
 
@@ -623,6 +699,11 @@ def extra_calls(style_rule: dict) -> list[str]:
         wrap = text.get("wrap", "static_cast<TextWrapMode>(0u)")
         overflow = text.get("overflow", "static_cast<TextOverflowMode>(1u)")
         calls.append(f"text_extra(StyleExtraText{{{wrap}, {overflow}}})")
+    overflow = extras.get("overflow")
+    if overflow:
+        x = overflow.get("x", "OverflowMode::visible")
+        y = overflow.get("y", "OverflowMode::visible")
+        calls.append(f"overflow_extra(StyleExtraOverflow{{{x}, {y}}})")
     return calls
 
 
@@ -674,6 +755,8 @@ def build_generated_model(tree: ThemeTree, ids: dict[str, str], header_ids: dict
             )
             for declaration in rule.declarations:
                 if update_box_property(style_rule, declaration.name, declaration.tokens, variables):
+                    continue
+                if update_border_property(style_rule, declaration.name, declaration.tokens, variables):
                     continue
                 if update_extra_property(style_rule, declaration, variables):
                     continue

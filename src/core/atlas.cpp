@@ -33,8 +33,8 @@ namespace auik::detail
             surface.channels.clear();
             static constexpr const char *channel_names[] = {"r", "g", "b", "a"};
             for (u32 i = 0; i < channel_count && i < 4u; ++i) surface.channels.push_back(channel_names[i]);
-            auto clear_pixel = umbf::utils::make_clear_pixel(surface.format, surface.channels.size());
-            umbf::utils::fill_color_pixels(clear_pixel.get(), surface);
+            auto clear_pixel = umbf::make_clear_pixel(surface.format, surface.channels.size());
+            umbf::fill_color_pixels(clear_pixel.get(), surface);
             return surface.pixels != nullptr;
         }
 
@@ -69,12 +69,12 @@ namespace auik::detail
         }
 
         static bool can_fit_after_growth(const AtlasPage &page, const amal::ivec2 &new_size, amal::irect &probe_rect,
-                                         umbf::utils::SkylinePacker &grown_packer, i32 padding)
+                                         umbf::SkylinePacker &grown_packer, i32 padding)
         {
             grown_packer.reset(new_size, padding);
             for (const auto &locked : page.rects)
                 if (!grown_packer.add_locked(locked)) return false;
-            return grown_packer.pack_rect(probe_rect, umbf::utils::SkylineHeuristic::bottom_left);
+            return grown_packer.pack_rect(probe_rect, umbf::SkylineHeuristic::bottom_left);
         }
 
         static bool grow_page(AtlasPage &page, const amal::irect &incoming_rect, const amal::ivec2 &max_size,
@@ -89,7 +89,7 @@ namespace auik::detail
                 if (next_size.y < max_size.y) next_size.y = amal::min(next_size.y * 2, max_size.y);
 
                 amal::irect probe = incoming_rect;
-                umbf::utils::SkylinePacker grown_packer;
+                umbf::SkylinePacker grown_packer;
                 if (!can_fit_after_growth(page, next_size, probe, grown_packer, padding)) continue;
 
                 umbf::Image2D grown_surface;
@@ -221,10 +221,10 @@ namespace auik::detail
                 if (page->surface.channels.size() != source.channels.size()) continue;
 
                 rect = {{0, 0}, required_size};
-                if (!page->packer.pack_rect(rect, umbf::utils::SkylineHeuristic::bottom_left))
+                if (!page->packer.pack_rect(rect, umbf::SkylineHeuristic::bottom_left))
                 {
                     if (!grow_page(*page, rect, state.max_size, state.padding, gpu_ctx)) continue;
-                    if (!page->packer.pack_rect(rect, umbf::utils::SkylineHeuristic::bottom_left))
+                    if (!page->packer.pack_rect(rect, umbf::SkylineHeuristic::bottom_left))
                     {
                         out.clear();
                         return false;
@@ -245,14 +245,14 @@ namespace auik::detail
                 }
 
                 rect = {{0, 0}, required_size};
-                if (!target_page->packer.pack_rect(rect, umbf::utils::SkylineHeuristic::bottom_left))
+                if (!target_page->packer.pack_rect(rect, umbf::SkylineHeuristic::bottom_left))
                 {
                     out.clear();
                     return false;
                 }
             }
 
-            umbf::utils::copy_pixels_to_area(source, target_page->surface, rect);
+            umbf::copy_pixels_to_area(source, target_page->surface, rect);
             target_page->rects.push_back(rect);
             mark_page_touched(target_page, touched_pages);
 

@@ -349,10 +349,11 @@ namespace auik
         return true;
     }
 
+    bool Text::update_locale() { return update_translated_text(); }
+
     void Text::update_layout_min_size_force()
     {
         assert(_style.id != Theme::STYLE_ID_INVALID && "Text style must be resolved before layout update");
-        if (detail::get_context().dirty_flags & DirtyFlagBits::locale) update_translated_text();
         _layout_result.clear();
         _content_bounds = {position(), {0.0f, 0.0f}};
         _instances.clear();
@@ -531,6 +532,20 @@ namespace auik
 
     void Text::draw(DrawCtx &ctx)
     {
+        if (ctx.reason & DrawReasonBits::invalidate)
+        {
+            if (_hit_id != AUIK_INVALID_DRAW_DATA_ID)
+            {
+                detail::RectData hit_rect = get_rect();
+                hit_rect.bounds = _content_bounds;
+                hit_rect.bounds.size = {0.0f, 0.0f};
+                update_hit_rect(_hit_id, hit_rect, true);
+            }
+            if (auto *stream = get_primary_textured_quads_stream()) invalidate_text_draw_ids(stream, _draw_ids, 0);
+            reset_draw_records();
+            return;
+        }
+
         const u16 current_clip = clip_id();
         if (current_clip == 0xFFFFu)
         {
@@ -548,8 +563,7 @@ namespace auik
             update_hit_rect(_hit_id, hit_rect, force_update);
         }
         else if (_hit_id != AUIK_INVALID_DRAW_DATA_ID &&
-                 ((ctx.reason & DrawReasonBits::invalidate) ||
-                  (detail::get_context().dirty_flags & DirtyFlagBits::hit_rect_update)))
+                 (detail::get_context().dirty_flags & DirtyFlagBits::hit_rect_update))
         {
             detail::RectData hit_rect = get_rect();
             hit_rect.bounds = _content_bounds;
@@ -562,13 +576,6 @@ namespace auik
         {
             _draw_ids.clear();
             _instances_gpu_dirty = true;
-            return;
-        }
-
-        if ((ctx.reason & DrawReasonBits::invalidate))
-        {
-            invalidate_text_draw_ids(textured_quads_stream, _draw_ids, 0);
-            reset_draw_records();
             return;
         }
 
@@ -811,9 +818,9 @@ namespace auik
             requested_event_flags = resolve_etext_event_flags();
             event_flags = is_disabled() ? EventFlagBits::none : requested_event_flags;
             detail::text_edit_initialize_state(&_edit_state, text_wrap_mode(layout_flags) != TextWrapMode::word);
-            register_shortcut(this, Shortcut{.mods = KeyModeBits::control, .keys = {Key::c}},
+            register_shortcut(this, Shortcut{.mods = KeyModeBits::control, .keys = make_shortcut_keys(Key::c)},
                               [this]() { copy_selection_to_clipboard(); });
-            register_shortcut(this, Shortcut{.mods = KeyModeBits::control, .keys = {Key::a}},
+            register_shortcut(this, Shortcut{.mods = KeyModeBits::control, .keys = make_shortcut_keys(Key::a)},
                               [this]() { select_all_text(); });
         }
     }
@@ -1513,8 +1520,8 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::streams::Stream text{read_text, write_text};
-        AUIK_EXPORT const umbf::streams::Stream etext{read_etext, write_text};
+        AUIK_EXPORT const umbf::registry::BlockStream text{read_text, write_text};
+        AUIK_EXPORT const umbf::registry::BlockStream etext{read_etext, write_text};
     } // namespace streams
 
 } // namespace auik

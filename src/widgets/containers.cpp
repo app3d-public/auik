@@ -28,14 +28,14 @@ namespace auik
         scrollbar = nullptr;
     }
 
-    static void ensure_styled_scrollbar(detail::Scrollbar *&scrollbar, Widget *parent, amal::axis axis,
-                                        u32 track_style_tag, u32 thumb_style_tag)
+    static void ensure_styled_scrollbar(detail::Scrollbar *&scrollbar, Widget *parent, ScrollData *scroll,
+                                        amal::axis axis, u32 track_style_tag, u32 thumb_style_tag)
     {
         if (scrollbar) return;
         const u32 id = axis == amal::axis::x ? AUIK_ID_SCROLLBAR_X : AUIK_ID_SCROLLBAR_Y;
         const u32 track_tag = axis == amal::axis::x ? AUIK_TAG_SCROLLBAR_TRACK_X : AUIK_TAG_SCROLLBAR_TRACK_Y;
         const u32 thumb_tag = axis == amal::axis::x ? AUIK_TAG_SCROLLBAR_THUMB_X : AUIK_TAG_SCROLLBAR_THUMB_Y;
-        scrollbar = acul::alloc<detail::Scrollbar>(id, track_tag, thumb_tag, parent, axis);
+        scrollbar = acul::alloc<detail::Scrollbar>(id, track_tag, thumb_tag, parent, scroll, axis);
         scrollbar->set_track_style_tag(track_style_tag);
         scrollbar->set_thumb_style_tag(thumb_style_tag);
         scrollbar->unset_visible();
@@ -535,12 +535,52 @@ namespace auik
         children.erase(children.begin() + first, children.begin() + last);
         _explicit_child_layouts.erase(_explicit_child_layouts.begin() + first, _explicit_child_layouts.begin() + last);
         _child_layouts.erase(_child_layouts.begin() + first, _child_layouts.begin() + last);
-        if (!destroying) dispatch_change();
+        if (!destroying) request_children_update();
     }
 
     void Block::add_child(Widget *child, ChildLayoutFlags layout)
     {
         add_child_to_layer(child, layout, DepthZone::work);
+    }
+
+    void Block::add_children(const acul::vector<Widget *> &new_children, const acul::vector<ChildLayoutFlags> &layouts)
+    {
+        assert((layouts.empty() || layouts.size() == new_children.size()) && "child layout count mismatch");
+        if ((!layouts.empty() && layouts.size() != new_children.size()) || new_children.empty()) return;
+
+        acul::vector<ChildLayoutFlags> explicit_layouts;
+        explicit_layouts.reserve(new_children.size());
+        for (size_t i = 0u; i < new_children.size(); ++i)
+            explicit_layouts.push_back(layouts.empty() ? default_child_layout_flags() : layouts[i]);
+
+        bool inserted = false;
+        size_t first = 0u;
+        for (size_t end = 0u; end <= new_children.size(); ++end)
+        {
+            if (end != new_children.size() && new_children[end]) continue;
+            if (first != end)
+            {
+                for (size_t i = first; i < end; ++i)
+                {
+                    auto *child = new_children[i];
+                    child->set_depth_zone(DepthZone::work);
+                    child->set_parent(this);
+                    child->set_focus_parent(parent() && id() == parent()->id() ? parent() : this);
+                    child->update_style_invalidated();
+                }
+                children.insert(children.end(), new_children.begin() + first, new_children.begin() + end);
+                _explicit_child_layouts.insert(_explicit_child_layouts.end(), explicit_layouts.begin() + first,
+                                               explicit_layouts.begin() + end);
+                for (size_t i = first; i < end; ++i)
+                    _child_layouts.push_back(merge_child_layout_flags(_content_layout, explicit_layouts[i]));
+                inserted = true;
+            }
+            first = end + 1u;
+        }
+
+        if (!inserted) return;
+        invalidate_layout_measure();
+        request_children_update();
     }
 
     void Block::add_child_to_background(Widget *child, ChildLayoutFlags layout)
@@ -562,9 +602,9 @@ namespace auik
         child->update_style_invalidated();
         children.push_back(child);
         _explicit_child_layouts.push_back(layout);
-        _child_layouts.push_back(layout);
+        _child_layouts.push_back(merge_child_layout_flags(_content_layout, layout));
         invalidate_layout_measure();
-        dispatch_change();
+        request_children_update();
     }
 
     void Block::set_child_layout(size_t index, ChildLayoutFlags layout)
@@ -587,7 +627,7 @@ namespace auik
     {
         if (index >= children.size() || index >= _explicit_child_layouts.size() || index >= _child_layouts.size())
             return;
-        _child_layouts[index] = _explicit_child_layouts[index];
+        _child_layouts[index] = merge_child_layout_flags(_content_layout, _explicit_child_layouts[index]);
     }
 
     void Block::refresh_child_layouts()
@@ -751,6 +791,21 @@ namespace auik
         }
     }
 
+    void Block::invalidate_style()
+    {
+        Widget::invalidate_style();
+        for (auto *child : children)
+            if (child) child->invalidate_style();
+    }
+
+    bool Block::update_locale()
+    {
+        bool changed = Widget::update_locale();
+        for (auto *child : children)
+            if (child) changed |= child->update_locale();
+        return changed;
+    }
+
     u32 Block::get_depth_requirement() const
     {
         u32 requirement = 1u;
@@ -834,76 +889,107 @@ namespace auik
         Widget::on_detach();
     }
 
+    void Block::add_state_flags_inherit(WidgetStateFlags flags)
+    {
+        Widget::add_state_flags_inherit(flags);
+        if ((flags & WidgetStateFlagBits::visible) && !is_visible()) flags &= ~WidgetStateFlagBits::visible;
+        for (auto *child : children)
+            if (child) child->add_state_flags_inherit(flags);
+    }
+
+    void Block::remove_state_flags_inherit(WidgetStateFlags flags)
+    {
+        Widget::remove_state_flags_inherit(flags);
+        for (auto *child : children)
+            if (child) child->remove_state_flags_inherit(flags);
+    }
+
+    void detail::ScrollableBlock::add_state_flags_inherit(WidgetStateFlags flags)
+    {
+        Block::add_state_flags_inherit(flags);
+        if ((flags & WidgetStateFlagBits::visible) && !is_visible()) flags &= ~WidgetStateFlagBits::visible;
+        if (_scroll.scrollbar_x) _scroll.scrollbar_x->add_state_flags_inherit(flags);
+        if (_scroll.scrollbar_y) _scroll.scrollbar_y->add_state_flags_inherit(flags);
+    }
+
+    void detail::ScrollableBlock::remove_state_flags_inherit(WidgetStateFlags flags)
+    {
+        Block::remove_state_flags_inherit(flags);
+        if (_scroll.scrollbar_x) _scroll.scrollbar_x->remove_state_flags_inherit(flags);
+        if (_scroll.scrollbar_y) _scroll.scrollbar_y->remove_state_flags_inherit(flags);
+    }
+
+    bool Block::request_children_update()
+    {
+        if (!is_attached()) return false;
+        return add_render_command(
+            [this]() {
+                if (!is_attached()) return;
+                for (auto *child : children)
+                    if (child && !child->is_attached() && (child->widget_flags & WidgetFlagBits::attachable))
+                        child->on_attach();
+
+                Widget *layout_target = resolve_parent_layout_update_target(this);
+                if (!layout_target) layout_target = this;
+                layout_target->update_layout(false);
+                layout_target->update_depth(layout_target->depth_range());
+                layout_target->update_draw_commands(DrawReasonBits::layout);
+                detail::get_context().dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
+            },
+            true);
+    }
+
     void Block::on_change(ChangeEvent &event)
     {
-        if (event.target != id() || !is_attached()) return;
-        if (!add_render_command(
-                [this]() {
-                    if (!is_attached()) return;
-                    for (auto *child : children)
-                        if (child && !child->is_attached() && (child->widget_flags & WidgetFlagBits::attachable))
-                            child->on_attach();
+        if (event.target == id() && request_children_update()) event.prevent_default();
+    }
 
-                    Widget *layout_target = resolve_parent_layout_update_target(this);
-                    if (!layout_target) layout_target = this;
-                    layout_target->update_layout(false);
-                    rebuild_root_widget_depths();
-                    layout_target->update_draw_commands(DrawReasonBits::layout);
-                    detail::get_context().dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
-                },
-                true))
-            return;
-        event.prevent_default();
+    detail::ScrollableBlock::ScrollableBlock(u32 id, WidgetFlags widget_flags, u32 tag_id)
+        : Block(id, widget_flags, tag_id)
+    {
+        _scroll.widget = this;
+        _scroll.on_scroll_to = scroll_to_callback;
+    }
+
+    void detail::ScrollableBlock::scroll_to_callback(ScrollData &data, amal::axis axis)
+    {
+        (void)axis;
+        auto *self = static_cast<ScrollableBlock *>(data.widget);
+        if (!self) return;
+        self->request_scroll_layout_update(DrawReasonBits::layout);
     }
 
     DrawBlock::DrawBlock(u32 id, WidgetFlags widget_flags, u32 tag_id)
-        : Block(id, widget_flags, tag_id), _bg_rect(detail::make_rect_data(id, tag_id))
+        : detail::ScrollableBlock(id, widget_flags, tag_id), _bg_rect(detail::make_rect_data(id, tag_id))
     {
     }
 
-    DrawBlock::~DrawBlock()
+    detail::ScrollableBlock::~ScrollableBlock()
     {
-        release_scrollbar(_scrollbar_x);
-        release_scrollbar(_scrollbar_y);
+        release_scrollbar(_scroll.scrollbar_x);
+        release_scrollbar(_scroll.scrollbar_y);
     }
 
-    void DrawBlock::ensure_scrollbars()
+    void detail::ScrollableBlock::ensure_scrollbars()
     {
-        if (_draw_flags & DrawBlockFlagBits::scrollbar_x)
-            ensure_styled_scrollbar(_scrollbar_x, this, amal::axis::x, _scrollbar_track_style_tag,
-                                    _scrollbar_thumb_style_tag);
-        if (_draw_flags & DrawBlockFlagBits::scrollbar_y)
-            ensure_styled_scrollbar(_scrollbar_y, this, amal::axis::y, _scrollbar_track_style_tag,
-                                    _scrollbar_thumb_style_tag);
-        if (_scrollbar_x)
+        const auto overflow = scroll_overflow();
+        if (overflow.x == OverflowMode::auto_ || overflow.x == OverflowMode::scroll)
+            ensure_styled_scrollbar(_scroll.scrollbar_x, this, &_scroll, amal::axis::x,
+                                    _scroll.scrollbar_track_style_tag, _scroll.scrollbar_thumb_style_tag);
+        if (overflow.y == OverflowMode::auto_ || overflow.y == OverflowMode::scroll)
+            ensure_styled_scrollbar(_scroll.scrollbar_y, this, &_scroll, amal::axis::y,
+                                    _scroll.scrollbar_track_style_tag, _scroll.scrollbar_thumb_style_tag);
+        if (_scroll.scrollbar_x)
         {
-            _scrollbar_x->set_clip_id(clip_id());
-            _scrollbar_x->update_depth(detail::depth_foreground_range(this->depth_range()));
-            _scrollbar_x->update_style_invalidated();
+            _scroll.scrollbar_x->set_clip_id(clip_id());
+            _scroll.scrollbar_x->update_depth(detail::depth_foreground_range(this->depth_range()));
+            _scroll.scrollbar_x->update_style_invalidated();
         }
-        if (_scrollbar_y)
+        if (_scroll.scrollbar_y)
         {
-            _scrollbar_y->set_clip_id(clip_id());
-            _scrollbar_y->update_depth(detail::depth_foreground_range(this->depth_range()));
-            _scrollbar_y->update_style_invalidated();
-        }
-    }
-
-    void DrawBlock::set_scrollbars_enabled(bool x, bool y)
-    {
-        if (x) _draw_flags |= DrawBlockFlagBits::scrollbar_x;
-        else _draw_flags &= ~DrawBlockFlagBits::scrollbar_x;
-        if (y) _draw_flags |= DrawBlockFlagBits::scrollbar_y;
-        else _draw_flags &= ~DrawBlockFlagBits::scrollbar_y;
-        if (!x && _scrollbar_x)
-        {
-            _scrollbar_x->unset_visible();
-            _scrollbar_x->sync_widget_flags();
-        }
-        if (!y && _scrollbar_y)
-        {
-            _scrollbar_y->unset_visible();
-            _scrollbar_y->sync_widget_flags();
+            _scroll.scrollbar_y->set_clip_id(clip_id());
+            _scroll.scrollbar_y->update_depth(detail::depth_foreground_range(this->depth_range()));
+            _scroll.scrollbar_y->update_style_invalidated();
         }
     }
 
@@ -924,6 +1010,13 @@ namespace auik
                                      : theme->get_resolved_style(_style_tag_id, id(), parent_id, style_state());
         if (style_id == Theme::STYLE_ID_INVALID) return nullptr;
         return &theme->get_style(style_id);
+    }
+
+    StyleExtraOverflow detail::ScrollableBlock::scroll_overflow() const
+    {
+        if (_scroll.style_id == Theme::STYLE_ID_INVALID) return {};
+        const auto *overflow = get_theme()->get_style(_scroll.style_id).overflow_settings();
+        return overflow ? *overflow : StyleExtraOverflow{};
     }
 
     amal::vec4 DrawBlock::draw_margin() const
@@ -951,89 +1044,122 @@ namespace auik
         _bg_rect.clip_id = clip_id();
     }
 
-    void DrawBlock::set_scrollbar_style_tag(u32 track_tag_id)
+    void detail::ScrollableBlock::set_scrollbar_style_tag(u32 track_tag_id)
     {
         set_scrollbar_style_tags(track_tag_id, scrollbar_thumb_style_for_track(track_tag_id));
     }
 
-    void DrawBlock::set_scrollbar_style_tags(u32 track_tag_id, u32 thumb_tag_id)
+    void detail::ScrollableBlock::set_scrollbar_style_tags(u32 track_tag_id, u32 thumb_tag_id)
     {
-        if (_scrollbar_track_style_tag == track_tag_id && _scrollbar_thumb_style_tag == thumb_tag_id) return;
-        _scrollbar_track_style_tag = track_tag_id;
-        _scrollbar_thumb_style_tag = thumb_tag_id;
-        release_scrollbar(_scrollbar_x);
-        release_scrollbar(_scrollbar_y);
+        if (_scroll.scrollbar_track_style_tag == track_tag_id && _scroll.scrollbar_thumb_style_tag == thumb_tag_id)
+            return;
+        _scroll.scrollbar_track_style_tag = track_tag_id;
+        _scroll.scrollbar_thumb_style_tag = thumb_tag_id;
+        release_scrollbar(_scroll.scrollbar_x);
+        release_scrollbar(_scroll.scrollbar_y);
+    }
+
+    void detail::ScrollableBlock::update_layout_min_size_force()
+    {
+        update_scroll_layout_min_size(zero_vec4(), _scroll.content_padding, {0.0f, 0.0f});
+    }
+
+    void detail::ScrollableBlock::update_scroll_layout_min_size(const amal::vec4 &margin,
+                                                                const amal::vec4 &base_padding,
+                                                                const amal::vec2 &style_min)
+    {
+        const auto overflow = scroll_overflow();
+        amal::vec4 padding = base_padding;
+        ensure_scrollbars();
+        if (overflow.y == OverflowMode::scroll && _scroll.scrollbar_y)
+            padding.z += _scroll.scrollbar_y->get_min_track_thickness();
+        if (overflow.x == OverflowMode::scroll && _scroll.scrollbar_x)
+            padding.w += _scroll.scrollbar_x->get_min_track_thickness();
+        update_layout_min_size_with(margin, padding);
+        auto required = required_size();
+        required.x = amal::max(required.x, style_min.x + margin.x + margin.z);
+        required.y = amal::max(required.y, style_min.y + margin.y + margin.w);
+
+        // A stretched box with local overflow handling consumes the size assigned by its parent.
+        // Its content remains available to the scrollbar, but does not enlarge the parent on that axis.
+        if (fill_width() && overflow.x != OverflowMode::visible) required.x = style_min.x + margin.x + margin.z;
+        if (fill_height() && overflow.y != OverflowMode::visible) required.y = style_min.y + margin.y + margin.w;
+        set_required_size(required);
     }
 
     void DrawBlock::update_layout_min_size_force()
     {
         const auto *style = draw_style();
-        amal::vec4 padding = sum_padding(draw_padding(), _content_padding);
-        ensure_scrollbars();
-        if ((_draw_flags & DrawBlockFlagBits::scrollbar_y) && _scrollbar_y && _scrollbar_y->is_visible())
-            padding.z += _scrollbar_y->get_min_track_thickness();
-        if ((_draw_flags & DrawBlockFlagBits::scrollbar_x) && _scrollbar_x && _scrollbar_x->is_visible())
-            padding.w += _scrollbar_x->get_min_track_thickness();
-        const amal::vec4 margin = draw_margin();
-        update_layout_min_size_with(margin, padding);
-        if (style)
-        {
-            auto required = required_size();
-            required.x = amal::max(required.x, amal::max(style->min_width(), 0.0f) + margin.x + margin.z);
-            required.y = amal::max(required.y, amal::max(style->min_height(), 0.0f) + margin.y + margin.w);
-            set_required_size(required);
-        }
+        const amal::vec2 style_min =
+            style ? amal::vec2{amal::max(style->min_width(), 0.0f), amal::max(style->min_height(), 0.0f)}
+                  : amal::vec2{0.0f, 0.0f};
+        update_scroll_layout_min_size(draw_margin(), sum_padding(draw_padding(), content_padding()), style_min);
     }
 
-    void DrawBlock::update_scroll_clip(const amal::vec2 &content_pos, const amal::vec2 &view_size)
+    void detail::ScrollableBlock::update_scroll_clip(const amal::vec2 &content_pos, const amal::vec2 &view_size)
     {
         const amal::vec4 own_clip = clip_id() != 0xFFFFu
                                         ? get_clip_rect(clip_id())
                                         : (parent() ? parent()->get_content_clip_rect() : get_main_viewport_rect());
-        const amal::vec4 clip =
-            _content_clip_rect_overridden
-                ? _content_clip_rect_override
+        const auto overflow = scroll_overflow();
+        amal::vec4 clip =
+            _scroll.clip_rect_overridden
+                ? _scroll.clip_rect_override
                 : detail::intersect_rects(own_clip, {content_pos.x, content_pos.y, view_size.x, view_size.y});
-        if (_content_clip_id == 0xFFFFu) _content_clip_id = push_clip_rect(clip);
-        else update_clip_rect(_content_clip_id, clip);
+        if (!_scroll.clip_rect_overridden && overflow.x == OverflowMode::visible)
+        {
+            clip.x = own_clip.x;
+            clip.z = own_clip.z;
+        }
+        if (!_scroll.clip_rect_overridden && overflow.y == OverflowMode::visible)
+        {
+            clip.y = own_clip.y;
+            clip.w = own_clip.w;
+        }
+        if (_scroll.content_clip_id == 0xFFFFu) _scroll.content_clip_id = push_clip_rect(clip);
+        else update_clip_rect(_scroll.content_clip_id, clip);
         for (auto *child : children)
-            if (child) child->set_clip_id(_content_clip_id);
+            if (child) child->set_clip_id(_scroll.content_clip_id);
     }
 
-    void DrawBlock::override_content_clip_rect(const amal::vec4 &rect)
+    void detail::ScrollableBlock::override_content_clip_rect(const amal::vec4 &rect)
     {
-        _content_clip_rect_overridden = true;
-        _content_clip_rect_override = rect;
-        if (_content_clip_id == 0xFFFFu) _content_clip_id = push_clip_rect(rect);
-        else update_clip_rect(_content_clip_id, rect);
+        _scroll.clip_rect_overridden = true;
+        _scroll.clip_rect_override = rect;
+        if (_scroll.content_clip_id == 0xFFFFu) _scroll.content_clip_id = push_clip_rect(rect);
+        else update_clip_rect(_scroll.content_clip_id, rect);
         for (auto *child : children)
-            if (child) child->set_clip_id(_content_clip_id);
+            if (child) child->set_clip_id(_scroll.content_clip_id);
     }
 
-    void DrawBlock::rebuild_scroll_clip_rect()
+    void detail::ScrollableBlock::rebuild_scroll_clip_rect() { rebuild_scroll_clip_rect(_scroll.content_padding); }
+
+    void detail::ScrollableBlock::rebuild_scroll_clip_rect(const amal::vec4 &padding)
     {
         if (clip_id() == 0xFFFFu) return;
-        const amal::vec4 padding = sum_padding(draw_padding(), _content_padding);
         const amal::vec2 content_pos = position() + amal::vec2{padding.x, padding.y};
-        const bool clip_ignores_padding_x = _draw_flags & DrawBlockFlagBits::clip_ignores_padding_x;
-        const bool clip_ignores_padding_y = _draw_flags & DrawBlockFlagBits::clip_ignores_padding_y;
-        const bool scroll_x_enabled = _draw_flags & DrawBlockFlagBits::scrollbar_x;
-        const bool scroll_y_enabled = _draw_flags & DrawBlockFlagBits::scrollbar_y;
-        const f32 bar_w = has_visible_scrollbar_y() && _scrollbar_y ? _scrollbar_y->get_min_track_thickness() : 0.0f;
-        const f32 bar_h = has_visible_scrollbar_x() && _scrollbar_x ? _scrollbar_x->get_min_track_thickness() : 0.0f;
+        const bool clip_ignores_padding_x = _scroll.flags & DrawBlockFlagBits::clip_ignores_padding_x;
+        const bool clip_ignores_padding_y = _scroll.flags & DrawBlockFlagBits::clip_ignores_padding_y;
+        const auto overflow = scroll_overflow();
+        const bool scroll_x_enabled = overflow.x == OverflowMode::auto_ || overflow.x == OverflowMode::scroll;
+        const bool scroll_y_enabled = overflow.y == OverflowMode::auto_ || overflow.y == OverflowMode::scroll;
+        const f32 bar_w =
+            has_visible_scrollbar_y() && _scroll.scrollbar_y ? _scroll.scrollbar_y->get_min_track_thickness() : 0.0f;
+        const f32 bar_h =
+            has_visible_scrollbar_x() && _scroll.scrollbar_x ? _scroll.scrollbar_x->get_min_track_thickness() : 0.0f;
         const amal::vec2 clip_pos{clip_ignores_padding_x ? position().x : content_pos.x,
                                   clip_ignores_padding_y ? position().y : content_pos.y};
         const amal::vec2 clip_view_size{
             clip_ignores_padding_x
                 ? amal::max(size().x - bar_w, 0.0f)
-                : (scroll_x_enabled ? _scroll_view_size.x : amal::max(size().x - padding.x - padding.z, 0.0f)),
+                : (scroll_x_enabled ? _scroll.view_size.x : amal::max(size().x - padding.x - padding.z, 0.0f)),
             clip_ignores_padding_y
                 ? amal::max(size().y - bar_h, 0.0f)
-                : (scroll_y_enabled ? _scroll_view_size.y : amal::max(size().y - padding.y - padding.w, 0.0f))};
+                : (scroll_y_enabled ? _scroll.view_size.y : amal::max(size().y - padding.y - padding.w, 0.0f))};
         update_scroll_clip(clip_pos, clip_view_size);
     }
 
-    void DrawBlock::request_scroll_layout_update(DrawReasonFlags reason)
+    void detail::ScrollableBlock::request_scroll_layout_update(DrawReasonFlags reason)
     {
         sync_clip_rect_cache();
         update_layout(true);
@@ -1043,14 +1169,25 @@ namespace auik
         mark_host_refresh_request();
     }
 
-    StyleUpdateFlags DrawBlock::update_style()
+    StyleUpdateFlags detail::ScrollableBlock::update_style()
     {
         StyleUpdateFlags out = Block::update_style();
+        if (_scroll.scrollbar_x) out |= _scroll.scrollbar_x->update_style_invalidated();
+        if (_scroll.scrollbar_y) out |= _scroll.scrollbar_y->update_style_invalidated();
+        return out;
+    }
+
+    StyleUpdateFlags DrawBlock::update_style()
+    {
+        StyleUpdateFlags out = detail::ScrollableBlock::update_style();
         if (_style_tag_id != 0u)
         {
             out |= resolve_style_selector(_style, id(), parent() ? parent()->id() : 0u, style_state());
             const auto &style = get_theme()->get_style(_style.id);
+            _scroll.style_id = _style.id;
             const auto style_mask = style.mask();
+            const auto *align = style.align_settings();
+            set_content_layout(align ? ChildLayoutFlags(align->flags) : default_child_layout_flags());
             amal::vec2 next_size = requested_size();
 
             // Block owns an explicit size separately from Widget's inline size. Its default
@@ -1064,20 +1201,24 @@ namespace auik
                               : ((style_mask & detail::StylePropertiesBits::height) ? style.height() : AUIK_SIZE_Y_FIT);
             set_requested_size(next_size);
         }
-        if (_scrollbar_x) out |= _scrollbar_x->update_style_invalidated();
-        if (_scrollbar_y) out |= _scrollbar_y->update_style_invalidated();
         return out;
     }
 
-    void DrawBlock::update_layout(bool min_size_known)
+    void detail::ScrollableBlock::update_layout(bool min_size_known)
+    {
+        update_scroll_layout(min_size_known, zero_vec4(), _scroll.content_padding, Block::resolved_inline_spacing());
+    }
+
+    void detail::ScrollableBlock::update_scroll_layout(bool min_size_known, const amal::vec4 &margin,
+                                                       const amal::vec4 &padding, f32 inline_spacing)
     {
         if (layout_measure_required(min_size_known)) update_layout_min_size_force();
 
-        if (_content_clip_rect_overridden) ensure_own_clip_rect(_content_clip_rect_override);
+        const auto resolved_overflow = scroll_overflow();
+
+        if (_scroll.clip_rect_overridden) ensure_own_clip_rect(_scroll.clip_rect_override);
         else if (parent()) set_clip_id(parent()->content_clip_id());
 
-        const amal::vec4 margin = draw_margin();
-        const amal::vec4 padding = sum_padding(draw_padding(), _content_padding);
         const amal::vec2 layout_origin = position();
         if (detail::is_fast_layout_update() && !is_fixed())
         {
@@ -1089,7 +1230,6 @@ namespace auik
             set_position({layout_origin.x + margin.x, layout_origin.y + margin.y});
             Widget::set_layout_size(inner_size);
             Widget::update_layout(true);
-            sync_draw_bounds();
 
             const amal::vec2 content_pos = position() + amal::vec2{padding.x, padding.y};
             const amal::vec2 raw_available_size = {amal::max(size().x - padding.x - padding.z, 0.0f),
@@ -1097,61 +1237,68 @@ namespace auik
             const amal::vec4 frame_clip = get_clip_rect(clip_id());
             const amal::vec4 visible_scroll_rect =
                 detail::intersect_rects(frame_clip, {position().x, position().y, size().x, size().y});
-            const bool scroll_x_enabled = _draw_flags & DrawBlockFlagBits::scrollbar_x;
-            const bool scroll_y_enabled = _draw_flags & DrawBlockFlagBits::scrollbar_y;
-            const bool need_scroll_y = scroll_y_enabled && _scrollbar_y && _scrollbar_y->is_visible();
-            const bool need_scroll_x = scroll_x_enabled && _scrollbar_x && _scrollbar_x->is_visible();
-            const f32 bar_w = need_scroll_y && _scrollbar_y ? _scrollbar_y->get_min_track_thickness() : 0.0f;
-            const f32 bar_h = need_scroll_x && _scrollbar_x ? _scrollbar_x->get_min_track_thickness() : 0.0f;
+            const bool scroll_x_enabled =
+                resolved_overflow.x == OverflowMode::auto_ || resolved_overflow.x == OverflowMode::scroll;
+            const bool scroll_y_enabled =
+                resolved_overflow.y == OverflowMode::auto_ || resolved_overflow.y == OverflowMode::scroll;
+            const bool need_scroll_y = scroll_y_enabled && _scroll.scrollbar_y && _scroll.scrollbar_y->is_visible();
+            const bool need_scroll_x = scroll_x_enabled && _scroll.scrollbar_x && _scroll.scrollbar_x->is_visible();
+            const f32 bar_w =
+                need_scroll_y && _scroll.scrollbar_y ? _scroll.scrollbar_y->get_min_track_thickness() : 0.0f;
+            const f32 bar_h =
+                need_scroll_x && _scroll.scrollbar_x ? _scroll.scrollbar_x->get_min_track_thickness() : 0.0f;
 
-            _scroll_view_size = {amal::max(raw_available_size.x - bar_w, 0.0f),
+            _scroll.view_size = {amal::max(raw_available_size.x - bar_w, 0.0f),
                                  amal::max(raw_available_size.y - bar_h, 0.0f)};
-            const bool clip_ignores_padding_x = _draw_flags & DrawBlockFlagBits::clip_ignores_padding_x;
-            const bool clip_ignores_padding_y = _draw_flags & DrawBlockFlagBits::clip_ignores_padding_y;
+            const bool clip_ignores_padding_x = _scroll.flags & DrawBlockFlagBits::clip_ignores_padding_x;
+            const bool clip_ignores_padding_y = _scroll.flags & DrawBlockFlagBits::clip_ignores_padding_y;
             const amal::vec2 clip_pos{clip_ignores_padding_x ? position().x : content_pos.x,
                                       clip_ignores_padding_y ? position().y : content_pos.y};
             const amal::vec2 clip_view_size{
-                clip_ignores_padding_x ? amal::max(size().x - bar_w, 0.0f) : _scroll_view_size.x,
-                clip_ignores_padding_y ? amal::max(size().y - bar_h, 0.0f) : _scroll_view_size.y};
+                clip_ignores_padding_x ? amal::max(size().x - bar_w, 0.0f) : _scroll.view_size.x,
+                clip_ignores_padding_y ? amal::max(size().y - bar_h, 0.0f) : _scroll.view_size.y};
             update_scroll_clip(clip_pos, clip_view_size);
-            if (_content_clip_rect_overridden) ensure_own_clip_rect(_content_clip_rect_override);
+            if (_scroll.clip_rect_overridden) ensure_own_clip_rect(_scroll.clip_rect_override);
             else set_clip_id(parent() ? parent()->content_clip_id() : clip_id());
 
-            if (_scrollbar_y && _scrollbar_y->is_visible())
+            if (_scroll.scrollbar_y && _scroll.scrollbar_y->is_visible())
             {
-                const amal::vec4 track_margin = _scrollbar_y->get_track_margin();
-                const f32 track_w = _scrollbar_y->get_min_track_thickness();
+                const amal::vec4 track_margin = _scroll.scrollbar_y->get_track_margin();
+                const f32 track_w = _scroll.scrollbar_y->get_min_track_thickness();
                 const f32 track_x =
                     visible_scroll_rect.x + amal::max(visible_scroll_rect.z - track_margin.z - track_w, 0.0f);
                 const f32 track_y = visible_scroll_rect.y + track_margin.y;
                 const f32 track_h = amal::max(visible_scroll_rect.w - track_margin.y - track_margin.w, 0.0f);
-                _scrollbar_y->configure({track_x, track_y}, {track_w, track_h}, _scroll_content_size.y,
-                                        _scroll_view_size.y);
+                _scroll.scrollbar_y->configure({track_x, track_y}, {track_w, track_h}, _scroll.content_size.y,
+                                               _scroll.view_size.y);
             }
-            if (_scrollbar_x && _scrollbar_x->is_visible())
+            if (_scroll.scrollbar_x && _scroll.scrollbar_x->is_visible())
             {
-                const amal::vec4 track_margin = _scrollbar_x->get_track_margin();
-                const f32 track_h = _scrollbar_x->get_min_track_thickness();
+                const amal::vec4 track_margin = _scroll.scrollbar_x->get_track_margin();
+                const f32 track_h = _scroll.scrollbar_x->get_min_track_thickness();
                 const f32 track_x = visible_scroll_rect.x + track_margin.x;
                 const f32 track_y =
                     visible_scroll_rect.y + amal::max(visible_scroll_rect.w - track_margin.w - track_h, 0.0f);
                 const f32 track_w = amal::max(visible_scroll_rect.z - bar_w - track_margin.x - track_margin.z, 0.0f);
-                _scrollbar_x->configure({track_x, track_y}, {track_w, track_h}, _scroll_content_size.x,
-                                        _scroll_view_size.x);
+                _scroll.scrollbar_x->configure({track_x, track_y}, {track_w, track_h}, _scroll.content_size.x,
+                                               _scroll.view_size.x);
             }
 
-            const amal::vec2 layout_view_size{need_scroll_x ? amal::max(_scroll_content_size.x, _scroll_view_size.x)
-                                                            : _scroll_view_size.x,
-                                              _scroll_view_size.y};
+            _scroll.max_offset = {scroll_x_enabled && _scroll.scrollbar_x ? _scroll.scrollbar_x->max_scroll() : 0.0f,
+                                  scroll_y_enabled && _scroll.scrollbar_y ? _scroll.scrollbar_y->max_scroll() : 0.0f};
+
+            const amal::vec2 layout_view_size{need_scroll_x ? amal::max(_scroll.content_size.x, _scroll.view_size.x)
+                                                            : _scroll.view_size.x,
+                                              _scroll.view_size.y};
             detail::layout_layer_children_fast_update(children, _child_layouts, DepthZone::background,
-                                                      {content_pos, _scroll_view_size}, resolved_inline_spacing(),
-                                                      _scroll_view_size.x);
+                                                      {content_pos, _scroll.view_size}, inline_spacing,
+                                                      _scroll.view_size.x);
             detail::layout_layer_children_fast_update(children, _child_layouts, DepthZone::work,
-                                                      {content_pos - _content_offset, layout_view_size},
-                                                      resolved_inline_spacing(), _scroll_view_size.x);
+                                                      {content_pos - _scroll.content_offset, layout_view_size},
+                                                      inline_spacing, _scroll.view_size.x);
             detail::layout_layer_children_fast_update(children, _child_layouts, DepthZone::foreground,
-                                                      {content_pos, _scroll_view_size}, resolved_inline_spacing(),
-                                                      _scroll_view_size.x);
+                                                      {content_pos, _scroll.view_size}, inline_spacing,
+                                                      _scroll.view_size.x);
             return;
         }
 
@@ -1167,7 +1314,6 @@ namespace auik
         set_position({layout_origin.x + margin.x, layout_origin.y + margin.y});
         Widget::set_layout_size(inner_size);
         Widget::update_layout(true);
-        sync_draw_bounds();
 
         const amal::vec2 content_pos = position() + amal::vec2{padding.x, padding.y};
         const amal::vec2 raw_available_size = {amal::max(size().x - padding.x - padding.z, 0.0f),
@@ -1177,10 +1323,14 @@ namespace auik
             detail::intersect_rects(frame_clip, {position().x, position().y, size().x, size().y});
         const amal::vec2 available_size = raw_available_size;
         ensure_scrollbars();
-        const bool scroll_x_enabled = _draw_flags & DrawBlockFlagBits::scrollbar_x;
-        const bool scroll_y_enabled = _draw_flags & DrawBlockFlagBits::scrollbar_y;
-        const f32 bar_w = scroll_y_enabled && _scrollbar_y ? _scrollbar_y->get_min_track_thickness() : 0.0f;
-        const f32 bar_h = scroll_x_enabled && _scrollbar_x ? _scrollbar_x->get_min_track_thickness() : 0.0f;
+        const OverflowMode overflow_x = resolved_overflow.x;
+        const OverflowMode overflow_y = resolved_overflow.y;
+        const bool scroll_x_enabled = overflow_x == OverflowMode::auto_ || overflow_x == OverflowMode::scroll;
+        const bool scroll_y_enabled = overflow_y == OverflowMode::auto_ || overflow_y == OverflowMode::scroll;
+        const f32 bar_w =
+            scroll_y_enabled && _scroll.scrollbar_y ? _scroll.scrollbar_y->get_min_track_thickness() : 0.0f;
+        const f32 bar_h =
+            scroll_x_enabled && _scroll.scrollbar_x ? _scroll.scrollbar_x->get_min_track_thickness() : 0.0f;
         auto with_scroll_trailing_padding = [padding](const amal::vec2 &content_size, bool scroll_x, bool scroll_y) {
             return content_size + amal::vec2{scroll_x ? padding.z : 0.0f, scroll_y ? padding.w : 0.0f};
         };
@@ -1189,144 +1339,150 @@ namespace auik
         // container's wrapping with the cached child sizes; measuring every child again here
         // duplicated the full subtree traversal performed before arrange.
         amal::vec2 children_layout_size = detail::compute_layer_children_required_size(
-            children, _child_layouts, DepthZone::work, resolved_inline_spacing(), 0.0f, false);
-        bool need_scroll_y = scroll_y_enabled && children_layout_size.y > available_size.y;
-        bool need_scroll_x = scroll_x_enabled && children_layout_size.x > available_size.x;
+            children, _child_layouts, DepthZone::work, inline_spacing, 0.0f, false);
+        bool need_scroll_y = overflow_y == OverflowMode::scroll ||
+                             (overflow_y == OverflowMode::auto_ && children_layout_size.y > available_size.y);
+        bool need_scroll_x = overflow_x == OverflowMode::scroll ||
+                             (overflow_x == OverflowMode::auto_ && children_layout_size.x > available_size.x);
         for (int i = 0; i < 2; ++i)
         {
             const f32 viewport_w = amal::max(available_size.x - (need_scroll_y ? bar_w : 0.0f), 0.0f);
             const f32 viewport_h = amal::max(available_size.y - (need_scroll_x ? bar_h : 0.0f), 0.0f);
             children_layout_size = detail::compute_layer_children_required_size(
-                children, _child_layouts, DepthZone::work, resolved_inline_spacing(), viewport_w, false);
-            const bool next_y = scroll_y_enabled && children_layout_size.y > viewport_h;
-            const bool next_x = scroll_x_enabled && children_layout_size.x > viewport_w;
+                children, _child_layouts, DepthZone::work, inline_spacing, viewport_w, false);
+            const bool next_y = overflow_y == OverflowMode::scroll ||
+                                (overflow_y == OverflowMode::auto_ && children_layout_size.y > viewport_h);
+            const bool next_x = overflow_x == OverflowMode::scroll ||
+                                (overflow_x == OverflowMode::auto_ && children_layout_size.x > viewport_w);
             if (next_y == need_scroll_y && next_x == need_scroll_x) break;
             need_scroll_y = next_y;
             need_scroll_x = next_x;
         }
 
-        _scroll_view_size = {amal::max(available_size.x - (need_scroll_y ? bar_w : 0.0f), 0.0f),
+        _scroll.view_size = {amal::max(available_size.x - (need_scroll_y ? bar_w : 0.0f), 0.0f),
                              amal::max(available_size.y - (need_scroll_x ? bar_h : 0.0f), 0.0f)};
-        _scroll_content_size = with_scroll_trailing_padding(children_layout_size, need_scroll_x, need_scroll_y);
-        const bool clip_ignores_padding_x = _draw_flags & DrawBlockFlagBits::clip_ignores_padding_x;
-        const bool clip_ignores_padding_y = _draw_flags & DrawBlockFlagBits::clip_ignores_padding_y;
+        _scroll.content_size = with_scroll_trailing_padding(children_layout_size, need_scroll_x, need_scroll_y);
+        const bool clip_ignores_padding_x = _scroll.flags & DrawBlockFlagBits::clip_ignores_padding_x;
+        const bool clip_ignores_padding_y = _scroll.flags & DrawBlockFlagBits::clip_ignores_padding_y;
         const amal::vec2 clip_pos{clip_ignores_padding_x ? position().x : content_pos.x,
                                   clip_ignores_padding_y ? position().y : content_pos.y};
         const amal::vec2 clip_view_size{
-            clip_ignores_padding_x ? amal::max(size().x - (need_scroll_y ? bar_w : 0.0f), 0.0f) : _scroll_view_size.x,
-            clip_ignores_padding_y ? amal::max(size().y - (need_scroll_x ? bar_h : 0.0f), 0.0f) : _scroll_view_size.y};
+            clip_ignores_padding_x ? amal::max(size().x - (need_scroll_y ? bar_w : 0.0f), 0.0f) : _scroll.view_size.x,
+            clip_ignores_padding_y ? amal::max(size().y - (need_scroll_x ? bar_h : 0.0f), 0.0f) : _scroll.view_size.y};
         update_scroll_clip(clip_pos, clip_view_size);
-        if (_content_clip_rect_overridden) ensure_own_clip_rect(_content_clip_rect_override);
+        if (_scroll.clip_rect_overridden) ensure_own_clip_rect(_scroll.clip_rect_override);
         else set_clip_id(parent() ? parent()->content_clip_id() : clip_id());
 
-        if (_scrollbar_x) _scrollbar_x->set_metrics(_scroll_content_size.x, _scroll_view_size.x);
-        if (_scrollbar_y) _scrollbar_y->set_metrics(_scroll_content_size.y, _scroll_view_size.y);
-        const amal::vec2 max_scroll{_scrollbar_x ? _scrollbar_x->max_scroll() : 0.0f,
-                                    _scrollbar_y ? _scrollbar_y->max_scroll() : 0.0f};
-        _content_offset = amal::clamp(_content_offset, amal::vec2{0.0f}, max_scroll);
-        if (_scrollbar_x) _scrollbar_x->set_scroll_offset(_content_offset.x);
-        if (_scrollbar_y) _scrollbar_y->set_scroll_offset(_content_offset.y);
+        _scroll.set_metrics(_scroll.content_size.x, _scroll.view_size.x, amal::axis::x);
+        _scroll.set_metrics(_scroll.content_size.y, _scroll.view_size.y, amal::axis::y);
+        const amal::vec2 max_scroll{scroll_x_enabled && _scroll.scrollbar_x ? _scroll.scrollbar_x->max_scroll() : 0.0f,
+                                    scroll_y_enabled && _scroll.scrollbar_y ? _scroll.scrollbar_y->max_scroll() : 0.0f};
+        _scroll.max_offset = max_scroll;
+        _scroll.content_offset = amal::clamp(_scroll.content_offset, amal::vec2{0.0f}, max_scroll);
 
-        const amal::vec2 pre_layout_children_size = _scroll_content_size;
-        amal::vec2 layout_view_size{need_scroll_x ? amal::max(_scroll_content_size.x, _scroll_view_size.x)
-                                                  : _scroll_view_size.x,
-                                    _scroll_view_size.y};
+        const amal::vec2 pre_layout_children_size = _scroll.content_size;
+        amal::vec2 layout_view_size{need_scroll_x ? amal::max(_scroll.content_size.x, _scroll.view_size.x)
+                                                  : _scroll.view_size.x,
+                                    _scroll.view_size.y};
         detail::layout_layer_children(this, children, _child_layouts, DepthZone::background,
-                                      {content_pos, _scroll_view_size}, resolved_inline_spacing(), _scroll_view_size.x);
+                                      {content_pos, _scroll.view_size}, inline_spacing, _scroll.view_size.x);
         detail::layout_layer_children(this, children, _child_layouts, DepthZone::work,
-                                      {content_pos - _content_offset, layout_view_size}, resolved_inline_spacing(),
-                                      _scroll_view_size.x);
+                                      {content_pos - _scroll.content_offset, layout_view_size}, inline_spacing,
+                                      _scroll.view_size.x);
         detail::layout_layer_children(this, children, _child_layouts, DepthZone::foreground,
-                                      {content_pos, _scroll_view_size}, resolved_inline_spacing(), _scroll_view_size.x);
+                                      {content_pos, _scroll.view_size}, inline_spacing, _scroll.view_size.x);
         const amal::vec2 laid_out_children_size = detail::compute_layer_children_required_size(
-            children, _child_layouts, DepthZone::work, resolved_inline_spacing(), layout_view_size.x, false);
+            children, _child_layouts, DepthZone::work, inline_spacing, layout_view_size.x, false);
         const amal::vec2 laid_out_scroll_content_size =
             with_scroll_trailing_padding(laid_out_children_size, need_scroll_x, need_scroll_y);
         if (laid_out_scroll_content_size != pre_layout_children_size)
         {
             children_layout_size = laid_out_children_size;
-            bool refined_need_y = scroll_y_enabled && children_layout_size.y > available_size.y;
-            bool refined_need_x = scroll_x_enabled && children_layout_size.x > available_size.x;
+            bool refined_need_y = overflow_y == OverflowMode::scroll ||
+                                  (overflow_y == OverflowMode::auto_ && children_layout_size.y > available_size.y);
+            bool refined_need_x = overflow_x == OverflowMode::scroll ||
+                                  (overflow_x == OverflowMode::auto_ && children_layout_size.x > available_size.x);
             for (int i = 0; i < 2; ++i)
             {
                 const f32 viewport_w = amal::max(available_size.x - (refined_need_y ? bar_w : 0.0f), 0.0f);
                 const f32 viewport_h = amal::max(available_size.y - (refined_need_x ? bar_h : 0.0f), 0.0f);
                 const f32 layout_w = refined_need_x ? amal::max(children_layout_size.x, viewport_w) : viewport_w;
                 detail::layout_layer_children(this, children, _child_layouts, DepthZone::background,
-                                              {content_pos, _scroll_view_size}, resolved_inline_spacing(), viewport_w);
+                                              {content_pos, _scroll.view_size}, inline_spacing, viewport_w);
                 detail::layout_layer_children(this, children, _child_layouts, DepthZone::work,
-                                              {content_pos - _content_offset, {layout_w, viewport_h}},
-                                              resolved_inline_spacing(), viewport_w);
+                                              {content_pos - _scroll.content_offset, {layout_w, viewport_h}},
+                                              inline_spacing, viewport_w);
                 detail::layout_layer_children(this, children, _child_layouts, DepthZone::foreground,
-                                              {content_pos, _scroll_view_size}, resolved_inline_spacing(), viewport_w);
+                                              {content_pos, _scroll.view_size}, inline_spacing, viewport_w);
                 children_layout_size = detail::compute_layer_children_required_size(
-                    children, _child_layouts, DepthZone::work, resolved_inline_spacing(), layout_w, false);
-                const bool next_y = scroll_y_enabled && children_layout_size.y > viewport_h;
-                const bool next_x = scroll_x_enabled && children_layout_size.x > viewport_w;
+                    children, _child_layouts, DepthZone::work, inline_spacing, layout_w, false);
+                const bool next_y = overflow_y == OverflowMode::scroll ||
+                                    (overflow_y == OverflowMode::auto_ && children_layout_size.y > viewport_h);
+                const bool next_x = overflow_x == OverflowMode::scroll ||
+                                    (overflow_x == OverflowMode::auto_ && children_layout_size.x > viewport_w);
                 if (next_y == refined_need_y && next_x == refined_need_x) break;
                 refined_need_y = next_y;
                 refined_need_x = next_x;
             }
             need_scroll_y = refined_need_y;
             need_scroll_x = refined_need_x;
-            _scroll_content_size = with_scroll_trailing_padding(children_layout_size, need_scroll_x, need_scroll_y);
-            _scroll_view_size = {amal::max(available_size.x - (need_scroll_y ? bar_w : 0.0f), 0.0f),
+            _scroll.content_size = with_scroll_trailing_padding(children_layout_size, need_scroll_x, need_scroll_y);
+            _scroll.view_size = {amal::max(available_size.x - (need_scroll_y ? bar_w : 0.0f), 0.0f),
                                  amal::max(available_size.y - (need_scroll_x ? bar_h : 0.0f), 0.0f)};
             const amal::vec2 refined_clip_view_size{
                 clip_ignores_padding_x ? amal::max(size().x - (need_scroll_y ? bar_w : 0.0f), 0.0f)
-                                       : _scroll_view_size.x,
+                                       : _scroll.view_size.x,
                 clip_ignores_padding_y ? amal::max(size().y - (need_scroll_x ? bar_h : 0.0f), 0.0f)
-                                       : _scroll_view_size.y};
+                                       : _scroll.view_size.y};
             update_scroll_clip(clip_pos, refined_clip_view_size);
-            if (_scrollbar_x) _scrollbar_x->set_metrics(_scroll_content_size.x, _scroll_view_size.x);
-            if (_scrollbar_y) _scrollbar_y->set_metrics(_scroll_content_size.y, _scroll_view_size.y);
-            const amal::vec2 refined_max_scroll{_scrollbar_x ? _scrollbar_x->max_scroll() : 0.0f,
-                                                _scrollbar_y ? _scrollbar_y->max_scroll() : 0.0f};
-            _content_offset = amal::clamp(_content_offset, amal::vec2{0.0f}, refined_max_scroll);
-            layout_view_size = {need_scroll_x ? amal::max(_scroll_content_size.x, _scroll_view_size.x)
-                                              : _scroll_view_size.x,
-                                _scroll_view_size.y};
+            _scroll.set_metrics(_scroll.content_size.x, _scroll.view_size.x, amal::axis::x);
+            _scroll.set_metrics(_scroll.content_size.y, _scroll.view_size.y, amal::axis::y);
+            const amal::vec2 refined_max_scroll{
+                scroll_x_enabled && _scroll.scrollbar_x ? _scroll.scrollbar_x->max_scroll() : 0.0f,
+                scroll_y_enabled && _scroll.scrollbar_y ? _scroll.scrollbar_y->max_scroll() : 0.0f};
+            _scroll.max_offset = refined_max_scroll;
+            _scroll.content_offset = amal::clamp(_scroll.content_offset, amal::vec2{0.0f}, refined_max_scroll);
+            layout_view_size = {need_scroll_x ? amal::max(_scroll.content_size.x, _scroll.view_size.x)
+                                              : _scroll.view_size.x,
+                                _scroll.view_size.y};
             detail::layout_layer_children(this, children, _child_layouts, DepthZone::background,
-                                          {content_pos, _scroll_view_size}, resolved_inline_spacing(),
-                                          _scroll_view_size.x);
+                                          {content_pos, _scroll.view_size}, inline_spacing, _scroll.view_size.x);
             detail::layout_layer_children(this, children, _child_layouts, DepthZone::work,
-                                          {content_pos - _content_offset, layout_view_size}, resolved_inline_spacing(),
-                                          _scroll_view_size.x);
+                                          {content_pos - _scroll.content_offset, layout_view_size}, inline_spacing,
+                                          _scroll.view_size.x);
             detail::layout_layer_children(this, children, _child_layouts, DepthZone::foreground,
-                                          {content_pos, _scroll_view_size}, resolved_inline_spacing(),
-                                          _scroll_view_size.x);
+                                          {content_pos, _scroll.view_size}, inline_spacing, _scroll.view_size.x);
         }
 
-        const bool was_scrollbar_y_visible = _scrollbar_y && _scrollbar_y->is_visible();
-        const bool was_scrollbar_x_visible = _scrollbar_x && _scrollbar_x->is_visible();
-        if (need_scroll_y && _scrollbar_y)
+        const bool was_scrollbar_y_visible = _scroll.scrollbar_y && _scroll.scrollbar_y->is_visible();
+        const bool was_scrollbar_x_visible = _scroll.scrollbar_x && _scroll.scrollbar_x->is_visible();
+        if (need_scroll_y && _scroll.scrollbar_y)
         {
-            const amal::vec4 track_margin = _scrollbar_y->get_track_margin();
-            const f32 track_w = _scrollbar_y->get_min_track_thickness();
+            const amal::vec4 track_margin = _scroll.scrollbar_y->get_track_margin();
+            const f32 track_w = _scroll.scrollbar_y->get_min_track_thickness();
             const f32 track_x =
                 visible_scroll_rect.x + amal::max(visible_scroll_rect.z - track_margin.z - track_w, 0.0f);
             const f32 track_y = visible_scroll_rect.y + track_margin.y;
             const f32 track_h = amal::max(visible_scroll_rect.w - track_margin.y - track_margin.w, 0.0f);
             const amal::vec2 track_pos = {track_x, track_y};
             const amal::vec2 track_size = {track_w, track_h};
-            _scrollbar_y->set_visible();
-            _scrollbar_y->sync_widget_flags();
-            _scrollbar_y->set_clip_id(clip_id());
-            _scrollbar_y->set_scroll_offset(_content_offset.y);
-            _scrollbar_y->configure(track_pos, track_size, _scroll_content_size.y, _scroll_view_size.y);
-            _content_offset.y = _scrollbar_y->scroll_offset();
+            _scroll.scrollbar_y->set_visible();
+            _scroll.scrollbar_y->sync_widget_flags();
+            _scroll.scrollbar_y->set_clip_id(clip_id());
+            _scroll.scrollbar_y->configure(track_pos, track_size, _scroll.content_size.y, _scroll.view_size.y);
         }
-        else if (_scrollbar_y)
+        else if (_scroll.scrollbar_y)
         {
-            if (_scrollbar_y->is_visible()) _scrollbar_y->invalidate_draw_commands(DrawReasonBits::layout);
-            _scrollbar_y->unset_visible();
-            _scrollbar_y->sync_widget_flags();
+            if (_scroll.scrollbar_y->is_visible())
+                _scroll.scrollbar_y->invalidate_draw_commands(DrawReasonBits::layout);
+            _scroll.scrollbar_y->unset_visible();
+            _scroll.scrollbar_y->sync_widget_flags();
         }
 
-        if (need_scroll_x && _scrollbar_x)
+        if (need_scroll_x && _scroll.scrollbar_x)
         {
-            const amal::vec4 track_margin = _scrollbar_x->get_track_margin();
-            const f32 track_h = _scrollbar_x->get_min_track_thickness();
+            const amal::vec4 track_margin = _scroll.scrollbar_x->get_track_margin();
+            const f32 track_h = _scroll.scrollbar_x->get_min_track_thickness();
             const f32 track_x = visible_scroll_rect.x + track_margin.x;
             const f32 track_y =
                 visible_scroll_rect.y + amal::max(visible_scroll_rect.w - track_margin.w - track_h, 0.0f);
@@ -1334,22 +1490,21 @@ namespace auik
                 visible_scroll_rect.z - (need_scroll_y ? bar_w : 0.0f) - track_margin.x - track_margin.z, 0.0f);
             const amal::vec2 track_pos = {track_x, track_y};
             const amal::vec2 track_size = {track_w, track_h};
-            _scrollbar_x->set_visible();
-            _scrollbar_x->sync_widget_flags();
-            _scrollbar_x->set_clip_id(clip_id());
-            _scrollbar_x->set_scroll_offset(_content_offset.x);
-            _scrollbar_x->configure(track_pos, track_size, _scroll_content_size.x, _scroll_view_size.x);
-            _content_offset.x = _scrollbar_x->scroll_offset();
+            _scroll.scrollbar_x->set_visible();
+            _scroll.scrollbar_x->sync_widget_flags();
+            _scroll.scrollbar_x->set_clip_id(clip_id());
+            _scroll.scrollbar_x->configure(track_pos, track_size, _scroll.content_size.x, _scroll.view_size.x);
         }
-        else if (_scrollbar_x)
+        else if (_scroll.scrollbar_x)
         {
-            if (_scrollbar_x->is_visible()) _scrollbar_x->invalidate_draw_commands(DrawReasonBits::layout);
-            _scrollbar_x->unset_visible();
-            _scrollbar_x->sync_widget_flags();
+            if (_scroll.scrollbar_x->is_visible())
+                _scroll.scrollbar_x->invalidate_draw_commands(DrawReasonBits::layout);
+            _scroll.scrollbar_x->unset_visible();
+            _scroll.scrollbar_x->sync_widget_flags();
         }
 
-        const bool is_scrollbar_y_visible = _scrollbar_y && _scrollbar_y->is_visible();
-        const bool is_scrollbar_x_visible = _scrollbar_x && _scrollbar_x->is_visible();
+        const bool is_scrollbar_y_visible = _scroll.scrollbar_y && _scroll.scrollbar_y->is_visible();
+        const bool is_scrollbar_x_visible = _scroll.scrollbar_x && _scroll.scrollbar_x->is_visible();
         const bool needs_scroll_events = is_scrollbar_y_visible || is_scrollbar_x_visible;
         const bool user_click = _user_bind && _user_bind->on_click_fn;
         const bool user_drag = _user_bind && _user_bind->on_drag_fn;
@@ -1368,43 +1523,60 @@ namespace auik
         }
     }
 
-    void DrawBlock::translate(const amal::vec2 &delta)
+    void DrawBlock::update_layout(bool min_size_known)
+    {
+        update_scroll_layout(min_size_known, draw_margin(), sum_padding(draw_padding(), content_padding()),
+                             resolved_inline_spacing());
+        sync_draw_bounds();
+    }
+
+    void detail::ScrollableBlock::translate(const amal::vec2 &delta)
     {
         if (delta.x == 0.0f && delta.y == 0.0f) return;
         Widget::translate(delta);
-        _bg_rect.bounds.offset += delta;
-        if (_scrollbar_x) _scrollbar_x->translate(delta);
-        if (_scrollbar_y) _scrollbar_y->translate(delta);
-        if (_content_clip_rect_overridden)
+        if (_scroll.scrollbar_x) _scroll.scrollbar_x->translate(delta);
+        if (_scroll.scrollbar_y) _scroll.scrollbar_y->translate(delta);
+        if (_scroll.clip_rect_overridden)
         {
-            _content_clip_rect_override.x += delta.x;
-            _content_clip_rect_override.y += delta.y;
+            _scroll.clip_rect_override.x += delta.x;
+            _scroll.clip_rect_override.y += delta.y;
         }
         rebuild_scroll_clip_rect();
         for (auto *child : children)
         {
-            if (!child) continue;
+            if (!child || !child->is_visible()) continue;
             child->translate(delta);
         }
     }
 
-    void DrawBlock::reset_clip_rect_records()
+    void DrawBlock::translate(const amal::vec2 &delta)
     {
-        Block::reset_clip_rect_records();
-        _bg_rect.clip_id = 0xFFFFu;
-        _content_clip_id = 0xFFFFu;
-        if (_scrollbar_x) _scrollbar_x->reset_clip_rect_records();
-        if (_scrollbar_y) _scrollbar_y->reset_clip_rect_records();
+        detail::ScrollableBlock::translate(delta);
+        _bg_rect.bounds.offset += delta;
+        rebuild_scroll_clip_rect(sum_padding(draw_padding(), content_padding()));
     }
 
-    void DrawBlock::rebuild_clip_rects()
+    void detail::ScrollableBlock::reset_clip_rect_records()
     {
-        if (_content_clip_rect_overridden) ensure_own_clip_rect(_content_clip_rect_override);
+        Block::reset_clip_rect_records();
+        _scroll.content_clip_id = 0xFFFFu;
+        if (_scroll.scrollbar_x) _scroll.scrollbar_x->reset_clip_rect_records();
+        if (_scroll.scrollbar_y) _scroll.scrollbar_y->reset_clip_rect_records();
+    }
+
+    void DrawBlock::reset_clip_rect_records()
+    {
+        detail::ScrollableBlock::reset_clip_rect_records();
+        _bg_rect.clip_id = 0xFFFFu;
+    }
+
+    void detail::ScrollableBlock::rebuild_clip_rects()
+    {
+        if (_scroll.clip_rect_overridden) ensure_own_clip_rect(_scroll.clip_rect_override);
         else if (parent()) set_clip_id(parent()->content_clip_id());
-        _bg_rect.clip_id = clip_id();
         rebuild_scroll_clip_rect();
-        if (_scrollbar_x) _scrollbar_x->rebuild_clip_rects();
-        if (_scrollbar_y) _scrollbar_y->rebuild_clip_rects();
+        if (_scroll.scrollbar_x) _scroll.scrollbar_x->rebuild_clip_rects();
+        if (_scroll.scrollbar_y) _scroll.scrollbar_y->rebuild_clip_rects();
         for (auto *child : children)
         {
             if (!child || !child->is_visible()) continue;
@@ -1412,29 +1584,48 @@ namespace auik
         }
     }
 
-    void DrawBlock::reset_draw_records()
+    void DrawBlock::rebuild_clip_rects()
     {
-        Block::reset_draw_records();
-        _bg_draw_id = {};
-        if (_scrollbar_x) _scrollbar_x->reset_draw_records();
-        if (_scrollbar_y) _scrollbar_y->reset_draw_records();
+        detail::ScrollableBlock::rebuild_clip_rects();
+        _bg_rect.clip_id = clip_id();
+        rebuild_scroll_clip_rect(sum_padding(draw_padding(), content_padding()));
     }
 
-    u32 DrawBlock::get_depth_requirement() const
+    void detail::ScrollableBlock::reset_draw_records()
+    {
+        Block::reset_draw_records();
+        if (_scroll.scrollbar_x) _scroll.scrollbar_x->reset_draw_records();
+        if (_scroll.scrollbar_y) _scroll.scrollbar_y->reset_draw_records();
+    }
+
+    void DrawBlock::reset_draw_records()
+    {
+        detail::ScrollableBlock::reset_draw_records();
+        _bg_draw_id = {};
+    }
+
+    void detail::ScrollableBlock::invalidate_style()
+    {
+        Block::invalidate_style();
+        if (_scroll.scrollbar_x) _scroll.scrollbar_x->invalidate_style();
+        if (_scroll.scrollbar_y) _scroll.scrollbar_y->invalidate_style();
+    }
+
+    u32 detail::ScrollableBlock::get_depth_requirement() const
     {
         u32 requirement = Block::get_depth_requirement();
-        if (_scrollbar_x && _scrollbar_x->is_visible()) requirement += _scrollbar_x->get_depth_requirement();
-        if (_scrollbar_y && _scrollbar_y->is_visible()) requirement += _scrollbar_y->get_depth_requirement();
+        if (_scroll.scrollbar_x && _scroll.scrollbar_x->is_visible())
+            requirement += _scroll.scrollbar_x->get_depth_requirement();
+        if (_scroll.scrollbar_y && _scroll.scrollbar_y->is_visible())
+            requirement += _scroll.scrollbar_y->get_depth_requirement();
         return requirement;
     }
 
-    void DrawBlock::update_depth(const amal::vec2 &depth_range)
+    void detail::ScrollableBlock::update_depth(const amal::vec2 &depth_range)
     {
         Widget::update_depth(depth_range);
         DepthCursor cursor(this->depth_range(), get_depth_requirement());
-        const amal::vec2 bg_range = cursor.next(1u);
-        _bg_rect.depth = next_depth(bg_range);
-        _bg_rect.hit_depth = _bg_rect.depth;
+        cursor.next(1u);
         auto update_layer = [&](DepthZone layer) {
             for (size_t i = 0u; i < children.size(); ++i)
             {
@@ -1447,24 +1638,49 @@ namespace auik
         update_layer(DepthZone::background);
         update_layer(DepthZone::work);
         update_layer(DepthZone::foreground);
-        if (_scrollbar_x && _scrollbar_x->is_visible())
-            _scrollbar_x->update_depth(cursor.next(_scrollbar_x->get_depth_requirement()));
-        if (_scrollbar_y && _scrollbar_y->is_visible())
-            _scrollbar_y->update_depth(cursor.next(_scrollbar_y->get_depth_requirement()));
+        if (_scroll.scrollbar_x && _scroll.scrollbar_x->is_visible())
+            _scroll.scrollbar_x->update_depth(cursor.next(_scroll.scrollbar_x->get_depth_requirement()));
+        if (_scroll.scrollbar_y && _scroll.scrollbar_y->is_visible())
+            _scroll.scrollbar_y->update_depth(cursor.next(_scroll.scrollbar_y->get_depth_requirement()));
     }
 
-    void DrawBlock::back_hit_depth()
+    void DrawBlock::update_depth(const amal::vec2 &depth_range)
+    {
+        detail::ScrollableBlock::update_depth(depth_range);
+        DepthCursor cursor(this->depth_range(), get_depth_requirement());
+        _bg_rect.depth = next_depth(cursor.next(1u));
+        _bg_rect.hit_depth = _bg_rect.depth;
+    }
+
+    void detail::ScrollableBlock::back_hit_depth()
     {
         Block::back_hit_depth();
-        if (_scrollbar_x) _scrollbar_x->back_hit_depth();
-        if (_scrollbar_y) _scrollbar_y->back_hit_depth();
+        if (_scroll.scrollbar_x) _scroll.scrollbar_x->back_hit_depth();
+        if (_scroll.scrollbar_y) _scroll.scrollbar_y->back_hit_depth();
     }
 
-    void DrawBlock::restore_hit_depth()
+    void detail::ScrollableBlock::restore_hit_depth()
     {
         Block::restore_hit_depth();
-        if (_scrollbar_x) _scrollbar_x->restore_hit_depth();
-        if (_scrollbar_y) _scrollbar_y->restore_hit_depth();
+        if (_scroll.scrollbar_x) _scroll.scrollbar_x->restore_hit_depth();
+        if (_scroll.scrollbar_y) _scroll.scrollbar_y->restore_hit_depth();
+    }
+
+    void detail::ScrollableBlock::draw(DrawCtx &ctx)
+    {
+        if (!is_visible() && !(ctx.reason & DrawReasonBits::invalidate)) return;
+        Block::draw(ctx);
+        const bool invalidating = ctx.reason & DrawReasonBits::invalidate;
+        if (_scroll.scrollbar_y && (_scroll.scrollbar_y->is_visible() || invalidating))
+        {
+            DrawCtx scrollbar_ctx = ctx;
+            _scroll.scrollbar_y->draw_local(scrollbar_ctx);
+        }
+        if (_scroll.scrollbar_x && (_scroll.scrollbar_x->is_visible() || invalidating))
+        {
+            DrawCtx scrollbar_ctx = ctx;
+            _scroll.scrollbar_x->draw_local(scrollbar_ctx);
+        }
     }
 
     void DrawBlock::draw(DrawCtx &ctx)
@@ -1476,20 +1692,12 @@ namespace auik
             QuadsInstanceData bg{};
             bg.rect = _bg_rect.bounds;
             bg.z_order = _bg_rect.depth;
-            const bool visible = fill_quads_instance_by_style(*draw_style(), clip_id(), bg);
+            const Style &style = *draw_style();
+            const bool visible = fill_quads_instance_by_style(style, clip_id(), bg);
+            set_quads_border_mask(bg, style.border_mask() & ~_border_mask_clear);
             emit_quads_instance(ctx, quads_stream, _bg_draw_id, bg, _bg_rect, visible, can_emit_hit(ctx));
         }
-        Block::draw(ctx);
-        if (_scrollbar_y && _scrollbar_y->is_visible())
-        {
-            DrawCtx scrollbar_ctx = ctx;
-            _scrollbar_y->draw_local(scrollbar_ctx);
-        }
-        if (_scrollbar_x && _scrollbar_x->is_visible())
-        {
-            DrawCtx scrollbar_ctx = ctx;
-            _scrollbar_x->draw_local(scrollbar_ctx);
-        }
+        detail::ScrollableBlock::draw(ctx);
     }
 
     WidgetRef::WidgetRef(Widget *target, WidgetFlags widget_flags)
@@ -1603,6 +1811,19 @@ namespace auik
     {
         Widget::reset_draw_records();
         if (_target && _ref_active) _target->reset_draw_records();
+    }
+
+    void WidgetRef::invalidate_style()
+    {
+        Widget::invalidate_style();
+        if (_target && _ref_active) _target->invalidate_style();
+    }
+
+    bool WidgetRef::update_locale()
+    {
+        bool changed = Widget::update_locale();
+        if (_target && _ref_active) changed |= _target->update_locale();
+        return changed;
     }
 
     u32 WidgetRef::get_depth_requirement() const
@@ -1848,6 +2069,21 @@ namespace auik
         }
     }
 
+    void WidgetStack::invalidate_style()
+    {
+        Widget::invalidate_style();
+        for (auto *child : _children)
+            if (child) child->invalidate_style();
+    }
+
+    bool WidgetStack::update_locale()
+    {
+        bool changed = Widget::update_locale();
+        for (auto *child : _children)
+            if (child) changed |= child->update_locale();
+        return changed;
+    }
+
     u32 WidgetStack::get_depth_requirement() const
     {
         u32 requirement = 1u;
@@ -1946,32 +2182,46 @@ namespace auik
         Widget::on_detach();
     }
 
+    void WidgetStack::add_state_flags_inherit(WidgetStateFlags flags)
+    {
+        Widget::add_state_flags_inherit(flags);
+        if ((flags & WidgetStateFlagBits::visible) && !is_visible()) flags &= ~WidgetStateFlagBits::visible;
+        for (auto *child : _children)
+            if (child) child->add_state_flags_inherit(flags);
+    }
+
+    void WidgetStack::remove_state_flags_inherit(WidgetStateFlags flags)
+    {
+        Widget::remove_state_flags_inherit(flags);
+        for (auto *child : _children)
+            if (child) child->remove_state_flags_inherit(flags);
+    }
+
     amal::vec2 WidgetStack::requested_size() const
     {
         if (auto *child = active_child()) return child->requested_size();
         return Widget::requested_size();
     }
 
-    void DrawBlock::on_scroll(const amal::vec2 &delta)
+    void detail::ScrollableBlock::on_scroll(const amal::vec2 &delta)
     {
         const amal::vec2 step = -delta * f32(AUIK_SCROLL_STEP);
-        const amal::vec2 old_offset = _content_offset;
-        if (_scrollbar_y && _scrollbar_y->is_visible())
-        {
-            _scrollbar_y->set_scroll_offset(_content_offset.y);
-            _scrollbar_y->scroll_by_pixels(step.y);
-            _content_offset.y = _scrollbar_y->scroll_offset();
-        }
-        if (_scrollbar_x && _scrollbar_x->is_visible())
-        {
-            _scrollbar_x->set_scroll_offset(_content_offset.x);
-            _scrollbar_x->scroll_by_pixels(step.x);
-            _content_offset.x = _scrollbar_x->scroll_offset();
-        }
-        if (_content_offset != old_offset) request_scroll_layout_update(DrawReasonBits::layout);
+        if (_scroll.scrollbar_y && _scroll.scrollbar_y->is_visible()) _scroll.scroll_by(step.y, amal::axis::y);
+        if (_scroll.scrollbar_x && _scroll.scrollbar_x->is_visible()) _scroll.scroll_by(step.x, amal::axis::x);
     }
 
-    void DrawBlock::on_click(MouseKey key, KeyPressState state, u32 click_count)
+    void detail::ScrollableBlock::set_scroll_offset(const amal::vec2 &value)
+    {
+        const amal::vec2 max_scroll{_scroll.scrollbar_x ? _scroll.scrollbar_x->max_scroll() : 0.0f,
+                                    _scroll.scrollbar_y ? _scroll.scrollbar_y->max_scroll() : 0.0f};
+        _scroll.max_offset = max_scroll;
+        const amal::vec2 next = amal::clamp(value, amal::vec2{0.0f}, max_scroll);
+        if (next == _scroll.content_offset) return;
+        _scroll.content_offset = next;
+        request_scroll_layout_update(DrawReasonBits::layout);
+    }
+
+    void detail::ScrollableBlock::on_click(MouseKey key, KeyPressState state, u32 click_count)
     {
         (void)click_count;
         if (key != MouseKey::left || state != KeyPressState::press) return;
@@ -1984,50 +2234,48 @@ namespace auik
         }
 
         bool is_offset_changed = false;
-        if (_scrollbar_y && _scrollbar_y->is_visible() &&
+        if (_scroll.scrollbar_y && _scroll.scrollbar_y->is_visible() &&
             (ctx.hover_id.tag_id == AUIK_TAG_SCROLLBAR_TRACK_Y || ctx.hover_id.tag_id == AUIK_TAG_SCROLLBAR_THUMB_Y))
         {
-            _scrollbar_y->set_scroll_offset(_content_offset.y);
-            if (ctx.hover_id.tag_id == AUIK_TAG_SCROLLBAR_THUMB_Y) _scrollbar_y->begin_thumb_drag(ctx.io.mouse_pos);
+            if (ctx.hover_id.tag_id == AUIK_TAG_SCROLLBAR_THUMB_Y)
+                _scroll.scrollbar_y->begin_thumb_drag(ctx.io.mouse_pos);
             else
             {
-                is_offset_changed = _scrollbar_y->scroll_to_track_click(ctx.io.mouse_pos) || is_offset_changed;
+                is_offset_changed = _scroll.scrollbar_y->scroll_to_track_click(ctx.io.mouse_pos) || is_offset_changed;
                 activate_scrollbar_thumb_style(this, AUIK_TAG_SCROLLBAR_THUMB_Y);
             }
-            _content_offset.y = _scrollbar_y->scroll_offset();
         }
 
-        if (_scrollbar_x && _scrollbar_x->is_visible() &&
+        if (_scroll.scrollbar_x && _scroll.scrollbar_x->is_visible() &&
             (ctx.hover_id.tag_id == AUIK_TAG_SCROLLBAR_TRACK_X || ctx.hover_id.tag_id == AUIK_TAG_SCROLLBAR_THUMB_X))
         {
-            _scrollbar_x->set_scroll_offset(_content_offset.x);
-            if (ctx.hover_id.tag_id == AUIK_TAG_SCROLLBAR_THUMB_X) _scrollbar_x->begin_thumb_drag(ctx.io.mouse_pos);
+            if (ctx.hover_id.tag_id == AUIK_TAG_SCROLLBAR_THUMB_X)
+                _scroll.scrollbar_x->begin_thumb_drag(ctx.io.mouse_pos);
             else
             {
-                is_offset_changed = _scrollbar_x->scroll_to_track_click(ctx.io.mouse_pos) || is_offset_changed;
+                is_offset_changed = _scroll.scrollbar_x->scroll_to_track_click(ctx.io.mouse_pos) || is_offset_changed;
                 activate_scrollbar_thumb_style(this, AUIK_TAG_SCROLLBAR_THUMB_X);
             }
-            _content_offset.x = _scrollbar_x->scroll_offset();
         }
 
-        if (is_offset_changed) request_scroll_layout_update(DrawReasonBits::layout);
+        (void)is_offset_changed;
     }
 
-    void DrawBlock::on_drag(const amal::vec2 &delta, KeyPressState state)
+    void detail::ScrollableBlock::on_drag(const amal::vec2 &delta, KeyPressState state)
     {
         auto &ctx = detail::get_context();
         const auto drag_id = ctx.io.drag_id;
         const bool drag_scrollbar_y =
-            _scrollbar_y && _scrollbar_y->is_visible() && detail::is_scrollbar_y_drag(drag_id, id());
+            _scroll.scrollbar_y && _scroll.scrollbar_y->is_visible() && detail::is_scrollbar_y_drag(drag_id, id());
         const bool drag_scrollbar_x =
-            _scrollbar_x && _scrollbar_x->is_visible() && detail::is_scrollbar_x_drag(drag_id, id());
+            _scroll.scrollbar_x && _scroll.scrollbar_x->is_visible() && detail::is_scrollbar_x_drag(drag_id, id());
         if (!drag_scrollbar_y && !drag_scrollbar_x) return;
 
         const bool thumb_drag = detail::is_scrollbar_thumb_drag(drag_id);
         if (state == KeyPressState::press)
         {
-            if (thumb_drag && drag_scrollbar_y) _scrollbar_y->begin_thumb_drag(ctx.io.mouse_pos);
-            if (thumb_drag && drag_scrollbar_x) _scrollbar_x->begin_thumb_drag(ctx.io.mouse_pos);
+            if (thumb_drag && drag_scrollbar_y) _scroll.scrollbar_y->begin_thumb_drag(ctx.io.mouse_pos);
+            if (thumb_drag && drag_scrollbar_x) _scroll.scrollbar_x->begin_thumb_drag(ctx.io.mouse_pos);
             return;
         }
         if (state == KeyPressState::release) return;
@@ -2035,19 +2283,15 @@ namespace auik
         bool is_offset_changed = false;
         if (drag_scrollbar_y)
         {
-            _scrollbar_y->set_scroll_offset(_content_offset.y);
-            is_offset_changed = thumb_drag ? _scrollbar_y->scroll_thumb_to_mouse_pos(ctx.io.mouse_pos)
-                                           : _scrollbar_y->scroll_thumb_by_drag_delta(delta);
-            _content_offset.y = _scrollbar_y->scroll_offset();
+            is_offset_changed = thumb_drag ? _scroll.scrollbar_y->scroll_thumb_to_mouse_pos(ctx.io.mouse_pos)
+                                           : _scroll.scrollbar_y->scroll_thumb_by_drag_delta(delta);
         }
         if (drag_scrollbar_x)
         {
-            _scrollbar_x->set_scroll_offset(_content_offset.x);
-            is_offset_changed = thumb_drag ? _scrollbar_x->scroll_thumb_to_mouse_pos(ctx.io.mouse_pos)
-                                           : _scrollbar_x->scroll_thumb_by_drag_delta(delta);
-            _content_offset.x = _scrollbar_x->scroll_offset();
+            is_offset_changed = thumb_drag ? _scroll.scrollbar_x->scroll_thumb_to_mouse_pos(ctx.io.mouse_pos)
+                                           : _scroll.scrollbar_x->scroll_thumb_by_drag_delta(delta);
         }
-        if (is_offset_changed) request_scroll_layout_update(DrawReasonBits::layout);
+        (void)is_offset_changed;
     }
 
     CollapseHeader::CollapseHeader(u32 id, StringView label, bool expanded, WidgetFlags widget_flags, u32 style_tag_id)
@@ -2101,32 +2345,15 @@ namespace auik
         return _label ? _label->text() : empty;
     }
 
-    void CollapseHeader::set_expanded(bool value)
+    void CollapseHeader::set_expanded(bool value) { _expanded = value; }
+
+    void CollapseHeader::sync_expanded_state()
     {
-        if (_expanded == value) return;
-        _expanded = value;
         _style.id = Theme::STYLE_ID_INVALID;
         if (_expanded) _content_style.id = Theme::STYLE_ID_INVALID;
-        set_required_size({0.0f, 0.0f});
         set_rect_tag_id(current_header_style_tag());
         _header_rect.id.tag_id = current_header_style_tag();
-        if (!_expanded)
-        {
-            for (auto *child : children)
-                if (child) child->invalidate_draw_commands(DrawReasonBits::layout);
-            if (_content_bg.render_id != AUIK_INVALID_DRAW_DATA_ID)
-            {
-                if (auto *stream = get_primary_quads_stream(); stream && stream->invalidate_data_in_stream)
-                    stream->invalidate_data_in_stream(stream, _content_bg);
-                _content_bg = {};
-            }
-        }
-        if (_trigger)
-        {
-            _trigger->set_open(_expanded);
-            _trigger->start_icon_animation(_expanded);
-        }
-        invalidate_layout();
+        if (_trigger) _trigger->set_open(_expanded);
     }
 
     void CollapseHeader::set_style_tag(u32 tag_id)
@@ -2367,6 +2594,20 @@ namespace auik
             if (child) child->reset_draw_records();
     }
 
+    void CollapseHeader::invalidate_style()
+    {
+        Block::invalidate_style();
+        if (_trigger) _trigger->invalidate_style();
+        if (_label) _label->invalidate_style();
+    }
+
+    bool CollapseHeader::update_locale()
+    {
+        bool changed = Block::update_locale();
+        if (_label) changed |= _label->update_locale();
+        return changed;
+    }
+
     void CollapseHeader::update_depth(const amal::vec2 &depth_range)
     {
         Widget::update_depth(depth_range);
@@ -2418,9 +2659,13 @@ namespace auik
         if (!is_visible() && !(ctx.reason & DrawReasonBits::invalidate)) return;
         auto *quads_stream = get_primary_quads_stream();
         QuadsInstanceData bg{};
-        bg.rect = _header_rect.bounds;
-        bg.z_order = _header_rect.depth;
-        const bool bg_visible = fill_quads_instance_by_style(get_theme()->get_style(_style.id), clip_id(), bg);
+        bool bg_visible = true;
+        if (!(ctx.reason & DrawReasonBits::invalidate))
+        {
+            bg.rect = _header_rect.bounds;
+            bg.z_order = _header_rect.depth;
+            bg_visible = fill_quads_instance_by_style(get_theme()->get_style(_style.id), clip_id(), bg);
+        }
         emit_quads_instance(ctx, quads_stream, _header_bg, bg, _header_rect, bg_visible, can_emit_hit(ctx));
         if (_trigger) _trigger->draw(ctx, false);
         if (_label)
@@ -2432,10 +2677,14 @@ namespace auik
         if (_expanded)
         {
             QuadsInstanceData content_bg{};
-            content_bg.rect = _content_rect.bounds;
-            content_bg.z_order = _content_rect.depth;
-            const bool content_bg_visible =
-                fill_quads_instance_by_style(get_theme()->get_style(_content_style.id), clip_id(), content_bg);
+            bool content_bg_visible = true;
+            if (!(ctx.reason & DrawReasonBits::invalidate))
+            {
+                content_bg.rect = _content_rect.bounds;
+                content_bg.z_order = _content_rect.depth;
+                content_bg_visible =
+                    fill_quads_instance_by_style(get_theme()->get_style(_content_style.id), clip_id(), content_bg);
+            }
             emit_quads_instance(ctx, quads_stream, _content_bg, content_bg, _content_rect, content_bg_visible, false);
             const amal::vec4 content_clip = get_content_clip_rect();
             for (auto *child : children)
@@ -2452,13 +2701,56 @@ namespace auik
         if (key != MouseKey::left || state != KeyPressState::press) return;
         const auto hover = detail::get_context().hover_id;
         if (hover.widget_id != id() || hover.tag_id != current_header_style_tag()) return;
-        add_render_command<detail::ClickEventTraits>(this, [this]() { toggle(); });
+        add_render_command<detail::ClickEventTraits>(this, [this]() {
+            toggle();
+            mark_changed();
+        });
         mark_host_refresh_request();
+    }
+
+    void CollapseHeader::on_change(ChangeEvent &event)
+    {
+        if (event.target != id() || !is_attached()) return;
+        sync_expanded_state();
+        if (!_expanded)
+        {
+            for (auto *child : children)
+                if (child) child->invalidate_draw_commands(DrawReasonBits::layout);
+            if (_content_bg.render_id != AUIK_INVALID_DRAW_DATA_ID)
+            {
+                if (auto *stream = get_primary_quads_stream(); stream && stream->invalidate_data_in_stream)
+                    stream->invalidate_data_in_stream(stream, _content_bg);
+                _content_bg = {};
+            }
+        }
+        if (_trigger) _trigger->start_icon_animation(_expanded);
+        invalidate_layout();
+
+        if (!(widget_flags & WidgetFlagBits::cache_global)) return;
+        const auto state = detail::find_widget_global_cache(id());
+        if (state && state->signature() == AUIK_TAG_COLLAPSE_HEADER_STATE)
+            acul::static_pointer_cast<detail::CollapseHeaderStateData>(state)->expanded = _expanded;
     }
 
     u32 CollapseHeader::current_header_style_tag() const { return _expanded ? _style.tag_id : _closed_style_tag; }
 
-    void CollapseHeader::on_attach() { Block::on_attach(); }
+    void CollapseHeader::on_attach()
+    {
+        if (widget_flags & WidgetFlagBits::cache_global)
+        {
+            const auto state = detail::find_widget_global_cache(id());
+            if (state && state->signature() == AUIK_TAG_COLLAPSE_HEADER_STATE)
+                set_expanded(acul::static_pointer_cast<detail::CollapseHeaderStateData>(state)->expanded);
+            else
+            {
+                auto value = acul::make_shared<detail::CollapseHeaderStateData>();
+                value->expanded = _expanded;
+                detail::set_widget_global_cache(id(), value);
+            }
+        }
+        sync_expanded_state();
+        Block::on_attach();
+    }
 
     void CollapseHeader::on_detach() { Block::on_detach(); }
 
@@ -2521,91 +2813,70 @@ namespace auik
 
     namespace
     {
-        struct BlockSizeData
-        {
-            amal::vec2 explicit_size = AUIK_SIZE_FIT;
-        };
-
-        struct BlockChildData
-        {
-            umbf::Block *block = nullptr;
-            ChildLayoutFlags layout = default_child_layout_flags();
-        };
-
         struct BlockHeaderData
         {
             detail::WidgetCommonData common{};
-            BlockSizeData size{};
+            amal::vec2 explicit_size = AUIK_SIZE_FIT;
         };
-
-        acul::vector<BlockChildData> collect_block_children(const Block &block)
-        {
-            acul::vector<BlockChildData> out;
-            const auto &layouts = block.child_layouts();
-            for (size_t child_i = 0u; child_i < block.children.size(); ++child_i)
-            {
-                auto *child = block.children[child_i];
-                if (!(child->widget_flags & WidgetFlagBits::configurable)) continue;
-                const ChildLayoutFlags layout =
-                    child_i < layouts.size() ? layouts[child_i] : default_child_layout_flags();
-                out.push_back({child, layout});
-            }
-            return out;
-        }
-
-        void write_block_size_data(acul::bin_stream &stream, const Block &block)
-        {
-            stream.write(block.explicit_size());
-        }
-
-        BlockSizeData read_block_size_data(acul::bin_stream &stream)
-        {
-            BlockSizeData out{};
-            stream.read(out.explicit_size);
-            return out;
-        }
-
-        void apply_block_size_data(Block *block, const BlockSizeData &size) { block->set_size(size.explicit_size); }
 
         void write_block_children(acul::bin_stream &stream, const Block &block)
         {
-            auto children = collect_block_children(block);
-            stream.write(static_cast<u32>(children.size()));
-
-            acul::vector<umbf::Block *> blocks;
-            blocks.reserve(children.size());
-            for (auto &child : children)
+            acul::vector<Widget *> blocks;
+            acul::vector<ChildLayoutFlags> layouts;
+            blocks.reserve(block.children.size());
+            layouts.reserve(block.children.size());
+            const auto &child_layouts = block.child_layouts();
+            for (size_t child_i = 0u; child_i < block.children.size(); ++child_i)
             {
-                stream.write(static_cast<u32>(child.layout));
-                blocks.push_back(child.block);
+                auto *child = block.children[child_i];
+                if (!child || !(child->widget_flags & WidgetFlagBits::cache_snapshot)) continue;
+                blocks.push_back(child);
+                layouts.push_back(child_i < child_layouts.size() ? child_layouts[child_i]
+                                                                 : default_child_layout_flags());
             }
+            stream.write(static_cast<u64>(layouts.size()));
+            if (!layouts.empty()) stream.write(layouts.data(), layouts.size());
             stream.write(blocks);
         }
 
-        void read_block_children(acul::bin_stream &stream, Block *block)
+        bool read_block_children(acul::bin_stream &stream, Block *block)
         {
-            u32 child_count = 0u;
-            stream.read(child_count);
-
-            acul::vector<ChildLayoutFlags> layouts;
-            layouts.reserve(child_count);
-            for (u32 child_i = 0u; child_i < child_count; ++child_i)
+            acul::vector<Widget *> children;
+            try
             {
-                u32 layout = 0u;
-                stream.read(layout);
-                layouts.push_back(ChildLayoutFlags(layout));
-            }
+                acul::vector<ChildLayoutFlags> layouts;
+                stream.read(layouts).read(children);
+                if (children.size() != layouts.size())
+                {
+                    for (auto *child : children)
+                        if (child) acul::release(child);
+                    return false;
+                }
 
-            acul::vector<umbf::Block *> children;
-            stream.read(children);
-            for (u32 child_i = 0u; child_i < child_count; ++child_i)
-                block->add_child(static_cast<Widget *>(children[child_i]), layouts[child_i]);
+                acul::vector<Widget *> widgets;
+                widgets.reserve(children.size());
+                for (auto *&child : children)
+                {
+                    auto *widget = dynamic_cast<Widget *>(child);
+                    if (!widget && child) acul::release(child);
+                    widgets.push_back(widget);
+                    child = nullptr;
+                }
+                block->add_children(widgets, layouts);
+                return true;
+            }
+            catch (...)
+            {
+                for (auto *child : children)
+                    if (child) acul::release(child);
+                return false;
+            }
         }
 
         void write_block_payload(acul::bin_stream &stream, const Block &block)
         {
             detail::write_widget_common_data(stream, block);
-            write_block_size_data(stream, block);
+            stream.write(block.explicit_size());
             write_block_children(stream, block);
         }
 
@@ -2613,19 +2884,20 @@ namespace auik
         {
             BlockHeaderData out{};
             out.common = detail::read_widget_common_data(stream);
-            out.size = read_block_size_data(stream);
+            stream.read(out.explicit_size);
             return out;
         }
 
         void apply_block_header_data(Block *block, const BlockHeaderData &header)
         {
             detail::apply_widget_common_data(block, header.common);
-            apply_block_size_data(block, header.size);
+            block->set_size(header.explicit_size);
         }
 
         static u32 serializable_widget_ref_flags(WidgetFlags flags)
         {
-            return static_cast<u32>(flags) & static_cast<u32>(WidgetFlagBits::visible | WidgetFlagBits::configurable);
+            return static_cast<u32>(flags) & static_cast<u32>(WidgetFlagBits::visible | WidgetFlagBits::cache_snapshot |
+                                                              WidgetFlagBits::cache_global);
         }
 
         void write_widget_ref_common_data(acul::bin_stream &stream, const WidgetRef &widget)
@@ -2652,7 +2924,11 @@ namespace auik
             const auto header = read_block_header_data(stream);
             auto *block = acul::alloc<Block>(header.common.id, WidgetFlags(header.common.widget_flags), AUIK_TAG_BLOCK);
             apply_block_header_data(block, header);
-            read_block_children(stream, block);
+            if (!read_block_children(stream, block))
+            {
+                acul::release(block);
+                throw acul::runtime_error("Failed to read block children");
+            }
             return block;
         }
 
@@ -2673,7 +2949,11 @@ namespace auik
             auto *widget =
                 acul::alloc<DrawBlock>(header.common.id, WidgetFlags(header.common.widget_flags), AUIK_TAG_DRAW_BLOCK);
             apply_block_header_data(widget, header);
-            read_block_children(stream, widget);
+            if (!read_block_children(stream, widget))
+            {
+                acul::release(widget);
+                throw acul::runtime_error("Failed to read draw block children");
+            }
 
             u32 style_tag = 0u;
             u32 draw_flags = 0u;
@@ -2709,7 +2989,7 @@ namespace auik
 
         struct StackChildData
         {
-            umbf::Block *block = nullptr;
+            Widget *block = nullptr;
             DepthZone layer = DepthZone::work;
         };
 
@@ -2720,7 +3000,7 @@ namespace auik
             for (size_t child_i = 0u; child_i < children.size(); ++child_i)
             {
                 auto *child = children[child_i];
-                if (!child || !(child->widget_flags & WidgetFlagBits::configurable)) continue;
+                if (!child || !(child->widget_flags & WidgetFlagBits::cache_snapshot)) continue;
                 out.push_back({child, child->get_depth_zone()});
             }
             return out;
@@ -2735,7 +3015,7 @@ namespace auik
             auto children = collect_stack_children(*widget);
             stream.write(static_cast<u32>(children.size()));
 
-            acul::vector<umbf::Block *> blocks;
+            acul::vector<Widget *> blocks;
             blocks.reserve(children.size());
             for (const auto &child : children)
             {
@@ -2761,14 +3041,29 @@ namespace auik
                 layers.push_back(static_cast<DepthZone>(layer));
             }
 
-            acul::vector<umbf::Block *> children;
+            acul::vector<Widget *> children;
             stream.read(children);
+
+            if (children.size() != layers.size())
+            {
+                for (auto *child : children)
+                    if (child) acul::release(child);
+                throw acul::runtime_error("Invalid widget stack child count");
+            }
 
             auto *widget = acul::alloc<WidgetStack>(WidgetFlags(common.widget_flags));
             detail::apply_widget_common_data(widget, common);
+            size_t restored_active_index = 0u;
+            bool active_child_restored = false;
             for (u32 child_i = 0u; child_i < child_count; ++child_i)
             {
-                auto *child = static_cast<Widget *>(children[child_i]);
+                auto *child = dynamic_cast<Widget *>(children[child_i]);
+                if (!child)
+                {
+                    if (children[child_i]) acul::release(children[child_i]);
+                    continue;
+                }
+                const size_t restored_index = widget->child_count();
                 switch (child_i < layers.size() ? layers[child_i] : DepthZone::work)
                 {
                     case DepthZone::background:
@@ -2782,8 +3077,13 @@ namespace auik
                         widget->add_child(child);
                         break;
                 }
+                if (child_i == active_index)
+                {
+                    restored_active_index = restored_index;
+                    active_child_restored = true;
+                }
             }
-            widget->set_active_index(static_cast<size_t>(active_index));
+            widget->set_active_index(active_child_restored ? restored_active_index : 0u);
             return widget;
         }
 
@@ -2802,6 +3102,19 @@ namespace auik
                 .write(widget->trigger_style_tag());
         }
 
+        void write_collapse_header_state(acul::bin_stream &stream, umbf::Block *block)
+        {
+            const auto *state = static_cast<detail::CollapseHeaderStateData *>(block);
+            stream.write(state->widget_id).write(state->expanded);
+        }
+
+        umbf::Block *read_collapse_header_state(acul::bin_stream &stream)
+        {
+            auto *state = acul::alloc<detail::CollapseHeaderStateData>();
+            stream.read(state->widget_id).read(state->expanded);
+            return state;
+        }
+
         umbf::Block *read_collapse_header(acul::bin_stream &stream)
         {
             const auto header = read_block_header_data(stream);
@@ -2809,7 +3122,11 @@ namespace auik
                 acul::alloc<CollapseHeader>(header.common.id, acul::string{}, true,
                                             WidgetFlags(header.common.widget_flags), AUIK_STYLE_TAG_COLLAPSE_HEADER);
             apply_block_header_data(widget, header);
-            read_block_children(stream, widget);
+            if (!read_block_children(stream, widget))
+            {
+                acul::release(widget);
+                throw acul::runtime_error("Failed to read collapse header children");
+            }
 
             const auto label = detail::read_localized_string(stream);
             bool expanded = true;
@@ -2854,11 +3171,13 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::streams::Stream block{read_block, write_block};
-        AUIK_EXPORT const umbf::streams::Stream draw_block{read_draw_block, write_draw_block};
-        AUIK_EXPORT const umbf::streams::Stream widget_stack{read_widget_stack, write_widget_stack};
-        AUIK_EXPORT const umbf::streams::Stream widget_ref{read_widget_ref, write_widget_ref};
-        AUIK_EXPORT const umbf::streams::Stream collapse_header{read_collapse_header, write_collapse_header};
-        AUIK_EXPORT const umbf::streams::Stream dummy{read_dummy, write_dummy};
+        AUIK_EXPORT const umbf::registry::BlockStream block{read_block, write_block};
+        AUIK_EXPORT const umbf::registry::BlockStream draw_block{read_draw_block, write_draw_block};
+        AUIK_EXPORT const umbf::registry::BlockStream widget_stack{read_widget_stack, write_widget_stack};
+        AUIK_EXPORT const umbf::registry::BlockStream widget_ref{read_widget_ref, write_widget_ref};
+        AUIK_EXPORT const umbf::registry::BlockStream collapse_header{read_collapse_header, write_collapse_header};
+        AUIK_EXPORT const umbf::registry::BlockStream collapse_header_state{read_collapse_header_state,
+                                                                            write_collapse_header_state};
+        AUIK_EXPORT const umbf::registry::BlockStream dummy{read_dummy, write_dummy};
     } // namespace streams
 } // namespace auik

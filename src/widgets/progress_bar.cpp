@@ -109,13 +109,13 @@ namespace auik
         const u32 parent_id = parent() ? parent()->id() : 0u;
         StyleUpdateFlags out = StyleUpdateFlagBits::none;
         bool redraw_changed = false;
-        if (_track_style.id == Theme::STYLE_ID_INVALID)
+        if (style_selector_needs_resolution(_track_style))
         {
             const auto flags = resolve_style_selector(_track_style, _track_style.tag_id, parent_id, StyleState::normal);
             if (flags & StyleUpdateFlagBits::redraw) redraw_changed = true;
             out |= flags;
         }
-        if (_active_style.id == Theme::STYLE_ID_INVALID)
+        if (style_selector_needs_resolution(_active_style))
         {
             const auto flags =
                 resolve_style_selector(_active_style, _active_style.tag_id, parent_id, StyleState::normal);
@@ -368,6 +368,6 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::streams::Stream progress_bar{read_progress_bar, write_progress_bar};
+        AUIK_EXPORT const umbf::registry::BlockStream progress_bar{read_progress_bar, write_progress_bar};
     } // namespace streams
 } // namespace auik

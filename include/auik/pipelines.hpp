@@ -10,6 +10,14 @@
 #define AUIK_INVERT_RADIUS_BIT          0x8
 #define AUIK_TEXTURE_INSTANCE_TINT_BIT 0x1
 
+#define AUIK_BORDER_LEFT_BIT   0x1u
+#define AUIK_BORDER_TOP_BIT    0x2u
+#define AUIK_BORDER_RIGHT_BIT  0x4u
+#define AUIK_BORDER_BOTTOM_BIT 0x8u
+#define AUIK_BORDER_ALL_BITS   0xFu
+#define AUIK_BORDER_MASK_SHIFT 24u
+#define AUIK_BORDER_MASK_SET_BIT (1u << 28u)
+
 namespace auik
 {
     struct QuadsInstanceData
@@ -39,6 +47,13 @@ namespace auik
         update_data_batch_in_stream(stream, draw_data_ids, data, count);
     }
 
+    inline void set_quads_border_mask(QuadsInstanceData &data, u32 border_mask)
+    {
+        data.mask &= ~(AUIK_BORDER_ALL_BITS << AUIK_BORDER_MASK_SHIFT);
+        data.mask |= (border_mask & AUIK_BORDER_ALL_BITS) << AUIK_BORDER_MASK_SHIFT;
+        data.mask |= AUIK_BORDER_MASK_SET_BIT;
+    }
+
     inline bool fill_quads_instance_by_style(const Style &style, u16 clip_id, QuadsInstanceData &data)
     {
         data.mask = static_cast<u32>(clip_id);
@@ -51,6 +66,7 @@ namespace auik
         if (data.border_thickness > 0.0f) flags |= AUIK_HAS_BORDER_BIT;
         if (data.border_radius > 0.0f) flags |= AUIK_HAS_RADIUS_BIT;
         data.mask = static_cast<u32>(clip_id) | ((style.corner_mask() & 0xFu) << 16u) | (flags << 20u);
+        set_quads_border_mask(data, style.border_mask());
         return true;
     }
 

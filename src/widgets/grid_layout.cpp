@@ -195,6 +195,36 @@ namespace auik
         for (auto &helper : _helpers) helper.draw = {};
     }
 
+    void GridLayout::invalidate_style()
+    {
+        Widget::invalidate_style();
+        for (auto &cell : _cells)
+            if (cell.widget) cell.widget->invalidate_style();
+    }
+
+    bool GridLayout::update_locale()
+    {
+        bool changed = Widget::update_locale();
+        for (auto &cell : _cells)
+            if (cell.widget) changed |= cell.widget->update_locale();
+        return changed;
+    }
+
+    void GridLayout::add_state_flags_inherit(WidgetStateFlags flags)
+    {
+        Widget::add_state_flags_inherit(flags);
+        if ((flags & WidgetStateFlagBits::visible) && !is_visible()) flags &= ~WidgetStateFlagBits::visible;
+        for (auto &cell : _cells)
+            if (cell.widget) cell.widget->add_state_flags_inherit(flags);
+    }
+
+    void GridLayout::remove_state_flags_inherit(WidgetStateFlags flags)
+    {
+        Widget::remove_state_flags_inherit(flags);
+        for (auto &cell : _cells)
+            if (cell.widget) cell.widget->remove_state_flags_inherit(flags);
+    }
+
     u32 GridLayout::get_depth_requirement() const
     {
         u32 requirement = 1u;

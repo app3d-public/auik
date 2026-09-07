@@ -31,8 +31,9 @@
 #define AUIK_POS_UNDEFINED_VALUE    0xFFFF03p0f
 #define AUIK_POS_UNDEFINED          {AUIK_POS_UNDEFINED_VALUE, AUIK_POS_UNDEFINED_VALUE}
 
-#define AUIK_STYLE_EXTRA_ALIGN 0x2E0F75C4u
-#define AUIK_STYLE_EXTRA_TEXT  0x7674E155u
+#define AUIK_STYLE_EXTRA_ALIGN    0x2E0F75C4u
+#define AUIK_STYLE_EXTRA_TEXT     0x7674E155u
+#define AUIK_STYLE_EXTRA_OVERFLOW 0xD49D84A3u
 
 namespace auik
 {
@@ -76,7 +77,7 @@ namespace auik
 
         struct StylePropertiesBits
         {
-            enum enum_type : u16
+            enum enum_type : u32
             {
                 none = 0x0,
                 padding = 0x1,
@@ -94,7 +95,10 @@ namespace auik
                 height = 0x1000,
                 min_width = 0x2000,
                 min_height = 0x4000,
-                extra = 0x8000
+                extra = 0x8000,
+                max_width = 0x10000,
+                max_height = 0x20000,
+                border_mask = 0x40000
             };
 
             using flag_bitmask = std::true_type;
@@ -123,6 +127,14 @@ namespace auik
         StyleExtra *next = nullptr;
     };
 
+    enum class OverflowMode : u8
+    {
+        visible,
+        hidden,
+        auto_,
+        scroll
+    };
+
     struct StyleExtraAlign
     {
         u32 flags = 0u;
@@ -132,6 +144,12 @@ namespace auik
     {
         TextWrapMode wrap = static_cast<TextWrapMode>(0u);
         TextOverflowMode overflow = static_cast<TextOverflowMode>(1u);
+    };
+
+    struct StyleExtraOverflow
+    {
+        OverflowMode x = OverflowMode::visible;
+        OverflowMode y = OverflowMode::visible;
     };
 
     class Style final
@@ -152,11 +170,14 @@ namespace auik
             _border_color = other._border_color;
             _border_radius = other._border_radius;
             _border_thickness = other._border_thickness;
+            _border_mask = other._border_mask;
             _text_size = other._text_size;
             _inline_spacing = other._inline_spacing;
             _size = other._size;
             _min_width = other._min_width;
             _min_height = other._min_height;
+            _max_width = other._max_width;
+            _max_height = other._max_height;
             _font = other._font;
             _corner_mask = other._corner_mask;
             _mask = other._mask;
@@ -176,11 +197,14 @@ namespace auik
             _border_color = other._border_color;
             _border_radius = other._border_radius;
             _border_thickness = other._border_thickness;
+            _border_mask = other._border_mask;
             _text_size = other._text_size;
             _inline_spacing = other._inline_spacing;
             _size = other._size;
             _min_width = other._min_width;
             _min_height = other._min_height;
+            _max_width = other._max_width;
+            _max_height = other._max_height;
             _font = other._font;
             _corner_mask = other._corner_mask;
             _extra = other._extra;
@@ -310,6 +334,22 @@ namespace auik
             return *this;
         }
 
+        [[nodiscard]] f32 max_width() const { return _max_width; }
+        Style &max_width(f32 value)
+        {
+            _max_width = value;
+            _mask |= detail::StylePropertiesBits::max_width;
+            return *this;
+        }
+
+        [[nodiscard]] f32 max_height() const { return _max_height; }
+        Style &max_height(f32 value)
+        {
+            _max_height = value;
+            _mask |= detail::StylePropertiesBits::max_height;
+            return *this;
+        }
+
         [[nodiscard]] u32 border_color() const { return _border_color; }
         Style &border_color(const amal::vec4 &value)
         {
@@ -352,6 +392,14 @@ namespace auik
         }
         [[nodiscard]] bool has_visible_border() const { return _border_thickness > 0.0f && _border_color != 0u; }
 
+        [[nodiscard]] u32 border_mask() const { return _border_mask; }
+        Style &border_mask(u32 value)
+        {
+            _border_mask = value & 0xFu;
+            _mask |= detail::StylePropertiesBits::border_mask;
+            return *this;
+        }
+
         [[nodiscard]] u32 corner_mask() const { return _corner_mask; }
         Style &corner_mask(u32 value)
         {
@@ -381,6 +429,12 @@ namespace auik
             return node ? static_cast<const StyleExtraText *>(node->data) : nullptr;
         }
 
+        [[nodiscard]] const StyleExtraOverflow *overflow_settings() const
+        {
+            const auto *node = extra(AUIK_STYLE_EXTRA_OVERFLOW);
+            return node ? static_cast<const StyleExtraOverflow *>(node->data) : nullptr;
+        }
+
         Style &align_extra(const StyleExtraAlign &value)
         {
             auto *data = upsert_extra_data<StyleExtraAlign>(AUIK_STYLE_EXTRA_ALIGN);
@@ -392,6 +446,14 @@ namespace auik
         Style &text_extra(const StyleExtraText &value)
         {
             auto *data = upsert_extra_data<StyleExtraText>(AUIK_STYLE_EXTRA_TEXT);
+            *data = value;
+            _mask |= detail::StylePropertiesBits::extra;
+            return *this;
+        }
+
+        Style &overflow_extra(const StyleExtraOverflow &value)
+        {
+            auto *data = upsert_extra_data<StyleExtraOverflow>(AUIK_STYLE_EXTRA_OVERFLOW);
             *data = value;
             _mask |= detail::StylePropertiesBits::extra;
             return *this;
@@ -450,6 +512,8 @@ namespace auik
                 acul::release(static_cast<StyleExtraAlign *>(node.data));
             else if (node.id == AUIK_STYLE_EXTRA_TEXT)
                 acul::release(static_cast<StyleExtraText *>(node.data));
+            else if (node.id == AUIK_STYLE_EXTRA_OVERFLOW)
+                acul::release(static_cast<StyleExtraOverflow *>(node.data));
         }
 
         void clone_extra(const Style &other)
@@ -460,6 +524,8 @@ namespace auik
                     align_extra(*static_cast<const StyleExtraAlign *>(node->data));
                 else if (node->id == AUIK_STYLE_EXTRA_TEXT && node->data)
                     text_extra(*static_cast<const StyleExtraText *>(node->data));
+                else if (node->id == AUIK_STYLE_EXTRA_OVERFLOW && node->data)
+                    overflow_extra(*static_cast<const StyleExtraOverflow *>(node->data));
             }
         }
 
@@ -470,11 +536,14 @@ namespace auik
         u32 _border_color{0};
         f32 _border_radius{0.0f};
         f32 _border_thickness{0.0f};
+        u32 _border_mask{0xFu};
         f32 _text_size{12.5f};
         f32 _inline_spacing{0.0f};
         amal::vec2 _size{AUIK_SIZE_X_FILL, AUIK_SIZE_Y_FIT};
         f32 _min_width{0.0f};
         f32 _min_height{0.0f};
+        f32 _max_width{0.0f};
+        f32 _max_height{0.0f};
         Font *_font{nullptr};
         u32 _corner_mask{0};
         StyleExtra *_extra = nullptr;
@@ -583,7 +652,7 @@ namespace auik
         inline bool has_style_desc(u32 key, StyleState state) const
         {
             const Style *desc = get_desc_style(key, state);
-            return desc && static_cast<u16>(desc->mask()) != 0;
+            return desc && static_cast<u32>(desc->mask()) != 0;
         }
     };
 

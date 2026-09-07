@@ -221,6 +221,6 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::streams::Stream rubber_band{read_rubber_band, write_rubber_band};
+        AUIK_EXPORT const umbf::registry::BlockStream rubber_band{read_rubber_band, write_rubber_band};
     } // namespace streams
 } // namespace auik

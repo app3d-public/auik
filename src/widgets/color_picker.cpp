@@ -301,7 +301,7 @@ namespace auik
             return flags;
         };
 
-        if (_grab_style.id == Theme::STYLE_ID_INVALID) out |= resolve_grab_state(StyleState::normal);
+        if (style_selector_needs_resolution(_grab_style)) out |= resolve_grab_state(StyleState::normal);
 
         const auto transition = detail::get_widget_style_selector_transition(id());
         if (transition.prev_id.tag_id == _grab_hit_rect.id.tag_id &&
@@ -681,7 +681,7 @@ namespace auik
             return flags;
         };
 
-        if (_grab_style.id == Theme::STYLE_ID_INVALID) out |= resolve_grab_state(StyleState::normal);
+        if (style_selector_needs_resolution(_grab_style)) out |= resolve_grab_state(StyleState::normal);
         const StyleState widget_grab_state = detail::resolve_grab_visual_state(style_state());
         if (widget_grab_state == StyleState::active || widget_grab_state == StyleState::focus)
             out |= resolve_grab_state(widget_grab_state);
@@ -1064,7 +1064,7 @@ namespace auik
             return flags;
         };
 
-        if (_grab_style.id == Theme::STYLE_ID_INVALID) out |= resolve_grab_state(StyleState::normal);
+        if (style_selector_needs_resolution(_grab_style)) out |= resolve_grab_state(StyleState::normal);
         const StyleState widget_grab_state = detail::resolve_grab_visual_state(style_state());
         if (widget_grab_state == StyleState::active || widget_grab_state == StyleState::focus)
             out |= resolve_grab_state(widget_grab_state);
@@ -1547,11 +1547,11 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::streams::Stream circle_color_picker{read_circle_color_picker,
-                                                                    write_circle_color_picker};
-        AUIK_EXPORT const umbf::streams::Stream gradient_color_picker{read_gradient_color_picker,
-                                                                      write_gradient_color_picker};
-        AUIK_EXPORT const umbf::streams::Stream square_color_picker{read_square_color_picker,
-                                                                    write_square_color_picker};
+        AUIK_EXPORT const umbf::registry::BlockStream circle_color_picker{read_circle_color_picker,
+                                                                          write_circle_color_picker};
+        AUIK_EXPORT const umbf::registry::BlockStream gradient_color_picker{read_gradient_color_picker,
+                                                                            write_gradient_color_picker};
+        AUIK_EXPORT const umbf::registry::BlockStream square_color_picker{read_square_color_picker,
+                                                                          write_square_color_picker};
     } // namespace streams
 } // namespace auik

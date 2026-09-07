@@ -8,7 +8,7 @@
 
 namespace auik
 {
-    class ImageButton : public Widget
+    class ImageButton : public Widget, public umbf::Block
     {
     public:
         AUIK_EXPORT ImageButton(u32 id, TextureID texture_id, amal::vec2 image_size, amal::vec2 size,
@@ -54,7 +54,8 @@ namespace auik
             _style = {Theme::STYLE_ID_INVALID, tag_id};
         }
 
-        virtual u32 signature() const override { return AUIK_TAG_IMAGE_BUTTON; }
+        virtual u32 signature() const noexcept override { return AUIK_TAG_IMAGE_BUTTON; }
+        umbf::Block *as_snapshot_block() noexcept override { return this; }
 
     protected:
         DrawDataID _bg{};
@@ -81,7 +82,7 @@ namespace auik
                                           amal::rect uv_rect = {{0.0f, 0.0f}, {1.0f, 1.0f}})
     {
         constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
-                                             WidgetFlagBits::configurable | WidgetFlagBits::hittable;
+                                             WidgetFlagBits::cache_snapshot | WidgetFlagBits::hittable;
         return acul::alloc<ImageButton>(id, texture_id, image_size, size, uv_rect, widget_flags,
                                         AUIK_STYLE_TAG_IMAGE_BUTTON);
     }
@@ -90,19 +91,19 @@ namespace auik
                                           amal::vec2 size = AUIK_SIZE_INHERIT)
     {
         constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
-                                             WidgetFlagBits::configurable | WidgetFlagBits::hittable;
+                                             WidgetFlagBits::cache_snapshot | WidgetFlagBits::hittable;
         return acul::alloc<ImageButton>(id, image, image_size, size, widget_flags, AUIK_STYLE_TAG_IMAGE_BUTTON);
     }
 
     inline ImageButton *make_styled_image(u32 id, Image *image, u32 style_tag, amal::vec2 image_size = {0.0f, 0.0f},
                                           amal::vec2 size = AUIK_SIZE_INHERIT)
     {
-        constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::configurable;
+        constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::cache_snapshot;
         return acul::alloc<ImageButton>(id, image, image_size, size, widget_flags, style_tag);
     }
 
     namespace streams
     {
-        extern AUIK_EXPORT const umbf::streams::Stream image_button;
+        extern AUIK_EXPORT const umbf::registry::BlockStream image_button;
     }
 } // namespace auik

@@ -114,6 +114,13 @@ namespace auik
             acul::release(_shortcut);
         }
 
+        bool update_locale() override
+        {
+            bool changed = _label && _label->update_locale();
+            if (_shortcut) changed |= _shortcut->update_locale();
+            return changed;
+        }
+
         StyleUpdateFlags update_style() override
         {
             sync_text_widget_flags();
@@ -173,6 +180,21 @@ namespace auik
             _label->reset_draw_records();
             _shortcut->reset_draw_records();
             _draw_recorded = false;
+        }
+
+        void add_state_flags_inherit(WidgetStateFlags flags) override
+        {
+            Widget::add_state_flags_inherit(flags);
+            if ((flags & WidgetStateFlagBits::visible) && !is_visible()) flags &= ~WidgetStateFlagBits::visible;
+            _label->add_state_flags_inherit(flags);
+            _shortcut->add_state_flags_inherit(flags);
+        }
+
+        void remove_state_flags_inherit(WidgetStateFlags flags) override
+        {
+            Widget::remove_state_flags_inherit(flags);
+            _label->remove_state_flags_inherit(flags);
+            _shortcut->remove_state_flags_inherit(flags);
         }
 
         void update_layout_min_size_force() override
@@ -242,17 +264,12 @@ namespace auik
             }
             if (has_shortcut)
             {
-                const auto shortcut_style_id = get_theme()->get_resolved_style(
-                    AUIK_STYLE_TAG_MENU_SHORTCUT, _shortcut->id(), id(), _shortcut->style_state());
-                const auto &shortcut_style = get_theme()->get_style(shortcut_style_id);
-                const amal::vec4 shortcut_margin = shortcut_style.margin();
-                const amal::vec2 shortcut_size = {
-                    amal::max(shortcut_required.x - shortcut_margin.x - shortcut_margin.z, 0.0f),
-                    amal::max(shortcut_required.y - shortcut_margin.y - shortcut_margin.w, 0.0f)};
                 right_x -= shortcut_required.x;
                 _shortcut->set_position(
                     {right_x, content_pos.y + amal::floor((content_size.y - shortcut_required.y) * 0.5f)});
-                _shortcut->set_layout_size(shortcut_size);
+                // Text::update_layout() applies its own margin. Pass the complete outer size here; passing the
+                // margin-stripped size makes Text subtract the menu shortcut margin for a second time.
+                _shortcut->set_layout_size(shortcut_required);
                 _shortcut->update_layout(true);
             }
         }
@@ -975,6 +992,7 @@ namespace auik
     {
         const auto transition = detail::get_widget_style_selector_transition(id());
         StyleUpdateFlags out = Tabbar::update_style();
+        StyleUpdateFlags popup_flags = StyleUpdateFlagBits::none;
         out |= resolve_style_selector(_menu_style, id(), parent() ? parent()->id() : 0u, style_state());
         const bool local_popup_transition =
             transition.prev_id.widget_id == id() || transition.current_id.widget_id == id();
@@ -988,7 +1006,7 @@ namespace auik
             for (auto *popup : _popups)
             {
                 if (!popup) continue;
-                out |= popup->update_style_invalidated();
+                popup_flags |= popup->update_style_invalidated();
                 for (auto *child : popup->children)
                 {
                     if (!child) continue;
@@ -998,12 +1016,12 @@ namespace auik
                         item->sync_selection_state(_selected_enabled, is_item_selected(popup_child_item_id(child)));
                     }
                     child->set_style_state(resolve_popup_item_state(child));
-                    out |= child->update_style_invalidated();
+                    popup_flags |= child->update_style_invalidated();
                 }
             }
         }
 
-        out |= update_popup_transition(transition.prev_id);
+        popup_flags |= update_popup_transition(transition.prev_id);
         Widget *current_transition_child = nullptr;
         if (transition.current_id.tag_id == AUIK_TAG_COMBO_BOX_ITEM)
         {
@@ -1011,7 +1029,7 @@ namespace auik
             if (child)
             {
                 child->set_style_state(transition.current_state);
-                out |= child->update_style_invalidated();
+                popup_flags |= child->update_style_invalidated();
                 current_transition_child = child;
             }
         }
@@ -1030,9 +1048,17 @@ namespace auik
                 const u32 item_id = popup_child_item_id(child);
                 const StyleState fallback = is_popup_item_focused(item_id) ? StyleState::focus : StyleState::normal;
                 child->set_style_state(fallback);
-                out |= child->update_style_invalidated();
+                popup_flags |= child->update_style_invalidated();
             }
         }
+        if (popup_flags & (StyleUpdateFlagBits::layout | StyleUpdateFlagBits::parent_layout))
+        {
+            for (auto *popup : _popups)
+                if (popup && popup->is_visible()) popup->update_layout(false);
+            reposition_open_popups();
+            detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
+        }
+        if (popup_flags & StyleUpdateFlagBits::redraw) out |= StyleUpdateFlagBits::redraw;
         return out;
     }
 
@@ -1325,14 +1351,20 @@ namespace auik
             get_theme()->get_resolved_style(AUIK_STYLE_TAG_MENU_POPUP, popup->id(), 0, StyleState::normal));
         const amal::vec4 padding = popup_style.padding();
         const f32 popup_w = content_w + padding.x + padding.z;
-        const f32 desired_popup_h = amal::max(content_h + padding.y + padding.w, AUIK_MENU_POPUP_ITEM_FALLBACK_HEIGHT);
         const amal::vec4 popup_bounds = get_popup_bounds_rect();
         const f32 popup_y = depth == 0u ? anchor.offset.y + anchor.size.y : anchor.offset.y;
+        const f32 border_thickness = amal::max(popup_style.border_thickness(), 0.0f);
+        const u32 border_mask = popup_style.border_mask();
+        const f32 border_top = (border_mask & AUIK_BORDER_TOP_BIT) ? border_thickness : 0.0f;
+        const f32 border_bottom = (border_mask & AUIK_BORDER_BOTTOM_BIT) ? border_thickness : 0.0f;
+        const f32 body_top = amal::ceil(popup_y + border_top);
+        const f32 body_bottom = amal::ceil(body_top + content_h + padding.y + padding.w);
+        const f32 desired_popup_h =
+            amal::max(body_bottom + border_bottom - popup_y, AUIK_MENU_POPUP_ITEM_FALLBACK_HEIGHT);
         const f32 available_h = amal::max(popup_bounds.y + popup_bounds.w - popup_y, 0.0f);
         const bool need_scroll = desired_popup_h > available_h;
         const f32 popup_h = need_scroll ? available_h : desired_popup_h;
         popup->window_flags = get_popup_window_flags() | WindowFlagBits::docked;
-        if (!need_scroll) popup->window_flags &= ~WindowFlagBits::scrollable;
         popup->set_visible();
         popup->sync_widget_flags();
         popup->update_style_invalidated();
@@ -2007,19 +2039,25 @@ namespace auik
         {
             auto *popup = static_cast<PopupMenu *>(block);
             detail::write_widget_common_data(stream, *popup);
-            acul::vector<umbf::Block *> blocks;
+            acul::vector<Widget *> blocks;
             if (auto *menu = popup->menu_model()) blocks.push_back(menu);
-            stream.write(blocks);
+            stream.read(blocks);
         }
 
         umbf::Block *read_popup_menu(acul::bin_stream &stream)
         {
             const auto common = detail::read_widget_common_data(stream);
-            acul::vector<umbf::Block *> blocks;
+            acul::vector<Widget *> blocks;
             stream.read(blocks);
 
             MenuBar *menu = nullptr;
-            if (!blocks.empty()) menu = static_cast<MenuBar *>(blocks[0]);
+            if (!blocks.empty())
+            {
+                menu = dynamic_cast<MenuBar *>(blocks[0]);
+                if (!menu && blocks[0]) acul::release(blocks[0]);
+            }
+            for (size_t i = 1u; i < blocks.size(); ++i)
+                if (blocks[i]) acul::release(blocks[i]);
             auto *popup = acul::alloc<PopupMenu>(menu, WidgetFlags(common.widget_flags));
             detail::apply_widget_common_data(popup, common);
             return popup;
@@ -2028,7 +2066,7 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::streams::Stream menu_bar{read_menu_bar, write_menu_bar};
-        AUIK_EXPORT const umbf::streams::Stream popup_menu{read_popup_menu, write_popup_menu};
+        AUIK_EXPORT const umbf::registry::BlockStream menu_bar{read_menu_bar, write_menu_bar};
+        AUIK_EXPORT const umbf::registry::BlockStream popup_menu{read_popup_menu, write_popup_menu};
     } // namespace streams
 } // namespace auik

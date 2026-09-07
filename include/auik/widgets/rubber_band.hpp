@@ -20,7 +20,7 @@ namespace auik
         RubberBandMatchMode mode = RubberBandMatchMode::overlap;
     };
 
-    class RubberBand final : public Widget
+    class RubberBand final : public Widget, public umbf::Block
     {
     public:
         AUIK_EXPORT explicit RubberBand(u32 id, WidgetFlags widget_flags = WidgetFlagBits::none);
@@ -43,7 +43,8 @@ namespace auik
         AUIK_EXPORT void restore_hit_depth() override;
         AUIK_EXPORT void draw(DrawCtx &ctx) override;
         AUIK_EXPORT void on_drag(const amal::vec2 &delta, KeyPressState state) override;
-        virtual u32 signature() const override { return AUIK_TAG_RUBBER_BAND; }
+        virtual u32 signature() const noexcept override { return AUIK_TAG_RUBBER_BAND; }
+        umbf::Block *as_snapshot_block() noexcept override { return this; }
 
     private:
         static amal::rect make_rect_from_points(const amal::vec2 &a, const amal::vec2 &b);
@@ -62,6 +63,6 @@ namespace auik
 
     namespace streams
     {
-        extern AUIK_EXPORT const umbf::streams::Stream rubber_band;
+        extern AUIK_EXPORT const umbf::registry::BlockStream rubber_band;
     } // namespace streams
 } // namespace auik

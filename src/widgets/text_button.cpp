@@ -194,7 +194,7 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::streams::Stream text_button{read_text_button, write_text_button};
+        AUIK_EXPORT const umbf::registry::BlockStream text_button{read_text_button, write_text_button};
     } // namespace streams
 
 } // namespace auik

@@ -288,35 +288,62 @@ namespace auik
         return *this;
     }
 
-    bool Font::load(const FontInfo &info, int face_index)
+    acul::op_result Font::load(const FontInfo &info, int face_index)
     {
         _info = info;
         return load(info.path, face_index);
     }
 
-    bool Font::load(const acul::string &path, int face_index)
+    acul::op_result Font::load(const acul::string &path, int face_index)
     {
         clear();
-        if (path.empty()) return false;
-        if (!detail::g_context || !detail::g_context->ft_library) return false;
+        if (path.empty())
+            return {ACUL_OP_INVALID_SIZE, AUIK_OP_DOMAIN, AUIK_OP_CODE_FONT_PATH_EMPTY};
+        if (!detail::g_context || !detail::g_context->ft_library)
+            return {ACUL_OP_NULLPTR, AUIK_OP_DOMAIN, AUIK_OP_CODE_FREETYPE_NOT_INITIALIZED};
 
         _face_index = face_index;
         auto error = FT_New_Face(detail::g_context->ft_library, path.c_str(), face_index, &_face);
         if (error)
         {
             clear();
-            return false;
+            return {ACUL_OP_READ_ERROR, AUIK_OP_DOMAIN, static_cast<u32>(error)};
         }
 
         _hb_face = hb_ft_face_create_referenced(_face);
         if (!_hb_face)
         {
             clear();
-            return false;
+            return {ACUL_OP_ERROR_GENERIC, AUIK_OP_DOMAIN, AUIK_OP_CODE_HARFBUZZ_FACE_CREATE_ERROR};
         }
 
         _info.path = path;
-        return true;
+        return {ACUL_OP_SUCCESS, AUIK_OP_DOMAIN};
+    }
+
+    acul::string font_load_error_message(acul::op_result result)
+    {
+        if (result.success()) return {};
+        if (result.domain_id != AUIK_OP_DOMAIN)
+            return acul::format("Foreign operation error (domain=0x%04x, state=%u, code=%u)", result.domain_id,
+                                result.state, result.code);
+
+        if (result.state == ACUL_OP_READ_ERROR)
+        {
+            const char *description = FT_Error_String(static_cast<FT_Error>(result.code));
+            return acul::format("FT_New_Face failed with code %u%s%s", result.code, description ? ": " : "",
+                                description ? description : "");
+        }
+
+        switch (result.code)
+        {
+            case AUIK_OP_CODE_FONT_PATH_EMPTY: return "Font path is empty";
+            case AUIK_OP_CODE_FREETYPE_NOT_INITIALIZED: return "FreeType library is not initialized";
+            case AUIK_OP_CODE_HARFBUZZ_FACE_CREATE_ERROR: return "Failed to create HarfBuzz face";
+            case AUIK_OP_CODE_FONT_NOT_REGISTERED: return "Font face is not registered";
+            default:
+                return acul::format("Font operation failed (state=%u, code=%u)", result.state, result.code);
+        }
     }
 
     void Font::clear()
@@ -608,7 +635,9 @@ namespace auik
     f32 detail::TextFontAccess::line_height(Font &font, u32 size_px)
     {
         if (!font.ensure_size_px(size_px) || !font._face->size) return 0.0f;
-        return static_cast<f32>(font._face->size->metrics.height) / 64.0f;
+        const auto &metrics = font._face->size->metrics;
+        const FT_Pos glyph_extents = metrics.ascender - metrics.descender;
+        return static_cast<f32>(amal::max(metrics.height, glyph_extents)) / 64.0f;
     }
 
     bool load_fonts(FontRegistry &fonts, const acul::vector<acul::string> &search_dirs)
@@ -618,7 +647,8 @@ namespace auik
                                                                  ".pcf", ".fnt", ".bdf", ".pfr"};
         FcConfig *config = FcInitLoadConfigAndFonts();
         FcPattern *pat = FcPatternCreate();
-        FcObjectSet *os = FcObjectSetBuild(FC_FAMILY, FC_WEIGHT, FC_SLANT, FC_FILE, FC_FULLNAME, (char *)0);
+        FcObjectSet *os =
+            FcObjectSetBuild(FC_FAMILY, FC_WEIGHT, FC_SLANT, FC_FILE, FC_FULLNAME, FC_LANG, (char *)0);
         if (!search_dirs.empty())
             for (auto &path : search_dirs) FcConfigAppFontAddFile(config, (const FcChar8 *)path.c_str());
         FcFontSet *fs = FcFontList(config, pat, os);
@@ -627,6 +657,7 @@ namespace auik
             FcPattern *font = fs->fonts[i];
 
             FcChar8 *file, *family, *fullname;
+            FcLangSet *languages = nullptr;
             int slant, weight;
             if (FcPatternGetString(font, FC_FILE, 0, &file) == FcResultMatch &&
                 FcPatternGetString(font, FC_FAMILY, 0, &family) == FcResultMatch &&
@@ -639,7 +670,12 @@ namespace auik
                                [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
                 if (std::find(supported_extensions.begin(), supported_extensions.end(), ext) !=
                     supported_extensions.end())
-                    fonts.emplace((char *)family, {(char *)file, (char *)fullname, weight, slant});
+                {
+                    const bool text_font =
+                        FcPatternGetLangSet(font, FC_LANG, 0, &languages) == FcResultMatch && languages &&
+                        FcLangSetHasLang(languages, reinterpret_cast<const FcChar8 *>("en")) != FcLangDifferentLang;
+                    fonts.emplace((char *)family, {(char *)file, (char *)fullname, weight, slant, text_font});
+                }
             }
         }
         if (fs) FcFontSetDestroy(fs);
@@ -721,7 +757,7 @@ namespace auik
         for (auto *node = loader; node; node = node->next)
         {
             Font font;
-            if (!font.load(font_info.path)) return false;
+            if (!font.load(font_info.path).success()) return false;
             font.set_load_flags(node->load_flags);
             font.set_render_mode(node->render_mode);
             if (!cache_font_icon_glyphs(font, *node)) return false;

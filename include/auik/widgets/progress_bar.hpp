@@ -11,7 +11,7 @@
 
 namespace auik
 {
-    class ProgressBar final : public Widget
+    class ProgressBar final : public Widget, public umbf::Block
     {
     public:
         AUIK_EXPORT ProgressBar(u32 id, f32 value, f32 min_value, f32 max_value, f32 size, amal::axis axis,
@@ -42,7 +42,8 @@ namespace auik
         AUIK_EXPORT void set_axis(amal::axis axis);
         AUIK_EXPORT void set_style_tags(u32 track_tag_id, u32 active_tag_id);
         AUIK_EXPORT bool has_draw_record() const;
-        u32 signature() const override { return AUIK_TAG_PROGRESS_BAR; }
+        u32 signature() const noexcept override { return AUIK_TAG_PROGRESS_BAR; }
+        umbf::Block *as_snapshot_block() noexcept override { return this; }
 
     private:
         f32 _value = 0.0f;
@@ -75,12 +76,12 @@ namespace auik
                                           f32 size = 0.0f, amal::axis axis = amal::axis::x)
     {
         constexpr WidgetFlags widget_flags =
-            WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::configurable;
+            WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::cache_snapshot;
         return acul::alloc<ProgressBar>(id, value, min_value, max_value, size, axis, widget_flags);
     }
 
     namespace streams
     {
-        extern AUIK_EXPORT const umbf::streams::Stream progress_bar;
+        extern AUIK_EXPORT const umbf::registry::BlockStream progress_bar;
     } // namespace streams
 } // namespace auik

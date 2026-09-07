@@ -1,11 +1,57 @@
+#include <amal/geometric.hpp>
 #include <auik/animation.hpp>
 #include <auik/auik.hpp>
-#include <amal/geometric.hpp>
+#include <auik/widgets/scroll.hpp>
+
+#define SCROLL_ANIMATION_X_UD_TAG 0x93A38B41u
+#define SCROLL_ANIMATION_Y_UD_TAG 0xEAA4DAFBu
 
 namespace auik
 {
     namespace
     {
+        struct ScrollAnimationData
+        {
+            AnimationState state;
+            Widget *owner = nullptr;
+            ScrollData *scroll = nullptr;
+            amal::axis axis = amal::axis::x;
+            f64 start_time = 0.0;
+
+            ~ScrollAnimationData()
+            {
+                if (detail::g_context && state.task_owner_id) cancel_delayed_tasks(state.task_owner_id);
+                state.cancel(owner, this);
+            }
+        };
+
+        void start_scroll_animation(AnimationState *state, Widget *, void *user_data, f64 now)
+        {
+            auto *data = static_cast<ScrollAnimationData *>(user_data);
+            if (!state || !data) return;
+            data->start_time = now;
+            state->current = state->from;
+        }
+
+        bool tick_scroll_animation(AnimationState *state, Widget *, void *user_data, f64 now)
+        {
+            auto *data = static_cast<ScrollAnimationData *>(user_data);
+            if (!state || !data || !data->scroll) return false;
+            const f32 progress = get_default_animation_progress(data->start_time, state->duration, now);
+            state->current = state->from + (state->to - state->from) * progress;
+            data->scroll->scroll_to(state->current, data->axis);
+            return progress < 1.0f;
+        }
+
+        void finish_scroll_animation(AnimationState *state, Widget *, void *user_data)
+        {
+            auto *data = static_cast<ScrollAnimationData *>(user_data);
+            if (!state || !data || !data->scroll) return;
+            state->current = state->to;
+            data->scroll->scroll_to(state->to, data->axis);
+            if (state->on_complete) state->on_complete(state, data->owner, user_data, data->scroll);
+        }
+
         void start_scale_animation(AnimationState *state, Widget *owner, void *user_data, f64)
         {
             (void)user_data;
@@ -26,8 +72,8 @@ namespace auik
 
         bool tick_scale_animation(AnimationState *state, Widget *, void *, f64 now)
         {
-            auto *scale_data = state ? get_scale_post_effect_data(get_scale_post_effect(), state->post_data_id)
-                                     : nullptr;
+            auto *scale_data =
+                state ? get_scale_post_effect_data(get_scale_post_effect(), state->post_data_id) : nullptr;
             if (!state || !scale_data || !scale_data->animating) return false;
             const f32 eased = get_default_animation_progress(scale_data->animation_start, state->duration, now);
             scale_data->scale =
@@ -38,14 +84,14 @@ namespace auik
 
         void finish_scale_animation(AnimationState *state, Widget *owner, void *user_data)
         {
-            auto *scale_data = state ? get_scale_post_effect_data(get_scale_post_effect(), state->post_data_id)
-                                     : nullptr;
+            auto *scale_data =
+                state ? get_scale_post_effect_data(get_scale_post_effect(), state->post_data_id) : nullptr;
             if (scale_data)
             {
                 scale_data->scale = scale_data->animation_to;
                 scale_data->animating = false;
                 state->current = state->to;
-                if (state->scale_finish) state->scale_finish(state, owner, user_data, *scale_data);
+                if (state->on_complete) state->on_complete(state, owner, user_data, scale_data);
             }
             if (state && state->post_data_id != AUIK_INVALID_POST_EFFECT_DATA_ID)
             {
@@ -87,23 +133,24 @@ namespace auik
 
         bool tick_rotate_animation(AnimationState *state, Widget *, void *, f64 now)
         {
-            auto *rotate_data = state ? get_rotate_post_effect_data(get_rotate_post_effect(), state->post_data_id)
-                                      : nullptr;
+            auto *rotate_data =
+                state ? get_rotate_post_effect_data(get_rotate_post_effect(), state->post_data_id) : nullptr;
             if (!state || !rotate_data || !rotate_data->animating) return false;
             const f32 eased = get_default_animation_progress(rotate_data->animation_start, state->duration, now);
-            rotate_data->angle = rotate_data->animation_from + (rotate_data->animation_to - rotate_data->animation_from) * eased;
+            rotate_data->angle =
+                rotate_data->animation_from + (rotate_data->animation_to - rotate_data->animation_from) * eased;
             return eased < 1.0f;
         }
 
         void finish_rotate_animation(AnimationState *state, Widget *owner, void *user_data)
         {
-            auto *rotate_data = state ? get_rotate_post_effect_data(get_rotate_post_effect(), state->post_data_id)
-                                      : nullptr;
+            auto *rotate_data =
+                state ? get_rotate_post_effect_data(get_rotate_post_effect(), state->post_data_id) : nullptr;
             if (rotate_data)
             {
                 rotate_data->angle = rotate_data->animation_to;
                 rotate_data->animating = false;
-                if (state->rotate_finish) state->rotate_finish(state, owner, user_data, *rotate_data);
+                if (state->on_complete) state->on_complete(state, owner, user_data, rotate_data);
             }
             if (state && state->post_data_id != AUIK_INVALID_POST_EFFECT_DATA_ID)
             {
@@ -152,10 +199,10 @@ namespace auik
         tick = nullptr;
         at_finish = nullptr;
         destroy = nullptr;
-        scale_finish = nullptr;
-        rotate_finish = nullptr;
+        on_complete = nullptr;
         is_active = false;
         tick_scheduled = false;
+        task_owner_id = 0u;
     }
 
     void AnimationState::cancel(Widget *owner, void *user_data)
@@ -168,7 +215,7 @@ namespace auik
     }
 
     void configure_scale_animation(AnimationState &state, f64 duration, f32 from, f32 to,
-                                   PFN_scale_animation_finish finish)
+                                   PFN_animation_complete complete)
     {
         if (state.tick != tick_scale_animation)
         {
@@ -182,12 +229,11 @@ namespace auik
         state.from = from;
         state.to = to;
         state.current = from;
-        state.scale_finish = finish;
-        state.rotate_finish = nullptr;
+        state.on_complete = complete;
     }
 
     void configure_rotate_animation(AnimationState &state, f64 duration, amal::vec2 center, f32 from, f32 to,
-                                    PFN_rotate_animation_finish finish)
+                                    PFN_animation_complete complete)
     {
         if (state.tick != tick_rotate_animation)
         {
@@ -202,8 +248,7 @@ namespace auik
         state.from = from;
         state.to = to;
         state.current = from;
-        state.rotate_finish = finish;
-        state.scale_finish = nullptr;
+        state.on_complete = complete;
     }
 
     AnimationState *start_animation(AnimationState &state, Widget *owner, void *user_data)
@@ -223,7 +268,6 @@ namespace auik
         *value = state.current;
         return true;
     }
-
 
     f32 get_default_animation_progress(f64 start_time, f64 duration, f64 now)
     {
@@ -248,7 +292,8 @@ namespace auik
         const f64 now = current_animation_time();
         const f64 delay = get_max_animation_delay() > 0.0 ? get_max_animation_delay() : (1.0 / 60.0);
         state.tick_scheduled = true;
-        schedule_delayed_host_task(owner->id(), now + delay, [&state, owner, user_data]() {
+        const u64 task_owner_id = state.task_owner_id ? state.task_owner_id : owner->id();
+        schedule_delayed_host_task(task_owner_id, now + delay, [&state, owner, user_data]() {
             state.tick_scheduled = false;
             const bool active = state.next_frame(current_animation_time(), owner, user_data);
             owner->update_draw_commands(DrawReasonBits::external);
@@ -257,5 +302,35 @@ namespace auik
             if (active) next_animation_frame(state, owner, user_data);
         });
         return true;
+    }
+
+    AnimationState *animate_scroll_to(ScrollData &scroll, f32 offset, amal::axis axis, f64 duration,
+                                      PFN_animation_complete complete)
+    {
+        Widget *owner = scroll.widget;
+        if (!owner) return nullptr;
+        const f32 target = amal::clamp(offset, 0.0f, scroll.max_scroll(axis));
+        if (duration <= 0.0 || target == scroll.offset(axis))
+        {
+            scroll.scroll_to(target, axis);
+            return nullptr;
+        }
+
+        const u32 user_data_tag = axis == amal::axis::x ? SCROLL_ANIMATION_X_UD_TAG : SCROLL_ANIMATION_Y_UD_TAG;
+        owner->erase_user_data(user_data_tag);
+        auto *data = owner->emplace_user_data_tagged<ScrollAnimationData>(user_data_tag);
+        data->owner = owner;
+        data->scroll = &scroll;
+        data->axis = axis;
+        data->state.duration = duration;
+        data->state.from = scroll.offset(axis);
+        data->state.to = target;
+        data->state.current = data->state.from;
+        data->state.at_start = start_scroll_animation;
+        data->state.tick = tick_scroll_animation;
+        data->state.at_finish = finish_scroll_animation;
+        data->state.on_complete = complete;
+        data->state.task_owner_id = (static_cast<u64>(user_data_tag) << 32u) | owner->id();
+        return start_animation(data->state, owner, data);
     }
 } // namespace auik

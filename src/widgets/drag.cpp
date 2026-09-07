@@ -1,7 +1,7 @@
-#include <charconv>
 #include <acul/string/utils.hpp>
 #include <auik/auik.hpp>
 #include <auik/widgets/drag.hpp>
+#include <charconv>
 #include "../core/session_stream_utils.hpp"
 
 namespace auik
@@ -598,8 +598,8 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::streams::Stream drag_int{read_drag_int, write_drag_int};
-        AUIK_EXPORT const umbf::streams::Stream drag_float{read_drag_float, write_drag_float};
-        AUIK_EXPORT const umbf::streams::Stream drag_double{read_drag_double, write_drag_double};
+        AUIK_EXPORT const umbf::registry::BlockStream drag_int{read_drag_int, write_drag_int};
+        AUIK_EXPORT const umbf::registry::BlockStream drag_float{read_drag_float, write_drag_float};
+        AUIK_EXPORT const umbf::registry::BlockStream drag_double{read_drag_double, write_drag_double};
     } // namespace streams
 } // namespace auik

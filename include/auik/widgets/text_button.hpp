@@ -8,7 +8,7 @@
 
 namespace auik
 {
-    class TextButton : public Widget
+    class TextButton : public Widget, public umbf::Block
     {
     public:
         TextButton(u32 id, StringView text, amal::vec2 inline_size, WidgetFlags widget_flags, EventFlags event_flags,
@@ -24,6 +24,7 @@ namespace auik
         ~TextButton() override { acul::release(_text); }
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
+        bool update_locale() override { return _text && _text->update_locale(); }
         AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
@@ -33,7 +34,8 @@ namespace auik
         AUIK_EXPORT void restore_hit_depth() override;
 
         AUIK_EXPORT void draw(DrawCtx &ctx) override;
-        u32 signature() const override { return AUIK_TAG_TEXT_BUTTON; }
+        u32 signature() const noexcept override { return AUIK_TAG_TEXT_BUTTON; }
+        umbf::Block *as_snapshot_block() noexcept override { return this; }
 
         const acul::string &text() const { return _text->text(); }
         void set_text(const acul::string &text) { _text->set_text(text); }
@@ -60,13 +62,13 @@ namespace auik
     inline TextButton *make_text_button(u32 id, StringView text = "", amal::vec2 inline_size = AUIK_SIZE_INHERIT)
     {
         constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
-                                             WidgetFlagBits::configurable | WidgetFlagBits::hittable;
+                                             WidgetFlagBits::cache_snapshot | WidgetFlagBits::hittable;
         return acul::alloc<TextButton>(id, text, inline_size, widget_flags, EventFlagBits::none,
                                        AUIK_STYLE_TAG_TEXT_BUTTON);
     }
 
     namespace streams
     {
-        extern AUIK_EXPORT const umbf::streams::Stream text_button;
+        extern AUIK_EXPORT const umbf::registry::BlockStream text_button;
     }
 } // namespace auik

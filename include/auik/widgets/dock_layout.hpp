@@ -6,6 +6,7 @@
 
 namespace auik
 {
+    struct DockLayoutStreamAccess;
     using DockLayoutNodeID = u32;
 
     struct DockLayoutNodeSettings : detail::DockBaseNodeSettings
@@ -18,7 +19,7 @@ namespace auik
         }
     };
 
-    class DockLayout final : public Widget
+    class DockLayout final : public Widget, public umbf::Block
     {
     public:
         AUIK_EXPORT explicit DockLayout(u32 id, const amal::vec2 &inline_size, WidgetFlags widget_flags);
@@ -43,6 +44,10 @@ namespace auik
         AUIK_EXPORT void reset_clip_rect_records() override;
         AUIK_EXPORT void rebuild_clip_rects() override;
         AUIK_EXPORT void reset_draw_records() override;
+        AUIK_EXPORT void invalidate_style() override;
+        AUIK_EXPORT bool update_locale() override;
+        AUIK_EXPORT void add_state_flags_inherit(WidgetStateFlags flags) override;
+        AUIK_EXPORT void remove_state_flags_inherit(WidgetStateFlags flags) override;
         AUIK_EXPORT u32 get_depth_requirement() const override;
         AUIK_EXPORT void update_depth(const amal::vec2 &depth_range) override;
         AUIK_EXPORT void draw(DrawCtx &ctx) override;
@@ -50,7 +55,8 @@ namespace auik
         AUIK_EXPORT void on_detach() override;
         u16 content_clip_id() const override { return clip_id(); }
         amal::vec4 get_content_clip_rect() const override { return get_clip_rect(clip_id()); }
-        u32 signature() const override { return AUIK_TAG_DOCK_LAYOUT; }
+        u32 signature() const noexcept override { return AUIK_TAG_DOCK_LAYOUT; }
+        umbf::Block *as_snapshot_block() noexcept override { return this; }
 
     private:
         struct Item
@@ -76,11 +82,18 @@ namespace auik
         };
 
         detail::DockBase<Item, Policy> _dock;
+
+        friend struct DockLayoutStreamAccess;
     };
 
     inline DockLayout *make_dock_layout(u32 id, const amal::vec2 &inline_size = AUIK_SIZE_INHERIT)
     {
         return acul::alloc<DockLayout>(
-            id, inline_size, WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::configurable);
+            id, inline_size, WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::cache_snapshot);
+    }
+
+    namespace streams
+    {
+        extern AUIK_EXPORT const umbf::registry::BlockStream dock_layout;
     }
 } // namespace auik

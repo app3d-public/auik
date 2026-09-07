@@ -22,12 +22,12 @@ namespace auik
 
         constexpr inline WidgetFlags get_combobox_widget_flags()
         {
-            return WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::configurable |
+            return WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::cache_snapshot |
                    WidgetFlagBits::hittable;
         }
     } // namespace detail
 
-    class Combobox final : public Widget
+    class Combobox final : public Widget, public umbf::Block
     {
     public:
         AUIK_EXPORT Combobox(u32 id, const acul::vector<StringView> &items, u32 selected_index, amal::vec2 inline_size,
@@ -40,12 +40,16 @@ namespace auik
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void reset_clip_rect_records() override;
         AUIK_EXPORT void rebuild_clip_rects() override;
+        AUIK_EXPORT void invalidate_style() override;
+        AUIK_EXPORT bool update_locale() override;
         AUIK_EXPORT void update_depth(const amal::vec2 &depth_range) override;
         AUIK_EXPORT void back_hit_depth() override;
         AUIK_EXPORT void restore_hit_depth() override;
         AUIK_EXPORT void draw(DrawCtx &ctx) override;
         AUIK_EXPORT void on_focus(bool focused) override;
         AUIK_EXPORT void on_click(MouseKey key, KeyPressState state, u32 click_count) override;
+        AUIK_EXPORT void on_drag(const amal::vec2 &delta, KeyPressState state) override;
+        AUIK_EXPORT void on_scroll(const amal::vec2 &delta) override;
 
         acul::vector<acul::string> items() const;
         AUIK_EXPORT acul::vector<StringView> item_text_views() const;
@@ -68,7 +72,8 @@ namespace auik
         AUIK_EXPORT void open();
         AUIK_EXPORT void close();
         AUIK_EXPORT void toggle();
-        virtual u32 signature() const override { return AUIK_TAG_COMBO_BOX; }
+        virtual u32 signature() const noexcept override { return AUIK_TAG_COMBO_BOX; }
+        umbf::Block *as_snapshot_block() noexcept override { return this; }
 
     private:
         void rebuild_control_layout();
@@ -82,6 +87,7 @@ namespace auik
 
         u32 _selected_index = 0u;
         bool _open = false;
+        bool _center_selection_on_open = false;
 
         StyleSelector _style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_COMBO_BOX};
         detail::PopupTrigger *_trigger = nullptr;
@@ -94,7 +100,7 @@ namespace auik
         ModelBinding *_model_binding = nullptr;
     };
 
-    class MultipleCombobox final : public Widget
+    class MultipleCombobox final : public Widget, public umbf::Block
     {
     public:
         AUIK_EXPORT MultipleCombobox(u32 id, const acul::vector<StringView> &items, StringView placeholder,
@@ -107,12 +113,16 @@ namespace auik
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void reset_clip_rect_records() override;
         AUIK_EXPORT void rebuild_clip_rects() override;
+        AUIK_EXPORT void invalidate_style() override;
+        AUIK_EXPORT bool update_locale() override;
         AUIK_EXPORT void update_depth(const amal::vec2 &depth_range) override;
         AUIK_EXPORT void back_hit_depth() override;
         AUIK_EXPORT void restore_hit_depth() override;
         AUIK_EXPORT void draw(DrawCtx &ctx) override;
         AUIK_EXPORT void on_focus(bool focused) override;
         AUIK_EXPORT void on_click(MouseKey key, KeyPressState state, u32 click_count) override;
+        AUIK_EXPORT void on_drag(const amal::vec2 &delta, KeyPressState state) override;
+        AUIK_EXPORT void on_scroll(const amal::vec2 &delta) override;
 
         acul::vector<acul::string> items() const;
         AUIK_EXPORT acul::vector<StringView> item_text_views() const;
@@ -137,7 +147,8 @@ namespace auik
         AUIK_EXPORT void open();
         AUIK_EXPORT void close();
         AUIK_EXPORT void toggle();
-        virtual u32 signature() const override { return AUIK_TAG_MULTIPLE_COMBO_BOX; }
+        virtual u32 signature() const noexcept override { return AUIK_TAG_MULTIPLE_COMBO_BOX; }
+        umbf::Block *as_snapshot_block() noexcept override { return this; }
 
     private:
         void rebuild_control_layout();
@@ -152,6 +163,7 @@ namespace auik
         acul::string _placeholder_literal;
         bool _translated_placeholder = false;
         bool _open = false;
+        bool _center_selection_on_open = false;
         StyleSelector _style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_COMBO_BOX};
         detail::PopupTrigger *_trigger = nullptr;
         Text *_label = nullptr;
@@ -200,7 +212,7 @@ namespace auik
 
     namespace streams
     {
-        extern AUIK_EXPORT const umbf::streams::Stream combobox;
-        extern AUIK_EXPORT const umbf::streams::Stream multiple_combobox;
+        extern AUIK_EXPORT const umbf::registry::BlockStream combobox;
+        extern AUIK_EXPORT const umbf::registry::BlockStream multiple_combobox;
     } // namespace streams
 } // namespace auik

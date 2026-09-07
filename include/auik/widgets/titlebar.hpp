@@ -1,5 +1,6 @@
 #pragma once
 
+#include <acul/point.hpp>
 #include <auik/detail/fwd.hpp>
 #include <auik/detail/gpu_context.hpp>
 #include <auik/widgets/menu.hpp>
@@ -51,7 +52,7 @@ namespace auik
         TitlebarCreateFlags flags;
         f32 height = 0.0f;
         i32 padding = 0;
-        acul::point2D<i32> frame;
+        acul::ipoint32 frame;
         amal::vec2 caption_button_size{};
         bool caption_buttons[AUIK_WINDOW_CAPTION_BTN_COUNT]{};
         ImageButton *caption_button_widgets[AUIK_WINDOW_CAPTION_BTN_COUNT]{};
@@ -62,7 +63,7 @@ namespace auik
         void (*destroy)(TitlebarState *state) = nullptr;
     };
 
-    class Titlebar final : public Widget
+    class Titlebar final : public Widget, public umbf::Block
     {
         friend struct TitlebarStreamAccess;
 
@@ -88,6 +89,10 @@ namespace auik
         AUIK_EXPORT void reset_clip_rect_records() override;
         AUIK_EXPORT void rebuild_clip_rects() override;
         AUIK_EXPORT void reset_draw_records() override;
+        AUIK_EXPORT void invalidate_style() override;
+        AUIK_EXPORT bool update_locale() override;
+        AUIK_EXPORT void add_state_flags_inherit(WidgetStateFlags flags) override;
+        AUIK_EXPORT void remove_state_flags_inherit(WidgetStateFlags flags) override;
         AUIK_EXPORT void draw(DrawCtx &ctx) override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void on_attach() override;
@@ -101,7 +106,8 @@ namespace auik
         AUIK_EXPORT bool reload_caption_button_icons(f32 dpi, const FontRegistry &fonts);
         AUIK_EXPORT void set_caption_hover_button(i32 index);
         AUIK_EXPORT void set_caption_active_button(i32 index);
-        virtual u32 signature() const override { return AUIK_TAG_TITLEBAR; }
+        virtual u32 signature() const noexcept override { return AUIK_TAG_TITLEBAR; }
+        umbf::Block *as_snapshot_block() noexcept override { return this; }
 
     private:
         void ensure_icon_widget();
@@ -131,7 +137,7 @@ namespace auik
     inline Titlebar *make_titlebar(u32 id = AUIK_TAG_TITLEBAR)
     {
         constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
-                                             WidgetFlagBits::configurable | WidgetFlagBits::hittable;
+                                             WidgetFlagBits::cache_snapshot | WidgetFlagBits::hittable;
         return acul::alloc<Titlebar>(id, widget_flags);
     }
 
@@ -146,6 +152,6 @@ namespace auik
 
     namespace streams
     {
-        extern AUIK_EXPORT const umbf::streams::Stream titlebar;
+        extern AUIK_EXPORT const umbf::registry::BlockStream titlebar;
     }
 } // namespace auik

@@ -14,7 +14,7 @@
 
 namespace auik
 {
-    class CircleColorPicker final : public Widget
+    class CircleColorPicker final : public Widget, public umbf::Block
     {
     public:
         AUIK_EXPORT CircleColorPicker(u32 id, const amal::vec4 &value, f32 inline_width, WidgetFlags widget_flags);
@@ -38,7 +38,8 @@ namespace auik
         AUIK_EXPORT void set_model_binding(ModelBinding *binding);
         AUIK_EXPORT void set_hue_radius(f32 hue_deg, f32 radius_t);
         AUIK_EXPORT bool has_draw_record() const;
-        virtual u32 signature() const override { return AUIK_TAG_CIRCLE_COLOR_PICKER; }
+        virtual u32 signature() const noexcept override { return AUIK_TAG_CIRCLE_COLOR_PICKER; }
+        umbf::Block *as_snapshot_block() noexcept override { return this; }
 
     private:
         amal::vec4 _value = {1.0f, 1.0f, 1.0f, 1.0f};
@@ -81,11 +82,11 @@ namespace auik
                                                        f32 inline_width = AUIK_SIZE_X_INHERIT)
     {
         constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
-                                             WidgetFlagBits::configurable | WidgetFlagBits::hittable;
+                                             WidgetFlagBits::cache_snapshot | WidgetFlagBits::hittable;
         return acul::alloc<CircleColorPicker>(id, value, inline_width, widget_flags);
     }
 
-    class GradientColorPicker final : public Widget
+    class GradientColorPicker final : public Widget, public umbf::Block
     {
     public:
         AUIK_EXPORT GradientColorPicker(u32 id, const amal::vec4 &value, const amal::vec2 &inline_size,
@@ -112,7 +113,8 @@ namespace auik
         AUIK_EXPORT void set_model_binding(ModelBinding *binding);
         AUIK_EXPORT void set_hsv(f32 hue_deg, f32 saturation, f32 value_t);
         AUIK_EXPORT bool has_draw_record() const;
-        virtual u32 signature() const override { return AUIK_TAG_GRADIENT_COLOR_PICKER; }
+        virtual u32 signature() const noexcept override { return AUIK_TAG_GRADIENT_COLOR_PICKER; }
+        umbf::Block *as_snapshot_block() noexcept override { return this; }
 
     private:
         amal::vec4 _value = {1.0f, 0.0f, 0.0f, 1.0f};
@@ -151,11 +153,11 @@ namespace auik
                                                            const amal::vec2 &inline_size = AUIK_SIZE_INHERIT)
     {
         constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
-                                             WidgetFlagBits::configurable | WidgetFlagBits::hittable;
+                                             WidgetFlagBits::cache_snapshot | WidgetFlagBits::hittable;
         return acul::alloc<GradientColorPicker>(id, value, inline_size, widget_flags);
     }
 
-    class SquareColorPicker final : public Widget
+    class SquareColorPicker final : public Widget, public umbf::Block
     {
     public:
         AUIK_EXPORT SquareColorPicker(u32 id, const amal::vec4 &value, f32 inline_width, WidgetFlags widget_flags);
@@ -181,7 +183,8 @@ namespace auik
         AUIK_EXPORT void set_model_binding(ModelBinding *binding);
         AUIK_EXPORT void set_hsv(f32 hue_deg, f32 saturation, f32 value_t);
         AUIK_EXPORT bool has_draw_record() const;
-        virtual u32 signature() const override { return AUIK_TAG_SQUARE_COLOR_PICKER; }
+        virtual u32 signature() const noexcept override { return AUIK_TAG_SQUARE_COLOR_PICKER; }
+        umbf::Block *as_snapshot_block() noexcept override { return this; }
 
     private:
         enum class ActiveZone : u8
@@ -233,14 +236,14 @@ namespace auik
                                                        f32 inline_width = AUIK_SIZE_X_INHERIT)
     {
         constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
-                                             WidgetFlagBits::configurable | WidgetFlagBits::hittable;
+                                             WidgetFlagBits::cache_snapshot | WidgetFlagBits::hittable;
         return acul::alloc<SquareColorPicker>(id, value, inline_width, widget_flags);
     }
 
     namespace streams
     {
-        extern AUIK_EXPORT const umbf::streams::Stream circle_color_picker;
-        extern AUIK_EXPORT const umbf::streams::Stream gradient_color_picker;
-        extern AUIK_EXPORT const umbf::streams::Stream square_color_picker;
+        extern AUIK_EXPORT const umbf::registry::BlockStream circle_color_picker;
+        extern AUIK_EXPORT const umbf::registry::BlockStream gradient_color_picker;
+        extern AUIK_EXPORT const umbf::registry::BlockStream square_color_picker;
     } // namespace streams
 } // namespace auik

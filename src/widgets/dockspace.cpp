@@ -644,7 +644,7 @@ namespace auik
             if (!_menu)
             {
                 constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
-                                                     WidgetFlagBits::configurable | WidgetFlagBits::hittable;
+                                                     WidgetFlagBits::cache_snapshot | WidgetFlagBits::hittable;
                 _menu = acul::alloc<PopupMenu>(make_dockspace_menu_id(_dockspace->id(), _node_id) + AUIK_TAG_POPUP_MENU,
                                                acul::vector<StringView>{}, widget_flags, false);
             }
@@ -2288,6 +2288,31 @@ namespace auik
         for (auto &helper : _resize_helpers) helper.hit_draw = {};
     }
 
+    void Dockspace::invalidate_style()
+    {
+        Widget::invalidate_style();
+        for (auto &node : _nodes)
+        {
+            if (node.tabbar) node.tabbar->invalidate_style();
+            if (node.menu) node.menu->invalidate_style();
+            for (auto *window : node.windows)
+                if (window) window->invalidate_style();
+        }
+    }
+
+    bool Dockspace::update_locale()
+    {
+        bool changed = Widget::update_locale();
+        for (auto &node : _nodes)
+        {
+            if (node.tabbar) changed |= node.tabbar->update_locale();
+            if (node.menu) changed |= node.menu->update_locale();
+            for (auto *window : node.windows)
+                if (window) changed |= window->update_locale();
+        }
+        return changed;
+    }
+
     void Dockspace::handle_tabbar_changed(DockNodeID node_id, TabbarChangeReason reason)
     {
         auto *node_ptr = get_node(node_id);
@@ -2868,9 +2893,12 @@ namespace auik
             if (is_size_fill(style_size)) return amal::ceil(settings_min);
             if (is_size_fit(style_size))
             {
-                const bool placed = axis_size(child->bounds.size, helper->axis) > 0.0f;
-                return amal::ceil(
-                    amal::max(settings_min, placed ? 0.0f : axis_size(child->required_size, helper->axis)));
+                // A vertical fit-content node keeps its content height during an explicit resize. The regular
+                // layout path may still shrink it when the whole split does not have enough space. Horizontal
+                // fit nodes remain manually resizable (the application uses one for the sidebar width).
+                const f32 required_min =
+                    helper->axis == amal::axis::y ? axis_size(child->required_size, helper->axis) : 0.0f;
+                return amal::ceil(amal::max(settings_min, required_min));
             }
             if (is_size_concrete(style_size)) return amal::ceil(amal::max(settings_min, style_size));
             const f32 required_min = axis_size(child->required_size, helper->axis);
@@ -3119,14 +3147,14 @@ namespace auik
                 .write(static_cast<u64>(node.active_window_index))
                 .write(node.record_active_window);
 
-            acul::vector<umbf::Block *> windows;
+            acul::vector<Widget *> windows;
             acul::vector<amal::rect> undocked_bounds;
             windows.reserve(node.windows.size());
             undocked_bounds.reserve(node.windows.size());
             for (size_t window_i = 0u; window_i < node.windows.size(); ++window_i)
             {
                 auto *window = node.windows[window_i];
-                if (!window || !(window->widget_flags & WidgetFlagBits::configurable)) continue;
+                if (!window || !(window->widget_flags & WidgetFlagBits::cache_snapshot)) continue;
                 windows.push_back(window);
                 undocked_bounds.push_back(window_i < node.undocked_bounds.size() ? node.undocked_bounds[window_i]
                                                                                  : window->bounds());
@@ -3162,11 +3190,34 @@ namespace auik
             node.undocked_bounds.resize(bounds_count);
             if (!node.undocked_bounds.empty()) stream.read(node.undocked_bounds.data(), node.undocked_bounds.size());
 
-            acul::vector<umbf::Block *> windows;
+            acul::vector<Widget *> windows;
             stream.read(windows);
+            if (windows.size() != node.undocked_bounds.size())
+            {
+                for (auto *window : windows)
+                    if (window) acul::release(window);
+                throw acul::runtime_error("invalid dockspace window count");
+            }
+
+            auto serialized_bounds = std::move(node.undocked_bounds);
+            node.undocked_bounds.clear();
             node.windows.reserve(windows.size());
-            for (auto *block : windows) node.windows.push_back(static_cast<Window *>(block));
-            if (node.active_window_index < node.windows.size()) node.record_active_window = true;
+            node.undocked_bounds.reserve(windows.size());
+            const size_t serialized_active_index = node.active_window_index;
+            node.active_window_index = static_cast<size_t>(-1);
+            for (size_t window_i = 0u; window_i < windows.size(); ++window_i)
+            {
+                auto *window = dynamic_cast<Window *>(windows[window_i]);
+                if (!window)
+                {
+                    if (windows[window_i]) acul::release(windows[window_i]);
+                    continue;
+                }
+                if (window_i == serialized_active_index) node.active_window_index = node.windows.size();
+                node.windows.push_back(window);
+                node.undocked_bounds.push_back(serialized_bounds[window_i]);
+            }
+            node.record_active_window = node.active_window_index < node.windows.size();
         }
 
         static void write(acul::bin_stream &stream, umbf::Block *block)
@@ -3224,6 +3275,7 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::streams::Stream dockspace{DockspaceStreamAccess::read, DockspaceStreamAccess::write};
+        AUIK_EXPORT const umbf::registry::BlockStream dockspace{DockspaceStreamAccess::read,
+                                                                DockspaceStreamAccess::write};
     } // namespace streams
 } // namespace auik

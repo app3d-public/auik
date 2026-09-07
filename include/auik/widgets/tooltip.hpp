@@ -22,6 +22,7 @@ namespace auik
         bool has_draw_record() const { return _bg.render_id != AUIK_INVALID_DRAW_DATA_ID; }
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
+        bool update_locale() override { return _text.update_locale(); }
         AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void update_depth(const amal::vec2 &depth_range) override;

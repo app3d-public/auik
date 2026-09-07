@@ -9,6 +9,7 @@
 #include <auik/widgets/image.hpp>
 #include <auik/widgets/slider.hpp>
 #include <auik/widgets/tabbar.hpp>
+#include <auik/widgets/text.hpp>
 #include <auik/widgets/titlebar.hpp>
 #include <auik/widgets/tooltip.hpp>
 #include <auik/widgets/window.hpp>
@@ -29,7 +30,8 @@ namespace auik
             if (!viewport) return;
             const amal::vec4 rect{viewport->rect.offset.x, viewport->rect.offset.y, viewport->rect.size.x,
                                   viewport->rect.size.y};
-            viewport->clip_id = push_clip_rect(rect);
+            if (viewport->clip_id == 0xFFFFu) viewport->clip_id = push_clip_rect(rect);
+            else update_clip_rect(viewport->clip_id, rect);
         }
 
         static void update_viewport_layout(Viewport *viewport)
@@ -375,6 +377,8 @@ namespace auik
         static void reset_clip_rect_records()
         {
             auto &ctx = detail::get_context();
+            for (Viewport *viewport : ctx.viewports)
+                if (viewport) viewport->clip_id = 0xFFFFu;
             for (Widget *widget : ctx.widget_tree)
             {
                 if (!widget) continue;
@@ -563,6 +567,7 @@ namespace auik
         detail::g_context->transient_cache.clear();
         detail::g_context->id_map.clear();
         detail::g_context->disposal_queue.discard();
+        setup_shortcut_model(nullptr);
         detail::destroy_atlas_state(detail::g_context->atlas_state);
         destroy_cached_images(*detail::g_context);
         for (auto *effect : detail::g_context->post_effects)
@@ -628,19 +633,37 @@ namespace auik
 
     static bool record_fast_update_commands();
 
+    void invalidate_styles()
+    {
+        auto &ctx = detail::get_context();
+        for (Widget *widget : ctx.widget_tree)
+            if (widget) widget->invalidate_style();
+        for (Widget *widget : ctx.transient_cache)
+            if (widget && !widget->is_attached()) widget->invalidate_style();
+        detail::mark_styles_dirty();
+        update_styles();
+    }
+
+    static void update_widget_style(Widget *widget)
+    {
+        if (!widget) return;
+        auto &ctx = detail::get_context();
+        if (widget->is_attached())
+        {
+            const auto it = ctx.id_map.find(widget->id());
+            if (it == ctx.id_map.end() || it->second != widget) return;
+        }
+        else if (!widget->is_transient()) return;
+        widget->update_style_invalidated();
+    }
+
     void update_styles()
     {
         auto &ctx = detail::get_context();
         if (!(ctx.dirty_flags & DirtyFlagBits::styles)) return;
-        acul::vector<Widget *> widgets;
-        widgets.reserve(ctx.id_map.size());
-        for (const auto &[id, widget] : ctx.id_map)
-            if (widget) widgets.push_back(widget);
-        for (Widget *widget : widgets)
-        {
-            const auto it = ctx.id_map.find(widget->id());
-            if (it != ctx.id_map.end() && it->second == widget) widget->update_style_invalidated();
-        }
+        for (const auto &entry : ctx.id_map) update_widget_style(entry.second);
+        for (Widget *widget : ctx.transient_cache)
+            if (widget && !widget->is_attached()) update_widget_style(widget);
         ctx.dirty_flags &= ~DirtyFlagBits::styles;
         ctx.dirty_flags &= ~DirtyFlagBits::fast_update;
     }
@@ -649,8 +672,7 @@ namespace auik
     {
         auto &ctx = detail::get_context();
         if (!(ctx.dirty_flags & detail::layout_dirty_mask)) return;
-        const bool use_fast_path =
-            (ctx.dirty_flags & DirtyFlagBits::fast_update) && !(ctx.dirty_flags & DirtyFlagBits::locale);
+        const bool use_fast_path = ctx.dirty_flags & DirtyFlagBits::fast_update;
         if (use_fast_path)
         {
             record_fast_update_commands();
@@ -931,7 +953,12 @@ namespace auik
     AUIK_EXPORT void mark_locale_changed()
     {
         auto &ctx = detail::get_context();
-        ctx.dirty_flags |= DirtyFlagBits::locale | DirtyFlagBits::layout | DirtyFlagBits::redraw;
+        bool changed = false;
+        for (Widget *widget : ctx.widget_tree)
+            if (widget) changed |= widget->update_locale();
+        for (Widget *widget : ctx.transient_cache)
+            if (widget && !widget->is_attached()) changed |= widget->update_locale();
+        if (changed) ctx.dirty_flags |= DirtyFlagBits::layout | DirtyFlagBits::redraw;
         mark_host_refresh_request();
     }
 
@@ -973,15 +1000,18 @@ namespace auik
     AUIK_EXPORT bool remove_widget(Widget *widget)
     {
         if (!remove_widget_from_root_unsync(widget)) return false;
+        widget->invalidate_draw_commands(DrawReasonBits::layout);
         redraw_all_commands();
+        acul::release(widget);
         return true;
     }
 
     AUIK_EXPORT bool remove_widget(u32 id)
     {
-        if (!remove_widget_from_root_unsync(id)) return false;
-        redraw_all_commands();
-        return true;
+        if (!id) return false;
+        auto &ctx = detail::get_context();
+        const auto it = ctx.id_map.find(id);
+        return it != ctx.id_map.end() ? remove_widget(it->second) : false;
     }
 
     AUIK_EXPORT bool hide_widget(u32 id)

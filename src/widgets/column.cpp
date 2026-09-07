@@ -335,6 +335,36 @@ namespace auik
         }
     }
 
+    void Column::invalidate_style()
+    {
+        Widget::invalidate_style();
+        for (auto *slot : _columns)
+            if (slot) slot->invalidate_style();
+    }
+
+    bool Column::update_locale()
+    {
+        bool changed = Widget::update_locale();
+        for (auto *slot : _columns)
+            if (slot) changed |= slot->update_locale();
+        return changed;
+    }
+
+    void Column::add_state_flags_inherit(WidgetStateFlags flags)
+    {
+        Widget::add_state_flags_inherit(flags);
+        if ((flags & WidgetStateFlagBits::visible) && !is_visible()) flags &= ~WidgetStateFlagBits::visible;
+        for (auto *column : _columns)
+            if (column) column->add_state_flags_inherit(flags);
+    }
+
+    void Column::remove_state_flags_inherit(WidgetStateFlags flags)
+    {
+        Widget::remove_state_flags_inherit(flags);
+        for (auto *column : _columns)
+            if (column) column->remove_state_flags_inherit(flags);
+    }
+
     void Column::update_depth(const amal::vec2 &depth_range)
     {
         Widget::update_depth(depth_range);
@@ -448,7 +478,7 @@ namespace auik
     {
         struct ColumnChildData
         {
-            umbf::Block *block = nullptr;
+            Widget *block = nullptr;
             ChildLayoutFlags layout = default_child_layout_flags();
         };
 
@@ -466,7 +496,7 @@ namespace auik
                 for (size_t child_i = 0; child_i < children.size(); ++child_i)
                 {
                     auto *child = children[child_i];
-                    if (!(child->widget_flags & WidgetFlagBits::configurable)) continue;
+                    if (!(child->widget_flags & WidgetFlagBits::cache_snapshot)) continue;
                     const ChildLayoutFlags layout =
                         child_i < layouts.size() ? layouts[child_i] : default_child_layout_flags();
                     items.push_back({child, layout});
@@ -487,7 +517,7 @@ namespace auik
             for (auto &children : columns)
             {
                 stream.write(static_cast<u32>(children.size()));
-                acul::vector<umbf::Block *> blocks;
+                acul::vector<Widget *> blocks;
                 blocks.reserve(children.size());
                 for (auto &child : children)
                 {
@@ -526,11 +556,23 @@ namespace auik
                     layouts.push_back(ChildLayoutFlags(layout));
                 }
 
-                acul::vector<umbf::Block *> children;
+                acul::vector<Widget *> children;
                 stream.read(children);
+                if (children.size() != layouts.size())
+                {
+                    for (auto *child : children)
+                        if (child) acul::release(child);
+                    acul::release(column);
+                    throw acul::runtime_error("Invalid column child count");
+                }
                 for (u32 child_i = 0u; child_i < child_count; ++child_i)
                 {
-                    auto *child = static_cast<Widget *>(children[child_i]);
+                    auto *child = dynamic_cast<Widget *>(children[child_i]);
+                    if (!child)
+                    {
+                        if (children[child_i]) acul::release(children[child_i]);
+                        continue;
+                    }
                     column->add_child(column_i, child, layouts[child_i]);
                 }
             }
@@ -540,7 +582,7 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::streams::Stream column{read_column, write_column};
+        AUIK_EXPORT const umbf::registry::BlockStream column{read_column, write_column};
     } // namespace streams
 
 } // namespace auik

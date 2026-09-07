@@ -5,6 +5,7 @@
 #include <acul/string/string.hpp>
 #include <acul/vector.hpp>
 #include <amal/vector.hpp>
+#include <umbf/umbf.hpp>
 #include "../detail/context.hpp"
 #include "../detail/events.hpp"
 #include "../draw.hpp"
@@ -65,11 +66,12 @@ namespace auik
         {
             none = 0x0,
             visible = 0x1,
-            configurable = 0x2,
-            attachable = 0x4,
-            hittable = 0x8,
-            read_only = 0x10,
-            disabled = 0x20
+            attachable = 0x2,
+            hittable = 0x4,
+            read_only = 0x8,
+            disabled = 0x10,
+            cache_snapshot = 0x20,
+            cache_global = 0x40
         };
         using flag_bitmask = std::true_type;
     };
@@ -82,7 +84,9 @@ namespace auik
         {
             none = 0x0,
             attached = 0x1,
-            transient = 0x2
+            transient = 0x2,
+            style_invalidated = 0x4,
+            visible = 0x8
         };
         using flag_bitmask = std::true_type;
     };
@@ -200,15 +204,16 @@ namespace auik
         detail::StylePropertiesBits::border_thickness | detail::StylePropertiesBits::font |
         detail::StylePropertiesBits::inline_spacing | detail::StylePropertiesBits::width |
         detail::StylePropertiesBits::height | detail::StylePropertiesBits::min_width |
-        detail::StylePropertiesBits::min_height | detail::StylePropertiesBits::extra;
+        detail::StylePropertiesBits::min_height | detail::StylePropertiesBits::max_width |
+        detail::StylePropertiesBits::max_height | detail::StylePropertiesBits::extra;
     constexpr inline detail::StylePropertyFlags g_style_parent_layout_mask = detail::StylePropertiesBits::margin;
 
     constexpr inline WidgetFlags get_default_widget_flags()
     {
-        return WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::configurable;
+        return WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::cache_snapshot;
     }
 
-    class Widget : public umbf::Block
+    class Widget
     {
     public:
         struct UserBind
@@ -323,12 +328,14 @@ namespace auik
                                                       {is_size_concrete(bounds.size.x) ? bounds.size.x : 0.0f,
                                                        is_size_concrete(bounds.size.y) ? bounds.size.y : 0.0f}}))
         {
+            if (widget_flags & WidgetFlagBits::visible) _widget_state_flags |= WidgetStateFlagBits::visible;
             assert(_viewport && "main viewport must be set before creating widgets");
         }
 
         AUIK_EXPORT virtual ~Widget();
 
-        u32 signature() const override { return AUIK_WIDGET_SIGN_IGNORE; }
+        virtual u32 signature() const noexcept { return AUIK_WIDGET_SIGN_IGNORE; }
+        virtual umbf::Block *as_snapshot_block() noexcept { return nullptr; }
 
         template <class T, class... Args>
         T *emplace_user_data(Args &&...args)
@@ -379,6 +386,7 @@ namespace auik
         }
 
         AUIK_EXPORT void pop_user_data_head(u32 expected_tag);
+        AUIK_EXPORT void erase_user_data(u32 tag);
 
         UserBind &bind()
         {
@@ -389,10 +397,17 @@ namespace auik
         inline u32 id() const { return _id; }
         inline bool is_attached() const { return _widget_state_flags & WidgetStateFlagBits::attached; }
         inline bool is_transient() const { return _widget_state_flags & WidgetStateFlagBits::transient; }
+        inline bool is_style_invalidated() const
+        {
+            return _widget_state_flags & WidgetStateFlagBits::style_invalidated;
+        }
         inline Widget *parent() const { return _parent; }
         inline void set_parent(Widget *parent)
         {
             _parent = parent;
+            if ((widget_flags & WidgetFlagBits::visible) && (!_parent || _parent->is_visible()))
+                add_state_flags_inherit(WidgetStateFlagBits::visible);
+            else remove_state_flags_inherit(WidgetStateFlagBits::visible);
             if (_parent && !is_visible()) set_position(AUIK_POS_UNDEFINED);
         }
         inline Widget *focus_parent() const { return _focus_parent; }
@@ -400,7 +415,8 @@ namespace auik
         inline detail::RectData &get_rect() { return _rect; }
         inline const detail::RectData &get_rect() const { return _rect; }
         inline void set_rect_tag_id(u32 tag_id) { _rect.id.tag_id = tag_id; }
-        inline bool is_visible() const { return (widget_flags & WidgetFlagBits::visible); }
+        inline bool is_visible() const { return _widget_state_flags & WidgetStateFlagBits::visible; }
+        inline bool is_logically_visible() const { return widget_flags & WidgetFlagBits::visible; }
         inline void set_visible() { set_widget_flag(WidgetFlagBits::visible); }
         inline void unset_visible() { unset_widget_flag(WidgetFlagBits::visible); }
         inline StyleState style_state() const { return _style_state; }
@@ -517,8 +533,10 @@ namespace auik
         inline void set_disabled() { set_widget_flag(WidgetFlagBits::disabled); }
         inline void unset_disabled() { unset_widget_flag(WidgetFlagBits::disabled); }
         inline void unset_disbled() { unset_disabled(); }
-        inline void set_configurable() { set_widget_flag(WidgetFlagBits::configurable); }
-        inline void unset_configurable() { unset_widget_flag(WidgetFlagBits::configurable); }
+        inline void set_cache_snapshot() { set_widget_flag(WidgetFlagBits::cache_snapshot); }
+        inline void unset_cache_snapshot() { unset_widget_flag(WidgetFlagBits::cache_snapshot); }
+        inline void set_cache_global() { set_widget_flag(WidgetFlagBits::cache_global); }
+        inline void unset_cache_global() { unset_widget_flag(WidgetFlagBits::cache_global); }
         inline Viewport *viewport() const { return _viewport; }
         inline void set_viewport(Viewport *viewport) { _viewport = viewport; }
         inline void attach_to_viewport(Viewport *viewport) { set_viewport(viewport); }
@@ -551,6 +569,18 @@ namespace auik
         virtual void reset_clip_rect_records() { _rect.clip_id = 0xFFFFu; }
         virtual void rebuild_clip_rects() {}
         virtual void reset_draw_records() { reset_external_draw_cull_state(); }
+        virtual void invalidate_style() { _widget_state_flags |= WidgetStateFlagBits::style_invalidated; }
+        virtual bool update_locale() { return false; }
+        virtual void add_state_flags_inherit(WidgetStateFlags flags)
+        {
+            if ((flags & WidgetStateFlagBits::visible) && !is_logically_visible())
+            {
+                _widget_state_flags &= ~WidgetStateFlagBits::visible;
+                flags &= ~WidgetStateFlagBits::visible;
+            }
+            _widget_state_flags |= flags;
+        }
+        virtual void remove_state_flags_inherit(WidgetStateFlags flags) { _widget_state_flags &= ~flags; }
         virtual void sync_widget_flags() { sync_widget_flags(resolve_event_flags(requested_event_flags)); }
 
         // Setters only change local widget state. Use these explicit synchronization points when an attached
@@ -605,6 +635,7 @@ namespace auik
 
         inline bool update_layout_min_size()
         {
+            if (is_style_invalidated()) update_style_invalidated();
             if (!layout_measure_required(true)) return false;
             update_layout_min_size_force();
             return true;
@@ -624,7 +655,13 @@ namespace auik
         virtual StyleUpdateFlags update_style() = 0;
         StyleUpdateFlags update_style_invalidated()
         {
+            auto &ctx = detail::get_context();
+            const bool force_resolution = is_style_invalidated();
+            const bool restore_styles_flag = force_resolution && !(ctx.dirty_flags & DirtyFlagBits::styles);
+            if (restore_styles_flag) ctx.dirty_flags |= DirtyFlagBits::styles;
             const StyleUpdateFlags flags = update_style();
+            if (restore_styles_flag) ctx.dirty_flags &= ~DirtyFlagBits::styles;
+            _widget_state_flags &= ~WidgetStateFlagBits::style_invalidated;
             if (flags & (StyleUpdateFlagBits::layout | StyleUpdateFlagBits::parent_layout)) invalidate_layout_measure();
             return flags;
         }
@@ -685,7 +722,8 @@ namespace auik
             auto &ctx = detail::get_context();
             ctx.id_map.emplace(id(), this);
             if (is_disabled() && !post_effect()) apply_disabled_post_effect();
-            if (const auto attach_cb = detail::get_default_widget_attach_cb()) attach_cb(this);
+            auto bind = ctx.widget_attach_binds.find(id());
+            if (bind != ctx.widget_attach_binds.end() && bind->second.on_attach) bind->second.on_attach(this);
         }
         virtual void on_detach()
         {
@@ -694,7 +732,10 @@ namespace auik
                 _widget_state_flags &= ~WidgetStateFlagBits::attached;
                 return;
             }
-            auto &map = detail::get_context().id_map;
+            auto &ctx = detail::get_context();
+            auto bind = ctx.widget_attach_binds.find(id());
+            if (bind != ctx.widget_attach_binds.end() && bind->second.on_detach) bind->second.on_detach(this);
+            auto &map = ctx.id_map;
             auto it = map.find(id());
             if (it != map.end() && it->second == this) map.erase(it);
             _widget_state_flags &= ~WidgetStateFlagBits::attached;
@@ -794,7 +835,7 @@ namespace auik
             on_focus(focused);
         }
 
-        inline void dispatch_key(Key key, KeyPressState state, KeyMode mods)
+        inline bool dispatch_key(Key key, KeyPressState state, KeyMode mods)
         {
             KeyEvent e{};
             e.key = key;
@@ -803,9 +844,10 @@ namespace auik
             if (_user_bind && _user_bind->on_key_fn)
             {
                 _user_bind->on_key_fn(e);
-                if (e.is_prevented_default()) return;
+                if (e.is_prevented_default()) return true;
             }
             on_key(key, state, mods);
+            return false;
         }
 
         inline void dispatch_char(u32 char_code, u32 count)
@@ -826,8 +868,7 @@ namespace auik
             invalidate_layout_measure();
             ChangeEvent event{};
             event.target = id();
-            for (Widget *widget = this; widget; widget = widget->parent())
-                widget->dispatch_change(event);
+            for (Widget *widget = this; widget; widget = widget->parent()) widget->dispatch_change(event);
             return event.is_prevented_default();
         }
 
@@ -854,8 +895,7 @@ namespace auik
         inline bool dispatch_change(ChangeEvent &e)
         {
             e.current_target = id();
-            if (_user_bind && _user_bind->on_change_fn)
-                _user_bind->on_change_fn(e);
+            if (_user_bind && _user_bind->on_change_fn) _user_bind->on_change_fn(e);
             if (!e.is_prevented_default()) on_change(e);
             return e.is_prevented_default();
         }
@@ -1062,6 +1102,14 @@ namespace auik
                     left_text->overflow != right_text->overflow)
                     return false;
             }
+            else if (left_node->id == AUIK_STYLE_EXTRA_OVERFLOW)
+            {
+                auto *left_overflow = static_cast<const StyleExtraOverflow *>(left_node->data);
+                auto *right_overflow = static_cast<const StyleExtraOverflow *>(right_node->data);
+                if (!left_overflow || !right_overflow || left_overflow->x != right_overflow->x ||
+                    left_overflow->y != right_overflow->y)
+                    return false;
+            }
             else if (left_node->data != right_node->data) return false;
             left_node = left_node->next;
             right_node = right_node->next;
@@ -1102,6 +1150,9 @@ namespace auik
         if ((union_mask & detail::StylePropertiesBits::border_thickness) &&
             prev_style.border_thickness() != next_style.border_thickness())
             changed |= detail::StylePropertiesBits::border_thickness;
+        if ((union_mask & detail::StylePropertiesBits::border_mask) &&
+            prev_style.border_mask() != next_style.border_mask())
+            changed |= detail::StylePropertiesBits::border_mask;
         if ((union_mask & detail::StylePropertiesBits::corner_mask) &&
             prev_style.corner_mask() != next_style.corner_mask())
             changed |= detail::StylePropertiesBits::corner_mask;
@@ -1121,6 +1172,11 @@ namespace auik
         if ((union_mask & detail::StylePropertiesBits::min_height) &&
             prev_style.min_height() != next_style.min_height())
             changed |= detail::StylePropertiesBits::min_height;
+        if ((union_mask & detail::StylePropertiesBits::max_width) && prev_style.max_width() != next_style.max_width())
+            changed |= detail::StylePropertiesBits::max_width;
+        if ((union_mask & detail::StylePropertiesBits::max_height) &&
+            prev_style.max_height() != next_style.max_height())
+            changed |= detail::StylePropertiesBits::max_height;
         if ((union_mask & detail::StylePropertiesBits::extra) && !style_extra_equal(prev_style, next_style))
             changed |= detail::StylePropertiesBits::extra;
 
@@ -1148,4 +1204,17 @@ namespace auik
         return make_style_update_flags(theme->get_style(prev_style_id), theme->get_style(next_style_id));
     }
 
+    inline bool style_selector_needs_resolution(const StyleSelector &selector)
+    {
+        return selector.id == Theme::STYLE_ID_INVALID || (detail::get_context().dirty_flags & DirtyFlagBits::styles);
+    }
 } // namespace auik
+
+namespace acul
+{
+    template <>
+    AUIK_EXPORT bin_stream &bin_stream::write(auik::Widget *);
+
+    template <>
+    AUIK_EXPORT bin_stream &bin_stream::read(auik::Widget *&);
+} // namespace acul

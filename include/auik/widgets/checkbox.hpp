@@ -10,7 +10,7 @@
 
 namespace auik
 {
-    class Checkbox final : public Widget
+    class Checkbox final : public Widget, public umbf::Block
     {
     public:
         AUIK_EXPORT Checkbox(u32 id, bool value, WidgetFlags widget_flags);
@@ -26,7 +26,8 @@ namespace auik
         AUIK_EXPORT void restore_hit_depth() override;
         AUIK_EXPORT void draw(DrawCtx &ctx) override;
         AUIK_EXPORT void on_click(MouseKey key, KeyPressState state, u32 click_count) override;
-        u32 signature() const override { return AUIK_TAG_CHECKBOX; }
+        u32 signature() const noexcept override { return AUIK_TAG_CHECKBOX; }
+        umbf::Block *as_snapshot_block() noexcept override { return this; }
 
         bool value() const { return _value; }
         void set_value(bool value) { _value = value; }
@@ -56,12 +57,12 @@ namespace auik
     inline Checkbox *make_checkbox(u32 id, bool value)
     {
         constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
-                                             WidgetFlagBits::configurable | WidgetFlagBits::hittable;
+                                             WidgetFlagBits::cache_snapshot | WidgetFlagBits::hittable;
         return acul::alloc<Checkbox>(id, value, widget_flags);
     }
 
     namespace streams
     {
-        extern AUIK_EXPORT const umbf::streams::Stream checkbox;
+        extern AUIK_EXPORT const umbf::registry::BlockStream checkbox;
     }
 } // namespace auik

@@ -4,12 +4,20 @@
 #include "menu.hpp"
 
 #define AUIK_TAG_WINDOW          0xB4382179u
+#define AUIK_TAG_WINDOW_STATE    0x7D900222u
 #define AUIK_TAG_VIEWPORT_WINDOW 0x965E5D42u
 #define AUIK_TAG_WINDOW_HEADER   0x663566BEu
 #define AUIK_TAG_WINDOW_CONTENT  0x2E80C7A1u
 
 namespace auik
 {
+    struct WindowStateData final : public detail::WidgetStateData
+    {
+        amal::rect bounds{};
+
+        u32 signature() const noexcept override { return AUIK_TAG_WINDOW_STATE; }
+    };
+
     class PopupMenu;
     class RubberBand;
 
@@ -29,9 +37,6 @@ namespace auik
             decorated = 0x4,
             docked = 0x8,
             dockable = 0x10,
-            scrollable = 0x20,
-            no_scrollbar_x = 0x40,
-            no_scrollbar_y = 0x80,
             rubber_band = 0x100
         };
 
@@ -48,21 +53,26 @@ namespace auik
     constexpr inline WindowFlags get_decorated_window_flags()
     {
         return WindowFlagBits::resizable | WindowFlagBits::movable | WindowFlagBits::decorated |
-               WindowFlagBits::scrollable | WindowFlagBits::dockable;
+               WindowFlagBits::dockable;
     }
-    constexpr inline WindowFlags get_fixed_window_flags()
-    {
-        return WindowFlagBits::decorated | WindowFlagBits::scrollable;
-    }
-    constexpr inline WindowFlags get_popup_window_flags()
-    {
-        return WindowFlagBits::movable | WindowFlagBits::scrollable;
-    }
+    constexpr inline WindowFlags get_fixed_window_flags() { return WindowFlagBits::decorated; }
+    constexpr inline WindowFlags get_popup_window_flags() { return WindowFlagBits::movable; }
 
-    class Window : public Widget
+    class Window : public Widget, public umbf::Block
     {
     private:
-        DrawBlock *_content_block = nullptr;
+        class ContentBlock final : public detail::ScrollableBlock
+        {
+        public:
+            ContentBlock(u32 id, WidgetFlags widget_flags, u32 tag_id)
+                : detail::ScrollableBlock(id, widget_flags, tag_id)
+            {
+            }
+
+            AUIK_EXPORT bool apply_window_style(StyleID style_id, const Style &style);
+        };
+
+        ContentBlock *_content_block = nullptr;
 
     public:
         acul::vector<Widget *> &children;
@@ -118,8 +128,22 @@ namespace auik
         const acul::string &title() const { return _title; }
         AUIK_EXPORT void set_title(StringView title);
         AUIK_EXPORT const Text *title_text() const;
-        DrawBlock *content_block() { return _content_block; }
-        const DrawBlock *content_block() const { return _content_block; }
+        auik::Block *content_block() { return _content_block; }
+        const auik::Block *content_block() const { return _content_block; }
+        ScrollData *scroll_data() { return _content_block ? _content_block->scroll_data() : nullptr; }
+        const ScrollData *scroll_data() const { return _content_block ? _content_block->scroll_data() : nullptr; }
+        void reset_content_scroll_offset()
+        {
+            if (_content_block) _content_block->reset_scroll_offset();
+        }
+        void center_content_on(const Widget *child)
+        {
+            if (!_content_block || !child || !child->is_visible() || !_content_block->has_visible_scrollbar_y()) return;
+            const f32 child_center = child->position().y + child->size().y * 0.5f;
+            const f32 viewport_center = _content_block->position().y + _content_block->size().y * 0.5f;
+            _content_block->set_scroll_offset(
+                {_content_block->scroll_offset().x, amal::max(child_center - viewport_center, 0.0f)});
+        }
         const acul::vector<ChildLayoutFlags> &child_layouts() const { return _content_block->child_layouts(); }
         using value_type = Widget *;
         using iterator = acul::vector<value_type>::iterator;
@@ -150,6 +174,8 @@ namespace auik
         AUIK_EXPORT void reset_clip_rect_records() override;
         AUIK_EXPORT void rebuild_clip_rects() override;
         AUIK_EXPORT void reset_draw_records() override;
+        AUIK_EXPORT void invalidate_style() override;
+        AUIK_EXPORT bool update_locale() override;
         AUIK_EXPORT virtual void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT u32 get_depth_requirement() const override;
         AUIK_EXPORT virtual void update_depth(const amal::vec2 &depth_range) override;
@@ -162,7 +188,8 @@ namespace auik
             Widget::sync_widget_flags(requested_event_flags | _window_event_flags);
         }
         AUIK_EXPORT virtual void draw(DrawCtx &ctx) override;
-        u32 signature() const override { return AUIK_TAG_WINDOW; }
+        u32 signature() const noexcept override { return AUIK_TAG_WINDOW; }
+        umbf::Block *as_snapshot_block() noexcept override { return this; }
 
     private:
         acul::string _title;
@@ -185,12 +212,14 @@ namespace auik
         DrawDataID _bg_draw_id{};
         EventFlags _window_event_flags = EventFlagBits::none;
         u32 _window_style_tag = AUIK_STYLE_TAG_WINDOW;
-        StyleSelector _window_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_WINDOW};
+        mutable StyleSelector _window_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_WINDOW};
 
     protected:
         // Window subclasses may extend attach/detach while preserving the base window tree lifecycle.
         AUIK_EXPORT virtual void on_attach() override;
         AUIK_EXPORT virtual void on_detach() override;
+        AUIK_EXPORT void add_state_flags_inherit(WidgetStateFlags flags) override;
+        AUIK_EXPORT void remove_state_flags_inherit(WidgetStateFlags flags) override;
         AUIK_EXPORT virtual void on_change(ChangeEvent &event) override;
 
     private:
@@ -225,21 +254,21 @@ namespace auik
                                          const amal::rect &bounds = {AUIK_POS_IGNORE, AUIK_SIZE_AUTO})
     {
         constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
-                                             WidgetFlagBits::configurable | WidgetFlagBits::hittable;
+                                             WidgetFlagBits::cache_snapshot | WidgetFlagBits::hittable;
         return acul::alloc<Window>(id, title, bounds, get_decorated_window_flags(), widget_flags);
     }
 
     inline Window *make_popup_window(u32 id, const amal::rect &bounds = {AUIK_POS_IGNORE, AUIK_SIZE_AUTO})
     {
         constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
-                                             WidgetFlagBits::configurable | WidgetFlagBits::hittable;
+                                             WidgetFlagBits::cache_snapshot | WidgetFlagBits::hittable;
         return acul::alloc<Window>(id, "", bounds, get_popup_window_flags(), widget_flags);
     }
 
     inline Window *make_viewport_window(u32 id, StringView title = "")
     {
         constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
-                                             WidgetFlagBits::configurable | WidgetFlagBits::hittable;
+                                             WidgetFlagBits::cache_snapshot | WidgetFlagBits::hittable;
         auto *window = acul::alloc<Window>(id, title, amal::rect{AUIK_POS_IGNORE, AUIK_SIZE_FILL},
                                            get_popup_window_flags(), widget_flags);
         window->set_rect_tag_id(AUIK_TAG_VIEWPORT_WINDOW);
@@ -248,6 +277,7 @@ namespace auik
 
     namespace streams
     {
-        extern AUIK_EXPORT const umbf::streams::Stream window;
-    }
+        extern AUIK_EXPORT const umbf::registry::BlockStream window;
+        extern AUIK_EXPORT const umbf::registry::BlockStream window_state;
+    } // namespace streams
 } // namespace auik

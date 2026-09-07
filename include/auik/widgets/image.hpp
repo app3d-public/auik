@@ -7,7 +7,7 @@
 
 namespace auik
 {
-    class Image : public Widget
+    class Image : public Widget, public umbf::Block
     {
     public:
         Image(u32 id, TextureID texture_id, amal::vec2 size, amal::rect uv_rect, WidgetFlags flags)
@@ -37,7 +37,8 @@ namespace auik
         bool coverage_mode() const { return _coverage_mode; }
         void set_coverage_mode(bool value) { _coverage_mode = value; }
 
-        virtual u32 signature() const override { return AUIK_TAG_IMAGE; }
+        virtual u32 signature() const noexcept override { return AUIK_TAG_IMAGE; }
+        umbf::Block *as_snapshot_block() noexcept override { return this; }
 
     private:
         friend class CheckerImage;
@@ -48,7 +49,7 @@ namespace auik
         bool _coverage_mode = false;
     };
 
-    class CheckerImage : public Widget
+    class CheckerImage : public Widget, public umbf::Block
     {
     public:
         CheckerImage(u32 id, amal::vec2 size, u32 style_tag, WidgetFlags flags)
@@ -71,7 +72,8 @@ namespace auik
             set_rect_tag_id(tag_id);
         }
 
-        virtual u32 signature() const override { return AUIK_TAG_CHECKER_IMAGE; }
+        virtual u32 signature() const noexcept override { return AUIK_TAG_CHECKER_IMAGE; }
+        umbf::Block *as_snapshot_block() noexcept override { return this; }
 
     private:
         DrawDataID _checker{};
@@ -82,7 +84,8 @@ namespace auik
                              amal::rect uv_rect = {{0.0f, 0.0f}, {1.0f, 1.0f}})
     {
         return acul::alloc<Image>(id, texture_id, size, uv_rect,
-                                  WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::configurable);
+                                  WidgetFlagBits::visible | WidgetFlagBits::attachable |
+                                      WidgetFlagBits::cache_snapshot);
     }
 
     inline void cache_image(u32 id, Image *image)
@@ -119,7 +122,7 @@ namespace auik
 
     namespace streams
     {
-        extern AUIK_EXPORT const umbf::streams::Stream image;
-        extern AUIK_EXPORT const umbf::streams::Stream checker_image;
+        extern AUIK_EXPORT const umbf::registry::BlockStream image;
+        extern AUIK_EXPORT const umbf::registry::BlockStream checker_image;
     } // namespace streams
 } // namespace auik

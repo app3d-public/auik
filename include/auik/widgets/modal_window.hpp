@@ -33,6 +33,14 @@ namespace auik
         u32 group_id = 0u;
     };
 
+    struct ModalWidget
+    {
+        Widget *widget = nullptr;
+        acul::unique_function<void()> on_close = nullptr;
+        bool prevent_close = false;
+        u32 group_id = 0u;
+    };
+
     template <typename... Args>
     acul::vector<ModalButton> make_modal_button_list(Args &&...args)
     {
@@ -62,7 +70,7 @@ namespace auik
         acul::unique_function<void()> _on_close = nullptr;
     };
 
-    class ModalQueue final : public Widget
+    class ModalQueue final : public Widget, public umbf::Block
     {
     public:
         AUIK_EXPORT explicit ModalQueue(u32 id, WidgetFlags widget_flags);
@@ -74,9 +82,11 @@ namespace auik
         AUIK_EXPORT void set_modal_width(f32 value);
         f32 modal_width() const { return _modal_width; }
         AUIK_EXPORT void push(ModalMessage &&message);
+        AUIK_EXPORT void push(ModalWidget &&modal);
+        AUIK_EXPORT void close_active_window();
         AUIK_EXPORT void close_all_windows();
-        bool empty() const { return _messages.empty(); }
-        u32 message_count() const { return static_cast<u32>(_messages.size()); }
+        bool empty() const { return _entries.empty(); }
+        u32 message_count() const { return static_cast<u32>(_entries.size()); }
         int prevent_close_count() const { return _prevent_close_count; }
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
@@ -86,13 +96,17 @@ namespace auik
         AUIK_EXPORT void reset_clip_rect_records() override;
         AUIK_EXPORT void rebuild_clip_rects() override;
         AUIK_EXPORT void reset_draw_records() override;
+        AUIK_EXPORT void invalidate_style() override;
+        AUIK_EXPORT bool update_locale() override;
         AUIK_EXPORT void update_depth(const amal::vec2 &depth_range) override;
         AUIK_EXPORT void back_hit_depth() override;
         AUIK_EXPORT void restore_hit_depth() override;
         AUIK_EXPORT void draw(DrawCtx &ctx) override;
         AUIK_EXPORT void on_click(MouseKey key, KeyPressState state, u32 click_count) override;
         AUIK_EXPORT void on_drag(const amal::vec2 &delta, KeyPressState state) override;
-        virtual u32 signature() const override { return AUIK_TAG_MODAL_QUEUE; }
+        bool accepts_focus_on_mouse_press(ElementID) const override { return false; }
+        virtual u32 signature() const noexcept override { return AUIK_TAG_MODAL_QUEUE; }
+        umbf::Block *as_snapshot_block() noexcept override { return this; }
 
     private:
         friend class ModalWindow;
@@ -105,6 +119,16 @@ namespace auik
             bool valid = false;
         };
 
+        struct ModalEntry
+        {
+            ModalMessage message{};
+            Widget *widget = nullptr;
+            acul::unique_function<void()> on_close = nullptr;
+            bool custom = false;
+            bool prevent_close = false;
+            u32 group_id = 0u;
+        };
+
         bool is_attached() const;
         void request_redraw();
         void update_modal_draw_commands(DrawReasonFlags reason);
@@ -113,8 +137,10 @@ namespace auik
         void request_modal_rebuild();
         void clear_modal(bool invalidate_draw = true);
         void close_all_windows_now();
-        bool remove_modal(ModalWindow *modal, bool invoke_callback = true);
-        ModalWindow *active_modal() const { return _modal; }
+        bool remove_modal(Widget *modal, bool invoke_callback = true);
+        Widget *active_modal() const { return _modal; }
+        void release_pending_entries();
+        void erase_entry(size_t index);
         void layout_active_modal();
         void update_active_modal_depth();
         void rebuild_modal();
@@ -122,9 +148,9 @@ namespace auik
         u32 group_count(u32 group_id) const;
         void decrement_group_count(u32 group_id);
 
-        ModalWindow *_modal = nullptr;
+        Widget *_modal = nullptr;
         DrawDataID _backdrop_draw;
-        acul::vector<ModalMessage> _messages;
+        acul::vector<ModalEntry> _entries;
         acul::hashmap<u32, u32> _group_counts;
         ModalIcon _icon{};
         f32 _modal_width = AUIK_MODAL_WINDOW_WIDTH;
@@ -147,6 +173,6 @@ namespace auik
 
     namespace streams
     {
-        extern AUIK_EXPORT const umbf::streams::Stream modal_queue;
+        extern AUIK_EXPORT const umbf::registry::BlockStream modal_queue;
     } // namespace streams
 } // namespace auik

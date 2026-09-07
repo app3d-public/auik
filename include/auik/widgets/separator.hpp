@@ -39,7 +39,7 @@ namespace auik
         {
         }
 
-        virtual u32 signature() const override { return AUIK_TAG_SEPARATOR; }
+        virtual u32 signature() const noexcept override { return AUIK_TAG_SEPARATOR; }
     };
 
     class VSeparator final : public Separator
@@ -51,7 +51,7 @@ namespace auik
         {
         }
 
-        virtual u32 signature() const override { return AUIK_TAG_SEPARATOR; }
+        virtual u32 signature() const noexcept override { return AUIK_TAG_SEPARATOR; }
     };
 
     inline HSeparator *make_h_separator() { return acul::alloc<HSeparator>(); }
@@ -60,7 +60,7 @@ namespace auik
 
     namespace streams
     {
-        extern AUIK_EXPORT const umbf::streams::Stream h_separator;
-        extern AUIK_EXPORT const umbf::streams::Stream v_separator;
+        extern AUIK_EXPORT const umbf::registry::BlockStream h_separator;
+        extern AUIK_EXPORT const umbf::registry::BlockStream v_separator;
     } // namespace streams
 } // namespace auik

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <umbf/utils.hpp>
+#include <umbf/ext/image/utils.hpp>
 #include "fwd.hpp"
 #include "gpu_context.hpp"
 
@@ -24,7 +24,7 @@ namespace auik::detail
         u32 atlas_id = AUIK_INVALID_DRAW_DATA_ID;
         AtlasTextureResource texture{};
         umbf::Image2D surface{};
-        umbf::utils::SkylinePacker packer{};
+        umbf::SkylinePacker packer{};
         acul::vector<amal::irect> rects;
     };
 

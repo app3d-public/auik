@@ -14,12 +14,14 @@ namespace auik
     class Dockspace;
     class Image;
     class ImageButton;
+    class Text;
     class Tooltip;
     struct Viewport;
     struct DrawStream;
     struct DrawPipeline;
     struct PostEffect;
     struct SoundContext;
+    struct ModelDB;
 
     namespace detail
     {
