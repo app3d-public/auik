@@ -213,7 +213,7 @@ namespace auik
         return WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::cache_snapshot;
     }
 
-    class Widget
+    class AUIK_CLASS_EXPORT Widget
     {
     public:
         struct UserBind
@@ -652,7 +652,7 @@ namespace auik
         AUIK_EXPORT virtual void update_depth(const amal::vec2 &depth_range);
         AUIK_EXPORT virtual void back_hit_depth();
         AUIK_EXPORT virtual void restore_hit_depth();
-        virtual StyleUpdateFlags update_style() = 0;
+        AUIK_NO_EXPORT virtual StyleUpdateFlags update_style() = 0;
         StyleUpdateFlags update_style_invalidated()
         {
             auto &ctx = detail::get_context();
@@ -667,7 +667,7 @@ namespace auik
         }
         // A container may suppress event-driven style updates for a child that it does not currently draw.
         virtual bool accepts_child_style_update(const Widget *) const { return true; }
-        virtual void draw(DrawCtx &) = 0;
+        AUIK_NO_EXPORT virtual void draw(DrawCtx &) = 0;
 
         // Controls whether a mouse press on this hit target replaces ctx.focus_id.
         // Return false for technical targets that should preserve the current focus leaf.
@@ -991,7 +991,7 @@ namespace auik
             tail->pNext = node;
         }
 
-        void clear_user_data();
+        AUIK_NO_EXPORT void clear_user_data();
         WidgetUserData *_user_data = nullptr;
     };
 
@@ -1087,30 +1087,9 @@ namespace auik
         while (left_node || right_node)
         {
             if (!left_node || !right_node) return false;
-            if (left_node->id != right_node->id) return false;
-            if (left_node->id == AUIK_STYLE_EXTRA_ALIGN)
-            {
-                auto *left_align = static_cast<const StyleExtraAlign *>(left_node->data);
-                auto *right_align = static_cast<const StyleExtraAlign *>(right_node->data);
-                if (!left_align || !right_align || left_align->flags != right_align->flags) return false;
-            }
-            else if (left_node->id == AUIK_STYLE_EXTRA_TEXT)
-            {
-                auto *left_text = static_cast<const StyleExtraText *>(left_node->data);
-                auto *right_text = static_cast<const StyleExtraText *>(right_node->data);
-                if (!left_text || !right_text || left_text->wrap != right_text->wrap ||
-                    left_text->overflow != right_text->overflow)
-                    return false;
-            }
-            else if (left_node->id == AUIK_STYLE_EXTRA_OVERFLOW)
-            {
-                auto *left_overflow = static_cast<const StyleExtraOverflow *>(left_node->data);
-                auto *right_overflow = static_cast<const StyleExtraOverflow *>(right_node->data);
-                if (!left_overflow || !right_overflow || left_overflow->x != right_overflow->x ||
-                    left_overflow->y != right_overflow->y)
-                    return false;
-            }
-            else if (left_node->data != right_node->data) return false;
+            if (left_node->id != right_node->id || left_node->size != right_node->size) return false;
+            if (std::memcmp(Style::extra_data(left_node), Style::extra_data(right_node), left_node->size) != 0)
+                return false;
             left_node = left_node->next;
             right_node = right_node->next;
         }

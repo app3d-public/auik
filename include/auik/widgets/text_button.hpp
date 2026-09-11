@@ -8,7 +8,7 @@
 
 namespace auik
 {
-    class TextButton : public Widget, public umbf::Block
+    class AUIK_CLASS_EXPORT TextButton : public Widget, public umbf::Block
     {
     public:
         TextButton(u32 id, StringView text, amal::vec2 inline_size, WidgetFlags widget_flags, EventFlags event_flags,

@@ -33,7 +33,7 @@ namespace auik
         DrawDataID _draw{};
     };
 
-    class WRect final : public Widget, public umbf::Block
+    class AUIK_CLASS_EXPORT WRect final : public Widget, public umbf::Block
     {
     public:
         AUIK_EXPORT explicit WRect(u32 id, const amal::rect &bounds, WidgetFlags flags);

@@ -1828,8 +1828,8 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::registry::BlockStream textbox{read_textbox, write_textbox};
-        AUIK_EXPORT const umbf::registry::BlockStream multiline_textbox{read_multiline_textbox,
+        extern AUIK_EXPORT const umbf::registry::BlockStream textbox{read_textbox, write_textbox};
+        extern AUIK_EXPORT const umbf::registry::BlockStream multiline_textbox{read_multiline_textbox,
                                                                         write_multiline_textbox};
     } // namespace streams
 

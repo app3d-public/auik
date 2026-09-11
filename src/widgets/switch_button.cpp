@@ -255,7 +255,7 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::registry::BlockStream switch_button{read_switch_button, write_switch_button};
+        extern AUIK_EXPORT const umbf::registry::BlockStream switch_button{read_switch_button, write_switch_button};
     } // namespace streams
 
 } // namespace auik

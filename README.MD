@@ -11,7 +11,7 @@ It is not a windowing framework and does not own your main loop. Instead, it pro
 - Unicode-aware typography
 - Animations and delayed UI tasks
 - Post-processing effects
-- CSS-inspired theme system
+- Declarative theme description styling
 - Audio support for UI interactions and modal events
 - Binary UI state snapshots
 - i18n integration API
@@ -21,7 +21,7 @@ Auik uses an event-driven retained UI model with a multi-pipeline rendering arch
 Unlike traditional UI systems that generate a single vertex stream, Auik organizes rendering into multiple specialized draw streams and pipelines.
 
 ## Styling
-Auik includes a CSS-inspired theme system. Themes can be created either through the native C++ API or through the CSS transpiler.
+Auik includes a ASD-inspired theme system. Themes can be created either through the native C++ API or through the ASD transpiler.
 
 ## Icons
 Auik provides an API for default icons using [Remix Icon](https://github.com/Remix-Design/RemixIcon). Icons and fonts are not bundled.
@@ -53,30 +53,31 @@ The following dependencies are included as git submodules and must be checked ou
 The following dependencies must be installed on your system:
 - [Python 3](https://www.python.org/)
 - [Jinja2](https://pypi.org/project/Jinja2/)
-- [tinycss2](https://pypi.org/project/tinycss2/)
 - [fontconfig](https://www.freedesktop.org/wiki/Software/fontconfig/)
 - [freetype](https://www.freetype.org/)
 - [harfbuzz](https://github.com/harfbuzz/harfbuzz)
 
-### CSS Theme Generation
+### ASD Theme Generation
 
-Auik itself generates the built-in style and variable ids required by the public widget headers. Optional modules can generate their own public style id headers and register them with the theme compiler. Host applications generate concrete CSS theme sources explicitly with `compile_auik_css_theme()`.
+See the [ASD syntax specification](docs/wiki/README.md) for declarations, values and inheritance.
+
+Auik itself generates the built-in style and variable ids required by the public widget headers. Optional modules can generate their own public style id headers and register them with the theme compiler. Host applications generate concrete ASD theme sources explicitly with `compile_auik_asd_theme()`.
 
 ```cmake
 add_subdirectory(modules/auik)
 ```
 
-Call `compile_auik_css_theme()` even when the host application only wants the default theme:
+Call `compile_auik_asd_theme()` even when the host application only wants the default theme:
 
 ```cmake
-compile_auik_css_theme("${AUIK_BASE_THEME}")
+compile_auik_asd_theme("${AUIK_BASE_THEME}")
 ```
 
 Generated files are exported through:
-- `AUIK_CSS_SRC`
-- `AUIK_CSS_HEADER`
-- `AUIK_CSS_INCLUDE_DIR`
-- `AUIK_CSS_TARGET`
+- `AUIK_ASD_SRC`
+- `AUIK_ASD_HEADER`
+- `AUIK_ASD_INCLUDE_DIR`
+- `AUIK_ASD_TARGET`
 
 The host application is responsible for compiling the generated files into its own target.
 

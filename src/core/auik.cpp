@@ -183,6 +183,16 @@ namespace auik
             begin_unbound_drag();
         }
 
+        void dispatch_drag(detail::Context &ctx, u32 id, const amal::vec2 &delta, KeyPressState state)
+        {
+            auto it = ctx.id_map.find(id);
+            if (it == ctx.id_map.end() || !it->second->has_event_handler(EventFlagBits::drag)) return;
+            Widget *widget = it->second;
+            widget->dispatch_drag(delta, state);
+            // User callbacks may erase widgets or rehash the ID map.
+            if (ctx.io.drag_id.widget_id == id) try_begin_unbound_drag(ctx, widget);
+        }
+
     } // namespace
 
     static void erase_user_data_tag(WidgetUserData *&head, u32 tag)
@@ -766,12 +776,8 @@ namespace auik
                 io.drag_id = io.clicked_id;
                 io.drag_key_flags = io.active_mouse_buttons;
             }
-            auto it = ctx.id_map.find(io.drag_id.widget_id);
-            if (it != ctx.id_map.end() && it->second->has_event_handler(EventFlagBits::drag))
-            {
-                it->second->dispatch_drag(drag_delta, begin_drag ? KeyPressState::press : KeyPressState::repeat);
-                try_begin_unbound_drag(ctx, it->second);
-            }
+            dispatch_drag(ctx, io.drag_id.widget_id, drag_delta,
+                          begin_drag ? KeyPressState::press : KeyPressState::repeat);
             mark_host_refresh_request();
         }
 
@@ -1234,14 +1240,7 @@ namespace auik
                 frame_cache.drag_widget_id = 0;
                 frame_cache.drag_delta = {0.0f, 0.0f};
                 if (drag_widget_id != 0 && drag_delta != amal::vec2{0.0f})
-                {
-                    auto it = ctx.id_map.find(drag_widget_id);
-                    if (it != ctx.id_map.end() && it->second->has_event_handler(EventFlagBits::drag))
-                    {
-                        it->second->dispatch_drag(drag_delta, KeyPressState::repeat);
-                        try_begin_unbound_drag(ctx, it->second);
-                    }
-                }
+                    dispatch_drag(ctx, drag_widget_id, drag_delta, KeyPressState::repeat);
             }
 
             if (changes & FrameChangesBits::scroll_delta)

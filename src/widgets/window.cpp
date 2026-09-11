@@ -25,13 +25,21 @@ namespace auik
         return normal_mask != active_mask;
     }
 
+    static inline bool is_docked_window(const Window &window) { return window.window_flags & WindowFlagBits::docked; }
+    static inline u32 effective_window_style_tag(const Window &window)
+    {
+        return is_docked_window(window) && window.dock_style_tag() != 0u ? window.dock_style_tag()
+                                                                         : window.window_style_tag();
+    }
+
     static inline bool needs_layout_on_active(Window &window)
     {
         auto *theme = get_theme();
+        const u32 window_style_tag = effective_window_style_tag(window);
         const Style &window_normal =
-            theme->get_style(theme->get_resolved_style(AUIK_STYLE_TAG_WINDOW, window.id(), 0, StyleState::normal));
+            theme->get_style(theme->get_resolved_style(window_style_tag, window.id(), 0, StyleState::normal));
         const Style &window_active =
-            theme->get_style(theme->get_resolved_style(AUIK_STYLE_TAG_WINDOW, window.id(), 0, StyleState::active));
+            theme->get_style(theme->get_resolved_style(window_style_tag, window.id(), 0, StyleState::active));
         if (has_layout_style_delta(window_normal, window_active)) return true;
 
         if (!(window.window_flags & WindowFlagBits::decorated)) return false;
@@ -71,12 +79,13 @@ namespace auik
     static inline amal::vec4 window_border_insets(const Style &style)
     {
         const f32 thickness = amal::max(style.border_thickness(), 0.0f);
-        const u32 mask = style.border_mask();
-        return {(mask & AUIK_BORDER_LEFT_BIT) ? thickness : 0.0f, (mask & AUIK_BORDER_TOP_BIT) ? thickness : 0.0f,
-                (mask & AUIK_BORDER_RIGHT_BIT) ? thickness : 0.0f, (mask & AUIK_BORDER_BOTTOM_BIT) ? thickness : 0.0f};
+        const u32 border_mask = style.border_mask();
+        return {(border_mask & AUIK_BORDER_LEFT_BIT) ? thickness : 0.0f,
+                (border_mask & AUIK_BORDER_TOP_BIT) ? thickness : 0.0f,
+                (border_mask & AUIK_BORDER_RIGHT_BIT) ? thickness : 0.0f,
+                (border_mask & AUIK_BORDER_BOTTOM_BIT) ? thickness : 0.0f};
     }
 
-    static inline bool is_docked_window(const Window &window) { return window.window_flags & WindowFlagBits::docked; }
     static inline Widget *window_menu_widget(const Window &window)
     {
         auto *menu = window.get_menu();
@@ -99,11 +108,6 @@ namespace auik
     static inline bool owns_popup_menu_tree(const Window &window)
     {
         return !is_docked_window(window) && window.header_popup_menu();
-    }
-
-    static inline bool should_use_docked_window_style(const Window &window, u32 base_style_tag)
-    {
-        return is_docked_window(window) && base_style_tag == AUIK_STYLE_TAG_WINDOW;
     }
 
     static inline void get_window_resize_direction(const detail::RectData &rect, const amal::vec2 &mouse_pos,
@@ -536,24 +540,24 @@ namespace auik
         }
     }
 
-    u32 Window::effective_window_style_tag() const
-    {
-        if (should_use_docked_window_style(*this, _window_style_tag)) return AUIK_STYLE_TAG_DOCKED_WINDOW;
-        return _window_style_tag;
-    }
-
     const Style &Window::resolved_window_style() const
     {
         // A child can rebuild its clip rect after the window style was invalidated but before
         // Window::update_style() gets its turn in the deferred refresh. Resolve the selector
         // lazily so internal content never observes the transient invalid cache entry.
-        if (_window_style.id == Theme::STYLE_ID_INVALID)
+        const u32 style_tag = effective_window_style_tag(*this);
+        if (_window_style.id == Theme::STYLE_ID_INVALID || _window_style.tag_id != style_tag)
         {
-            const u32 frame_style_tag = effective_window_style_tag();
-            if (_window_style.tag_id != frame_style_tag) _window_style = {Theme::STYLE_ID_INVALID, frame_style_tag};
+            _window_style = {Theme::STYLE_ID_INVALID, style_tag};
             resolve_style_selector(_window_style, id(), 0u, style_state());
         }
         return get_theme()->get_style(_window_style.id);
+    }
+
+    bool Window::preserves_dock_size() const
+    {
+        const auto *settings = resolved_window_style().aspect_ratio_settings();
+        return settings && settings->mode == AspectRatioMode::preserve;
     }
 
     bool Window::ContentBlock::apply_window_style(StyleID style_id, const Style &style)
@@ -1024,8 +1028,8 @@ namespace auik
     StyleUpdateFlags Window::update_style()
     {
         StyleUpdateFlags out = StyleUpdateFlagBits::none;
-        const u32 frame_style_tag = effective_window_style_tag();
-        if (_window_style.tag_id != frame_style_tag) _window_style = {Theme::STYLE_ID_INVALID, frame_style_tag};
+        const u32 style_tag = effective_window_style_tag(*this);
+        if (_window_style.tag_id != style_tag) _window_style = {Theme::STYLE_ID_INVALID, style_tag};
         out |= resolve_style_selector(_window_style, id(), 0u, style_state());
         const Style &window_style = resolved_window_style();
         _min_size = {window_style.min_width(), window_style.min_height()};
@@ -1739,6 +1743,7 @@ namespace auik
                                            translated);
             stream.write(static_cast<u32>(widget->window_flags))
                 .write(widget->window_style_tag())
+                .write(widget->dock_style_tag())
                 .write(static_cast<Widget *>(widget->content_block()));
             write_window_menu(stream, *widget);
         }
@@ -1749,7 +1754,8 @@ namespace auik
             const auto title = detail::read_localized_string(stream);
             u32 window_flags = 0u;
             u32 window_style_tag = AUIK_STYLE_TAG_WINDOW;
-            stream.read(window_flags).read(window_style_tag);
+            u32 dock_style_tag = AUIK_STYLE_TAG_DOCKED_WINDOW;
+            stream.read(window_flags).read(window_style_tag).read(dock_style_tag);
 
             Widget *content_block = nullptr;
             stream.read(content_block);
@@ -1758,6 +1764,7 @@ namespace auik
                 acul::alloc<Window>(common.id, StringView{title.text.c_str(), title.translated}, common.bounds,
                                     WindowFlags(window_flags), WidgetFlags(common.widget_flags));
             widget->set_window_style_tag(window_style_tag);
+            widget->set_dock_style_tag(dock_style_tag);
             if (content_block &&
                 (content_block->signature() == AUIK_TAG_BLOCK || content_block->signature() == AUIK_TAG_DRAW_BLOCK))
             {
@@ -1787,8 +1794,8 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::registry::BlockStream window{read_window, write_window};
-        AUIK_EXPORT const umbf::registry::BlockStream window_state{read_window_state, write_window_state};
+        extern AUIK_EXPORT const umbf::registry::BlockStream window{read_window, write_window};
+        extern AUIK_EXPORT const umbf::registry::BlockStream window_state{read_window_state, write_window_state};
     } // namespace streams
 
 } // namespace auik

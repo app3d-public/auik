@@ -122,6 +122,8 @@ namespace auik
                                      WindowFlagBits::none, WidgetFlagBits::hittable);
         _popup->get_rect().id.widget_id = this->id();
         _popup->set_window_style_tag(AUIK_STYLE_TAG_COMBO_BOX_POPUP);
+        _popup->set_dock_style_tag(0u);
+        _popup->set_auto_size(false, false);
         _popup->set_focus_parent(this);
 
         set_items(items);
@@ -742,7 +744,7 @@ namespace auik
     {
         _popup->set_window_style_tag(AUIK_STYLE_TAG_COMBO_BOX_POPUP);
         _popup->update_style_invalidated();
-        _popup->window_flags = get_popup_window_flags() | WindowFlagBits::docked;
+        _popup->window_flags = WindowFlagBits::none;
         const auto &popup_style = get_theme()->get_style(
             get_theme()->get_resolved_style(AUIK_STYLE_TAG_COMBO_BOX_POPUP, _popup->id(), 0, StyleState::normal));
         const amal::vec4 popup_padding = popup_style.padding();
@@ -780,7 +782,7 @@ namespace auik
             resolve_dropdown_popup_placement(position().y, size().y, desired_h, min_popup_h, max_popup_h, viewport);
         _popup->set_window_style_tag(AUIK_STYLE_TAG_COMBO_BOX_POPUP);
         _popup->update_style_invalidated();
-        _popup->window_flags = get_popup_window_flags() | WindowFlagBits::docked;
+        _popup->window_flags = WindowFlagBits::none;
 
         _popup->set_position({position().x, placement.y});
         _popup->set_size({size().x, placement.height});
@@ -869,6 +871,8 @@ namespace auik
                                      WindowFlagBits::none, WidgetFlagBits::hittable);
         _popup->get_rect().id.widget_id = this->id();
         _popup->set_window_style_tag(AUIK_STYLE_TAG_COMBO_BOX_POPUP);
+        _popup->set_dock_style_tag(0u);
+        _popup->set_auto_size(false, false);
         _popup->set_focus_parent(this);
         set_items(items);
         set_placeholder(placeholder);
@@ -1343,7 +1347,7 @@ namespace auik
     {
         _popup->set_window_style_tag(AUIK_STYLE_TAG_COMBO_BOX_POPUP);
         _popup->update_style_invalidated();
-        _popup->window_flags = get_popup_window_flags() | WindowFlagBits::docked;
+        _popup->window_flags = WindowFlagBits::none;
         const auto &popup_style = get_theme()->get_style(
             get_theme()->get_resolved_style(AUIK_STYLE_TAG_COMBO_BOX_POPUP, _popup->id(), 0, StyleState::normal));
         const amal::vec4 popup_padding = popup_style.padding();
@@ -1377,7 +1381,7 @@ namespace auik
                                                                 : amal::max(desired_h, min_popup_h);
         const auto placement =
             resolve_dropdown_popup_placement(position().y, size().y, desired_h, min_popup_h, max_popup_h, viewport);
-        _popup->window_flags = get_popup_window_flags() | WindowFlagBits::docked;
+        _popup->window_flags = WindowFlagBits::none;
         _popup->set_position({position().x, placement.y});
         _popup->set_size({size().x, placement.height});
         _popup->attach_to_viewport(this->viewport());
@@ -1544,8 +1548,8 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::registry::BlockStream combobox{read_combobox, write_combobox};
-        AUIK_EXPORT const umbf::registry::BlockStream multiple_combobox{read_multiple_combobox,
+        extern AUIK_EXPORT const umbf::registry::BlockStream combobox{read_combobox, write_combobox};
+        extern AUIK_EXPORT const umbf::registry::BlockStream multiple_combobox{read_multiple_combobox,
                                                                         write_multiple_combobox};
     } // namespace streams
 } // namespace auik

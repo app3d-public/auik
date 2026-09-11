@@ -34,7 +34,7 @@ dockspace-node-fit,0x61168F8D
 dockspace-node-fit-width,0xA0506791
 dockspace-resize-helper,0x5FD17F53
 dockspace-resize-helper-drag,0x25F62CA2
-global,0x3BE7F102
+global,0x00000000
 gradient-slider,0x5043E2F0
 gradient-slider-grab,0xE100CA9A
 gradient-slider-grab-border,0x50332FFE

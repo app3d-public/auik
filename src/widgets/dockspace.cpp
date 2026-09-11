@@ -48,12 +48,6 @@ namespace auik
         }
     }
 
-    static DockNodeSettings normalize_dock_node_settings(DockNodeSettings settings)
-    {
-        if (settings.style_tag == 0u) settings.style_tag = AUIK_STYLE_TAG_DOCKSPACE_NODE;
-        return settings;
-    }
-
     static PopupMenu *window_popup_menu(Window *window)
     {
         if (!window || !window->is_popup_menu()) return nullptr;
@@ -118,30 +112,13 @@ namespace auik
 
     static f32 get_dock_helper_hit_depth() { return next_depth(get_dock_drag_hit_depth_range()); }
 
-    static amal::vec2 get_tab_drag_grab_offset(Tabbar *tabbar, u32 element_id, const amal::vec2 &fallback)
+    static amal::vec2 get_tab_drag_grab_offset(Tabbar *tabbar, const amal::vec2 &fallback)
     {
         if (!tabbar) return fallback;
-        const auto mouse = detail::get_io().mouse_pos;
-        amal::vec2 grab = fallback;
-        if (tabbar->has_drag_grab_offset()) grab = tabbar->drag_grab_offset();
-        else
-        {
-            for (auto *tab : *tabbar)
-            {
-                if (!tab || tab->get_rect().id.element_id != element_id) continue;
-                const auto tab_bounds = tab->bounds();
-                grab.x = amal::clamp(mouse.x - tab_bounds.offset.x, 0.0f, amal::max(tab_bounds.size.x, 0.0f));
-                break;
-            }
-        }
-
-        const auto tabbar_bounds = tabbar->bounds();
-        if (tabbar_bounds.size.y > 0.0f)
-            grab.y = amal::clamp(mouse.y - tabbar_bounds.offset.y, 0.0f, tabbar_bounds.size.y);
-        return grab;
+        return tabbar->drag_grab_offset();
     }
 
-    static bool is_tabbar_drag_escape(Tabbar *tabbar, u32 element_id)
+    bool Dockspace::is_tabbar_drag_escape(Tabbar *tabbar, u32 element_id) const
     {
         if (!tabbar || element_id == 0u) return false;
         u32 index = static_cast<u32>(-1);
@@ -155,11 +132,17 @@ namespace auik
 
         const auto own_bounds = tabbar->bounds();
         const auto *tab = tabbar->item_at(index);
-        const f32 escape_x = tab ? amal::max(tab->size().x, 1.0f) : own_bounds.size.y;
+        const f32 tab_width = tab ? amal::max(tab->size().x, 1.0f) : own_bounds.size.y;
+        const auto panel = tabbar->drag_bounds();
+        const f32 grab_x = tabbar->drag_grab_offset().x;
+        const f32 min_x = panel.offset.x;
+        const f32 max_x = amal::max(min_x, panel.offset.x + panel.size.x - tab_width);
+        const f32 escape_x = tab_width * 0.5f;
         const f32 escape_y = amal::max(own_bounds.size.y, 1.0f);
         const auto mouse = detail::get_io().mouse_pos;
-        return mouse.x < own_bounds.offset.x - escape_x ||
-               mouse.x > own_bounds.offset.x + own_bounds.size.x + escape_x ||
+        // Compare the unconstrained position: the visual tab stays at the panel edge.
+        const f32 logical_x = mouse.x - grab_x;
+        return logical_x < min_x - escape_x || logical_x > max_x + escape_x ||
                mouse.y < own_bounds.offset.y - escape_y || mouse.y > own_bounds.offset.y + own_bounds.size.y + escape_y;
     }
 
@@ -216,11 +199,16 @@ namespace auik
                                      : (flags & DockspaceResizeFlagBits::visible_resize_helper_y);
     }
 
-    static StyleState resolve_resize_helper_state(const detail::RectData &rect)
+    static StyleState resolve_resize_helper_state(const detail::RectData &rect, const detail::RectData &hit_rect)
     {
         const auto &ctx = detail::get_context();
         if (ctx.io.drag_id == rect.id) return StyleState::active;
-        if (ctx.hover_id == rect.id) return StyleState::hover;
+        const auto mouse = ctx.io.mouse_pos;
+        const auto &bounds = hit_rect.bounds;
+        const bool inside_hitbox = mouse.x >= bounds.offset.x && mouse.y >= bounds.offset.y &&
+                                   mouse.x < bounds.offset.x + bounds.size.x &&
+                                   mouse.y < bounds.offset.y + bounds.size.y;
+        if (ctx.hover_id == rect.id && inside_hitbox) return StyleState::hover;
         return StyleState::normal;
     }
 
@@ -289,6 +277,15 @@ namespace auik
     }
 
     static bool remove_root_widget(Widget *widget) { return remove_widget_from_root_unsync(widget); }
+
+    static void refresh_root_depth_draws()
+    {
+        // Docking changes the root list and the depth requirements of its destination subtree.
+        // Repaint every affected root with the same depth assignment, not just the dock.
+        rebuild_root_widget_depths();
+        for (auto *root : detail::get_context().widget_tree)
+            if (root) root->update_draw_commands(DrawReasonBits::layout);
+    }
 
     static void rerecord_root_widgets_after(Widget *anchor)
     {
@@ -737,67 +734,36 @@ namespace auik
                  {{0.0f, 0.0f}, {0.0f, 0.0f}}, AUIK_TAG_DOCKSPACE)
     {
         set_size(AUIK_SIZE_FILL);
-        _nodes.push_back({});
-        _nodes[0].settings.min_size = {0.0f, 0.0f};
-        update_node_style_cache(0u, _nodes[0]);
     }
 
     Dockspace::~Dockspace() { clear(); }
 
     Dockspace::Node *Dockspace::get_node(DockNodeID node)
     {
-        if (node >= _nodes.size()) return nullptr;
-        return &_nodes[node];
+        return _tree.get(node);
     }
 
     const Dockspace::Node *Dockspace::get_node(DockNodeID node) const
     {
-        if (node >= _nodes.size()) return nullptr;
-        return &_nodes[node];
+        return _tree.get(node);
     }
 
-    void Dockspace::update_node_style_cache(DockNodeID node_id, Node &node)
+    DockNodeID Dockspace::create_node(DockNodeID parent, bool split, DockNodeSettings settings, size_t position)
     {
-        node.settings = normalize_dock_node_settings(node.settings);
-        if (node_id == 0u)
-        {
-            node.style_size = AUIK_SIZE_FILL;
-            node.min_size = node.settings.min_size;
-            return;
-        }
-        const StyleID style_id = get_theme()->get_resolved_style(node.settings.style_tag, 0u, 0u, StyleState::normal);
-        const Style &style = get_theme()->get_style(style_id);
-        node.style_size = style.size();
-        node.min_size = {amal::max(node.settings.min_size.x, style.min_width()),
-                         amal::max(node.settings.min_size.y, style.min_height())};
-    }
-
-    DockNodeID Dockspace::create_node(DockNodeID parent, bool split, DockNodeSettings settings)
-    {
-        settings = normalize_dock_node_settings(settings);
-        assert(parent < _nodes.size() && "parent dock node is invalid");
-        DockNodeID id = static_cast<DockNodeID>(_nodes.size());
+        assert(parent < _tree.nodes().size() && "parent dock node is invalid");
+        DockNodeID id = static_cast<DockNodeID>(_tree.nodes().size());
         Node node{};
         node.parent = parent;
         node.settings = settings;
-        update_node_style_cache(id, node);
-        _nodes.push_back(std::move(node));
-        auto &parent_node = _nodes[parent];
-        parent_node.children.push_back(id);
-        for (DockNodeID child_id : parent_node.children)
-        {
-            auto &child = _nodes[child_id];
-            if (is_size_fill(axis_size(child.style_size, parent_node.axis)))
-                set_axis_size(child.settings.size, parent_node.axis, 0.0f);
-        }
-        if (split) _nodes[id].axis = parent_node.axis;
+        _tree.append(parent, std::move(node), position);
+        if (split) _tree.nodes()[id].axis = _tree.nodes()[parent].axis;
         return id;
     }
 
     DockNodeID Dockspace::create_split(DockNodeID parent, amal::axis axis, DockNodeSettings settings)
     {
         DockNodeID id = create_node(parent, true, settings);
-        _nodes[id].axis = axis;
+        _tree.nodes()[id].axis = axis;
         return id;
     }
 
@@ -813,39 +779,18 @@ namespace auik
 
     void Dockspace::set_node_settings(DockNodeID node, DockNodeSettings settings)
     {
-        settings = normalize_dock_node_settings(settings);
         if (auto *n = get_node(node))
         {
             const bool recreate_tabbar = n->tabbar && (n->settings.tabbar_flags != settings.tabbar_flags ||
                                                        n->settings.tabpanel != settings.tabpanel);
             n->settings = settings;
-            update_node_style_cache(node, *n);
             if (recreate_tabbar) clear_node_chrome(*n);
         }
     }
 
-    void Dockspace::set_node_tabbar_flags(DockNodeID node, TabbarFlags flags)
-    {
-        auto *n = get_node(node);
-        if (!n || n->settings.tabbar_flags == flags) return;
-
-        const bool recreate_tabbar = n->tabbar != nullptr;
-        n->settings.tabbar_flags = flags;
-        if (!recreate_tabbar) return;
-
-        clear_node_chrome(*n);
-        auto &ctx = detail::get_context();
-        ctx.dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
-        update_layout(false);
-        invalidate_draw_commands(DrawReasonBits::layout);
-        update_draw_commands(DrawReasonBits::layout | DrawReasonBits::record);
-        if (ctx.dirty_flags & DirtyFlagBits::clip_rect) sync_clip_rect_cache();
-        mark_host_refresh_request();
-    }
-
     void Dockspace::set_new_node_settings(DockNodeSettings settings)
     {
-        _new_node_settings = normalize_dock_node_settings(settings);
+        _new_node_settings = settings;
     }
 
     void Dockspace::set_policy_flags(DockspaceFlags flags)
@@ -879,7 +824,7 @@ namespace auik
     {
         _menu_group = std::move(group);
         close_menu();
-        for (auto &node : _nodes)
+        for (auto &node : _tree.nodes())
         {
             if (node.menu) node.menu->close_popup();
             if (node.menu)
@@ -919,6 +864,7 @@ namespace auik
     void Dockspace::detach_window(Window *window, const amal::rect *undocked_bounds)
     {
         if (!window) return;
+        const bool fit_height = window->preserves_dock_size();
         auto &map = detail::get_context().id_map;
         const bool window_attached = map.find(window->id()) != map.end();
         if (window_attached && (window->widget_flags & WidgetFlagBits::attachable))
@@ -927,6 +873,8 @@ namespace auik
         window->window_flags &= ~WindowFlagBits::docked;
         window->set_parent(nullptr);
         window->set_focus_parent(nullptr);
+        window->update_style_invalidated();
+        window->set_auto_size(false, fit_height);
     }
 
     Window *Dockspace::active_window(Node &node)
@@ -934,6 +882,15 @@ namespace auik
         if (node.windows.empty()) return nullptr;
         const size_t index = selected_window_index(node);
         return index < node.windows.size() ? node.windows[index] : nullptr;
+    }
+
+    f32 Dockspace::preserved_node_size(const Node &node, amal::axis axis) const
+    {
+        if (node.windows.empty()) return 0.0f;
+        const size_t index = selected_window_index(node);
+        const auto *window = index < node.windows.size() ? node.windows[index] : nullptr;
+        if (!window || !window->preserves_dock_size()) return 0.0f;
+        return amal::ceil(amal::max(axis_size(node.required_size, axis), axis_size(node.resize_min_size, axis)));
     }
 
     Window *Dockspace::extract_window(Node &node, Window *window, amal::rect *out_undocked_bounds)
@@ -961,20 +918,7 @@ namespace auik
         if (!node || !node->children.empty() || !node->windows.empty()) return;
         close_menu();
         clear_node_chrome(*node);
-        if (node->parent != AUIK_DOCK_NODE_INVALID)
-        {
-            auto *parent_node = get_node(node->parent);
-            if (parent_node)
-            {
-                for (size_t i = 0; i < parent_node->children.size(); ++i)
-                {
-                    if (parent_node->children[i] != node_id) continue;
-                    parent_node->children.erase(parent_node->children.begin() + i);
-                    break;
-                }
-            }
-        }
-        node->parent = AUIK_DOCK_NODE_INVALID;
+        _tree.detach(node_id);
         node->settings.flags = DockspaceResizeFlagBits::none;
     }
 
@@ -994,11 +938,8 @@ namespace auik
         extracted->window_flags |= WindowFlagBits::decorated | WindowFlagBits::movable | WindowFlagBits::resizable;
         extracted->window_flags &= ~WindowFlagBits::docked;
         extracted->reset_draw_records();
-        extracted->set_size(amal::max(extracted->size(), extracted->min_size()));
-        extracted->set_auto_size(false, false);
         extracted->set_auto_position(false, false);
         if (node->windows.empty()) remove_empty_node(node_id);
-        else fit_node_to_required_width(node_id, true);
         update_layout_sync(true);
         add_widget_to_root(extracted);
         const auto viewport = get_widget_viewport_rect(extracted);
@@ -1033,11 +974,7 @@ namespace auik
                 node->record_active_window = true;
                 node->tabbar->close_item(element_id);
                 if (node->windows.empty()) remove_empty_node(node_id);
-                else
-                {
-                    node->active_window_index = selected_window_index(*node);
-                    fit_node_to_required_width(node_id, true);
-                }
+                else node->active_window_index = selected_window_index(*node);
                 update_layout_sync(true);
                 mark_host_refresh_request();
                 return;
@@ -1051,7 +988,6 @@ namespace auik
         detach_window(extracted, &undocked_bounds);
         acul::release(extracted);
         if (node->windows.empty()) remove_empty_node(node_id);
-        else fit_node_to_required_width(node_id, true);
         update_layout_sync(true);
     }
 
@@ -1113,20 +1049,24 @@ namespace auik
         if (element_id == 0u) return true;
         node->tabbar->set_selected(element_id);
         node->tabbar->update_style_invalidated();
-        fit_node_to_required_width(node_id, false);
+        // Transfer drag ownership before layout. Tabbar derives the dragged tab from the shared
+        // context, so the inserted window cannot reinitialize the existing dock allocation.
+        auto &ctx = detail::get_context();
+        ctx.io.drag_id = make_element_id(node->tabbar->id(), node->tabbar->item_style_tag(), element_id);
+        ctx.io.clicked_id = ctx.io.drag_id;
+        ctx.io.last_drag_pos = ctx.io.mouse_pos;
+        ctx.io.drag_key_flags = ctx.io.active_mouse_buttons;
+        ctx.frame_cache.drag_widget_id = node->tabbar->id();
         update_depth(this->depth_range());
         update_layout_sync(true);
 
         node = get_node(node_id);
         if (!node || !node->tabbar) return true;
-        auto &ctx = detail::get_context();
-        ctx.io.drag_id = make_element_id(node->tabbar->id(), node->tabbar->item_style_tag(), element_id);
-        ctx.io.drag_key_flags = ctx.io.active_mouse_buttons;
-        ctx.frame_cache.drag_widget_id = node->tabbar->id();
-        node->tabbar->begin_external_drag(element_id);
+        node->tabbar->adopt_drag();
         node->tabbar->invalidate_draw_commands(DrawReasonBits::layout);
         node->tabbar->reset_draw_records();
         node->tabbar->update_draw_commands(DrawReasonBits::layout | DrawReasonBits::record);
+        refresh_root_depth_draws();
         ctx.dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
         mark_host_refresh_request();
         return true;
@@ -1140,8 +1080,13 @@ namespace auik
             auto *window = node.windows[i];
             if (!window) continue;
             invalidate_window_draw_records(window);
-            const amal::rect *undocked_bounds = i < node.undocked_bounds.size() ? &node.undocked_bounds[i] : nullptr;
-            detach_window(window, undocked_bounds);
+            // This window is being destroyed, not converted into a floating window.
+            // Detach its lifetime hooks without resolving styles or rebuilding its presentation.
+            const auto &map = detail::get_context().id_map;
+            if (map.find(window->id()) != map.end() && (window->widget_flags & WidgetFlagBits::attachable))
+                static_cast<Widget *>(window)->on_detach();
+            window->set_parent(nullptr);
+            window->set_focus_parent(nullptr);
             acul::release(window);
         }
         node.windows.clear();
@@ -1197,15 +1142,12 @@ namespace auik
 
     void Dockspace::clear()
     {
-        for (auto &node : _nodes)
+        for (auto &node : _tree.nodes())
         {
             clear_node_windows(node);
             clear_node_chrome(node);
         }
-        _nodes.clear();
-        _nodes.push_back({});
-        _nodes[0].settings.min_size = {0.0f, 0.0f};
-        update_node_style_cache(0u, _nodes[0]);
+        _tree.reset();
     }
 
     StyleUpdateFlags Dockspace::update_style()
@@ -1230,10 +1172,9 @@ namespace auik
                 }
             }
         }
-        for (DockNodeID node_id = 0u; node_id < _nodes.size(); ++node_id)
+        for (DockNodeID node_id = 0u; node_id < _tree.nodes().size(); ++node_id)
         {
-            auto &node = _nodes[node_id];
-            update_node_style_cache(node_id, node);
+            auto &node = _tree.nodes()[node_id];
             if (node.tabbar) out |= node.tabbar->update_style_invalidated();
             if (node.menu) out |= node.menu->update_style_invalidated();
             for (auto *window : node.windows)
@@ -1332,9 +1273,8 @@ namespace auik
                                       : make_dockspace_tabbar_depth_range(this->depth_range()));
     }
 
-    bool Dockspace::fit_node_to_required_width(DockNodeID node_id, bool allow_shrink)
+    bool Dockspace::initialize_node_width(DockNodeID node_id)
     {
-        if (!get_node(node_id)) return false;
         measure_node(root_node());
 
         DockNodeID current_id = node_id;
@@ -1347,18 +1287,13 @@ namespace auik
 
             if (parent->axis == amal::axis::x)
             {
-                const f32 required_width = amal::ceil(amal::max(current->required_size.x, 0.0f));
-                if (required_width <= 0.0f) return false;
-                const f32 current_width = axis_size(current->settings.size, amal::axis::x);
-                if (!allow_shrink)
-                {
-                    if (current->bounds.size.x + 0.5f >= required_width) return false;
-                    if (current_width + 0.5f >= required_width) return false;
-                }
-                else if (std::abs(current_width - required_width) <= 0.5f) return false;
-
-                const f32 next_width = allow_shrink ? required_width : amal::max(current_width, required_width);
-                set_axis_size(current->settings.size, amal::axis::x, next_width);
+                // A direct child is still uninitialized; its parent must distribute it according to FILL.
+                // Only an existing ancestor needs cross-axis expansion for the new leaf minimum.
+                if (current_id == node_id) return false;
+                const f32 initial_width = amal::max(amal::ceil(current->resize_min_size.x), current->bounds.size.x);
+                if (initial_width <= 0.0f) return false;
+                if (current->bounds.size.x == initial_width) return false;
+                current->bounds.size.x = initial_width;
                 return true;
             }
 
@@ -1540,16 +1475,33 @@ namespace auik
         auto *node = get_node(node_id);
         if (!node) return {0.0f, 0.0f};
 
-        amal::vec2 required = node->min_size;
+        amal::vec2 required = node_id == root_node() ? amal::vec2{0.0f} : amal::vec2{80.0f};
+        amal::vec2 minimum = required;
         if (!node->children.empty())
         {
             f32 main = 0.0f;
             f32 cross = 0.0f;
+            f32 min_main = 0.0f;
+            f32 min_cross = 0.0f;
+            f32 requested_main = 0.0f;
+            f32 requested_cross = 0.0f;
             for (DockNodeID child_id : node->children)
             {
+                const auto *child = get_node(child_id);
                 const amal::vec2 child_required = measure_node(child_id);
                 main += axis_size(child_required, node->axis);
                 cross = amal::max(cross, cross_size(child_required, node->axis));
+                if (child)
+                {
+                    min_main += axis_size(child->resize_min_size, node->axis);
+                    min_cross = amal::max(min_cross, cross_size(child->resize_min_size, node->axis));
+                    const f32 child_main = axis_size(child->requested_size, node->axis);
+                    requested_main +=
+                        is_size_concrete(child_main) ? child_main : axis_size(child_required, node->axis);
+                    // A floating window's bounds are retained for a later undock, not used as the
+                    // cross-axis initializer of its dock branch. Dock width is seeded by the style minimum.
+                    requested_cross = amal::max(requested_cross, cross_size(child->resize_min_size, node->axis));
+                }
             }
             if (_resize_helper_style.id == Theme::STYLE_ID_INVALID) update_style();
             const amal::vec4 helper_padding = get_theme()->get_style(_resize_helper_style.id).padding();
@@ -1565,7 +1517,12 @@ namespace auik
                     const bool helper = i > 0u && current && prev &&
                                         has_visible_resize_helper_flag(current->settings.flags, amal::axis::y) &&
                                         has_visible_resize_helper_flag(prev->settings.flags, amal::axis::y);
-                    if (helper) main += helper_main_size;
+                    if (helper)
+                    {
+                        main += helper_main_size;
+                        min_main += helper_main_size;
+                        requested_main += helper_main_size;
+                    }
                 }
                 else if (i + 1u < node->children.size())
                 {
@@ -1574,22 +1531,35 @@ namespace auik
                     const bool helper = current && next &&
                                         has_visible_resize_helper_flag(current->settings.flags, amal::axis::x) &&
                                         has_visible_resize_helper_flag(next->settings.flags, amal::axis::x);
-                    if (helper) main += helper_main_size;
+                    if (helper)
+                    {
+                        main += helper_main_size;
+                        min_main += helper_main_size;
+                        requested_main += helper_main_size;
+                    }
                 }
             }
             required = amal::max(required, make_axis_size(node->axis, main, cross));
+            minimum = amal::max(minimum, make_axis_size(node->axis, min_main, min_cross));
+            node->requested_size = make_axis_size(node->axis, requested_main, requested_cross);
         }
         else
         {
             if (needs_node_tab_panel(*node)) sync_node_tabbar(node_id, *node);
+            // Selection changes must reach the subtree before measuring: hidden children
+            // do not contribute to container measurements.
+            sync_node_window_visibility(*node);
             const size_t selected_index = selected_window_index(*node);
+            node->requested_size = {AUIK_SIZE_X_FILL, AUIK_SIZE_Y_FILL};
             if (!node->content_collapsed)
                 for (size_t i = 0; i < node->windows.size(); ++i)
                 {
                     auto *window = node->windows[i];
                     if (!window) continue;
-                    const bool active = i == selected_index;
-                    if (!active) continue;
+                    window->update_style_invalidated();
+                    if (i != selected_index) continue;
+                    minimum = amal::max(minimum, window->min_size());
+                    node->requested_size = window->requested_size();
                     window->update_layout_min_size();
                     required = amal::max(required, window->required_size());
                 }
@@ -1612,25 +1582,22 @@ namespace auik
                 const amal::vec2 chrome_required = node->tabbar->required_size();
                 const f32 chrome_height = amal::max(chrome_required.y, menu_h) + padding.y + padding.w;
                 required.x = amal::max(required.x, chrome_required.x + menu_w + padding.x + padding.z);
-                if (node->content_collapsed) required.y = chrome_height;
-                else required.y += chrome_height;
-            }
-        }
-
-        if (node_id != 0u)
-        {
-            if (node->parent != AUIK_DOCK_NODE_INVALID)
-            {
-                const auto *parent_node = get_node(node->parent);
-                if (parent_node)
+                minimum.x = amal::max(minimum.x, chrome_required.x + menu_w + padding.x + padding.z);
+                if (node->content_collapsed)
                 {
-                    const amal::axis axis = parent_node->axis;
-                    const f32 style_size = axis_size(node->style_size, axis);
-                    if (is_size_concrete(style_size) && !(node->content_collapsed && axis == amal::axis::y))
-                        set_axis_size(required, axis, amal::max(axis_size(required, axis), style_size));
+                    required.y = chrome_height;
+                    minimum.y = chrome_height;
+                }
+                else
+                {
+                    required.y += chrome_height;
+                    minimum.y += chrome_height;
                 }
             }
         }
+
+        required = amal::max(required, minimum);
+        node->resize_min_size = minimum;
         node->required_size = required;
         return required;
     }
@@ -1919,6 +1886,7 @@ namespace auik
                 const amal::vec2 tabbar_size{amal::max(panel_inner_w - menu_reserved, 0.0f), panel_inner_h};
                 node->tabbar->set_position(tabbar_pos);
                 node->tabbar->set_layout_size(tabbar_size);
+                node->tabbar->set_drag_bounds(panel_bounds);
                 node->tabbar->update_layout(true);
                 const f32 panel_bottom = panel_bounds.offset.y + panel_bounds.size.y;
                 const f32 node_bottom = node->bounds.offset.y + node->bounds.size.y;
@@ -1975,6 +1943,7 @@ namespace auik
                     const amal::vec2 tabbar_size{amal::max(panel_inner_w - menu_reserved, 0.0f), panel_inner_h};
                     node->tabbar->set_position(tabbar_pos);
                     node->tabbar->set_layout_size(tabbar_size);
+                    node->tabbar->set_drag_bounds(panel_bounds);
                     node->tabbar->update_layout(true);
                     const f32 panel_bottom = panel_bounds.offset.y + panel_bounds.size.y;
                     const f32 node_bottom = node->bounds.offset.y + node->bounds.size.y;
@@ -2024,6 +1993,10 @@ namespace auik
                       has_visible_resize_helper_flag(after->settings.flags, node->axis);
             interactive = before && after && has_resize_helper_flag(before->settings.flags, node->axis) &&
                           has_resize_helper_flag(after->settings.flags, node->axis);
+            if (interactive &&
+                (preserved_node_size(*before, node->axis) > 0.0f ||
+                 preserved_node_size(*after, node->axis) > 0.0f))
+                interactive = false;
         };
         auto helper_slot_size = [&](size_t before_child, size_t after_child, bool leading) {
             bool visible = false;
@@ -2057,18 +2030,7 @@ namespace auik
             else if (i + 1u < node->children.size()) helpers_sum += helper_slot_size(i, i + 1u, false);
         }
         auto child_axis_min_size = [axis = node->axis](const Node &child) {
-            if (child.content_collapsed && axis == amal::axis::y)
-                return amal::ceil(axis_size(child.required_size, axis));
-            const f32 settings_min = axis_size(child.min_size, axis);
-            const f32 style_size = axis_size(child.style_size, axis);
-            if (is_size_fill(style_size)) return amal::ceil(settings_min);
-            if (is_size_fit(style_size))
-            {
-                const bool placed = axis_size(child.bounds.size, axis) > 0.0f;
-                return amal::ceil(amal::max(settings_min, placed ? 0.0f : axis_size(child.required_size, axis)));
-            }
-            if (is_size_concrete(style_size)) return amal::ceil(amal::max(settings_min, style_size));
-            return amal::ceil(amal::max(settings_min, axis_size(child.required_size, axis)));
+            return amal::ceil(axis_size(child.resize_min_size, axis));
         };
         const f32 children_available = amal::max(main_available - helpers_sum, 0.0f);
         acul::vector<f32> child_main_sizes;
@@ -2081,82 +2043,119 @@ namespace auik
         child_fill.resize(node->children.size());
 
         f32 fixed_size = 0.0f;
-        f32 fill_min_sum = 0.0f;
         u32 fill_count = 0u;
+        bool has_uninitialized_fill = false;
         for (size_t i = 0; i < node->children.size(); ++i)
         {
             auto *child = get_node(node->children[i]);
             if (!child) continue;
-            const f32 minimum = child_axis_min_size(*child);
-            const f32 agreed_size = axis_size(child->settings.size, node->axis);
-            const f32 style_size = axis_size(child->style_size, node->axis);
+            const f32 allocated_size = axis_size(child->bounds.size, node->axis);
+            const bool initialized = allocated_size > 0.0f;
+            const f32 measured_minimum = child_axis_min_size(*child);
+            // An initialized node keeps its allocated size when a tab with a larger minimum becomes active.
+            // The new minimum still constrains subsequent user resize, but does not reinitialize the node.
+            const f32 minimum = initialized ? amal::min(measured_minimum, allocated_size) : measured_minimum;
+            const f32 requested_size =
+                child->children.empty() ? AUIK_SIZE_X_FILL : axis_size(child->requested_size, node->axis);
+            const f32 preserved_size = preserved_node_size(*child, node->axis);
             if (child->content_collapsed && node->axis == amal::axis::y) child_basis_sizes[i] = minimum;
-            else if (agreed_size > 0.0f) child_basis_sizes[i] = agreed_size;
-            else if (is_size_concrete(style_size)) child_basis_sizes[i] = style_size;
+            else if (preserved_size > 0.0f && !(child->tabbar && child->tabbar->dragging() && initialized))
+                child_basis_sizes[i] = preserved_size;
+            else if (initialized) child_basis_sizes[i] = allocated_size;
+            else if (is_size_concrete(requested_size)) child_basis_sizes[i] = requested_size;
+            else if (is_size_fit(requested_size)) child_basis_sizes[i] = axis_size(child->required_size, node->axis);
             else child_basis_sizes[i] = minimum;
 
             child_min_sizes[i] = minimum;
-            child_fill[i] = !(child->content_collapsed && node->axis == amal::axis::y) && agreed_size <= 0.0f &&
-                            is_size_fill(style_size);
+            child_fill[i] = !(child->content_collapsed && node->axis == amal::axis::y) && preserved_size <= 0.0f &&
+                            is_size_fill(requested_size);
             child_main_sizes[i] = amal::ceil(amal::max(child_basis_sizes[i], minimum));
             if (child_fill[i])
             {
                 ++fill_count;
-                fill_min_sum += child_main_sizes[i];
+                has_uninitialized_fill |= !initialized;
             }
             else fixed_size += child_main_sizes[i];
         }
 
-        const f32 clamped_size = fixed_size + fill_min_sum;
-        if (clamped_size > children_available && clamped_size > 0.0f)
-        {
-            f32 slack_sum = 0.0f;
-            for (size_t i = 0; i < node->children.size(); ++i)
+        const auto distribute_fill_equally = [&] {
+            f32 fill_available = amal::max(children_available - fixed_size, 0.0f);
+            u32 unresolved_fill_count = fill_count;
+            acul::vector<bool> constrained_fill(node->children.size(), false);
+            while (unresolved_fill_count > 0u)
             {
-                auto *child = get_node(node->children[i]);
-                if (!child) continue;
-                slack_sum += amal::max(child_main_sizes[i] - child_min_sizes[i], 0.0f);
-            }
-
-            if (slack_sum > 0.0f)
-            {
-                const f32 overflow = clamped_size - children_available;
+                const f32 fill_share = fill_available / static_cast<f32>(unresolved_fill_count);
+                bool constrained = false;
                 for (size_t i = 0; i < node->children.size(); ++i)
                 {
-                    auto *child = get_node(node->children[i]);
-                    if (!child) continue;
-                    const f32 slack = amal::max(child_main_sizes[i] - child_min_sizes[i], 0.0f);
-                    if (slack <= 0.0f) continue;
-                    const f32 shrink = amal::min(slack, overflow * slack / slack_sum);
-                    child_main_sizes[i] -= shrink;
+                    if (!child_fill[i] || constrained_fill[i] || child_min_sizes[i] <= fill_share) continue;
+                    child_main_sizes[i] = child_min_sizes[i];
+                    fill_available = amal::max(fill_available - child_main_sizes[i], 0.0f);
+                    constrained_fill[i] = true;
+                    --unresolved_fill_count;
+                    constrained = true;
                 }
+                if (constrained) continue;
 
-                f32 total = 0.0f;
-                for (f32 size : child_main_sizes) total += amal::max(size, 0.0f);
-                f32 extra = total - children_available;
-                for (size_t rev = node->children.size(); rev > 0u && extra > 0.0f; --rev)
-                {
-                    const size_t i = rev - 1u;
-                    auto *child = get_node(node->children[i]);
-                    if (!child) continue;
-                    const f32 slack = amal::max(child_main_sizes[i] - child_min_sizes[i], 0.0f);
-                    if (slack <= 0.0f) continue;
-                    const f32 shrink = amal::min(slack, extra);
-                    child_main_sizes[i] -= shrink;
-                    extra -= shrink;
-                }
+                for (size_t i = 0; i < node->children.size(); ++i)
+                    if (child_fill[i] && !constrained_fill[i]) child_main_sizes[i] = fill_share;
+                break;
             }
-        }
-        else if (fill_count > 0u)
-        {
-            const f32 fill_extra = amal::max(children_available - clamped_size, 0.0f);
-            const f32 fill_share = fill_extra / static_cast<f32>(fill_count);
+        };
+        if (has_uninitialized_fill) distribute_fill_equally();
+
+        const auto total_size = [&] {
+            f32 total = 0.0f;
+            for (f32 size : child_main_sizes) total += amal::max(size, 0.0f);
+            return total;
+        };
+        f32 allocated_total = total_size();
+        const auto shrink_group = [&](bool fill) {
+            f32 overflow = allocated_total - children_available;
+            if (overflow <= 0.0f) return;
+
+            f32 slack_sum = 0.0f;
+            for (size_t i = 0; i < node->children.size(); ++i)
+                if (child_fill[i] == fill)
+                    slack_sum += amal::max(child_main_sizes[i] - child_min_sizes[i], 0.0f);
+            if (slack_sum <= 0.0f) return;
+
             for (size_t i = 0; i < node->children.size(); ++i)
             {
-                auto *child = get_node(node->children[i]);
-                if (!child) continue;
-                if (child_fill[i]) child_main_sizes[i] += fill_share;
+                if (child_fill[i] != fill) continue;
+                const f32 slack = amal::max(child_main_sizes[i] - child_min_sizes[i], 0.0f);
+                if (slack <= 0.0f) continue;
+                const f32 shrink = amal::min(slack, overflow * slack / slack_sum);
+                child_main_sizes[i] -= shrink;
             }
+            allocated_total = total_size();
+        };
+
+        if (allocated_total > children_available)
+        {
+            // Stretch nodes absorb pressure before fixed and preserved nodes.
+            shrink_group(true);
+            shrink_group(false);
+        }
+        else if (fill_count > 0u && !has_uninitialized_fill)
+        {
+            const f32 extra = children_available - allocated_total;
+            const f32 extra_share = extra / static_cast<f32>(fill_count);
+            for (size_t i = 0; i < node->children.size(); ++i)
+                if (child_fill[i]) child_main_sizes[i] += extra_share;
+            allocated_total = total_size();
+        }
+
+        // Round shared boundaries, not each child's extent independently: fractional fill
+        // shares must not lose pixels before a fixed/preserved trailing node.
+        f32 cumulative_size = 0.f;
+        f32 previous_boundary = 0.f;
+        for (auto &child_size : child_main_sizes)
+        {
+            cumulative_size += child_size;
+            const f32 boundary = amal::round(cumulative_size);
+            child_size = boundary - previous_boundary;
+            previous_boundary = boundary;
         }
 
         f32 cursor = axis_size(node->bounds.offset, node->axis);
@@ -2174,19 +2173,19 @@ namespace auik
             if (i + 1u == node->children.size() && !(child->content_collapsed && node->axis == amal::axis::y))
             {
                 const f32 remaining_to_edge = axis_size(node->bounds.offset, node->axis) + main_available - cursor;
-                if (remaining_to_edge >= 0.0f) child_main = remaining_to_edge;
+                if (remaining_to_edge >= 0.0f)
+                {
+                    if (child_fill[i] || allocated_total > children_available) child_main = remaining_to_edge;
+                }
             }
 
             amal::rect child_bounds{};
             if (node->axis == amal::axis::x)
                 child_bounds = {{cursor, node->bounds.offset.y}, {child_main, cross_available}};
             else child_bounds = {{node->bounds.offset.x, cursor}, {cross_available, child_main}};
-            if (is_size_fit(axis_size(child->style_size, node->axis)) &&
-                axis_size(child->bounds.size, node->axis) <= 0.0f)
-                set_axis_size(child->settings.size, node->axis, child_main);
             layout_node(node->children[i], child_bounds);
-            cursor = axis_size(_nodes[node->children[i]].bounds.offset, node->axis) +
-                     axis_size(_nodes[node->children[i]].bounds.size, node->axis);
+            cursor = axis_size(_tree.nodes()[node->children[i]].bounds.offset, node->axis) +
+                     axis_size(_tree.nodes()[node->children[i]].bounds.size, node->axis);
 
             if (node->axis == amal::axis::x)
             {
@@ -2230,7 +2229,7 @@ namespace auik
     {
         if (delta.x == 0.0f && delta.y == 0.0f) return;
         Widget::translate(delta);
-        for (auto &node : _nodes)
+        for (auto &node : _tree.nodes())
         {
             if (node.tabbar) node.tabbar->translate(delta);
             if (node.menu) node.menu->translate(delta);
@@ -2253,7 +2252,7 @@ namespace auik
     void Dockspace::reset_clip_rect_records()
     {
         Widget::reset_clip_rect_records();
-        for (auto &node : _nodes)
+        for (auto &node : _tree.nodes())
         {
             if (node.tabbar) node.tabbar->reset_clip_rect_records();
             if (node.menu) node.menu->reset_clip_rect_records();
@@ -2265,7 +2264,7 @@ namespace auik
     void Dockspace::rebuild_clip_rects()
     {
         ensure_own_clip_rect({position().x, position().y, size().x, size().y});
-        for (auto &node : _nodes)
+        for (auto &node : _tree.nodes())
         {
             if (node.tabbar) node.tabbar->rebuild_clip_rects();
             if (node.menu) node.menu->rebuild_clip_rects();
@@ -2276,7 +2275,7 @@ namespace auik
 
     void Dockspace::reset_draw_records()
     {
-        for (auto &node : _nodes)
+        for (auto &node : _tree.nodes())
         {
             if (node.tabbar) node.tabbar->reset_draw_records();
             if (node.menu) node.menu->reset_draw_records();
@@ -2291,7 +2290,7 @@ namespace auik
     void Dockspace::invalidate_style()
     {
         Widget::invalidate_style();
-        for (auto &node : _nodes)
+        for (auto &node : _tree.nodes())
         {
             if (node.tabbar) node.tabbar->invalidate_style();
             if (node.menu) node.menu->invalidate_style();
@@ -2303,7 +2302,7 @@ namespace auik
     bool Dockspace::update_locale()
     {
         bool changed = Widget::update_locale();
-        for (auto &node : _nodes)
+        for (auto &node : _tree.nodes())
         {
             if (node.tabbar) changed |= node.tabbar->update_locale();
             if (node.menu) changed |= node.menu->update_locale();
@@ -2459,8 +2458,8 @@ namespace auik
         Tabbar *tabbar = node.tabbar;
         const amal::vec2 mouse = detail::get_io().mouse_pos;
         const auto drag_grab =
-            get_tab_drag_grab_offset(tabbar, element_id, {amal::min(window->size().x * 0.5f, 80.0f), 12.0f});
-        if (tabbar) tabbar->cancel_drag();
+            get_tab_drag_grab_offset(tabbar, {amal::min(window->size().x * 0.5f, 80.0f), 12.0f});
+        if (tabbar) tabbar->end_drag();
         amal::rect previous_undocked_bounds{};
         invalidate_window_draw_records(window);
         Window *extracted = extract_window(node, window, &previous_undocked_bounds);
@@ -2474,19 +2473,15 @@ namespace auik
         detach_window(extracted, &drag_bounds);
         extracted->window_flags |= WindowFlagBits::decorated | WindowFlagBits::movable | WindowFlagBits::resizable;
         extracted->window_flags &= ~WindowFlagBits::docked;
-        extracted->set_auto_size(false, false);
         extracted->set_auto_position(false, false);
         extracted->set_position(drag_bounds.offset);
-        extracted->set_size(drag_bounds.size);
         extracted->reset_draw_records();
         if (node.windows.empty()) remove_empty_node(node_id);
-        else fit_node_to_required_width(node_id, true);
         update_layout_sync(true);
         add_widget_to_root(extracted);
         const auto viewport = get_widget_viewport_rect(extracted);
         extracted->set_root_viewport_origin({viewport.x, viewport.y});
         extracted->set_position(drag_bounds.offset);
-        extracted->set_size(drag_bounds.size);
 
         auto &ctx = detail::get_context();
         const auto header_id = make_element_id(extracted->id(), AUIK_TAG_WINDOW_HEADER);
@@ -2518,7 +2513,7 @@ namespace auik
         const amal::vec2 dock_work_range = detail::depth_work_range(this->depth_range());
         u32 content_requirement = 1u;
         u32 chrome_requirement = 1u;
-        for (const auto &node : _nodes)
+        for (const auto &node : _tree.nodes())
         {
             for (auto *window : node.windows)
                 if (window) content_requirement = amal::max(content_requirement, window->get_depth_requirement());
@@ -2528,7 +2523,7 @@ namespace auik
         DepthCursor cursor(dock_work_range, content_requirement + chrome_requirement);
         const amal::vec2 content_range = cursor.next(content_requirement);
         _tabbar_depth_range = cursor.next(chrome_requirement);
-        for (auto &node : _nodes)
+        for (auto &node : _tree.nodes())
         {
             for (auto *window : node.windows)
             {
@@ -2543,7 +2538,7 @@ namespace auik
         const amal::vec2 dock_fg_range = detail::depth_foreground_range(this->depth_range());
         const amal::vec2 helper_range = detail::depth_foreground_range(dock_fg_range);
         _resize_helper_depth = next_depth(helper_range);
-        for (auto &node : _nodes)
+        for (auto &node : _tree.nodes())
         {
             node.tab_panel_rect.depth = _tab_panel_depth;
             node.tab_panel_rect.hit_depth = node.tab_panel_rect.depth;
@@ -2567,7 +2562,7 @@ namespace auik
     {
         u32 content_requirement = 1u;
         u32 chrome_requirement = 1u;
-        for (const auto &node : _nodes)
+        for (const auto &node : _tree.nodes())
         {
             for (auto *window : node.windows)
                 if (window) content_requirement = amal::max(content_requirement, window->get_depth_requirement());
@@ -2580,7 +2575,7 @@ namespace auik
     void Dockspace::back_hit_depth()
     {
         Widget::back_hit_depth();
-        for (auto &node : _nodes)
+        for (auto &node : _tree.nodes())
         {
             node.tab_panel_rect.hit_depth = get_rect().hit_depth;
             if (node.tabbar) node.tabbar->back_hit_depth();
@@ -2599,7 +2594,7 @@ namespace auik
     void Dockspace::restore_hit_depth()
     {
         Widget::restore_hit_depth();
-        for (auto &node : _nodes)
+        for (auto &node : _tree.nodes())
         {
             node.tab_panel_rect.hit_depth = node.tab_panel_rect.depth;
             if (node.tabbar) node.tabbar->restore_hit_depth();
@@ -2701,7 +2696,8 @@ namespace auik
                 continue;
             }
 
-            StyleState state = helper.interactive ? resolve_resize_helper_state(helper.rect) : StyleState::normal;
+            StyleState state =
+                helper.interactive ? resolve_resize_helper_state(helper.rect, helper.hit_rect) : StyleState::normal;
             u32 style_tag = _resize_helper_style.tag_id;
             if (helper.drop_zone && helper.axis == amal::axis::y) style_tag = AUIK_STYLE_TAG_DOCKSPACE_DROP_ZONE;
             else if (drag_zones_enabled && helper.axis == amal::axis::x) style_tag = _resize_helper_drag_style.tag_id;
@@ -2808,6 +2804,10 @@ namespace auik
         detail::set_window_cursor(cursor, ctx.window_ctx);
         if (helper_state)
         {
+            // Helper hover is per element; the Dockspace's own style may remain unchanged.
+            // Refresh its visual records on both enter and leave in the deferred hover callback.
+            DrawCtx draw_ctx{DrawReasonBits::none};
+            draw_resize_helpers(draw_ctx);
             ctx.dirty_flags |= DirtyFlagBits::redraw;
             mark_host_refresh_request();
         }
@@ -2886,63 +2886,19 @@ namespace auik
         if (requested_delta == 0.0f) return;
 
         auto child_min_size = [&](size_t index) {
-            auto *child = get_node(parent_node->children[index]);
+            const auto *child = get_node(parent_node->children[index]);
             if (!child) return 0.0f;
-            const f32 settings_min = axis_size(child->min_size, helper->axis);
-            const f32 style_size = axis_size(child->style_size, helper->axis);
-            if (is_size_fill(style_size)) return amal::ceil(settings_min);
-            if (is_size_fit(style_size))
-            {
-                // A vertical fit-content node keeps its content height during an explicit resize. The regular
-                // layout path may still shrink it when the whole split does not have enough space. Horizontal
-                // fit nodes remain manually resizable (the application uses one for the sidebar width).
-                const f32 required_min =
-                    helper->axis == amal::axis::y ? axis_size(child->required_size, helper->axis) : 0.0f;
-                return amal::ceil(amal::max(settings_min, required_min));
-            }
-            if (is_size_concrete(style_size)) return amal::ceil(amal::max(settings_min, style_size));
-            const f32 required_min = axis_size(child->required_size, helper->axis);
-            return amal::ceil(amal::max(settings_min, required_min));
+            const f32 measured = amal::ceil(axis_size(child->resize_min_size, helper->axis));
+            const f32 allocated = axis_size(child->bounds.size, helper->axis);
+            return allocated > 0.0f ? amal::min(measured, allocated) : measured;
         };
 
         acul::vector<f32> next_sizes;
         next_sizes.resize(parent_node->children.size());
         for (size_t i = 0; i < parent_node->children.size(); ++i) next_sizes[i] = _resize_basis[i];
 
-        auto is_fill_child = [&](size_t index) {
-            if (index >= parent_node->children.size()) return false;
-            auto *child = get_node(parent_node->children[index]);
-            return child && is_size_fill(axis_size(child->style_size, helper->axis));
-        };
-        auto find_prev_fill_child = [&](size_t index) {
-            if (parent_node->children.empty()) return static_cast<size_t>(-1);
-            size_t i = amal::min(index, parent_node->children.size() - 1u);
-            for (;;)
-            {
-                if (is_fill_child(i)) return i;
-                if (i == 0u) break;
-                --i;
-            }
-            return static_cast<size_t>(-1);
-        };
-        auto find_next_fill_child = [&](size_t index) {
-            for (size_t i = index; i < parent_node->children.size(); ++i)
-                if (is_fill_child(i)) return i;
-            return static_cast<size_t>(-1);
-        };
-        const size_t before_resize_child =
-            is_fill_child(helper->before_child) ? helper->before_child : find_prev_fill_child(helper->before_child);
-        const size_t after_resize_child =
-            is_fill_child(helper->after_child) ? helper->after_child : find_next_fill_child(helper->after_child);
-        const size_t grow_before = before_resize_child != static_cast<size_t>(-1)
-                                       ? before_resize_child
-                                       : static_cast<size_t>(helper->before_child);
-        const size_t grow_after = after_resize_child != static_cast<size_t>(-1)
-                                      ? after_resize_child
-                                      : static_cast<size_t>(helper->after_child);
-        if (grow_before >= parent_node->children.size() || grow_after >= parent_node->children.size() ||
-            grow_before == grow_after)
-            return;
+        const size_t grow_before = helper->before_child;
+        const size_t grow_after = helper->after_child;
 
         auto shrink_child = [&](size_t index, f32 amount) {
             if (index >= parent_node->children.size()) return 0.0f;
@@ -2977,8 +2933,8 @@ namespace auik
             f32 next_size = amal::max(next_sizes[i], child_min_size(i));
             next_size = amal::max(next_size, 0.0001f);
 
-            if (axis_size(child->settings.size, helper->axis) == next_size) continue;
-            set_axis_size(child->settings.size, helper->axis, next_size);
+            if (axis_size(child->bounds.size, helper->axis) == next_size) continue;
+            set_axis_size(child->bounds.size, helper->axis, next_size);
             changed = true;
         }
         if (!changed) return;
@@ -3017,34 +2973,20 @@ namespace auik
         if (!remove_root_widget(window)) return;
 
         const size_t insert_index = amal::min<size_t>(after_child, parent->children.size());
-        DockNodeSettings settings = normalize_dock_node_settings(_new_node_settings);
-
-        DockNodeID leaf_id = static_cast<DockNodeID>(_nodes.size());
-        Node leaf{};
-        leaf.parent = parent_id;
-        leaf.settings = settings;
-        _nodes.push_back(std::move(leaf));
-
-        parent = get_node(parent_id);
-        if (!parent) return;
-        parent->children.insert(parent->children.begin() + insert_index, leaf_id);
-        for (DockNodeID child_id : parent->children)
-        {
-            auto *child = get_node(child_id);
-            if (child && is_size_fill(axis_size(child->style_size, axis)))
-                set_axis_size(child->settings.size, axis, 0.0f);
-        }
+        const DockNodeID leaf_id = create_node(parent_id, false, _new_node_settings, insert_index);
 
         add_window(leaf_id, window);
-        fit_node_to_required_width(leaf_id, false);
+        initialize_node_width(leaf_id);
+        update_depth(this->depth_range());
         update_layout_sync(true);
+        refresh_root_depth_draws();
     }
 
     void Dockspace::on_attach()
     {
         Widget::on_attach();
         register_dockspace(this);
-        for (auto &node : _nodes)
+        for (auto &node : _tree.nodes())
         {
             if (node.tabbar && (node.tabbar->widget_flags & WidgetFlagBits::attachable)) node.tabbar->on_attach();
             if (node.menu && (node.menu->widget_flags & WidgetFlagBits::attachable)) node.menu->on_attach();
@@ -3057,7 +2999,7 @@ namespace auik
     void Dockspace::on_detach()
     {
         unregister_dockspace(this);
-        for (auto &node : _nodes)
+        for (auto &node : _tree.nodes())
         {
             if (node.menu && (node.menu->widget_flags & WidgetFlagBits::attachable)) node.menu->on_detach();
             if (node.tabbar && (node.tabbar->widget_flags & WidgetFlagBits::attachable)) node.tabbar->on_detach();
@@ -3090,10 +3032,7 @@ namespace auik
     {
         static void write_node_settings(acul::bin_stream &stream, const DockNodeSettings &settings)
         {
-            stream.write(settings.style_tag)
-                .write(settings.size)
-                .write(settings.min_size)
-                .write(static_cast<u32>(settings.flags))
+            stream.write(static_cast<u32>(settings.flags))
                 .write(static_cast<u32>(settings.tabbar_flags))
                 .write(settings.tabpanel);
         }
@@ -3103,15 +3042,12 @@ namespace auik
             DockNodeSettings settings{};
             u32 flags = 0u;
             u32 tabbar_flags = 0u;
-            stream.read(settings.style_tag)
-                .read(settings.size)
-                .read(settings.min_size)
-                .read(flags)
+            stream.read(flags)
                 .read(tabbar_flags)
                 .read(settings.tabpanel);
             settings.flags = DockspaceResizeFlags(flags);
             settings.tabbar_flags = TabbarFlags(tabbar_flags);
-            return normalize_dock_node_settings(settings);
+            return settings;
         }
 
         static void write_menu_group(acul::bin_stream &stream, const Dockspace::MenuGroup &group)
@@ -3229,8 +3165,8 @@ namespace auik
             write_menu_group(stream, dockspace->_menu_group);
             stream.write(dockspace->_open_menu_node);
 
-            stream.write(static_cast<u32>(dockspace->_nodes.size()));
-            for (const auto &node : dockspace->_nodes) write_node(stream, node);
+            stream.write(static_cast<u32>(dockspace->_tree.nodes().size()));
+            for (const auto &node : dockspace->_tree.nodes()) write_node(stream, node);
         }
 
         static umbf::Block *read(acul::bin_stream &stream)
@@ -3250,24 +3186,21 @@ namespace auik
             dockspace->_menu_group = std::move(menu_group);
             dockspace->_open_menu_node = open_menu_node;
 
-            for (auto &node : dockspace->_nodes) dockspace->clear_node_chrome(node);
-            dockspace->_nodes.clear();
+            for (auto &node : dockspace->_tree.nodes()) dockspace->clear_node_chrome(node);
+            dockspace->_tree.nodes().clear();
 
             u32 node_count = 0u;
             stream.read(node_count);
-            dockspace->_nodes.resize(node_count);
+            dockspace->_tree.nodes().resize(node_count);
             for (u32 node_i = 0u; node_i < node_count; ++node_i)
             {
-                read_node(stream, dockspace->_nodes[node_i]);
-                dockspace->update_node_style_cache(node_i, dockspace->_nodes[node_i]);
-                for (auto *window : dockspace->_nodes[node_i].windows) dockspace->attach_window(window);
+                read_node(stream, dockspace->_tree.nodes()[node_i]);
+                for (auto *window : dockspace->_tree.nodes()[node_i].windows) dockspace->attach_window(window);
             }
 
-            if (dockspace->_nodes.empty())
+            if (dockspace->_tree.nodes().empty())
             {
-                dockspace->_nodes.push_back({});
-                dockspace->_nodes[0].settings.min_size = {0.0f, 0.0f};
-                dockspace->update_node_style_cache(0u, dockspace->_nodes[0]);
+                dockspace->_tree.nodes().push_back({});
             }
             return dockspace;
         }
@@ -3275,7 +3208,7 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::registry::BlockStream dockspace{DockspaceStreamAccess::read,
+        extern AUIK_EXPORT const umbf::registry::BlockStream dockspace{DockspaceStreamAccess::read,
                                                                 DockspaceStreamAccess::write};
     } // namespace streams
 } // namespace auik

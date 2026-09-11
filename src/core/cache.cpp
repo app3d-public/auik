@@ -243,8 +243,8 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::registry::BlockStream snapshot_tree{read_snapshot_tree, write_snapshot_tree};
-        AUIK_EXPORT const umbf::registry::BlockStream global_cache{read_global_cache, write_global_cache};
+        extern AUIK_EXPORT const umbf::registry::BlockStream snapshot_tree{read_snapshot_tree, write_snapshot_tree};
+        extern AUIK_EXPORT const umbf::registry::BlockStream global_cache{read_global_cache, write_global_cache};
     } // namespace streams
 
     void insert_umbf_streams(umbf::registry::HashResolver &resolver)

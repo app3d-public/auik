@@ -1202,9 +1202,11 @@ namespace auik
         while (_popups.size() <= depth) _popups.push_back(nullptr);
         if (_popups[depth]) return _popups[depth];
         auto *popup = acul::alloc<Window>(AUIK_TAG_MENU_POPUP, "", amal::rect{{0.0f, 0.0f}, {0.0f, 0.0f}},
-                                          get_popup_window_flags(), WidgetFlagBits::visible | WidgetFlagBits::hittable);
+                                          WindowFlagBits::none, WidgetFlagBits::visible | WidgetFlagBits::hittable);
         popup->get_rect().id.widget_id = id();
         popup->set_window_style_tag(AUIK_STYLE_TAG_MENU_POPUP);
+        popup->set_dock_style_tag(0u);
+        popup->set_auto_size(false, false);
         popup->set_focus_parent(this);
         popup->unset_visible();
         popup->sync_widget_flags();
@@ -1364,7 +1366,7 @@ namespace auik
         const f32 available_h = amal::max(popup_bounds.y + popup_bounds.w - popup_y, 0.0f);
         const bool need_scroll = desired_popup_h > available_h;
         const f32 popup_h = need_scroll ? available_h : desired_popup_h;
-        popup->window_flags = get_popup_window_flags() | WindowFlagBits::docked;
+        popup->window_flags = WindowFlagBits::none;
         popup->set_visible();
         popup->sync_widget_flags();
         popup->update_style_invalidated();
@@ -2066,7 +2068,7 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::registry::BlockStream menu_bar{read_menu_bar, write_menu_bar};
-        AUIK_EXPORT const umbf::registry::BlockStream popup_menu{read_popup_menu, write_popup_menu};
+        extern AUIK_EXPORT const umbf::registry::BlockStream menu_bar{read_menu_bar, write_menu_bar};
+        extern AUIK_EXPORT const umbf::registry::BlockStream popup_menu{read_popup_menu, write_popup_menu};
     } // namespace streams
 } // namespace auik

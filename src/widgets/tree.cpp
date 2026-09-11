@@ -2452,7 +2452,7 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::registry::BlockStream tree{read_tree, write_tree};
-        AUIK_EXPORT const umbf::registry::BlockStream table_tree{read_table_tree, write_table_tree};
+        extern AUIK_EXPORT const umbf::registry::BlockStream tree{read_tree, write_tree};
+        extern AUIK_EXPORT const umbf::registry::BlockStream table_tree{read_table_tree, write_table_tree};
     } // namespace streams
 } // namespace auik

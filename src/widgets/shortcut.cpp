@@ -351,6 +351,6 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::registry::BlockStream shortcut_label{read_shortcut_label, write_shortcut_label};
+        extern AUIK_EXPORT const umbf::registry::BlockStream shortcut_label{read_shortcut_label, write_shortcut_label};
     }
 } // namespace auik

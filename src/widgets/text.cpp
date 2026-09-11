@@ -1520,8 +1520,8 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::registry::BlockStream text{read_text, write_text};
-        AUIK_EXPORT const umbf::registry::BlockStream etext{read_etext, write_text};
+        extern AUIK_EXPORT const umbf::registry::BlockStream text{read_text, write_text};
+        extern AUIK_EXPORT const umbf::registry::BlockStream etext{read_etext, write_text};
     } // namespace streams
 
 } // namespace auik

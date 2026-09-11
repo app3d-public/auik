@@ -871,6 +871,6 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::registry::BlockStream modal_queue{read_modal_queue, write_modal_queue};
+        extern AUIK_EXPORT const umbf::registry::BlockStream modal_queue{read_modal_queue, write_modal_queue};
     } // namespace streams
 } // namespace auik

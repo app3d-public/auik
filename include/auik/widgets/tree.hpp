@@ -20,7 +20,7 @@
 
 namespace auik
 {
-    class Tree : public Widget, public umbf::Block
+    class AUIK_CLASS_EXPORT Tree : public Widget, public umbf::Block
     {
     public:
         static AUIK_EXPORT constexpr size_t invalid_node = static_cast<size_t>(-1);
@@ -187,47 +187,47 @@ namespace auik
             AnimationState state;
         };
 
-        void rebuild_visible_nodes();
-        void rebuild_cells();
-        void clear_cells(bool invalidate_draw = true);
-        void clear_nodes();
-        void invalidate_visual_draw_records();
-        void clear_tree_line_draw_records();
-        void draw_tree_lines(DrawCtx &ctx, DrawStream *stream);
-        size_t node_depth(size_t node) const;
-        bool node_is_last_sibling(size_t node) const;
-        size_t node_ancestor_at_depth(size_t node, size_t depth) const;
-        size_t resolve_column_count() const;
-        u32 cell_element_id(size_t visible_row, size_t column) const;
-        DrawBlock *cell_widget(size_t visible_row, size_t column) const;
-        Widget *element_widget(ElementID element) const;
-        const TableColumnSettings &settings_for_column(size_t column) const;
-        void update_column_widths(f32 inner_width);
-        void resize_visuals();
-        void update_cell_clip_rects();
-        void sync_cell_parents();
-        void invalidate_layout();
-        void update_own_layout();
-        void update_reorder_indicator_layout();
-        StyleUpdateFlags update_resize_indicator();
-        void defer_model_records(ModelRecordsEvent event);
-        void defer_model_record_refresh(ModelRecordID record_id);
-        void apply_model_records(const ModelRecordsEvent &event);
-        void refresh_model_record(ModelRecordID record_id);
-        bool present_model_record(size_t record_index, DrawBlock *&label, Row &cells,
+        AUIK_NO_EXPORT void rebuild_visible_nodes();
+        AUIK_NO_EXPORT void rebuild_cells();
+        AUIK_NO_EXPORT void clear_cells(bool invalidate_draw = true);
+        AUIK_NO_EXPORT void clear_nodes();
+        AUIK_NO_EXPORT void invalidate_visual_draw_records();
+        AUIK_NO_EXPORT void clear_tree_line_draw_records();
+        AUIK_NO_EXPORT void draw_tree_lines(DrawCtx &ctx, DrawStream *stream);
+        AUIK_NO_EXPORT size_t node_depth(size_t node) const;
+        AUIK_NO_EXPORT bool node_is_last_sibling(size_t node) const;
+        AUIK_NO_EXPORT size_t node_ancestor_at_depth(size_t node, size_t depth) const;
+        AUIK_NO_EXPORT size_t resolve_column_count() const;
+        AUIK_NO_EXPORT u32 cell_element_id(size_t visible_row, size_t column) const;
+        AUIK_NO_EXPORT DrawBlock *cell_widget(size_t visible_row, size_t column) const;
+        AUIK_NO_EXPORT Widget *element_widget(ElementID element) const;
+        AUIK_NO_EXPORT const TableColumnSettings &settings_for_column(size_t column) const;
+        AUIK_NO_EXPORT void update_column_widths(f32 inner_width);
+        AUIK_NO_EXPORT void resize_visuals();
+        AUIK_NO_EXPORT void update_cell_clip_rects();
+        AUIK_NO_EXPORT void sync_cell_parents();
+        AUIK_NO_EXPORT void invalidate_layout();
+        AUIK_NO_EXPORT void update_own_layout();
+        AUIK_NO_EXPORT void update_reorder_indicator_layout();
+        AUIK_NO_EXPORT StyleUpdateFlags update_resize_indicator();
+        AUIK_NO_EXPORT void defer_model_records(ModelRecordsEvent event);
+        AUIK_NO_EXPORT void defer_model_record_refresh(ModelRecordID record_id);
+        AUIK_NO_EXPORT void apply_model_records(const ModelRecordsEvent &event);
+        AUIK_NO_EXPORT void refresh_model_record(ModelRecordID record_id);
+        AUIK_NO_EXPORT bool present_model_record(size_t record_index, DrawBlock *&label, Row &cells,
                                   ModelRecordID *parent_record_id = nullptr);
-        void rebuild_from_model_binding();
-        bool dispatch_reorder_drag(DragEvent &event);
+        AUIK_NO_EXPORT void rebuild_from_model_binding();
+        AUIK_NO_EXPORT bool dispatch_reorder_drag(DragEvent &event);
 
         struct ModelData;
 
-        void ensure_arrow_resources();
-        ArrowAnimation *find_arrow_animation(size_t node);
-        const ArrowAnimation *find_arrow_animation(size_t node) const;
-        void start_arrow_animation(size_t node, bool opening);
-        void clear_arrow_animation_draw(ArrowAnimation &animation);
-        void release_arrow_animations();
-        void draw_arrow(DrawCtx &ctx, ArrowVisual &visual);
+        AUIK_NO_EXPORT void ensure_arrow_resources();
+        AUIK_NO_EXPORT ArrowAnimation *find_arrow_animation(size_t node);
+        AUIK_NO_EXPORT const ArrowAnimation *find_arrow_animation(size_t node) const;
+        AUIK_NO_EXPORT void start_arrow_animation(size_t node, bool opening);
+        AUIK_NO_EXPORT void clear_arrow_animation_draw(ArrowAnimation &animation);
+        AUIK_NO_EXPORT void release_arrow_animations();
+        AUIK_NO_EXPORT void draw_arrow(DrawCtx &ctx, ArrowVisual &visual);
 
         acul::vector<Node> _nodes;
         acul::vector<Row> _node_cells;

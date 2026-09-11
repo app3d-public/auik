@@ -3,6 +3,152 @@
 
 namespace auik
 {
+    static inline f32 dock_axis_size(const amal::vec2 &value, amal::axis axis)
+    {
+        return axis == amal::axis::x ? value.x : value.y;
+    }
+
+    static inline f32 dock_cross_size(const amal::vec2 &value, amal::axis axis)
+    {
+        return axis == amal::axis::x ? value.y : value.x;
+    }
+
+    static inline amal::vec2 make_dock_axis_size(amal::axis axis, f32 main, f32 cross)
+    {
+        return axis == amal::axis::x ? amal::vec2{main, cross} : amal::vec2{cross, main};
+    }
+
+    static inline void set_dock_axis_size(amal::vec2 &value, amal::axis axis, f32 size)
+    {
+        if (axis == amal::axis::x) value.x = size;
+        else value.y = size;
+    }
+
+    static inline void set_dock_axis_offset(amal::vec2 &value, amal::axis axis, f32 offset)
+    {
+        if (axis == amal::axis::x) value.x = offset;
+        else value.y = offset;
+    }
+
+    amal::vec2 DockLayout::measure_node(DockLayoutNodeID id)
+    {
+        auto *node = get_node(id);
+        if (!node) return {};
+        update_node_style_cache(*node);
+        amal::vec2 required = node->min_size;
+        if (!node->children.empty())
+        {
+            f32 main = 0.0f;
+            f32 cross = 0.0f;
+            for (DockLayoutNodeID child_id : node->children)
+            {
+                const amal::vec2 child_required = measure_node(child_id);
+                main += dock_axis_size(child_required, node->axis);
+                cross = amal::max(cross, dock_cross_size(child_required, node->axis));
+            }
+            required = amal::max(required, make_dock_axis_size(node->axis, main, cross));
+        }
+        else
+        {
+            for (auto &item : node->items)
+            {
+                if (item.widget) item.widget->update_layout_min_size();
+                required = amal::max(required, (item.widget ? item.widget->required_size() : amal::vec2{0.0f, 0.0f}));
+            }
+        }
+
+        if (is_size_concrete(node->style_size.x)) required.x = amal::max(required.x, node->style_size.x);
+        if (is_size_concrete(node->style_size.y)) required.y = amal::max(required.y, node->style_size.y);
+        node->required_size = required;
+        return required;
+    }
+
+    void DockLayout::layout_node(DockLayoutNodeID id, const amal::rect &bounds)
+    {
+        auto *node = get_node(id);
+        if (!node) return;
+        node->bounds = bounds;
+        if (node->children.empty())
+        {
+            for (auto &item : node->items) layout_item(node->bounds, item);
+            return;
+        }
+
+        const f32 main_available = amal::max(dock_axis_size(bounds.size, node->axis), 0.0f);
+        const f32 cross_available = amal::max(dock_cross_size(bounds.size, node->axis), 0.0f);
+        f32 fixed_total = 0.0f;
+        size_t fill_count = 0u;
+
+        for (DockLayoutNodeID child_id : node->children)
+        {
+            auto *child = get_node(child_id);
+            if (!child) continue;
+            update_node_style_cache(*child);
+            const f32 style_size = dock_axis_size(child->style_size, node->axis);
+            const f32 min_size = dock_axis_size(child->min_size, node->axis);
+            if (is_size_fill(style_size))
+            {
+                ++fill_count;
+                continue;
+            }
+            if (is_size_concrete(style_size)) fixed_total += amal::max(style_size, min_size);
+            else fixed_total += amal::max(dock_axis_size(child->required_size, node->axis), min_size);
+        }
+
+        const f32 fill_size =
+            fill_count > 0u ? amal::max(main_available - fixed_total, 0.0f) / static_cast<f32>(fill_count) : 0.0f;
+        f32 cursor = dock_axis_size(bounds.offset, node->axis);
+        const f32 end = cursor + main_available;
+
+        for (size_t i = 0; i < node->children.size(); ++i)
+        {
+            auto *child = get_node(node->children[i]);
+            if (!child) continue;
+            const f32 style_main = dock_axis_size(child->style_size, node->axis);
+            const f32 min_main = dock_axis_size(child->min_size, node->axis);
+            f32 child_main = 0.0f;
+            if (is_size_fill(style_main)) child_main = fill_size;
+            else if (is_size_concrete(style_main)) child_main = style_main;
+            else child_main = dock_axis_size(child->required_size, node->axis);
+            child_main = amal::max(child_main, min_main);
+            child_main = amal::min(child_main, amal::max(end - cursor, 0.0f));
+
+            amal::rect child_bounds = bounds;
+            set_dock_axis_offset(child_bounds.offset, node->axis, cursor);
+            set_dock_axis_size(child_bounds.size, node->axis, child_main);
+            if (node->axis == amal::axis::x) child_bounds.size.y = cross_available;
+            else child_bounds.size.x = cross_available;
+            layout_node(node->children[i], child_bounds);
+            cursor += child_main;
+        }
+    }
+
+    DockLayoutNodeID DockLayout::create_node(DockLayoutNodeID parent, bool split, DockLayoutNodeSettings settings)
+    {
+        assert(parent < _tree.nodes().size() && "parent dock node is invalid");
+        DockLayoutNodeID id = static_cast<DockLayoutNodeID>(_tree.nodes().size());
+        Node node{};
+        node.parent = parent;
+        node.settings = settings;
+        update_node_style_cache(node);
+        _tree.append(parent, std::move(node));
+        auto &parent_node = _tree.nodes()[parent];
+        if (split) _tree.nodes()[id].axis = parent_node.axis;
+        return id;
+    }
+
+    void DockLayout::update_node_style_cache(Node &node)
+    {
+        node.style_size = node.settings.size;
+        node.min_size = node.settings.min_size;
+        if (node.settings.style_tag == 0u) return;
+        const StyleID style_id = get_theme()->get_resolved_style(node.settings.style_tag, 0u, 0u, StyleState::normal);
+        const Style &style = get_theme()->get_style(style_id);
+        node.style_size = style.size();
+        node.min_size = {amal::max(node.settings.min_size.x, style.min_width()),
+                         amal::max(node.settings.min_size.y, style.min_height())};
+    }
+
     static inline amal::vec2 dock_layout_align_pos(const amal::rect &bounds, const amal::vec2 &size,
                                                    ChildLayoutFlags layout)
     {
@@ -18,27 +164,44 @@ namespace auik
     }
 
     DockLayout::DockLayout(u32 id, const amal::vec2 &inline_size, WidgetFlags widget_flags)
-        : Widget(id, widget_flags, EventFlagBits::none, {{0.0f, 0.0f}, inline_size}, AUIK_TAG_DOCK_LAYOUT), _dock(this)
+        : Widget(id, widget_flags, EventFlagBits::none, {{0.0f, 0.0f}, inline_size}, AUIK_TAG_DOCK_LAYOUT)
     {
     }
 
-    DockLayout::~DockLayout() { clear(); }
+    DockLayout::~DockLayout()
+    {
+        acul::vector<Widget *> children;
+        for (const auto &node : _tree.nodes())
+            for (const auto &item : node.items)
+                if (item.widget) children.push_back(item.widget);
+        clear();
+        for (auto *child : children) acul::release(child);
+    }
 
     DockLayoutNodeID DockLayout::create_split(DockLayoutNodeID parent, amal::axis axis, DockLayoutNodeSettings settings)
     {
-        return _dock.create_split(parent, axis, settings);
+        const auto id = create_node(parent, true, settings);
+        get_node(id)->axis = axis;
+        return id;
     }
 
     DockLayoutNodeID DockLayout::create_leaf(DockLayoutNodeID parent, DockLayoutNodeSettings settings)
     {
-        return _dock.create_leaf(parent, settings);
+        return create_node(parent, false, settings);
     }
 
-    void DockLayout::set_split_axis(DockLayoutNodeID node, amal::axis axis) { _dock.set_split_axis(node, axis); }
+    void DockLayout::set_split_axis(DockLayoutNodeID node, amal::axis axis)
+    {
+        if (auto *n = get_node(node)) n->axis = axis;
+    }
 
     void DockLayout::set_node_settings(DockLayoutNodeID node, DockLayoutNodeSettings settings)
     {
-        _dock.set_node_settings(node, settings);
+        if (auto *n = get_node(node))
+        {
+            n->settings = settings;
+            update_node_style_cache(*n);
+        }
     }
 
     void DockLayout::add_child(DockLayoutNodeID node, Widget *child, ChildLayoutFlags layout)
@@ -47,24 +210,59 @@ namespace auik
         Item item{};
         item.widget = child;
         item.layout = layout;
-        _dock.add_item(node, item);
+        if (auto *n = get_node(node))
+        {
+            attach_item(item);
+            n->items.push_back(item);
+        }
     }
 
-    bool DockLayout::remove_child(DockLayoutNodeID node, Widget *child) { return _dock.remove_item(node, child); }
+    DockLayout::Node *DockLayout::get_node(DockLayoutNodeID id) { return _tree.attached(id) ? _tree.get(id) : nullptr; }
 
-    void DockLayout::clear_node(DockLayoutNodeID node) { _dock.clear_items(node); }
+    const DockLayout::Node *DockLayout::get_node(DockLayoutNodeID id) const
+    {
+        return _tree.attached(id) ? _tree.get(id) : nullptr;
+    }
 
-    void DockLayout::clear() { _dock.clear(); }
+    bool DockLayout::remove_child(DockLayoutNodeID id, Widget *child)
+    {
+        auto *node = get_node(id);
+        if (!node || !child) return false;
+        for (size_t i = 0; i < node->items.size(); ++i)
+            if (node->items[i].widget == child)
+            {
+                detach_item(node->items[i]);
+                node->items.erase(node->items.begin() + i);
+                return true;
+            }
+        return false;
+    }
+
+    void DockLayout::clear_node(DockLayoutNodeID id)
+    {
+        if (auto *node = get_node(id))
+        {
+            for (auto &item : node->items) detach_item(item);
+            node->items.clear();
+        }
+    }
+
+    void DockLayout::clear()
+    {
+        for (auto &node : _tree.nodes())
+            for (auto &item : node.items) detach_item(item);
+        _tree.reset();
+    }
 
     StyleUpdateFlags DockLayout::update_style()
     {
         StyleUpdateFlags flags = StyleUpdateFlagBits::none;
-        for (Item &item : _dock.items())
+        for (Item &item : items())
             if (item.widget && item.widget->is_visible()) flags |= item.widget->update_style_invalidated();
         return flags;
     }
 
-    void DockLayout::update_layout_min_size_force() { set_required_size(_dock.measure(root_node())); }
+    void DockLayout::update_layout_min_size_force() { set_required_size(measure_node(root_node())); }
 
     void DockLayout::update_layout(bool min_size_known)
     {
@@ -72,48 +270,48 @@ namespace auik
         set_layout_size(resolve_layout_size_from_required());
         Widget::update_layout(true);
         set_clip_id(parent() ? parent()->content_clip_id() : clip_id());
-        _dock.layout(root_node(), bounds());
+        layout_node(root_node(), bounds());
     }
 
     void DockLayout::translate(const amal::vec2 &delta)
     {
         if (delta.x == 0.0f && delta.y == 0.0f) return;
         Widget::translate(delta);
-        for (Item &item : _dock.items())
+        for (Item &item : items())
             if (item.widget) item.widget->translate(delta);
     }
 
     void DockLayout::reset_clip_rect_records()
     {
         Widget::reset_clip_rect_records();
-        for (Item &item : _dock.items())
+        for (Item &item : items())
             if (item.widget) item.widget->reset_clip_rect_records();
     }
 
     void DockLayout::rebuild_clip_rects()
     {
         set_clip_id(parent() ? parent()->content_clip_id() : clip_id());
-        for (Item &item : _dock.items())
+        for (Item &item : items())
             if (item.widget && item.widget->is_visible()) item.widget->rebuild_clip_rects();
     }
 
     void DockLayout::reset_draw_records()
     {
-        for (Item &item : _dock.items())
+        for (Item &item : items())
             if (item.widget) item.widget->reset_draw_records();
     }
 
     void DockLayout::invalidate_style()
     {
         Widget::invalidate_style();
-        for (Item &item : _dock.items())
+        for (Item &item : items())
             if (item.widget) item.widget->invalidate_style();
     }
 
     bool DockLayout::update_locale()
     {
         bool changed = Widget::update_locale();
-        for (Item &item : _dock.items())
+        for (Item &item : items())
             if (item.widget) changed |= item.widget->update_locale();
         return changed;
     }
@@ -122,21 +320,21 @@ namespace auik
     {
         Widget::add_state_flags_inherit(flags);
         if ((flags & WidgetStateFlagBits::visible) && !is_visible()) flags &= ~WidgetStateFlagBits::visible;
-        for (auto &item : _dock.items())
+        for (auto &item : items())
             if (item.widget) item.widget->add_state_flags_inherit(flags);
     }
 
     void DockLayout::remove_state_flags_inherit(WidgetStateFlags flags)
     {
         Widget::remove_state_flags_inherit(flags);
-        for (auto &item : _dock.items())
+        for (auto &item : items())
             if (item.widget) item.widget->remove_state_flags_inherit(flags);
     }
 
     u32 DockLayout::get_depth_requirement() const
     {
         u32 requirement = 1u;
-        for (const Item &item : _dock.items())
+        for (const Item &item : items())
             if (item.widget && item.widget->is_visible())
                 requirement += amal::max(item.widget->get_depth_requirement(), 1u);
         return requirement;
@@ -147,7 +345,7 @@ namespace auik
         Widget::update_depth(depth_range);
         DepthCursor cursor(this->depth_range(), get_depth_requirement());
         cursor.next(1u);
-        for (Item &item : _dock.items())
+        for (Item &item : items())
             if (item.widget && item.widget->is_visible())
                 item.widget->update_depth(cursor.next(amal::max(item.widget->get_depth_requirement(), 1u)));
     }
@@ -155,7 +353,7 @@ namespace auik
     void DockLayout::draw(DrawCtx &ctx)
     {
         if (!is_visible() && !(ctx.reason & DrawReasonBits::invalidate)) return;
-        for (Item &item : _dock.items())
+        for (Item &item : items())
             if (item.widget && (item.widget->is_visible() || (ctx.reason & DrawReasonBits::invalidate)))
                 item.widget->draw_local(ctx);
     }
@@ -163,31 +361,31 @@ namespace auik
     void DockLayout::on_attach()
     {
         Widget::on_attach();
-        for (Item &item : _dock.items())
+        for (Item &item : items())
             if (item.widget && (item.widget->widget_flags & WidgetFlagBits::attachable)) item.widget->on_attach();
     }
 
     void DockLayout::on_detach()
     {
-        for (Item &item : _dock.items())
+        for (Item &item : items())
             if (item.widget && (item.widget->widget_flags & WidgetFlagBits::attachable)) item.widget->on_detach();
         Widget::on_detach();
     }
 
-    void DockLayout::Policy::attach_item(DockLayout *owner, Item &item)
+    void DockLayout::attach_item(Item &item)
     {
-        if (!owner || !item.widget) return;
-        item.widget->set_parent(owner);
-        item.widget->set_focus_parent(owner);
+        if (!item.widget) return;
+        item.widget->set_parent(this);
+        item.widget->set_focus_parent(this);
         item.widget->update_style_invalidated();
-        if (detail::get_context().id_map.find(owner->id()) != detail::get_context().id_map.end() &&
+        if (detail::get_context().id_map.find(id()) != detail::get_context().id_map.end() &&
             (item.widget->widget_flags & WidgetFlagBits::attachable))
             item.widget->on_attach();
     }
 
-    void DockLayout::Policy::detach_item(DockLayout *owner, Item &item)
+    void DockLayout::detach_item(Item &item)
     {
-        if (!owner || !item.widget) return;
+        if (!item.widget) return;
         if (detail::get_context().id_map.find(item.widget->id()) != detail::get_context().id_map.end() &&
             (item.widget->widget_flags & WidgetFlagBits::attachable))
             item.widget->on_detach();
@@ -195,12 +393,7 @@ namespace auik
         item.widget->set_focus_parent(nullptr);
     }
 
-    void DockLayout::Policy::update_item_min_size(DockLayout *, Item &item)
-    {
-        if (item.widget) item.widget->update_layout_min_size();
-    }
-
-    void DockLayout::Policy::layout_item(DockLayout *, const amal::rect &bounds, Item &item)
+    void DockLayout::layout_item(const amal::rect &bounds, Item &item)
     {
         if (!item.widget) return;
         const amal::vec2 required = item.widget->required_size();
@@ -216,14 +409,14 @@ namespace auik
 
     struct DockLayoutStreamAccess
     {
-        static void write_settings(acul::bin_stream &stream, const detail::DockBaseNodeSettings &settings)
+        static void write_settings(acul::bin_stream &stream, const DockLayoutNodeSettings &settings)
         {
             stream.write(settings.style_tag).write(settings.size).write(settings.min_size);
         }
 
-        static detail::DockBaseNodeSettings read_settings(acul::bin_stream &stream)
+        static DockLayoutNodeSettings read_settings(acul::bin_stream &stream)
         {
-            detail::DockBaseNodeSettings settings{};
+            DockLayoutNodeSettings settings{};
             stream.read(settings.style_tag).read(settings.size).read(settings.min_size);
             return settings;
         }
@@ -232,7 +425,7 @@ namespace auik
         {
             const auto *layout = static_cast<DockLayout *>(block);
             detail::write_widget_common_data(stream, *layout);
-            const auto &nodes = layout->_dock.nodes();
+            const auto &nodes = layout->_tree.nodes();
             stream.write(static_cast<u32>(nodes.size()));
             for (const auto &node : nodes)
             {
@@ -261,21 +454,21 @@ namespace auik
             const auto common = detail::read_widget_common_data(stream);
             auto *layout = acul::alloc<DockLayout>(common.id, common.inline_size, WidgetFlags(common.widget_flags));
             detail::apply_widget_common_data(layout, common);
-            layout->_dock.nodes().clear();
+            layout->_tree.nodes().clear();
 
             u32 node_count = 0u;
             stream.read(node_count);
             if (node_count == 0u) node_count = 1u;
-            layout->_dock.nodes().resize(node_count);
+            layout->_tree.nodes().resize(node_count);
             for (u32 node_i = 0u; node_i < node_count; ++node_i)
             {
-                auto &node = layout->_dock.nodes()[node_i];
+                auto &node = layout->_tree.nodes()[node_i];
                 const auto settings = read_settings(stream);
                 u8 axis = static_cast<u8>(amal::axis::x);
                 stream.read(axis).read(node.parent);
                 node.axis = static_cast<amal::axis>(axis);
                 node.settings = settings;
-                layout->_dock.set_node_settings(node_i, settings);
+                layout->set_node_settings(node_i, settings);
                 u32 child_count = 0u;
                 stream.read(child_count);
                 node.children.resize(child_count);
@@ -308,7 +501,7 @@ namespace auik
                         if (blocks[item_i]) acul::release(blocks[item_i]);
                         continue;
                     }
-                    layout->_dock.add_item(node_i, DockLayout::Item{widget, item_layouts[item_i]});
+                    layout->add_child(node_i, widget, item_layouts[item_i]);
                 }
             }
             return layout;
@@ -317,7 +510,7 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::registry::BlockStream dock_layout{DockLayoutStreamAccess::read,
-                                                                  DockLayoutStreamAccess::write};
+        extern AUIK_EXPORT const umbf::registry::BlockStream dock_layout{DockLayoutStreamAccess::read,
+                                                                         DockLayoutStreamAccess::write};
     }
 } // namespace auik

@@ -91,10 +91,8 @@ namespace auik
 
         u16 content_clip_id() const override
         {
-            if (_drag_element_id != 0u) return get_layout_parent_clip_id();
             return _content_clip_id != 0xFFFFu ? _content_clip_id : clip_id();
         }
-
         using PFN_on_changed_icon_create = Widget *(*)(u32 id);
         using value_type = detail::Selectable *;
         struct Item
@@ -217,9 +215,6 @@ namespace auik
         bool mark_changed() { return mark_changed(TabbarChangeReason::selection); }
         AUIK_EXPORT u32 insertion_index_at(const amal::vec2 &point) const;
         const amal::vec2 &drag_grab_offset() const { return _drag_grab_offset; }
-        bool has_drag_grab_offset() const { return _drag_grab_offset_valid; }
-        AUIK_EXPORT void begin_external_drag(u32 element_id);
-        AUIK_EXPORT void cancel_drag();
         u32 item_style_tag() const { return _item_style_tag; }
         u32 selected_item_style_tag() const { return _selected_item_style_tag; }
         u32 popup_item_style_tag() const { return _popup_item_style_tag; }
@@ -230,6 +225,19 @@ namespace auik
         umbf::Block *as_snapshot_block() noexcept override { return this; }
 
     protected:
+        friend class Dockspace;
+        AUIK_EXPORT u32 drag_element_id() const;
+        bool dragging() const { return drag_element_id() != 0u; }
+        AUIK_EXPORT void adopt_drag();
+        // Dockspace owns this constraint. Store it relative to the tabbar so translation keeps it aligned.
+        void set_drag_bounds(const amal::rect &bounds) { _drag_bounds = {bounds.offset - position(), bounds.size}; }
+        amal::rect drag_bounds() const
+        {
+            if (_drag_bounds.size.x > 0.0f) return {position() + _drag_bounds.offset, _drag_bounds.size};
+            return parent() ? parent()->bounds() : amal::rect{};
+        }
+        amal::vec2 resolve_drag_visual_position(const amal::vec2 &base, const amal::vec2 &candidate,
+                                                const amal::vec2 &size) const;
         AUIK_EXPORT bool draw_transition_targets(DrawCtx &ctx);
         AUIK_EXPORT void rebuild_items();
         AUIK_EXPORT void update_popup_layout();
@@ -246,10 +254,8 @@ namespace auik
         AUIK_EXPORT void handle_item_click(u32 element_id);
         AUIK_EXPORT u32 find_index_by_element_id(u32 element_id) const;
         AUIK_EXPORT void reorder_item(u32 from, u32 to);
-        AUIK_EXPORT void begin_drag(u32 element_id);
+        AUIK_EXPORT void begin_drag();
         AUIK_EXPORT void end_drag();
-        AUIK_EXPORT u32 find_drop_index_by_x(f32 x) const;
-        AUIK_EXPORT u32 find_drop_index_by_dragged_center() const;
         AUIK_EXPORT virtual u16 get_layout_parent_clip_id() const;
         AUIK_EXPORT virtual amal::vec4 get_layout_parent_clip_rect() const;
         AUIK_EXPORT bool update_drag_realtime_order(f32 delta_x);
@@ -290,13 +296,10 @@ namespace auik
         u32 _visible_count = 0u;
         u32 _overflow_start = 0u;
         u32 _next_element_id = 1u;
-        u32 _drag_element_id = 0u;
-        u32 _drag_preview_index = 0u;
         u32 _last_selected_element_id = 0u;
+        amal::rect _drag_bounds{};
         amal::vec2 _drag_grab_offset{0.0f, 0.0f};
-        amal::vec2 _drag_offset{0.0f, 0.0f};
-        amal::vec2 _drag_applied_offset{0.0f, 0.0f};
-        bool _drag_grab_offset_valid = false;
+        f32 _drag_position_x = 0.0f;
         bool _drag_moved = false;
         bool _open = false;
         ScrollData _scroll{};

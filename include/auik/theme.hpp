@@ -10,6 +10,10 @@
 #include <amal/vector.hpp>
 #include <auik/symbol_export.h>
 #include <auik/widget_tags.hpp>
+#include <cstddef>
+#include <cstring>
+#include <type_traits>
+
 
 #define AUIK_SIZE_X_MIN_FIT         0x0
 #define AUIK_SIZE_Y_MIN_FIT         AUIK_SIZE_X_MIN_FIT
@@ -31,9 +35,10 @@
 #define AUIK_POS_UNDEFINED_VALUE    0xFFFF03p0f
 #define AUIK_POS_UNDEFINED          {AUIK_POS_UNDEFINED_VALUE, AUIK_POS_UNDEFINED_VALUE}
 
-#define AUIK_STYLE_EXTRA_ALIGN    0x2E0F75C4u
-#define AUIK_STYLE_EXTRA_TEXT     0x7674E155u
-#define AUIK_STYLE_EXTRA_OVERFLOW 0xD49D84A3u
+#define AUIK_STYLE_EXTRA_ALIGN        0x2E0F75C4u
+#define AUIK_STYLE_EXTRA_TEXT         0x7674E155u
+#define AUIK_STYLE_EXTRA_OVERFLOW     0xD49D84A3u
+#define AUIK_STYLE_EXTRA_ASPECT_RATIO 0x73A24D11u
 
 namespace auik
 {
@@ -122,9 +127,16 @@ namespace auik
 
     struct StyleExtra
     {
-        u32 id = 0u;
-        void *data = nullptr;
+        StyleExtra *root = nullptr;
         StyleExtra *next = nullptr;
+        u32 id = 0u;
+        u32 size = 0u;
+    };
+
+    enum class AspectRatioMode : u8
+    {
+        initial,
+        preserve
     };
 
     enum class OverflowMode : u8
@@ -152,10 +164,16 @@ namespace auik
         OverflowMode y = OverflowMode::visible;
     };
 
+    struct StyleExtraAspectRatio
+    {
+        AspectRatioMode mode = AspectRatioMode::initial;
+    };
+
     class Style final
     {
     public:
         Style() = default;
+        explicit Style(size_t extra_storage_size) { create_extra_storage(extra_storage_size); }
         Style(const Style &other) { *this = other; }
         Style(Style &&other) noexcept { *this = std::move(other); }
 
@@ -180,9 +198,9 @@ namespace auik
             _max_height = other._max_height;
             _font = other._font;
             _corner_mask = other._corner_mask;
-            _mask = other._mask;
             clone_extra(other);
             _mask = other._mask;
+            _disabled_mask = other._disabled_mask;
             return *this;
         }
 
@@ -209,6 +227,7 @@ namespace auik
             _corner_mask = other._corner_mask;
             _extra = other._extra;
             _mask = other._mask;
+            _disabled_mask = other._disabled_mask;
             other._extra = nullptr;
             other._mask &= ~detail::StylePropertyFlags(detail::StylePropertiesBits::extra);
             return *this;
@@ -218,13 +237,13 @@ namespace auik
         Style &padding(const amal::vec4 &value)
         {
             _padding = value;
-            _mask |= detail::StylePropertiesBits::padding;
+            enable(detail::StylePropertiesBits::padding);
             return *this;
         }
         Style &padding(const amal::vec2 &value)
         {
             _padding = {value.x, value.y, value.x, value.y};
-            _mask |= detail::StylePropertiesBits::padding;
+            enable(detail::StylePropertiesBits::padding);
             return *this;
         }
 
@@ -232,13 +251,13 @@ namespace auik
         Style &margin(const amal::vec4 &value)
         {
             _margin = value;
-            _mask |= detail::StylePropertiesBits::margin;
+            enable(detail::StylePropertiesBits::margin);
             return *this;
         }
         Style &margin(const amal::vec2 &value)
         {
             _margin = {value.x, value.y, value.x, value.y};
-            _mask |= detail::StylePropertiesBits::margin;
+            enable(detail::StylePropertiesBits::margin);
             return *this;
         }
 
@@ -246,13 +265,13 @@ namespace auik
         Style &background_color(const amal::vec4 &value)
         {
             _background_color = detail::pack_rgba8(value);
-            _mask |= detail::StylePropertiesBits::background_color;
+            enable(detail::StylePropertiesBits::background_color);
             return *this;
         }
         Style &background_color(u32 value)
         {
             _background_color = value;
-            _mask |= detail::StylePropertiesBits::background_color;
+            enable(detail::StylePropertiesBits::background_color);
             return *this;
         }
 
@@ -260,13 +279,13 @@ namespace auik
         Style &text_color(const amal::vec4 &value)
         {
             _text_color = detail::pack_rgba8(value);
-            _mask |= detail::StylePropertiesBits::text_color;
+            enable(detail::StylePropertiesBits::text_color);
             return *this;
         }
         Style &text_color(u32 value)
         {
             _text_color = value;
-            _mask |= detail::StylePropertiesBits::text_color;
+            enable(detail::StylePropertiesBits::text_color);
             return *this;
         }
 
@@ -274,7 +293,7 @@ namespace auik
         Style &text_size(f32 value)
         {
             _text_size = value;
-            _mask |= detail::StylePropertiesBits::text_size;
+            enable(detail::StylePropertiesBits::text_size);
             return *this;
         }
 
@@ -282,7 +301,7 @@ namespace auik
         Style &font(Font *value)
         {
             _font = value;
-            _mask |= detail::StylePropertiesBits::font;
+            enable(detail::StylePropertiesBits::font);
             return *this;
         }
 
@@ -290,7 +309,7 @@ namespace auik
         Style &inline_spacing(f32 value)
         {
             _inline_spacing = value;
-            _mask |= detail::StylePropertiesBits::inline_spacing;
+            enable(detail::StylePropertiesBits::inline_spacing);
             return *this;
         }
 
@@ -298,7 +317,7 @@ namespace auik
         Style &width(f32 value)
         {
             _size.x = value;
-            _mask |= detail::StylePropertiesBits::width;
+            enable(detail::StylePropertiesBits::width);
             return *this;
         }
 
@@ -306,7 +325,7 @@ namespace auik
         Style &height(f32 value)
         {
             _size.y = value;
-            _mask |= detail::StylePropertiesBits::height;
+            enable(detail::StylePropertiesBits::height);
             return *this;
         }
 
@@ -314,7 +333,7 @@ namespace auik
         Style &size(const amal::vec2 &value)
         {
             _size = value;
-            _mask |= detail::StylePropertiesBits::width | detail::StylePropertiesBits::height;
+            enable(detail::StylePropertiesBits::width | detail::StylePropertiesBits::height);
             return *this;
         }
 
@@ -322,7 +341,7 @@ namespace auik
         Style &min_width(f32 value)
         {
             _min_width = value;
-            _mask |= detail::StylePropertiesBits::min_width;
+            enable(detail::StylePropertiesBits::min_width);
             return *this;
         }
 
@@ -330,7 +349,7 @@ namespace auik
         Style &min_height(f32 value)
         {
             _min_height = value;
-            _mask |= detail::StylePropertiesBits::min_height;
+            enable(detail::StylePropertiesBits::min_height);
             return *this;
         }
 
@@ -338,7 +357,7 @@ namespace auik
         Style &max_width(f32 value)
         {
             _max_width = value;
-            _mask |= detail::StylePropertiesBits::max_width;
+            enable(detail::StylePropertiesBits::max_width);
             return *this;
         }
 
@@ -346,7 +365,7 @@ namespace auik
         Style &max_height(f32 value)
         {
             _max_height = value;
-            _mask |= detail::StylePropertiesBits::max_height;
+            enable(detail::StylePropertiesBits::max_height);
             return *this;
         }
 
@@ -354,13 +373,13 @@ namespace auik
         Style &border_color(const amal::vec4 &value)
         {
             _border_color = detail::pack_rgba8(value);
-            _mask |= detail::StylePropertiesBits::border_color;
+            enable(detail::StylePropertiesBits::border_color);
             return *this;
         }
         Style &border_color(u32 value)
         {
             _border_color = value;
-            _mask |= detail::StylePropertiesBits::border_color;
+            enable(detail::StylePropertiesBits::border_color);
             return *this;
         }
 
@@ -368,17 +387,17 @@ namespace auik
         Style &border_radius(f32 value)
         {
             _border_radius = value;
-            _mask |= detail::StylePropertiesBits::border_radius;
+            enable(detail::StylePropertiesBits::border_radius);
             if (value <= 0.0f)
             {
                 _corner_mask = 0u;
-                _mask |= detail::StylePropertiesBits::corner_mask;
+                enable(detail::StylePropertiesBits::corner_mask);
             }
             else if (!(_mask & detail::StylePropertiesBits::corner_mask))
             {
                 // Apply default rounding to all corners only when corner_mask was not set explicitly.
                 _corner_mask = 0xFu;
-                _mask |= detail::StylePropertiesBits::corner_mask;
+                enable(detail::StylePropertiesBits::corner_mask);
             }
             return *this;
         }
@@ -387,7 +406,7 @@ namespace auik
         Style &border_thickness(f32 value)
         {
             _border_thickness = value;
-            _mask |= detail::StylePropertiesBits::border_thickness;
+            enable(detail::StylePropertiesBits::border_thickness);
             return *this;
         }
         [[nodiscard]] bool has_visible_border() const { return _border_thickness > 0.0f && _border_color != 0u; }
@@ -396,7 +415,7 @@ namespace auik
         Style &border_mask(u32 value)
         {
             _border_mask = value & 0xFu;
-            _mask |= detail::StylePropertiesBits::border_mask;
+            enable(detail::StylePropertiesBits::border_mask);
             return *this;
         }
 
@@ -404,11 +423,16 @@ namespace auik
         Style &corner_mask(u32 value)
         {
             _corner_mask = value;
-            _mask |= detail::StylePropertiesBits::corner_mask;
+            enable(detail::StylePropertiesBits::corner_mask);
             return *this;
         }
 
-        [[nodiscard]] const StyleExtra *extra() const { return _extra; }
+        [[nodiscard]] const StyleExtra *extra() const { return _extra ? _extra->next : nullptr; }
+
+        [[nodiscard]] static const void *extra_data(const StyleExtra *node)
+        {
+            return node ? reinterpret_cast<const u8 *>(node) + extra_header_size() : nullptr;
+        }
 
         [[nodiscard]] const StyleExtra *extra(u32 id) const
         {
@@ -420,113 +444,152 @@ namespace auik
         [[nodiscard]] const StyleExtraAlign *align_settings() const
         {
             const auto *node = extra(AUIK_STYLE_EXTRA_ALIGN);
-            return node ? static_cast<const StyleExtraAlign *>(node->data) : nullptr;
+            return node ? static_cast<const StyleExtraAlign *>(extra_data(node)) : nullptr;
         }
 
         [[nodiscard]] const StyleExtraText *text_settings() const
         {
             const auto *node = extra(AUIK_STYLE_EXTRA_TEXT);
-            return node ? static_cast<const StyleExtraText *>(node->data) : nullptr;
+            return node ? static_cast<const StyleExtraText *>(extra_data(node)) : nullptr;
         }
 
         [[nodiscard]] const StyleExtraOverflow *overflow_settings() const
         {
             const auto *node = extra(AUIK_STYLE_EXTRA_OVERFLOW);
-            return node ? static_cast<const StyleExtraOverflow *>(node->data) : nullptr;
+            return node ? static_cast<const StyleExtraOverflow *>(extra_data(node)) : nullptr;
+        }
+
+        [[nodiscard]] const StyleExtraAspectRatio *aspect_ratio_settings() const
+        {
+            const auto *node = extra(AUIK_STYLE_EXTRA_ASPECT_RATIO);
+            return node ? static_cast<const StyleExtraAspectRatio *>(extra_data(node)) : nullptr;
         }
 
         Style &align_extra(const StyleExtraAlign &value)
         {
-            auto *data = upsert_extra_data<StyleExtraAlign>(AUIK_STYLE_EXTRA_ALIGN);
-            *data = value;
-            _mask |= detail::StylePropertiesBits::extra;
+            if (set_extra(AUIK_STYLE_EXTRA_ALIGN, value)) enable(detail::StylePropertiesBits::extra);
             return *this;
         }
 
         Style &text_extra(const StyleExtraText &value)
         {
-            auto *data = upsert_extra_data<StyleExtraText>(AUIK_STYLE_EXTRA_TEXT);
-            *data = value;
-            _mask |= detail::StylePropertiesBits::extra;
+            if (set_extra(AUIK_STYLE_EXTRA_TEXT, value)) enable(detail::StylePropertiesBits::extra);
             return *this;
         }
 
         Style &overflow_extra(const StyleExtraOverflow &value)
         {
-            auto *data = upsert_extra_data<StyleExtraOverflow>(AUIK_STYLE_EXTRA_OVERFLOW);
-            *data = value;
-            _mask |= detail::StylePropertiesBits::extra;
+            if (set_extra(AUIK_STYLE_EXTRA_OVERFLOW, value)) enable(detail::StylePropertiesBits::extra);
+            return *this;
+        }
+
+        Style &aspect_ratio_extra(const StyleExtraAspectRatio &value)
+        {
+            if (set_extra(AUIK_STYLE_EXTRA_ASPECT_RATIO, value)) enable(detail::StylePropertiesBits::extra);
+            return *this;
+        }
+
+        Style &copy_extra(const StyleExtra &extra, const void *data)
+        {
+            if (this->extra(extra.id)) return *this;
+            if (write_extra(extra.id, data, extra.size)) enable(detail::StylePropertiesBits::extra);
+            return *this;
+        }
+
+        Style &disable(detail::StylePropertyFlags properties)
+        {
+            _mask &= ~properties;
+            _disabled_mask |= properties;
             return *this;
         }
 
         void destroy_extra()
         {
-            StyleExtra *node = _extra;
-            while (node)
-            {
-                StyleExtra *next = node->next;
-                release_extra_data(*node);
-                acul::release(node);
-                node = next;
-            }
+            if (_extra) acul::release(_extra);
             _extra = nullptr;
             _mask &= ~detail::StylePropertyFlags(detail::StylePropertiesBits::extra);
+            _disabled_mask &= ~detail::StylePropertyFlags(detail::StylePropertiesBits::extra);
         }
 
         [[nodiscard]] detail::StylePropertyFlags mask() const { return _mask; }
+        [[nodiscard]] detail::StylePropertyFlags disabled_mask() const { return _disabled_mask; }
+
+        static constexpr size_t extra_storage_size(size_t data_size)
+        {
+            return extra_header_size() + align_extra_size(data_size);
+        }
 
     private:
+        void enable(detail::StylePropertyFlags properties)
+        {
+            _disabled_mask &= ~properties;
+            _mask |= properties;
+        }
+
+        static constexpr size_t align_extra_size(size_t value)
+        {
+            constexpr size_t alignment = alignof(std::max_align_t);
+            return (value + alignment - 1u) & ~(alignment - 1u);
+        }
+
+        static constexpr size_t extra_header_size() { return align_extra_size(sizeof(StyleExtra)); }
+        void create_extra_storage(size_t storage_size)
+        {
+            if (storage_size == 0u) return;
+            assert(storage_size <= UINT32_MAX && "style extra storage is too large");
+            const size_t allocation_size = extra_header_size() + storage_size;
+            const size_t node_count = (allocation_size + sizeof(StyleExtra) - 1u) / sizeof(StyleExtra);
+            _extra = acul::mem_allocator<StyleExtra>::allocate(node_count);
+            assert(_extra && "failed to allocate style extra storage");
+            if (_extra) *_extra = StyleExtra{_extra, nullptr, 0u, static_cast<u32>(storage_size)};
+        }
+
         StyleExtra *mutable_extra(u32 id)
         {
-            for (StyleExtra *it = _extra; it; it = it->next)
-                if (it->id == id) return it;
-            return nullptr;
+            return const_cast<StyleExtra *>(static_cast<const Style *>(this)->extra(id));
         }
 
-        void append_extra_node(StyleExtra *node)
+        bool write_extra(u32 id, const void *data, size_t data_size)
         {
-            if (!_extra)
-            {
-                _extra = node;
-                return;
-            }
+            assert(_extra && "style extra storage was not declared");
+            if (!_extra) return false;
+            const size_t record_size = extra_storage_size(data_size);
             StyleExtra *tail = _extra;
             while (tail->next) tail = tail->next;
+            auto *storage = reinterpret_cast<u8 *>(_extra) + extra_header_size();
+            auto *node_ptr = tail == _extra ? storage : reinterpret_cast<u8 *>(tail) + extra_storage_size(tail->size);
+            const size_t used = static_cast<size_t>(node_ptr - storage);
+            assert(used + record_size <= _extra->size && "style extra storage was not declared");
+            if (used + record_size > _extra->size) return false;
+            auto *node = reinterpret_cast<StyleExtra *>(node_ptr);
+            *node = StyleExtra{_extra, nullptr, id, static_cast<u32>(data_size)};
             tail->next = node;
-        }
-
-        template <typename T>
-        T *upsert_extra_data(u32 id)
-        {
-            if (auto *node = mutable_extra(id)) return static_cast<T *>(node->data);
-            auto *data = acul::alloc<T>(T{});
-            auto *node = acul::alloc<StyleExtra>(StyleExtra{id, data, nullptr});
-            append_extra_node(node);
-            return data;
-        }
-
-        static void release_extra_data(StyleExtra &node)
-        {
-            if (!node.data) return;
-            if (node.id == AUIK_STYLE_EXTRA_ALIGN)
-                acul::release(static_cast<StyleExtraAlign *>(node.data));
-            else if (node.id == AUIK_STYLE_EXTRA_TEXT)
-                acul::release(static_cast<StyleExtraText *>(node.data));
-            else if (node.id == AUIK_STYLE_EXTRA_OVERFLOW)
-                acul::release(static_cast<StyleExtraOverflow *>(node.data));
+            auto *dst = node_ptr + extra_header_size();
+            std::memset(dst, 0, align_extra_size(data_size));
+            if (data && data_size) std::memcpy(dst, data, data_size);
+            return true;
         }
 
         void clone_extra(const Style &other)
         {
+            if (!other._extra) return;
+            create_extra_storage(other._extra->size);
             for (const StyleExtra *node = other.extra(); node; node = node->next)
+                write_extra(node->id, extra_data(node), node->size);
+        }
+
+        template <typename T>
+        bool set_extra(u32 id, const T &value)
+        {
+            static_assert(std::is_trivially_copyable_v<T>);
+            if (auto *node = mutable_extra(id))
             {
-                if (node->id == AUIK_STYLE_EXTRA_ALIGN && node->data)
-                    align_extra(*static_cast<const StyleExtraAlign *>(node->data));
-                else if (node->id == AUIK_STYLE_EXTRA_TEXT && node->data)
-                    text_extra(*static_cast<const StyleExtraText *>(node->data));
-                else if (node->id == AUIK_STYLE_EXTRA_OVERFLOW && node->data)
-                    overflow_extra(*static_cast<const StyleExtraOverflow *>(node->data));
+                assert(node->size == sizeof(T) && "style extra type size mismatch");
+                if (node->size != sizeof(T)) return false;
+                std::memcpy(reinterpret_cast<u8 *>(node) + extra_header_size(), &value, sizeof(T));
+                return true;
             }
+            return write_extra(id, &value, sizeof(T));
         }
 
         amal::vec4 _padding{0.0f};
@@ -548,9 +611,10 @@ namespace auik
         u32 _corner_mask{0};
         StyleExtra *_extra = nullptr;
         detail::StylePropertyFlags _mask{0};
+        detail::StylePropertyFlags _disabled_mask{0};
     };
 
-    inline Style make_style() { return {}; }
+    inline Style make_style(size_t extra_storage_size = 0u) { return Style(extra_storage_size); }
 
     class Theme final
     {
@@ -561,7 +625,15 @@ namespace auik
         ~Theme() { destroy(); }
 
         StyleID add_style(u32 key, const Style &style, StyleState state = StyleState::normal)
-        { return add_desc(key, style, state); }
+        {
+            return add_desc(key, Style(style), state);
+        }
+
+        // Transfers ownership of extra data to the theme without cloning it.
+        StyleID add_style(u32 key, Style &&style, StyleState state = StyleState::normal)
+        {
+            return add_desc(key, std::move(style), state);
+        }
 
         StyleID get(u32 key, StyleState state = StyleState::normal) const
         {
@@ -614,7 +686,7 @@ namespace auik
         acul::hashmap<u32, acul::any> _var_store;
 
         AUIK_EXPORT StyleID add_desc(u32 key, const Style &style, StyleState state);
-
+        AUIK_EXPORT StyleID add_desc(u32 key, Style &&style, StyleState state);
         void destroy()
         {
             clear_resolved_cache();

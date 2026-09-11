@@ -8,7 +8,7 @@
 
 namespace auik
 {
-    class ImageButton : public Widget, public umbf::Block
+    class AUIK_CLASS_EXPORT ImageButton : public Widget, public umbf::Block
     {
     public:
         AUIK_EXPORT ImageButton(u32 id, TextureID texture_id, amal::vec2 image_size, amal::vec2 size,
@@ -70,11 +70,11 @@ namespace auik
         bool _coverage_mode = false;
         bool _selected = false;
 
-        amal::vec2 resolve_image_size() const;
-        TextureID resolve_texture_id() const;
-        amal::rect resolve_uv_rect() const;
-        bool resolve_coverage_mode() const;
-        bool has_draw_record() const;
+        AUIK_NO_EXPORT amal::vec2 resolve_image_size() const;
+        AUIK_NO_EXPORT TextureID resolve_texture_id() const;
+        AUIK_NO_EXPORT amal::rect resolve_uv_rect() const;
+        AUIK_NO_EXPORT bool resolve_coverage_mode() const;
+        AUIK_NO_EXPORT bool has_draw_record() const;
     };
 
     inline ImageButton *make_image_button(u32 id, TextureID texture_id, amal::vec2 image_size = {0.0f, 0.0f},

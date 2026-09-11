@@ -582,7 +582,7 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::registry::BlockStream column{read_column, write_column};
+        extern AUIK_EXPORT const umbf::registry::BlockStream column{read_column, write_column};
     } // namespace streams
 
 } // namespace auik

@@ -368,6 +368,6 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::registry::BlockStream progress_bar{read_progress_bar, write_progress_bar};
+        extern AUIK_EXPORT const umbf::registry::BlockStream progress_bar{read_progress_bar, write_progress_bar};
     } // namespace streams
 } // namespace auik

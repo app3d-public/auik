@@ -35,7 +35,7 @@ namespace auik
 
     } // namespace detail
 
-    class Block : public Widget, public umbf::Block
+    class AUIK_CLASS_EXPORT Block : public Widget, public umbf::Block
     {
     public:
         acul::vector<Widget *> children;
@@ -118,7 +118,7 @@ namespace auik
 
     private:
         AUIK_EXPORT void add_child_to_layer(Widget *child, ChildLayoutFlags layout, DepthZone layer);
-        bool request_children_update();
+        AUIK_NO_EXPORT bool request_children_update();
         amal::vec2 _explicit_size = AUIK_SIZE_FIT;
         f32 _inline_spacing = 0.0f;
     };
@@ -225,7 +225,7 @@ namespace auik
         };
     } // namespace detail
 
-    class DrawBlock : public detail::ScrollableBlock
+    class AUIK_CLASS_EXPORT DrawBlock : public detail::ScrollableBlock
     {
     public:
         AUIK_EXPORT explicit DrawBlock(u32 id, WidgetFlags widget_flags, u32 tag_id);
@@ -428,7 +428,7 @@ namespace auik
         bool _expanded = true;
     };
 
-    class Dummy final : public Widget, public umbf::Block
+    class AUIK_CLASS_EXPORT Dummy final : public Widget, public umbf::Block
     {
     public:
         explicit Dummy(u32 id, amal::vec2 size, WidgetFlags widget_flags)

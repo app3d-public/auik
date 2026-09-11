@@ -7,12 +7,7 @@ import sys
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from pathlib import Path
-
-try:
-    import tinycss2
-except ImportError as exc:
-    print("theme_compile.py requires tinycss2. Install it for the Python used to run this script.", file=sys.stderr)
-    raise SystemExit(1) from exc
+from asd import serialize
 
 try:
     from jinja2 import Template
@@ -33,6 +28,7 @@ STYLE_STATES = {
     "active": "StyleState::active",
     "focus": "StyleState::focus",
 }
+EXTRA_NAMES = ('align', 'text', 'overflow', 'aspect-ratio')
 DEFAULT_IDS_CSV_NAME = "default_style_tags_id.csv"
 APP_IDS_CSV_NAME = "style_tags_id.csv"
 THEME_STYLE_SHEET_HEADER_NAME = "theme_style_sheet.hpp"
@@ -40,79 +36,85 @@ THEME_STYLE_SHEET_SOURCE_NAME = "theme_style_sheet.cpp"
 
 
 @dataclass
-class CssDeclaration:
+class AsdDeclaration:
     name: str
     value: str
     tokens: list = field(default_factory=list)
 
 
 @dataclass
-class CssRule:
+class AsdRule:
     selectors: list[str]
-    declarations: list[CssDeclaration] = field(default_factory=list)
+    declarations: list[AsdDeclaration] = field(default_factory=list)
     source: Path | None = None
 
 
 @dataclass
 class ThemeTree:
-    rules: list[CssRule] = field(default_factory=list)
+    rules: list[AsdRule] = field(default_factory=list)
     tags: set[str] = field(default_factory=set)
     variables: set[str] = field(default_factory=set)
 
 
-def parse_css(path: Path) -> list[CssRule]:
-    stylesheet = tinycss2.parse_stylesheet(path.read_text(encoding="utf-8"), skip_comments=True, skip_whitespace=True)
-    rules: list[CssRule] = []
+def selector_tag(selector):
+    return selector.split(':', 1)[0].removeprefix('.')
 
-    for item in stylesheet:
-        if item.type != "qualified-rule":
-            continue
+def selector_state(selector):
+    return selector.split(':', 1)[1] if ':' in selector else None
 
-        selector_text = tinycss2.serialize(item.prelude).strip()
-        selectors = [selector.strip() for selector in selector_text.split(",") if selector.strip()]
-        declarations: list[CssDeclaration] = []
-
-        for declaration in tinycss2.parse_declaration_list(item.content, skip_comments=True, skip_whitespace=True):
-            if declaration.type != "declaration":
-                continue
-            declarations.append(
-                CssDeclaration(
-                    name=declaration.name,
-                    value=tinycss2.serialize(declaration.value).strip(),
-                    tokens=list(declaration.value),
-                )
-            )
-
-        rules.append(CssRule(selectors=selectors, declarations=declarations, source=path))
-
-    return rules
-
-
-def selector_tag(selector: str) -> str | None:
-    match = CLASS_RE.search(selector)
-    return match.group(1) if match else None
-
-
-def selector_state(selector: str) -> str | None:
-    match = STATE_RE.search(selector)
-    return match.group(1) if match else None
-
-
-def collect_tree(css_files: list[Path]) -> ThemeTree:
+def collect_tree(asd_files):
+    from asd import parse, resolve, declarations, values
     tree = ThemeTree()
-    for path in css_files:
-        for rule in parse_css(path):
-            tree.rules.append(rule)
-            for selector in rule.selectors:
-                tag = selector_tag(selector)
-                if tag:
-                    tree.tags.add(tag)
-            for declaration in rule.declarations:
-                if declaration.name.startswith("--") and declaration.name not in VIRTUAL_VARIABLES:
-                    tree.variables.add(declaration.name[2:])
-                for variable in collect_var_refs(declaration.tokens):
-                    if variable not in VIRTUAL_VARIABLES:
-                        tree.variables.add(variable[2:])
+    tree.styles = []
+    tree.variable_values = {}
+    tree.fixed_ids = {}
+    for path in asd_files:
+        styles, variables = parse(path)
+        tree.styles.extend(styles)
+        tree.variable_values.update(variables)
+        for style in styles:
+            if not style.template:
+                tree.tags.add(style.name)
+                if style.fixed_id is not None: tree.fixed_ids[style.name] = f"0x{style.fixed_id:08X}"
+    tree.variables = set(tree.variable_values) - {'dpi'}
+    if 'dpi' in tree.variable_values: raise ValueError('@dpi is provided by the host and cannot be redefined')
+    if tree.variables & {s.name for s in tree.styles}: raise ValueError('Style and variable names must be distinct')
+    return tree
+
+def lower_tree(tree):
+    from asd import resolve, declarations, merge, values
+    entities, resolved = resolve(tree.styles)
+    # Resolve variable dependencies before emitting their C++ declarations.
+    ordered, active = {}, []
+    def visit(name):
+        if name == 'dpi': return
+        if name in ordered: return
+        if name in active: raise ValueError('Variable cycle: ' + ' -> '.join(active + [name]))
+        if name not in tree.variable_values: raise ValueError(f'Unknown variable @{name}')
+        active.append(name)
+        tokens = values(tree.variable_values[name])
+        for ref in sorted(collect_var_refs(tokens)): visit(ref[2:])
+        active.pop()
+        ordered[name] = tokens
+    for name in sorted(tree.variables): visit(name)
+    tree.rules = [AsdRule([':root'], [AsdDeclaration('--'+name, '', tokens) for name,tokens in ordered.items()])]
+    for name, item in entities.items():
+        if item.template: continue
+        props, states = resolved[name]
+        for state, state_props in [('', props), *states.items()]:
+            if state:
+                state_props = dict(state_props)
+                if any(extra_name in state_props for extra_name in EXTRA_NAMES):
+                    for extra_name in EXTRA_NAMES:
+                        if extra_name not in state_props and extra_name in props:
+                            state_props[extra_name] = props[extra_name]
+                        elif isinstance(state_props.get(extra_name), dict) and isinstance(props.get(extra_name), dict):
+                            state_props[extra_name] = merge(props[extra_name], state_props[extra_name])
+            decls = [AsdDeclaration(k,v,values(v)) for k,v in declarations(state_props)]
+            for decl in decls:
+                for ref in collect_var_refs(decl.tokens):
+                    if ref[2:] not in tree.variables and ref != '--dpi': raise ValueError(f'{item.location}: unknown variable @{ref[2:]}')
+            tree.rules.append(AsdRule(['.'+name+(':'+state if state else '')], decls))
     return tree
 
 
@@ -181,9 +183,10 @@ def generate_unique_id(used_ids: set[str], sign_request_path: str = "") -> str:
     raise RuntimeError("Failed to generate a unique id via sign_request.py after 128 attempts")
 
 
-def update_ids(csv_path: Path, names: set[str], used_ids: set[str] | None = None, sign_request_path: str = "") -> dict[str, str]:
+def update_ids(csv_path: Path, names: set[str], used_ids: set[str] | None = None, sign_request_path: str = "", fixed_ids=None) -> dict[str, str]:
     old_ids = read_ids(csv_path)
     ids = {name: old_ids[name] for name in sorted(names) if name in old_ids}
+    ids.update({name: value for name, value in (fixed_ids or {}).items() if name in names})
     used = set(used_ids or set()) | set(ids.values())
     for name in sorted(names):
         if name in ids:
@@ -262,7 +265,7 @@ def collect_var_refs(tokens: list) -> set[str]:
             args = clean_tokens(token.arguments)
             if args and args[0].type == "ident":
                 refs.add(args[0].value)
-        elif token.type == "function":
+        elif token.type in ("function", "tuple"):
             refs.update(collect_var_refs(token.arguments))
     return refs
 
@@ -292,7 +295,7 @@ def resolve_function(token, variables: dict[str, str]) -> str:
 
     if name == "var":
         if not args or args[0].type != "ident":
-            raise ValueError("var() expects a CSS variable name")
+            raise ValueError("var() expects a ASD variable name")
         var_name = args[0].value
         if var_name in VIRTUAL_VALUES:
             return VIRTUAL_VALUES[var_name]
@@ -311,7 +314,7 @@ def resolve_function(token, variables: dict[str, str]) -> str:
 
     if name in ("rgb", "rgba"):
         channels = split_commas(args)
-        if len(channels) < 3:
+        if len(channels) not in (3, 4):
             raise ValueError(f"{name}() expects at least three channels")
         r = color_channel_to_u8(channels[0], variables)
         g = color_channel_to_u8(channels[1], variables)
@@ -324,6 +327,8 @@ def resolve_function(token, variables: dict[str, str]) -> str:
 
 def resolve_value(tokens: list, variables: dict[str, str]) -> str:
     tokens = clean_tokens(tokens)
+    if len(tokens) == 2 and tokens[0].type == 'literal' and tokens[0].value in ('+', '-'):
+        return tokens[0].value + resolve_value(tokens[1:], variables)
     if len(tokens) == 1:
         token = tokens[0]
         if token.type == "number":
@@ -336,25 +341,45 @@ def resolve_value(tokens: list, variables: dict[str, str]) -> str:
                 return f"pt_to_px({fmt_float(float(token.value))}, dpi)"
             raise ValueError(f"Unsupported unit '{token.unit}'")
         if token.type == "ident":
-            return token.value
+            raise ValueError(f"Expected a value or @reference, got '{token.value}'")
+        if token.type == "tuple":
+            token.type = "function"
+            token.name = "rgba"
+            return resolve_function(token, variables)
         if token.type == "function":
             return resolve_function(token, variables)
 
-    return tinycss2.serialize(tokens).strip()
+    return serialize(tokens).strip()
 
 
 def resolve_calc(tokens: list, variables: dict[str, str]) -> str:
-    parts: list[str] = []
-    for token in tokens:
-        if token.type == "whitespace":
-            parts.append(" ")
-        elif token.type == "literal":
-            parts.append(token.value)
-        elif token.type in ("number", "dimension", "ident", "function"):
-            parts.append(resolve_value([token], variables))
-        else:
-            parts.append(tinycss2.serialize([token]).strip())
-    return "".join(parts).strip()
+    tokens = clean_tokens(tokens)
+    index = 0
+    def atom():
+        nonlocal index
+        if index == len(tokens): raise ValueError('Missing expression operand')
+        token = tokens[index]
+        index += 1
+        if token.type == 'literal' and token.value in ('+', '-'):
+            return token.value + atom()
+        if token.type == 'tuple': return '(' + resolve_calc(token.arguments, variables) + ')'
+        if token.type not in ('number', 'dimension', 'function'):
+            raise ValueError('Invalid expression operand')
+        if token.type == 'function' and token.name == 'font': raise ValueError('Font is not a numeric operand')
+        return resolve_value([token], variables)
+    def expression(min_precedence=0):
+        nonlocal index
+        result = atom()
+        while index < len(tokens):
+            token = tokens[index]
+            precedence = {'+': 1, '-': 1, '*': 2, '/': 2}.get(token.value, -1) if token.type == 'literal' else -1
+            if precedence < min_precedence: break
+            index += 1
+            result += ' ' + token.value + ' ' + expression(precedence + 1)
+        return result
+    result = expression()
+    if index != len(tokens): raise ValueError('Expected an arithmetic operator')
+    return '(' + result + ')'
 
 
 def resolve_box(tokens: list, variables: dict[str, str], ctor: str) -> str:
@@ -388,7 +413,14 @@ def resolve_box_side(tokens: list, variables: dict[str, str], ctor: str, side: s
     return resolve_value(words[0], variables)
 
 
+def disable_call(*properties: str) -> str:
+    flags = " | ".join(f"detail::StylePropertiesBits::{property}" for property in properties)
+    return f"disable({flags})"
+
+
 def resolve_border_radius(tokens: list, variables: dict[str, str]) -> list[str]:
+    if single_ident(tokens) == "disabled":
+        return [disable_call("border_radius", "corner_mask")]
     words = split_words(tokens)
     values = [resolve_value(word, variables) for word in words]
     if len(values) == 1:
@@ -403,15 +435,19 @@ def resolve_border_radius(tokens: list, variables: dict[str, str]) -> list[str]:
             mask |= 1 << index
             if radius == "0.0f":
                 radius = value
+            elif radius != value:
+                raise ValueError('radius supports a single nonzero radius shared by its enabled corners')
     return [f"border_radius({radius})", f"corner_mask(0x{mask:X}u)"]
 
 
 def resolve_border(tokens: list, variables: dict[str, str]) -> list[str]:
+    if single_ident(tokens) == "disabled":
+        return [disable_call("border_color", "border_thickness", "border_mask")]
     words = split_words(tokens)
     thickness = None
     color = None
     for word in words:
-        if any(token.type == "function" and token.name.lower() in ("rgb", "rgba", "var") for token in word):
+        if any(token.type == "tuple" or (token.type == "function" and token.name.lower() == "var") for token in word):
             color = resolve_value(word, variables)
         elif any(token.type in ("dimension", "number") for token in word):
             thickness = resolve_value(word, variables)
@@ -443,6 +479,7 @@ def resolve_axis_size(tokens: list, variables: dict[str, str], axis: str) -> str
 
 
 def align_flag_for_display(value: str) -> str:
+    if value == "disabled": return "0u"
     if value == "block":
         return "ChildLayoutFlagBits::block"
     if value == "inline":
@@ -451,6 +488,7 @@ def align_flag_for_display(value: str) -> str:
 
 
 def align_flag_for_text_align(value: str) -> str:
+    if value == "disabled": return "0u"
     if value == "left":
         return "ChildLayoutFlagBits::hleft"
     if value == "center":
@@ -461,6 +499,7 @@ def align_flag_for_text_align(value: str) -> str:
 
 
 def align_flag_for_vertical_align(value: str) -> str:
+    if value == "disabled": return "0u"
     if value == "top":
         return "ChildLayoutFlagBits::top"
     if value == "middle":
@@ -471,7 +510,7 @@ def align_flag_for_vertical_align(value: str) -> str:
 
 
 def text_wrap_for_white_space(value: str) -> str:
-    if value == "nowrap":
+    if value in ("nowrap", "disabled"):
         return "static_cast<TextWrapMode>(0u)"
     if value == "normal":
         return "static_cast<TextWrapMode>(1u)"
@@ -481,13 +520,14 @@ def text_wrap_for_white_space(value: str) -> str:
 def text_overflow_for_value(value: str) -> str:
     if value == "ellipsis":
         return "static_cast<TextOverflowMode>(1u)"
-    if value == "clip":
+    if value in ("clip", "disabled"):
         return "static_cast<TextOverflowMode>(0u)"
     raise ValueError(f"Unsupported text-overflow value '{value}'")
 
 
 def overflow_for_value(value: str) -> str:
     modes = {
+        "disabled": "OverflowMode::visible",
         "visible": "OverflowMode::visible",
         "hidden": "OverflowMode::hidden",
         "auto": "OverflowMode::auto_",
@@ -510,9 +550,14 @@ def overflow_values(tokens: list, name: str) -> list[str]:
     return values
 
 
-def declaration_calls(declaration: CssDeclaration, variables: dict[str, str]) -> list[str]:
+def declaration_calls(declaration: AsdDeclaration, variables: dict[str, str]) -> list[str]:
     name = declaration.name
     tokens = declaration.tokens
+    if single_ident(tokens) == 'disabled' and name != 'border-radius':
+        property_name = {'background-color': 'background_color', 'color': 'text_color',
+                         'font-size': 'text_size', 'font-family': 'font',
+                         'inline-spacing': 'inline_spacing'}.get(name, name.replace('-', '_'))
+        return [disable_call(property_name)]
     if name == "padding":
         return [f"padding({resolve_box(tokens, variables, name)})"]
     if name == "margin":
@@ -553,14 +598,14 @@ def declaration_calls(declaration: CssDeclaration, variables: dict[str, str]) ->
         return [f"border_thickness({resolve_value(tokens, variables)})"]
     if name.startswith("--"):
         return []
-    raise ValueError(f"Unsupported CSS property '{name}'")
+    raise ValueError(f"Unsupported ASD property '{name}'")
 
 
-def style_expression(calls: list[str]) -> str:
+def style_expression(calls: list[str], receiver: str = "make_style()") -> str:
     if not calls:
-        return "make_style()"
-    lines = ["make_style()"]
-    lines.extend(f"            .{call}" for call in calls)
+        return receiver
+    lines = [receiver]
+    lines.extend(f"                .{call}" for call in calls)
     return "\n".join(lines)
 
 
@@ -590,7 +635,13 @@ def update_box_property(style_rule: dict, name: str, tokens: list, variables: di
 
     boxes = style_rule.setdefault("boxes", {})
     values = boxes.get(ctor, ["0.0f", "0.0f", "0.0f", "0.0f"])
-    if name == ctor:
+    if single_ident(tokens) == 'disabled':
+        if name == ctor:
+            boxes.pop(ctor, None)
+            style_rule["properties"][ctor] = [disable_call(ctor)]
+            return True
+        values[BOX_SIDE_INDEX[name.removeprefix(ctor + '-')]] = '0.0f'
+    elif name == ctor:
         values = resolve_box_values(tokens, variables, ctor)
     else:
         side = name.removeprefix(f"{ctor}-")
@@ -609,11 +660,21 @@ def update_border_property(style_rule: dict, name: str, tokens: list, variables:
         return False
 
     if name == "border":
+        if single_ident(tokens) == "disabled":
+            style_rule["border_mask"] = 0
+            style_rule["properties"]["border"] = resolve_border(tokens, variables)
+            return True
         border_mask = 0xF
     else:
         side = name.removeprefix("border-")
         if side not in BORDER_SIDE_MASK:
             return False
+        if single_ident(tokens) == 'disabled':
+            border_mask = style_rule.get("border_mask", 0xF) & ~BORDER_SIDE_MASK[side]
+            calls = style_rule["properties"].get("border", [])
+            style_rule["properties"]["border"] = [c for c in calls if not c.startswith('border_mask(')] + [f"border_mask(0x{border_mask:X}u)"]
+            style_rule["border_mask"] = border_mask
+            return True
         border_mask = style_rule.get("border_mask", 0) | BORDER_SIDE_MASK[side]
 
     style_rule["border_mask"] = border_mask
@@ -623,8 +684,13 @@ def update_border_property(style_rule: dict, name: str, tokens: list, variables:
     return True
 
 
-def update_extra_property(style_rule: dict, declaration: CssDeclaration, variables: dict[str, str]) -> bool:
+def update_extra_property(style_rule: dict, declaration: AsdDeclaration, variables: dict[str, str]) -> bool:
     name = declaration.name
+    if name == "disable-extra":
+        extra_name = declaration.value.replace('-', '_')
+        style_rule.setdefault("extras", {}).pop(extra_name, None)
+        style_rule.setdefault("disabled_extras", set()).add(declaration.value)
+        return True
     if name not in (
         "display",
         "text-align",
@@ -634,51 +700,69 @@ def update_extra_property(style_rule: dict, declaration: CssDeclaration, variabl
         "overflow",
         "overflow-x",
         "overflow-y",
+        "aspect-ratio",
     ):
         return False
 
     extras = style_rule.setdefault("extras", {})
     if name == "display":
+        style_rule.setdefault("disabled_extras", set()).discard("align")
         value = single_ident(declaration.tokens)
         if not value:
             raise ValueError(f"{name} expects a single keyword")
         align = extras.setdefault("align", {})
         align["display"] = align_flag_for_display(value)
     elif name == "text-align":
+        style_rule.setdefault("disabled_extras", set()).discard("align")
         value = single_ident(declaration.tokens)
         if not value:
             raise ValueError(f"{name} expects a single keyword")
         align = extras.setdefault("align", {})
         align["h"] = align_flag_for_text_align(value)
     elif name == "vertical-align":
+        style_rule.setdefault("disabled_extras", set()).discard("align")
         value = single_ident(declaration.tokens)
         if not value:
             raise ValueError(f"{name} expects a single keyword")
         align = extras.setdefault("align", {})
         align["v"] = align_flag_for_vertical_align(value)
     elif name == "white-space":
+        style_rule.setdefault("disabled_extras", set()).discard("text")
         value = single_ident(declaration.tokens)
         if not value:
             raise ValueError(f"{name} expects a single keyword")
         text = extras.setdefault("text", {})
         text["wrap"] = text_wrap_for_white_space(value)
     elif name == "text-overflow":
+        style_rule.setdefault("disabled_extras", set()).discard("text")
         value = single_ident(declaration.tokens)
         if not value:
             raise ValueError(f"{name} expects a single keyword")
         text = extras.setdefault("text", {})
         text["overflow"] = text_overflow_for_value(value)
     elif name == "overflow":
+        style_rule.setdefault("disabled_extras", set()).discard("overflow")
         values = overflow_values(declaration.tokens, name)
         overflow = extras.setdefault("overflow", {})
         overflow["x"] = values[0]
         overflow["y"] = values[-1]
     elif name in ("overflow-x", "overflow-y"):
+        style_rule.setdefault("disabled_extras", set()).discard("overflow")
         values = overflow_values(declaration.tokens, name)
         if len(values) != 1:
             raise ValueError(f"{name} expects one value")
         overflow = extras.setdefault("overflow", {})
         overflow["x" if name == "overflow-x" else "y"] = values[0]
+    elif name == "aspect-ratio":
+        value = single_ident(declaration.tokens)
+        if value not in ("disabled", "preserve"):
+            raise ValueError("aspect-ratio expects 'disabled' or 'preserve'")
+        if value == 'disabled':
+            extras.pop('aspect_ratio', None)
+            style_rule.setdefault("disabled_extras", set()).add("aspect-ratio")
+            return True
+        style_rule.setdefault("disabled_extras", set()).discard("aspect-ratio")
+        extras["aspect_ratio"] = value
     return True
 
 
@@ -704,7 +788,30 @@ def extra_calls(style_rule: dict) -> list[str]:
         x = overflow.get("x", "OverflowMode::visible")
         y = overflow.get("y", "OverflowMode::visible")
         calls.append(f"overflow_extra(StyleExtraOverflow{{{x}, {y}}})")
+    aspect_ratio = extras.get("aspect_ratio")
+    if aspect_ratio:
+        calls.append("aspect_ratio_extra(StyleExtraAspectRatio{AspectRatioMode::preserve})")
     return calls
+
+
+def extra_types(style_rule: dict) -> list[str]:
+    extras = style_rule.get("extras", {})
+    types: list[str] = []
+    if extras.get("align"):
+        types.append("StyleExtraAlign")
+    if extras.get("text"):
+        types.append("StyleExtraText")
+    if extras.get("overflow"):
+        types.append("StyleExtraOverflow")
+    if extras.get("aspect_ratio"):
+        types.append("StyleExtraAspectRatio")
+    return types
+
+
+def extra_storage_size(style_rule: dict) -> str:
+    return " + ".join(
+        f"Style::extra_storage_size(sizeof({extra_type}))" for extra_type in extra_types(style_rule)
+    )
 
 
 def build_defines(ids: dict[str, str], variable_names: set[str]) -> list[dict[str, str]]:
@@ -719,6 +826,7 @@ def build_defines(ids: dict[str, str], variable_names: set[str]) -> list[dict[st
 
 
 def build_generated_model(tree: ThemeTree, ids: dict[str, str], header_ids: dict[str, str], include_headers: list[str]) -> dict:
+    tree = lower_tree(tree)
     variables = {name: local_var_name(name) for name in tree.variables}
     var_def_map: OrderedDict[str, dict[str, str]] = OrderedDict()
     style_rule_map: OrderedDict[tuple[str, str], dict] = OrderedDict()
@@ -769,14 +877,15 @@ def build_generated_model(tree: ThemeTree, ids: dict[str, str], header_ids: dict
         calls: list[str] = []
         for property_calls in style_rule["properties"].values():
             calls.extend(property_calls)
+        if style_rule.get("disabled_extras") and not style_rule.get("extras"):
+            calls.append(disable_call("extra"))
         calls.extend(extra_calls(style_rule))
-        if not calls:
-            continue
         style_rules.append(
             {
                 "tag_macro": style_rule["tag_macro"],
-                "style": style_expression(calls),
+                "style": style_expression(calls, "style"),
                 "state": style_rule["state"],
+                "extra_storage_size": extra_storage_size(style_rule),
             }
         )
 
@@ -832,8 +941,11 @@ namespace auik
         theme->set_var({{ variable.macro }}, {{ variable.name }});
 {% endfor %}
 {% for rule in rules %}
-        theme->add_style({{ rule.tag_macro }}, {{ rule.style }}{% if rule.state %},
-                         {{ rule.state }}{% endif %});
+        {
+            auto style = make_style({{ rule.extra_storage_size }});
+            {{ rule.style }};
+            theme->add_style({{ rule.tag_macro }}, std::move(style){% if rule.state %}, {{ rule.state }}{% endif %});
+        }
 {% endfor %}
         return theme;
     }
@@ -868,10 +980,11 @@ def write_ids_header(path: Path, ids: dict[str, str], variable_names: set[str]) 
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Compile auik CSS theme sources.")
-    parser.add_argument("--input-folder", action="append", type=Path, help="Folder with project CSS files")
-    parser.add_argument("--input-base", required=True, type=Path, help="Base CSS file")
+    parser = argparse.ArgumentParser(description="Compile auik ASD theme sources.")
+    parser.add_argument("--input-folder", action="append", type=Path, help="Folder with project ASD files")
+    parser.add_argument("--input-base", required=True, type=Path, help="Base ASD file")
     parser.add_argument("--ids-csv", action="append", type=Path, default=[], help="Additional predeclared style ids CSV")
+    parser.add_argument("--app-ids-csv", type=Path, help="Persistent writable ID registry for application styles")
     parser.add_argument(
         "--processed-ids",
         action="append",
@@ -882,7 +995,7 @@ def main() -> int:
     )
     parser.add_argument("--ids-output-csv", type=Path, help="Path to the ids CSV updated from --input-base")
     parser.add_argument("--output-folder", type=Path, help="Folder for generated hpp/cpp")
-    parser.add_argument("--ids-header", type=Path, help="Generate default widget/style tag defines from the base CSS id cache")
+    parser.add_argument("--ids-header", type=Path, help="Generate default widget/style tag defines from the base ASD id cache")
     parser.add_argument("--ids-only", action="store_true", help="Only update id caches and generate --ids-header")
     parser.add_argument("--sign-request", type=Path, help="Path to umbf scripts/sign_request.py")
     parser.add_argument("--stamp", type=Path, help="Touch a stamp file after successful generation")
@@ -898,7 +1011,7 @@ def main() -> int:
         parser.error("--ids-only requires --ids-header")
 
     if not input_base.exists():
-        raise FileNotFoundError(f"Base CSS not found: {input_base}")
+        raise FileNotFoundError(f"Base ASD not found: {input_base}")
     for input_folder in input_folders:
         if not input_folder.exists():
             raise FileNotFoundError(f"Input folder not found: {input_folder}")
@@ -911,20 +1024,24 @@ def main() -> int:
         if not Path(header).exists():
             raise FileNotFoundError(f"Processed style ids header not found: {header}")
 
-    base_css_files = [input_base]
-    app_css_files = []
+    base_asd_files = [input_base]
+    app_asd_files = []
     for input_folder in input_folders:
-        folder_files = [path for path in sorted(input_folder.rglob("*.css")) if path.resolve() != input_base]
+        folder_files = [path for path in sorted(input_folder.rglob("*.asd")) if path.resolve() != input_base]
         if input_folder == input_base.parent:
-            base_css_files.extend(folder_files)
+            base_asd_files.extend(folder_files)
         else:
-            app_css_files.extend(folder_files)
+            app_asd_files.extend(folder_files)
 
-    css_files = base_css_files + app_css_files
-    base_tree = collect_tree(base_css_files)
-    app_tree = collect_tree(app_css_files)
-    tree = collect_tree(css_files)
+    base_asd_files = list(dict.fromkeys(base_asd_files))
+    app_asd_files = list(dict.fromkeys(p for p in app_asd_files if p not in base_asd_files))
+    asd_files = base_asd_files + app_asd_files
+    base_tree = collect_tree(base_asd_files)
+    app_tree = collect_tree(app_asd_files)
+    tree = collect_tree(asd_files)
 
+    all_fixed = tree.fixed_ids
+    if len(set(all_fixed.values())) != len(all_fixed): raise ValueError('Duplicate explicit style IDs')
     processed_ids = {}
     external_header_ids = {}
     include_headers = []
@@ -939,7 +1056,7 @@ def main() -> int:
     if processed_ids or external_header_ids:
         base_names = base_names - set(processed_ids) - set(external_header_ids)
     if args.ids_only:
-        base_ids = update_ids(base_csv_path, base_names, sign_request_path=sign_request_path)
+        base_ids = update_ids(base_csv_path, base_names, sign_request_path=sign_request_path, fixed_ids=all_fixed)
     else:
         base_ids = read_ids(base_csv_path)
 
@@ -947,19 +1064,34 @@ def main() -> int:
     app_ids = {}
     app_names = (app_tree.tags | app_tree.variables) - set(base_ids) - set(processed_ids) - set(external_header_ids)
     if app_names:
-        if len(input_folders) == 1:
+        if args.app_ids_csv:
+            app_csv_path = args.app_ids_csv.resolve()
+        elif len(input_folders) == 1:
             app_csv_path = input_folders[0] / APP_IDS_CSV_NAME
         else:
-            app_csv_path = output_folder / APP_IDS_CSV_NAME
+            raise ValueError('Multiple input folders require --app-ids-csv for persistent application IDs')
         app_ids = update_ids(
             app_csv_path,
             app_names,
             set(base_ids.values()) | set(processed_ids.values()) | set(external_header_ids.values()),
             sign_request_path,
+            fixed_ids=all_fixed,
         )
 
+    for name, value in all_fixed.items():
+        for mapping in (base_ids, app_ids, processed_ids, external_header_ids):
+            if name in mapping: mapping[name] = value
+    if args.ids_only: write_ids(base_csv_path, base_ids)
+    if app_csv_path: write_ids(app_csv_path, app_ids)
     app_header_ids = merge_ids(external_header_ids, app_ids)
     ids = merge_ids(merge_ids(base_ids, processed_ids), app_header_ids)
+    id_owners = {}
+    for name, value in ids.items():
+        number = int(value, 0)
+        if not 0 <= number <= 0xffffffff: raise ValueError(f'ID out of u32 range for {name}')
+        if number in id_owners and id_owners[number] != name:
+            raise ValueError(f'ID collision: {name} and {id_owners[number]}')
+        id_owners[number] = name
 
     if not args.ids_only:
         model = build_generated_model(tree, ids, app_header_ids, include_headers)
@@ -968,7 +1100,7 @@ def main() -> int:
         write_ids_header(args.ids_header.resolve(), base_ids, base_tree.variables)
     if args.stamp:
         touch(args.stamp.resolve())
-    print(f"Parsed {len(css_files)} css file(s), {len(tree.rules)} rule(s)")
+    print(f"Parsed {len(asd_files)} asd file(s), {len(tree.rules)} rule(s)")
     print(f"Updated base ids: {base_csv_path}")
     if app_csv_path:
         print(f"Updated app ids: {app_csv_path}")
@@ -981,4 +1113,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except (ValueError, KeyError, OSError) as error:
+        print(f'ASD: {error}', file=sys.stderr)
+        raise SystemExit(1)

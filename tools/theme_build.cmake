@@ -12,26 +12,26 @@ function(_auik_theme_tool_paths OUT_PYTHON OUT_COMPILER OUT_SIGN_REQUEST)
     set(${OUT_SIGN_REQUEST} "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../../umbf/scripts/sign_request.py" PARENT_SCOPE)
 endfunction()
 
-function(_auik_collect_css_files OUT_VAR INPUT_BASE INPUT_FOLDERS)
-    set(css_files "${INPUT_BASE}")
+function(_auik_collect_asd_files OUT_VAR INPUT_BASE INPUT_FOLDERS)
+    set(asd_files "${INPUT_BASE}")
 
     foreach(input_folder ${INPUT_FOLDERS})
         if(input_folder)
-            file(GLOB_RECURSE folder_css "${input_folder}/*.css")
-            list(APPEND css_files ${folder_css})
+            file(GLOB_RECURSE folder_asd "${input_folder}/*.asd")
+            list(APPEND asd_files ${folder_asd})
         endif()
     endforeach()
 
-    list(REMOVE_DUPLICATES css_files)
-    set(${OUT_VAR} ${css_files} PARENT_SCOPE)
+    list(REMOVE_DUPLICATES asd_files)
+    set(${OUT_VAR} ${asd_files} PARENT_SCOPE)
 endfunction()
 
-function(auik_register_css_style_processed_ids IDS_CSV IDS_HEADER)
-    set_property(GLOBAL APPEND PROPERTY AUIK_CSS_STYLE_PROCESSED_IDS "${IDS_CSV}" "${IDS_HEADER}")
+function(auik_register_asd_style_processed_ids IDS_CSV IDS_HEADER)
+    set_property(GLOBAL APPEND PROPERTY AUIK_ASD_STYLE_PROCESSED_IDS "${IDS_CSV}" "${IDS_HEADER}")
 endfunction()
 
 function(_auik_parse_processed_style_ids OUT_ARGS OUT_DEPS)
-    get_property(processed_ids GLOBAL PROPERTY AUIK_CSS_STYLE_PROCESSED_IDS)
+    get_property(processed_ids GLOBAL PROPERTY AUIK_ASD_STYLE_PROCESSED_IDS)
 
     set(processed_args)
     set(processed_deps)
@@ -61,7 +61,7 @@ function(compile_auik_default_style_ids INPUT_BASE)
     set(output_csv "${input_base_dir}/default_style_tags_id.csv")
     set(output_target "auik_default_style_ids")
 
-    _auik_collect_css_files(css_deps "${INPUT_BASE}" "")
+    _auik_collect_asd_files(asd_deps "${INPUT_BASE}" "")
 
     add_custom_command(
         OUTPUT "${output_csv}" "${output_header}"
@@ -71,7 +71,7 @@ function(compile_auik_default_style_ids INPUT_BASE)
             --ids-output-csv "${output_csv}"
             --ids-header "${output_header}"
             --sign-request "${sign_request_py}"
-        DEPENDS "${theme_compiler}" ${css_deps}
+        DEPENDS "${theme_compiler}" "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/asd.py" ${asd_deps}
         MAIN_DEPENDENCY "${INPUT_BASE}"
         COMMENT "Generate auik default style ids"
         VERBATIM
@@ -84,7 +84,7 @@ function(compile_auik_default_style_ids INPUT_BASE)
     set(AUIK_STYLE_IDS_HEADER "${output_header}" PARENT_SCOPE)
     set(AUIK_STYLE_IDS_INCLUDE_DIR "${output_dir}" PARENT_SCOPE)
     set(AUIK_STYLE_IDS_TARGET "${output_target}" PARENT_SCOPE)
-    auik_register_css_style_processed_ids("${output_csv}" "${output_header}")
+    auik_register_asd_style_processed_ids("${output_csv}" "${output_header}")
 endfunction()
 
 function(compile_auik_style_ids INPUT_BASE)
@@ -121,7 +121,7 @@ function(compile_auik_style_ids INPUT_BASE)
         set(output_target "${PROJECT_NAME}_style_ids")
     endif()
 
-    _auik_collect_css_files(css_deps "${INPUT_BASE}" "")
+    _auik_collect_asd_files(asd_deps "${INPUT_BASE}" "")
     _auik_parse_processed_style_ids(processed_ids_args processed_ids_deps)
 
     add_custom_command(
@@ -133,7 +133,7 @@ function(compile_auik_style_ids INPUT_BASE)
             --ids-header "${output_header}"
             ${processed_ids_args}
             --sign-request "${sign_request_py}"
-        DEPENDS "${theme_compiler}" ${css_deps} ${processed_ids_deps}
+        DEPENDS "${theme_compiler}" "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/asd.py" ${asd_deps} ${processed_ids_deps}
         MAIN_DEPENDENCY "${INPUT_BASE}"
         COMMENT "Generate ${PROJECT_NAME} style ids"
         VERBATIM
@@ -146,21 +146,21 @@ function(compile_auik_style_ids INPUT_BASE)
     set(AUIK_STYLE_IDS_HEADER "${output_header}" PARENT_SCOPE)
     set(AUIK_STYLE_IDS_INCLUDE_DIR "${output_dir}" PARENT_SCOPE)
     set(AUIK_STYLE_IDS_TARGET "${output_target}" PARENT_SCOPE)
-    auik_register_css_style_processed_ids("${output_csv}" "${output_header}")
+    auik_register_asd_style_processed_ids("${output_csv}" "${output_header}")
 endfunction()
 
-function(compile_auik_css_theme INPUT_BASE)
+function(compile_auik_asd_theme INPUT_BASE)
     _auik_theme_tool_paths(python_executable theme_compiler sign_request_py)
 
     set(options)
-    set(one_value_args INPUT_FOLDER)
+    set(one_value_args INPUT_FOLDER APP_IDS_CSV)
     set(multi_value_args INPUT_FOLDERS IDS_CSV)
     cmake_parse_arguments(AUIK_THEME "${options}" "${one_value_args}" "${multi_value_args}" ${ARGN})
 
     set(output_dir "${CMAKE_CURRENT_BINARY_DIR}")
     set(output_header "${output_dir}/theme_style_sheet.hpp")
     set(output_source "${output_dir}/theme_style_sheet.cpp")
-    set(output_target "auik_css_theme")
+    set(output_target "auik_asd_theme")
 
     if(AUIK_THEME_INPUT_FOLDERS)
         set(input_folders ${AUIK_THEME_INPUT_FOLDERS})
@@ -171,7 +171,7 @@ function(compile_auik_css_theme INPUT_BASE)
         set(input_folders "${input_folder}")
     endif()
 
-    _auik_collect_css_files(css_deps "${INPUT_BASE}" "${input_folders}")
+    _auik_collect_asd_files(asd_deps "${INPUT_BASE}" "${input_folders}")
 
     set(input_folder_args)
     foreach(input_folder ${input_folders})
@@ -179,6 +179,9 @@ function(compile_auik_css_theme INPUT_BASE)
     endforeach()
 
     set(ids_csv_args)
+    if(AUIK_THEME_APP_IDS_CSV)
+        list(APPEND ids_csv_args --app-ids-csv "${AUIK_THEME_APP_IDS_CSV}")
+    endif()
     foreach(ids_csv ${AUIK_THEME_IDS_CSV})
         list(APPEND ids_csv_args --ids-csv "${ids_csv}")
     endforeach()
@@ -193,9 +196,9 @@ function(compile_auik_css_theme INPUT_BASE)
             ${ids_csv_args}
             --output-folder "${output_dir}"
             --sign-request "${sign_request_py}"
-        DEPENDS "${theme_compiler}" ${css_deps} ${processed_ids_deps} ${AUIK_THEME_IDS_CSV}
+        DEPENDS "${theme_compiler}" "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/asd.py" ${asd_deps} ${processed_ids_deps} ${AUIK_THEME_IDS_CSV} ${AUIK_THEME_APP_IDS_CSV}
         MAIN_DEPENDENCY "${INPUT_BASE}"
-        COMMENT "Generate auik CSS theme"
+        COMMENT "Generate auik ASD theme"
         VERBATIM
     )
 
@@ -205,8 +208,8 @@ function(compile_auik_css_theme INPUT_BASE)
     endif()
     set_source_files_properties("${output_header}" "${output_source}" PROPERTIES GENERATED TRUE)
 
-    set(AUIK_CSS_HEADER "${output_header}" PARENT_SCOPE)
-    set(AUIK_CSS_SRC "${output_source}" PARENT_SCOPE)
-    set(AUIK_CSS_INCLUDE_DIR "${output_dir}" PARENT_SCOPE)
-    set(AUIK_CSS_TARGET "${output_target}" PARENT_SCOPE)
+    set(AUIK_ASD_HEADER "${output_header}" PARENT_SCOPE)
+    set(AUIK_ASD_SRC "${output_source}" PARENT_SCOPE)
+    set(AUIK_ASD_INCLUDE_DIR "${output_dir}" PARENT_SCOPE)
+    set(AUIK_ASD_TARGET "${output_target}" PARENT_SCOPE)
 endfunction()

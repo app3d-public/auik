@@ -11,7 +11,7 @@
 
 namespace auik
 {
-    class Text : public Widget, public umbf::Block
+    class AUIK_CLASS_EXPORT Text : public Widget, public umbf::Block
     {
     public:
         TextFlags text_flags = TextFlagBits::none;
@@ -175,8 +175,8 @@ namespace auik
         AUIK_EXPORT void update_content_bounds();
 
     private:
-        bool apply_model_binding_value();
-        bool rebuild_text_buffers(const amal::vec2 &bounds_size, bool reuse_layout);
+        AUIK_NO_EXPORT bool apply_model_binding_value();
+        AUIK_NO_EXPORT bool rebuild_text_buffers(const amal::vec2 &bounds_size, bool reuse_layout);
     };
 
     class EText : public Text

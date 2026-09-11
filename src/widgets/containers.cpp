@@ -3171,13 +3171,13 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::registry::BlockStream block{read_block, write_block};
-        AUIK_EXPORT const umbf::registry::BlockStream draw_block{read_draw_block, write_draw_block};
-        AUIK_EXPORT const umbf::registry::BlockStream widget_stack{read_widget_stack, write_widget_stack};
-        AUIK_EXPORT const umbf::registry::BlockStream widget_ref{read_widget_ref, write_widget_ref};
-        AUIK_EXPORT const umbf::registry::BlockStream collapse_header{read_collapse_header, write_collapse_header};
-        AUIK_EXPORT const umbf::registry::BlockStream collapse_header_state{read_collapse_header_state,
+        extern AUIK_EXPORT const umbf::registry::BlockStream block{read_block, write_block};
+        extern AUIK_EXPORT const umbf::registry::BlockStream draw_block{read_draw_block, write_draw_block};
+        extern AUIK_EXPORT const umbf::registry::BlockStream widget_stack{read_widget_stack, write_widget_stack};
+        extern AUIK_EXPORT const umbf::registry::BlockStream widget_ref{read_widget_ref, write_widget_ref};
+        extern AUIK_EXPORT const umbf::registry::BlockStream collapse_header{read_collapse_header, write_collapse_header};
+        extern AUIK_EXPORT const umbf::registry::BlockStream collapse_header_state{read_collapse_header_state,
                                                                             write_collapse_header_state};
-        AUIK_EXPORT const umbf::registry::BlockStream dummy{read_dummy, write_dummy};
+        extern AUIK_EXPORT const umbf::registry::BlockStream dummy{read_dummy, write_dummy};
     } // namespace streams
 } // namespace auik

@@ -1547,11 +1547,11 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::registry::BlockStream circle_color_picker{read_circle_color_picker,
+        extern AUIK_EXPORT const umbf::registry::BlockStream circle_color_picker{read_circle_color_picker,
                                                                           write_circle_color_picker};
-        AUIK_EXPORT const umbf::registry::BlockStream gradient_color_picker{read_gradient_color_picker,
+        extern AUIK_EXPORT const umbf::registry::BlockStream gradient_color_picker{read_gradient_color_picker,
                                                                             write_gradient_color_picker};
-        AUIK_EXPORT const umbf::registry::BlockStream square_color_picker{read_square_color_picker,
+        extern AUIK_EXPORT const umbf::registry::BlockStream square_color_picker{read_square_color_picker,
                                                                           write_square_color_picker};
     } // namespace streams
 } // namespace auik

@@ -244,7 +244,7 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::registry::BlockStream checkbox{read_checkbox, write_checkbox};
+        extern AUIK_EXPORT const umbf::registry::BlockStream checkbox{read_checkbox, write_checkbox};
     } // namespace streams
 
 } // namespace auik

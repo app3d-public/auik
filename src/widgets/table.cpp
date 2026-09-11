@@ -1912,7 +1912,7 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::registry::BlockStream table{read_table, write_table};
+        extern AUIK_EXPORT const umbf::registry::BlockStream table{read_table, write_table};
     } // namespace streams
 
 } // namespace auik

@@ -133,38 +133,43 @@ namespace auik
               _min_value(min_value),
               _max_value(max_value),
               _speed(speed),
-              _last_value(value),
-              _presented_value(value)
+              _last_value(value)
         {
             set_rect_tag_id(tag_id);
             set_drag_interaction_flag(_interaction_flags, drag_interaction_select_all_on_next_focus);
-            sync_text_from_value();
+            set_value(value);
         }
 
         template <typename T>
         void Draggable<T>::set_value(T value)
         {
-            set_value_internal(value, false);
+            if (!assign_value(value, false)) return;
+            if (is_attached()) mark_host_refresh_request();
+        }
+
+        template <typename T>
+        bool Draggable<T>::assign_value(T value, bool manual_change)
+        {
+            if constexpr (std::is_floating_point_v<T>)
+                value = cast_drag_value<T>(normalize_decimal_noise<T>(static_cast<f64>(value)));
+            value = clamp_value(value, _min_value, _max_value);
+            if (_value == value && !manual_change) return false;
+            _last_value = _value;
+            _value = value;
+            _manual_change = manual_change;
+            _value_text_dirty = true;
+            invalidate_layout_measure();
+            return true;
         }
 
         template <typename T>
         void Draggable<T>::set_value_internal(T value, bool manual_change, bool sync_model)
         {
-            if constexpr (std::is_floating_point_v<T>)
-                value = cast_drag_value<T>(normalize_decimal_noise<T>(static_cast<f64>(value)));
-            value = clamp_value(value, _min_value, _max_value);
-            const T prev_value = this->value();
-            if (prev_value == value && !manual_change) return;
-            _last_value = prev_value;
-            _value = value;
-            _manual_change = manual_change;
-            if (sync_model && _value_model_binding) set_model_binding_value<T>(*_value_model_binding, value);
-            const bool prevented = mark_changed();
+            if (!assign_value(value, manual_change)) return;
+            if (sync_model && _value_model_binding) set_model_binding_value<T>(*_value_model_binding, _value);
+            mark_changed();
             sync_text_from_value();
-            // A model-bound draggable reads its initial value before it is attached to the widget tree. Preserve the
-            // value and text presentation, but defer layout/draw work until Textbox::update_style() has resolved both
-            // the textbox and child Text styles.
-            if (!prevented && _style.id != Theme::STYLE_ID_INVALID) apply_render_update(true);
+            mark_host_refresh_request();
         }
 
         template <typename T>
@@ -176,11 +181,12 @@ namespace auik
 
             _value_model_binding->on_field_change = [this](ModelRecordID, ModelFieldID) {
                 T value{};
-                if (read_model_binding_value(*_value_model_binding, value)) set_value_internal(value, false, false);
+                if (!read_model_binding_value(*_value_model_binding, value)) return;
+                set_value(value);
             };
             attach_model_binding(*_value_model_binding);
             T value{};
-            if (read_model_binding_value(*_value_model_binding, value)) set_value_internal(value, false, false);
+            if (read_model_binding_value(*_value_model_binding, value)) set_value(value);
         }
 
         template <typename T>
@@ -191,7 +197,8 @@ namespace auik
             // draggable has a postfix, keep the input ASCII-only and let the integration validate or convert the
             // suffix from input_postfix() on commit.
             text_flags = _postfix.empty() ? drag_text_flags<T>() : TextFlagBits::chars_ascii;
-            sync_text_presentation_from_value();
+            _value_text_dirty = true;
+            invalidate_layout_measure();
         }
 
         template <typename T>
@@ -215,9 +222,16 @@ namespace auik
         }
 
         template <typename T>
+        void Draggable<T>::update_layout_min_size_force()
+        {
+            if (_value_text_dirty) sync_text_presentation_from_value();
+            Textbox::update_layout_min_size_force();
+        }
+
+        template <typename T>
         void Draggable<T>::update_layout(bool min_size_known)
         {
-            if (value() != _presented_value) sync_text_from_value();
+            if (_value_text_dirty) sync_text_presentation_from_value();
             Textbox::update_layout(min_size_known);
         }
 
@@ -352,7 +366,7 @@ namespace auik
                 clamp_value(cast_relative_stepped_drag_value<T>(_drag_origin_value, _drag_delta_steps, _active_speed),
                             _min_value, _max_value);
             _drag_value = static_cast<f64>(next_value);
-            set_value(next_value);
+            set_value_internal(next_value, false);
         }
 
         template <typename T>
@@ -387,7 +401,7 @@ namespace auik
         template <typename T>
         void Draggable<T>::sync_text_from_value()
         {
-            _presented_value = value();
+            _value_text_dirty = false;
             Textbox::set_value(format_value(value()));
             Textbox::sync_value();
             _pending_text_commit = false;
@@ -397,7 +411,7 @@ namespace auik
         template <typename T>
         void Draggable<T>::sync_text_presentation_from_value()
         {
-            _presented_value = value();
+            _value_text_dirty = false;
             Textbox::_value = format_value(value());
             sync_text_presentation();
             _pending_text_commit = false;
@@ -417,7 +431,7 @@ namespace auik
         {
             const T next_value = cast_relative_stepped_drag_value<T>(static_cast<f64>(value()), delta,
                                                                      resolve_drag_speed(value(), _speed));
-            set_value(clamp_value(next_value, _min_value, _max_value));
+            set_value_internal(clamp_value(next_value, _min_value, _max_value), false);
         }
 
         template <typename T>
@@ -598,8 +612,8 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::registry::BlockStream drag_int{read_drag_int, write_drag_int};
-        AUIK_EXPORT const umbf::registry::BlockStream drag_float{read_drag_float, write_drag_float};
-        AUIK_EXPORT const umbf::registry::BlockStream drag_double{read_drag_double, write_drag_double};
+        extern AUIK_EXPORT const umbf::registry::BlockStream drag_int{read_drag_int, write_drag_int};
+        extern AUIK_EXPORT const umbf::registry::BlockStream drag_float{read_drag_float, write_drag_float};
+        extern AUIK_EXPORT const umbf::registry::BlockStream drag_double{read_drag_double, write_drag_double};
     } // namespace streams
 } // namespace auik

@@ -16,9 +16,10 @@ namespace auik
     {
         [[maybe_unused]] void noop_play_system_hand_sound(SoundContext *) {}
 
+#if !defined(__linux__)
         void release_sound_context(SoundContext *ctx) { acul::release(ctx); }
-
         void noop_init_sound_system(SoundContext *) {}
+#endif
 
 #ifdef _WIN32
         void win32_play_system_hand_sound(SoundContext *)

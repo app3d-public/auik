@@ -33,6 +33,7 @@ namespace auik
             AUIK_EXPORT void set_limits(T min_value, T max_value);
             T min_value() const { return _min_value; }
             T max_value() const { return _max_value; }
+            AUIK_EXPORT void update_layout_min_size_force() override;
             AUIK_EXPORT void update_layout(bool min_size_known) override;
             AUIK_EXPORT void on_focus(bool focused) override;
             AUIK_EXPORT void on_hover(HoverState state) override;
@@ -50,6 +51,7 @@ namespace auik
             AUIK_EXPORT void sync_text_presentation_from_value();
             AUIK_EXPORT bool parse_text_value(T &out) const;
             AUIK_EXPORT bool should_draw_caret() const override;
+            AUIK_EXPORT bool assign_value(T value, bool manual_change);
             AUIK_EXPORT void set_value_internal(T value, bool manual_change, bool sync_model = true);
 
             T _value = T(0);
@@ -63,7 +65,7 @@ namespace auik
             f64 _drag_value = 0.0;
             f64 _active_speed = 1.0;
             T _last_value{};
-            T _presented_value{};
+            bool _value_text_dirty = true;
             u8 _interaction_flags = 0u;
             bool _pending_text_commit = false;
             bool _manual_change = false;

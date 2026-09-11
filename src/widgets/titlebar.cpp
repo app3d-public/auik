@@ -1027,6 +1027,6 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::registry::BlockStream titlebar{read_titlebar, write_titlebar};
+        extern AUIK_EXPORT const umbf::registry::BlockStream titlebar{read_titlebar, write_titlebar};
     }
 } // namespace auik

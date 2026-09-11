@@ -57,7 +57,16 @@ namespace auik
         _column_sizes.assign(_columns, 0.0f);
     }
 
-    GridLayout::~GridLayout() { clear(); }
+    GridLayout::~GridLayout()
+    {
+        for (auto &cell : _cells)
+        {
+            auto *child = cell.widget;
+            detach_cell(cell);
+            cell = {};
+            if (child) acul::release(child);
+        }
+    }
 
     void GridLayout::set_cell(size_t row, size_t column, Widget *widget, ChildLayoutFlags layout)
     {

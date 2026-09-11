@@ -227,7 +227,7 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::registry::BlockStream radio_button{read_radio_button, write_radio_button};
+        extern AUIK_EXPORT const umbf::registry::BlockStream radio_button{read_radio_button, write_radio_button};
     } // namespace streams
 
 } // namespace auik

@@ -58,7 +58,7 @@ namespace auik
     constexpr inline WindowFlags get_fixed_window_flags() { return WindowFlagBits::decorated; }
     constexpr inline WindowFlags get_popup_window_flags() { return WindowFlagBits::movable; }
 
-    class Window : public Widget, public umbf::Block
+    class AUIK_CLASS_EXPORT Window : public Widget, public umbf::Block
     {
     private:
         class ContentBlock final : public detail::ScrollableBlock
@@ -169,6 +169,13 @@ namespace auik
             _window_style = {Theme::STYLE_ID_INVALID, tag_id};
         }
         u32 window_style_tag() const { return _window_style_tag; }
+        void set_dock_style_tag(u32 tag_id)
+        {
+            _dock_style_tag = tag_id;
+            _window_style.id = Theme::STYLE_ID_INVALID;
+        }
+        u32 dock_style_tag() const { return _dock_style_tag; }
+        AUIK_EXPORT bool preserves_dock_size() const;
 
         AUIK_EXPORT virtual StyleUpdateFlags update_style() override;
         AUIK_EXPORT void reset_clip_rect_records() override;
@@ -212,6 +219,7 @@ namespace auik
         DrawDataID _bg_draw_id{};
         EventFlags _window_event_flags = EventFlagBits::none;
         u32 _window_style_tag = AUIK_STYLE_TAG_WINDOW;
+        u32 _dock_style_tag = AUIK_STYLE_TAG_DOCKED_WINDOW;
         mutable StyleSelector _window_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_WINDOW};
 
     protected:
@@ -232,22 +240,21 @@ namespace auik
             if (clip_id() != 0xFFFFu) return get_clip_rect(clip_id());
             return get_main_viewport_rect();
         }
-        void sync_window_event_flags(bool scroll, bool hover);
-        void sync_rubber_band();
-        void commit_rubber_band();
-        void redraw_decorations(DrawReasonFlags reason = DrawReasonBits::none);
+        AUIK_NO_EXPORT void sync_window_event_flags(bool scroll, bool hover);
+        AUIK_NO_EXPORT void sync_rubber_band();
+        AUIK_NO_EXPORT void commit_rubber_band();
+        AUIK_NO_EXPORT void redraw_decorations(DrawReasonFlags reason = DrawReasonBits::none);
 
         AUIK_EXPORT virtual void on_scroll(const amal::vec2 &delta) override;
         AUIK_EXPORT virtual void on_drag(const amal::vec2 &delta, KeyPressState state) override;
         AUIK_EXPORT virtual void on_focus(bool focused) override;
         AUIK_EXPORT virtual void on_hover(HoverState state) override;
         AUIK_EXPORT virtual void on_click(MouseKey key, KeyPressState state, u32 click_count) override;
-        u32 effective_window_style_tag() const;
-        const Style &resolved_window_style() const;
-        PopupMenu *ensure_header_popup_menu();
-        void install_header_menu_suffix();
-        void remove_header_menu_suffix();
-        void sync_header_popup_menu();
+        AUIK_NO_EXPORT const Style &resolved_window_style() const;
+        AUIK_NO_EXPORT PopupMenu *ensure_header_popup_menu();
+        AUIK_NO_EXPORT void install_header_menu_suffix();
+        AUIK_NO_EXPORT void remove_header_menu_suffix();
+        AUIK_NO_EXPORT void sync_header_popup_menu();
     };
 
     inline Window *make_decorated_window(u32 id, StringView title = "",

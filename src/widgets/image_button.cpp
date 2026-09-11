@@ -270,6 +270,6 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::registry::BlockStream image_button{read_image_button, write_image_button};
+        extern AUIK_EXPORT const umbf::registry::BlockStream image_button{read_image_button, write_image_button};
     } // namespace streams
 } // namespace auik

@@ -7,7 +7,7 @@
 
 namespace auik
 {
-    class Image : public Widget, public umbf::Block
+    class AUIK_CLASS_EXPORT Image : public Widget, public umbf::Block
     {
     public:
         Image(u32 id, TextureID texture_id, amal::vec2 size, amal::rect uv_rect, WidgetFlags flags)

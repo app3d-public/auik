@@ -61,14 +61,11 @@ namespace auik
         return {amal::round(position.x), amal::round(position.y)};
     }
 
-    static inline amal::vec2 resolve_drag_visual_position(const Widget &widget, const amal::vec2 &base,
-                                                          const amal::vec2 &candidate, const amal::vec2 &size)
+    amal::vec2 Tabbar::resolve_drag_visual_position(const amal::vec2 &base, const amal::vec2 &candidate,
+                                                    const amal::vec2 &size) const
     {
-        const Widget *parent = widget.parent();
         const amal::vec2 snapped = base + snap_drag_visual_position(candidate - base);
-        if (!parent) return snapped;
-
-        const auto parent_bounds = parent->bounds();
+        const auto parent_bounds = drag_bounds();
         if (parent_bounds.size.x <= 0.0f) return snapped;
 
         const f32 min_x = parent_bounds.offset.x;
@@ -192,9 +189,11 @@ namespace auik
             ensure_overflow_icon_resources();
 
             _popup = acul::alloc<Window>(AUIK_TAG_TABBAR_POPUP, "", amal::rect{{0.0f, 0.0f}, {0.0f, 0.0f}},
-                                         get_popup_window_flags(), WidgetFlagBits::hittable);
+                                         WindowFlagBits::none, WidgetFlagBits::hittable);
             _popup->get_rect().id.widget_id = id;
             _popup->set_window_style_tag(AUIK_STYLE_TAG_TABBAR_POPUP);
+            _popup->set_dock_style_tag(0u);
+            _popup->set_auto_size(false, false);
             _popup->set_focus_parent(this);
         }
     }
@@ -610,8 +609,6 @@ namespace auik
         for (auto &item : _items) release_item(item);
         _items.clear();
         _next_element_id = 1u;
-        _drag_element_id = 0u;
-        _drag_preview_index = 0u;
         _last_selected_element_id = 0u;
         _change_element_id = 0u;
         for (u32 i = 0; i < items.size(); ++i)
@@ -1131,7 +1128,7 @@ namespace auik
         _overflow_start = static_cast<u32>(_items.size());
         const f32 visible_tabs_right = content_x + amal::max(content_w - popup_reserved, 0.0f);
 
-        const u32 drag_index = find_index_by_element_id(_drag_element_id);
+        const u32 drag_index = find_index_by_element_id(drag_element_id());
         for (u32 i = 0; i < _items.size(); ++i)
         {
             auto *tab = _items[i].tab;
@@ -1183,17 +1180,14 @@ namespace auik
             tab->set_layout_size({required.x, tab_h});
             const amal::vec2 tab_base_pos{cursor_x, tab_y};
             amal::vec2 drag_visual_offset{0.0f, 0.0f};
-            if (movable() && i == drag_index)
+            if (movable() && i == drag_index && _drag_moved)
             {
-                if (_drag_offset.x != 0.0f || _drag_offset.y != 0.0f)
-                {
-                    const amal::vec2 candidate = tab_base_pos + _drag_offset;
-                    const amal::vec2 visual_pos =
-                        resolve_drag_visual_position(*this, tab_base_pos, candidate, {required.x, tab_h});
-                    drag_visual_offset = visual_pos - tab_base_pos;
-                }
-                _drag_applied_offset = drag_visual_offset;
+                const amal::vec2 visual_pos = resolve_drag_visual_position(
+                    tab_base_pos, {_drag_position_x, tab_base_pos.y}, {required.x, tab_h});
+                _drag_position_x = visual_pos.x;
+                drag_visual_offset.x = visual_pos.x - tab_base_pos.x;
             }
+            else if (movable() && i == drag_index) _drag_position_x = tab_base_pos.x;
             tab->set_position(tab_base_pos + drag_visual_offset);
             tab->update_layout(true);
             if (change_icon)
@@ -1233,10 +1227,7 @@ namespace auik
                 if (item.close_button) item.close_button->translate({dx, 0.0f});
             }
             if (movable() && drag_index < _items.size())
-            {
-                _drag_offset.x += dx;
-                _drag_applied_offset.x += dx;
-            }
+                _drag_position_x += dx;
             detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
         }
 
@@ -1265,6 +1256,7 @@ namespace auik
     {
         if (delta.x == 0.0f && delta.y == 0.0f) return;
         Widget::translate(delta);
+        if (dragging()) _drag_position_x += delta.x;
         if (_full_clip_id != 0xFFFFu || _content_clip_id != 0xFFFFu)
         {
             const auto &style = get_theme()->get_style(_style.id);
@@ -1427,7 +1419,7 @@ namespace auik
         }
         if (_overflow_button) _overflow_button->update_depth(control_range);
         if (_popup) _popup->update_depth(get_tab_popup_depth_range());
-        if (_drag_element_id != 0u) update_drag_depth();
+        if (dragging()) update_drag_depth();
     }
 
     u32 Tabbar::get_depth_requirement() const
@@ -1557,6 +1549,7 @@ namespace auik
             widget->draw_local(invalidate_ctx);
         };
 
+        const u32 drag_index = find_index_by_element_id(drag_element_id());
         for (u32 i = 0; i < _items.size(); ++i)
         {
             auto *tab = _items[i].tab;
@@ -1571,16 +1564,20 @@ namespace auik
                 continue;
             }
             DrawCtx tab_ctx = ctx;
+            const u16 item_clip = i == drag_index ? get_layout_parent_clip_id() : content_clip_id();
+            tab->set_clip_id(item_clip);
             tab->draw_local(tab_ctx);
             if (change_icon && change_icon->is_visible())
             {
                 DrawCtx icon_ctx = ctx;
+                change_icon->set_clip_id(item_clip);
                 change_icon->draw_local(icon_ctx);
             }
             else invalidate_hidden_widget(change_icon);
             if (close_button && close_button->is_visible())
             {
                 DrawCtx close_ctx = ctx;
+                close_button->set_clip_id(item_clip);
                 close_button->draw_local(close_ctx);
             }
             else invalidate_hidden_widget(close_button);
@@ -1741,7 +1738,7 @@ namespace auik
                 if (_items[fallback_index].tab) _items[fallback_index].tab->set_selected(true);
             }
         }
-        if (_drag_element_id == element_id) end_drag();
+        if (drag_element_id() == element_id) end_drag();
         rebuild_items();
         refresh_layout_owner(*this);
     }
@@ -1768,71 +1765,47 @@ namespace auik
         refresh_layout_owner(*this);
     }
 
-    void Tabbar::begin_drag(u32 element_id)
+    u32 Tabbar::drag_element_id() const
     {
+        const auto drag_id = detail::get_context().io.drag_id;
+        if (drag_id.widget_id != id() || drag_id.tag_id != _item_style_tag) return 0u;
+        return find_index_by_element_id(drag_id.element_id) < _items.size() ? drag_id.element_id : 0u;
+    }
+
+    void Tabbar::begin_drag()
+    {
+        const u32 element_id = drag_element_id();
         const u32 index = find_index_by_element_id(element_id);
         if (!movable() || index >= _items.size()) return;
-        _drag_element_id = element_id;
-        _drag_preview_index = index;
-        if (auto *tab = _items[index].tab)
-        {
-            const auto bounds = tab->bounds();
-            _drag_grab_offset = detail::get_io().mouse_pos - bounds.offset;
-            _drag_grab_offset.x = amal::clamp(_drag_grab_offset.x, 0.0f, amal::max(bounds.size.x, 0.0f));
-            _drag_grab_offset.y = amal::clamp(_drag_grab_offset.y, 0.0f, amal::max(bounds.size.y, 0.0f));
-            _drag_grab_offset_valid = true;
-        }
-        else
-        {
-            _drag_grab_offset = {0.0f, 0.0f};
-            _drag_grab_offset_valid = false;
-        }
-        _drag_offset = {0.0f, 0.0f};
-        _drag_applied_offset = {0.0f, 0.0f};
+        _drag_grab_offset = {0.0f, 0.0f};
+        auto *tab = _items[index].tab;
+        if (!tab) return;
+        const auto bounds = tab->bounds();
+        _drag_grab_offset = detail::get_io().mouse_pos - bounds.offset;
+        _drag_grab_offset.x = amal::clamp(_drag_grab_offset.x, 0.0f, amal::max(bounds.size.x, 0.0f));
+        _drag_grab_offset.y = amal::clamp(_drag_grab_offset.y, 0.0f, amal::max(bounds.size.y, 0.0f));
+        _drag_position_x = bounds.offset.x;
         _drag_moved = false;
         update_drag_depth();
     }
 
     void Tabbar::end_drag()
     {
-        _drag_element_id = 0u;
-        _drag_preview_index = 0u;
+        auto &ctx = detail::get_context();
+        if (ctx.io.drag_id.widget_id == id() && ctx.io.drag_id.tag_id == _item_style_tag)
+        {
+            ctx.io.drag_id = {};
+            if (ctx.frame_cache.drag_widget_id == id())
+            {
+                ctx.frame_cache.drag_widget_id = 0u;
+                ctx.frame_cache.drag_delta = {0.0f, 0.0f};
+                ctx.frame_cache.changes &= ~detail::FrameChangesBits::drag_delta;
+            }
+        }
         _drag_grab_offset = {0.0f, 0.0f};
-        _drag_grab_offset_valid = false;
-        _drag_offset = {0.0f, 0.0f};
-        _drag_applied_offset = {0.0f, 0.0f};
+        _drag_position_x = 0.0f;
         _drag_moved = false;
         update_depth(depth_range());
-    }
-
-    u32 Tabbar::find_drop_index_by_x(f32 x) const
-    {
-        const u32 drag_index = find_index_by_element_id(_drag_element_id);
-        if (drag_index >= _items.size()) return 0u;
-
-        u32 drop_index = 0u;
-        for (u32 i = 0; i < _items.size(); ++i)
-        {
-            if (i == drag_index) continue;
-            auto *tab = _items[i].tab;
-            if (!tab || !tab->is_visible()) continue;
-            const auto bounds = tab->bounds();
-            const f32 center_x = bounds.offset.x + bounds.size.x * 0.5f;
-            if (x < center_x) return drop_index;
-            ++drop_index;
-        }
-        return drop_index;
-    }
-
-    u32 Tabbar::find_drop_index_by_dragged_center() const
-    {
-        const u32 drag_index = find_index_by_element_id(_drag_element_id);
-        if (drag_index >= _items.size()) return 0u;
-        auto *drag_tab = _items[drag_index].tab;
-        if (!drag_tab) return 0u;
-        const auto drag_bounds = drag_tab->bounds();
-        const f32 drag_base_x = drag_bounds.offset.x - _drag_applied_offset.x;
-        return find_drop_index_by_x(drag_base_x + _drag_offset.x + drag_bounds.size.x * 0.5f);
     }
 
     u32 Tabbar::insertion_index_at(const amal::vec2 &point) const
@@ -1850,9 +1823,11 @@ namespace auik
         return drop_index;
     }
 
-    void Tabbar::begin_external_drag(u32 element_id)
+    void Tabbar::adopt_drag()
     {
-        begin_drag(element_id);
+        const u32 element_id = drag_element_id();
+        if (element_id == 0u || !movable()) return;
+        begin_drag();
         const u32 index = find_index_by_element_id(element_id);
         if (index >= _items.size()) return;
         auto *tab = _items[index].tab;
@@ -1866,17 +1841,14 @@ namespace auik
             amal::clamp(_drag_grab_offset.y, 0.0f, bounds.size.y),
         };
         const amal::vec2 target_pos = snap_drag_visual_position({mouse.x - grab.x, bounds.offset.y});
-        _drag_offset = target_pos - bounds.offset;
-        _drag_applied_offset = {0.0f, 0.0f};
+        _drag_position_x = target_pos.x;
         _drag_moved = true;
         update_layout_from_current_bounds(true);
     }
 
-    void Tabbar::cancel_drag() { end_drag(); }
-
     bool Tabbar::update_drag_realtime_order(f32 delta_x)
     {
-        u32 drag_index = find_index_by_element_id(_drag_element_id);
+        u32 drag_index = find_index_by_element_id(drag_element_id());
         if (drag_index >= _items.size()) return false;
         auto *drag_tab = _items[drag_index].tab;
         if (!drag_tab) return false;
@@ -1890,10 +1862,9 @@ namespace auik
                 if (!neighbor || !neighbor->is_visible()) break;
                 const auto drag_bounds = drag_tab->bounds();
                 const auto neighbor_bounds = neighbor->bounds();
-                const f32 drag_base_x = drag_bounds.offset.x - _drag_applied_offset.x;
-                const f32 drag_edge = drag_base_x + _drag_offset.x + drag_bounds.size.x;
+                const f32 drag_edge = _drag_position_x + drag_bounds.size.x;
                 const f32 neighbor_center = neighbor_bounds.offset.x + neighbor_bounds.size.x * 0.5f;
-                if (drag_edge <= neighbor_center) break;
+                if (drag_edge < neighbor_center) break;
                 if (!swap_drag_with_neighbor(drag_index, drag_index + 1u)) break;
                 changed = true;
                 ++drag_index;
@@ -1905,18 +1876,15 @@ namespace auik
             {
                 auto *neighbor = _items[drag_index - 1u].tab;
                 if (!neighbor || !neighbor->is_visible()) break;
-                const auto drag_bounds = drag_tab->bounds();
                 const auto neighbor_bounds = neighbor->bounds();
-                const f32 drag_base_x = drag_bounds.offset.x - _drag_applied_offset.x;
-                const f32 drag_edge = drag_base_x + _drag_offset.x;
+                const f32 drag_edge = _drag_position_x;
                 const f32 neighbor_center = neighbor_bounds.offset.x + neighbor_bounds.size.x * 0.5f;
-                if (drag_edge >= neighbor_center) break;
+                if (drag_edge > neighbor_center) break;
                 if (!swap_drag_with_neighbor(drag_index, drag_index - 1u)) break;
                 changed = true;
                 --drag_index;
             }
         }
-        _drag_preview_index = drag_index;
         return changed;
     }
 
@@ -1929,15 +1897,13 @@ namespace auik
         if (!drag_tab || !neighbor_tab) return false;
 
         const bool move_right = neighbor_index > drag_index;
-        const amal::vec2 drag_abs_pos = drag_tab->position();
-        const amal::vec2 drag_base_pos = drag_abs_pos - _drag_applied_offset;
         const amal::vec2 neighbor_pos = neighbor_tab->position();
         const amal::vec2 drag_size = drag_tab->size();
         const amal::vec2 neighbor_size = neighbor_tab->size();
         const f32 inline_spacing = amal::max(get_theme()->get_style(_style.id).inline_spacing(), 0.0f);
 
-        const f32 new_drag_base_x = move_right ? drag_base_pos.x + neighbor_size.x + inline_spacing : neighbor_pos.x;
-        const f32 new_neighbor_x = move_right ? drag_base_pos.x : new_drag_base_x + drag_size.x + inline_spacing;
+        const f32 new_neighbor_x = move_right ? neighbor_pos.x - drag_size.x - inline_spacing
+                                              : neighbor_pos.x + neighbor_size.x + inline_spacing;
         const amal::vec2 snapped_neighbor_pos = snap_drag_visual_position({new_neighbor_x, neighbor_pos.y});
         const amal::vec2 neighbor_delta = snapped_neighbor_pos - neighbor_pos;
         auto translate_item = [](Item &item, const amal::vec2 &delta) {
@@ -1947,10 +1913,6 @@ namespace auik
         };
         translate_item(_items[neighbor_index], neighbor_delta);
 
-        const f32 logical_drag_x = drag_base_pos.x + _drag_offset.x;
-        _drag_offset = {logical_drag_x - new_drag_base_x, 0.0f};
-        _drag_applied_offset = {drag_abs_pos.x - new_drag_base_x, 0.0f};
-
         const Item item_tmp = _items[drag_index];
         _items[drag_index] = _items[neighbor_index];
         _items[neighbor_index] = item_tmp;
@@ -1959,7 +1921,7 @@ namespace auik
 
     void Tabbar::update_drag_depth()
     {
-        const u32 drag_index = find_index_by_element_id(_drag_element_id);
+        const u32 drag_index = find_index_by_element_id(drag_element_id());
         if (drag_index >= _items.size()) return;
 
         const amal::vec2 parent_work_range = detail::depth_foreground_range(depth_range());
@@ -2045,21 +2007,19 @@ namespace auik
             return;
         }
 
-        const auto &ctx = detail::get_context();
         if (state == KeyPressState::press)
         {
-            if (ctx.hover_id.widget_id == id() && ctx.hover_id.tag_id == _item_style_tag)
-                begin_drag(ctx.hover_id.element_id);
+            begin_drag();
             return;
         }
-        const u32 drag_index = find_index_by_element_id(_drag_element_id);
+        const u32 element_id = drag_element_id();
+        const u32 drag_index = find_index_by_element_id(element_id);
         if (state == KeyPressState::release)
         {
-            const bool had_drag = _drag_element_id != 0u;
+            const bool had_drag = element_id != 0u;
             const bool should_snap_layout = _drag_moved && drag_index < _items.size();
-            const u32 changed_element_id = _drag_element_id;
             end_drag();
-            if (should_snap_layout) mark_changed(TabbarChangeReason::reorder, changed_element_id);
+            if (should_snap_layout) mark_changed(TabbarChangeReason::reorder, element_id);
             if (should_snap_layout || had_drag)
             {
                 add_render_command<detail::DragEventTraits>(this, [this, should_snap_layout]() {
@@ -2074,28 +2034,25 @@ namespace auik
         if (state != KeyPressState::repeat || drag_index >= _items.size()) return;
         if (delta.x == 0.0f && delta.y == 0.0f) return;
 
-        const amal::vec2 prev_drag_offset = _drag_offset;
+        const f32 previous_drag_x = _drag_position_x;
         if (auto *drag_tab = _items[drag_index].tab)
         {
             const auto drag_bounds = drag_tab->bounds();
-            const amal::vec2 drag_base_pos = drag_bounds.offset - _drag_applied_offset;
-            const amal::vec2 candidate =
-                _drag_grab_offset_valid
-                    ? amal::vec2{detail::get_io().mouse_pos.x - _drag_grab_offset.x, drag_base_pos.y}
-                    : drag_base_pos + amal::vec2{_drag_offset.x + delta.x, 0.0f};
-            const amal::vec2 visual_pos =
-                resolve_drag_visual_position(*this, drag_base_pos, candidate, drag_bounds.size);
-            _drag_offset = {visual_pos.x - drag_base_pos.x, 0.0f};
+            const auto &ctx = detail::get_context();
+            const f32 candidate_x = ctx.raw_mouse_mode ? _drag_position_x + delta.x
+                                                       : ctx.io.mouse_pos.x - _drag_grab_offset.x;
+            _drag_position_x =
+                resolve_drag_visual_position(drag_bounds.offset, {candidate_x, drag_bounds.offset.y}, drag_bounds.size)
+                    .x;
         }
-        else _drag_offset = {_drag_offset.x + delta.x, 0.0f};
+        else return;
 
-        const f32 drag_delta_x = _drag_offset.x - prev_drag_offset.x;
+        const f32 drag_delta_x = _drag_position_x - previous_drag_x;
         if (drag_delta_x == 0.0f) return;
 
         _drag_moved = true;
-        _drag_preview_index = find_drop_index_by_dragged_center();
-        add_render_command<detail::DragEventTraits>(this, [this, drag_delta_x]() {
-            if (find_index_by_element_id(_drag_element_id) >= _items.size()) return;
+        add_render_command<detail::DragEventTraits>(this, [this, drag_delta_x, element_id]() {
+            if (drag_element_id() != element_id) return;
             update_layout_from_current_bounds(true);
             if (update_drag_realtime_order(drag_delta_x)) update_layout_from_current_bounds(true);
             update_draw_commands(DrawReasonBits::layout);
@@ -2178,7 +2135,7 @@ namespace auik
 
         _popup->set_parent(parent());
         _popup->set_window_style_tag(AUIK_STYLE_TAG_TABBAR_POPUP);
-        _popup->window_flags = get_popup_window_flags() | WindowFlagBits::docked;
+        _popup->window_flags = WindowFlagBits::none;
         _popup->set_visible();
         _popup->sync_widget_flags();
         _popup->update_style_invalidated();
@@ -2213,7 +2170,7 @@ namespace auik
                                                                 : amal::max(desired_h, min_popup_h);
         const auto placement =
             resolve_dropdown_popup_placement(position().y, size().y, desired_h, min_popup_h, max_popup_h, viewport);
-        _popup->window_flags = get_popup_window_flags() | WindowFlagBits::docked;
+        _popup->window_flags = WindowFlagBits::none;
         _popup->set_position({position().x + size().x - popup_w, placement.y});
         _popup->set_size({popup_w, placement.height});
         _popup->attach_to_viewport(this->viewport());
@@ -2365,6 +2322,6 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::registry::BlockStream tabbar{read_tabbar, write_tabbar};
+        extern AUIK_EXPORT const umbf::registry::BlockStream tabbar{read_tabbar, write_tabbar};
     } // namespace streams
 } // namespace auik

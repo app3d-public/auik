@@ -2374,10 +2374,10 @@ namespace auik
 
     namespace streams
     {
-        AUIK_EXPORT const umbf::registry::BlockStream slider{read_slider, write_slider};
-        AUIK_EXPORT const umbf::registry::BlockStream gradient_slider{read_gradient_slider, write_gradient_slider};
-        AUIK_EXPORT const umbf::registry::BlockStream transparency_slider{read_transparency_slider,
+        extern AUIK_EXPORT const umbf::registry::BlockStream slider{read_slider, write_slider};
+        extern AUIK_EXPORT const umbf::registry::BlockStream gradient_slider{read_gradient_slider, write_gradient_slider};
+        extern AUIK_EXPORT const umbf::registry::BlockStream transparency_slider{read_transparency_slider,
                                                                           write_transparency_slider};
-        AUIK_EXPORT const umbf::registry::BlockStream range_slider{read_range_slider, write_range_slider};
+        extern AUIK_EXPORT const umbf::registry::BlockStream range_slider{read_range_slider, write_range_slider};
     } // namespace streams
 } // namespace auik
