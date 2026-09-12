@@ -2043,7 +2043,7 @@ namespace auik
             detail::write_widget_common_data(stream, *popup);
             acul::vector<Widget *> blocks;
             if (auto *menu = popup->menu_model()) blocks.push_back(menu);
-            stream.read(blocks);
+            stream.write(blocks);
         }
 
         umbf::Block *read_popup_menu(acul::bin_stream &stream)

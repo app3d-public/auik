@@ -112,7 +112,7 @@ namespace auik
         auto tree = acul::make_shared<detail::SnapshotTree>();
         tree->owns_roots = false;
         tree->roots = detail::get_context().widget_tree;
-        umbf::add_block(*file, tree.get());
+        if (!umbf::add_block(*file, tree.get())) return nullptr;
 
         auto global = acul::make_shared<detail::GlobalCache>();
         const auto &global_cache = detail::get_context().global_cache;
@@ -122,7 +122,7 @@ namespace auik
             (void)widget_id;
             if (state) global->entries.push_back(state);
         }
-        umbf::add_block(*file, global.get());
+        if (!umbf::add_block(*file, global.get())) return nullptr;
         return file;
     }
 

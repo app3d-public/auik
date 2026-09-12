@@ -436,7 +436,6 @@ combo-box:
 combo-box-popup:
     margin: 0px
     padding: (2px, 0px)
-    min-height: @(96px * @dpi)
     max-height: @(280px * @dpi)
     bg-color: @color-surface-dark
     radius: (0px, 0px, 4px, 4px)
