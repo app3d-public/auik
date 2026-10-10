@@ -120,6 +120,14 @@ namespace auik
         _text->translate(delta);
     }
 
+    void TextButton::reset_draw_records()
+    {
+        Widget::reset_draw_records();
+        _bg = {};
+        if (_text) _text->reset_draw_records();
+        _text_draw_dirty = true;
+    }
+
     void TextButton::rebuild_clip_rects()
     {
         assert(parent() && "TextButton must have parent");

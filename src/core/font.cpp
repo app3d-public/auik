@@ -1,4 +1,3 @@
-#include <acul/io/fs/path.hpp>
 #include <auik/auik.hpp>
 #include <auik/detail/atlas.hpp>
 #include <auik/detail/context.hpp>
@@ -643,14 +642,12 @@ namespace auik
     bool load_fonts(FontRegistry &fonts, const acul::vector<acul::string> &search_dirs)
     {
         if (!detail::g_context || !detail::g_context->ft_library) return false;
-        const acul::vector<acul::string> supported_extensions = {".ttf", ".ttc", ".cff", ".otf", ".otc",
-                                                                 ".pcf", ".fnt", ".bdf", ".pfr"};
         FcConfig *config = FcInitLoadConfigAndFonts();
         FcPattern *pat = FcPatternCreate();
         FcObjectSet *os =
             FcObjectSetBuild(FC_FAMILY, FC_WEIGHT, FC_SLANT, FC_FILE, FC_FULLNAME, FC_LANG, (char *)0);
         if (!search_dirs.empty())
-            for (auto &path : search_dirs) FcConfigAppFontAddFile(config, (const FcChar8 *)path.c_str());
+            for (auto &path : search_dirs) FcConfigAppFontAddDir(config, (const FcChar8 *)path.c_str());
         FcFontSet *fs = FcFontList(config, pat, os);
         for (int i = 0; fs && i < fs->nfont; ++i)
         {
@@ -665,17 +662,10 @@ namespace auik
                 FcPatternGetInteger(font, FC_WEIGHT, 0, &weight) == FcResultMatch &&
                 FcPatternGetInteger(font, FC_SLANT, 0, &slant) == FcResultMatch)
             {
-                acul::string ext = acul::fs::get_extension(reinterpret_cast<char *>(file));
-                std::transform(ext.begin(), ext.end(), ext.begin(),
-                               [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-                if (std::find(supported_extensions.begin(), supported_extensions.end(), ext) !=
-                    supported_extensions.end())
-                {
-                    const bool text_font =
-                        FcPatternGetLangSet(font, FC_LANG, 0, &languages) == FcResultMatch && languages &&
-                        FcLangSetHasLang(languages, reinterpret_cast<const FcChar8 *>("en")) != FcLangDifferentLang;
-                    fonts.emplace((char *)family, {(char *)file, (char *)fullname, weight, slant, text_font});
-                }
+                const bool text_font =
+                    FcPatternGetLangSet(font, FC_LANG, 0, &languages) == FcResultMatch && languages &&
+                    FcLangSetHasLang(languages, reinterpret_cast<const FcChar8 *>("en")) != FcLangDifferentLang;
+                fonts.emplace((char *)family, {(char *)file, (char *)fullname, weight, slant, text_font});
             }
         }
         if (fs) FcFontSetDestroy(fs);

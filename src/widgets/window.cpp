@@ -583,8 +583,6 @@ namespace auik
 
     Window::~Window()
     {
-        clear_children();
-
         if (_default_header_menu) acul::release(_default_header_menu);
         if (_rubber_band) acul::release(_rubber_band);
         if (_header) acul::release(_header);

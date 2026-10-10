@@ -509,33 +509,24 @@ namespace auik
     {
         if (first >= children.size() || count == 0u) return;
         const size_t last = first + amal::min(count, children.size() - first);
-        const bool destroying = detail::g_context && (detail::get_context().dirty_flags & DirtyFlagBits::destroying);
         invalidate_layout_measure();
         for (size_t i = first; i < last; ++i)
         {
             auto *child = children[i];
             if (!child) continue;
-            if (!destroying && child->is_attached())
+            if (child->is_attached())
             {
                 child->on_detach();
                 child->invalidate_draw_commands(DrawReasonBits::external);
             }
             child->set_parent(nullptr);
             child->set_focus_parent(nullptr);
-            if (detail::g_context && !destroying)
-            {
-                // Structural callbacks already queued for this child must observe
-                // the detached state before its storage is released. A forced
-                // disposal runs after the current queue wave and therefore after
-                // every callback that could have been queued while it was attached.
-                detail::get_context().disposal_queue.emplace([child]() { acul::release(child); }, true);
-            }
-            else acul::release(child);
+            acul::release(child);
         }
         children.erase(children.begin() + first, children.begin() + last);
         _explicit_child_layouts.erase(_explicit_child_layouts.begin() + first, _explicit_child_layouts.begin() + last);
         _child_layouts.erase(_child_layouts.begin() + first, _child_layouts.begin() + last);
-        if (!destroying) request_children_update();
+        request_children_update();
     }
 
     void Block::add_child(Widget *child, ChildLayoutFlags layout)
@@ -1002,7 +993,6 @@ namespace auik
 
     const Style *DrawBlock::draw_style() const
     {
-        if (_style_tag_id == 0u) return nullptr;
         auto *theme = get_theme();
         const u32 parent_id = parent() ? parent()->id() : 0u;
         const StyleID style_id = _style.id != Theme::STYLE_ID_INVALID && _style.tag_id == _style_tag_id
@@ -1180,27 +1170,24 @@ namespace auik
     StyleUpdateFlags DrawBlock::update_style()
     {
         StyleUpdateFlags out = detail::ScrollableBlock::update_style();
-        if (_style_tag_id != 0u)
-        {
-            out |= resolve_style_selector(_style, id(), parent() ? parent()->id() : 0u, style_state());
-            const auto &style = get_theme()->get_style(_style.id);
-            _scroll.style_id = _style.id;
-            const auto style_mask = style.mask();
-            const auto *align = style.align_settings();
-            set_content_layout(align ? ChildLayoutFlags(align->flags) : default_child_layout_flags());
-            amal::vec2 next_size = requested_size();
+        out |= resolve_style_selector(_style, id(), parent() ? parent()->id() : 0u, style_state());
+        const auto &style = get_theme()->get_style(_style.id);
+        _scroll.style_id = _style.id;
+        const auto style_mask = style.mask();
+        const auto *align = style.align_settings();
+        set_content_layout(align ? ChildLayoutFlags(align->flags) : default_child_layout_flags());
+        amal::vec2 next_size = requested_size();
 
-            // Block owns an explicit size separately from Widget's inline size. Its default
-            // fit-content value must not mask a width/height declared by the DrawBlock style.
-            // An explicit Block::set_width()/set_height() remains the highest-priority value.
-            next_size.x = has_explicit_width()
-                              ? resolved_explicit_width()
-                              : ((style_mask & detail::StylePropertiesBits::width) ? style.width() : AUIK_SIZE_X_FIT);
-            next_size.y = has_explicit_height()
-                              ? resolved_explicit_height()
-                              : ((style_mask & detail::StylePropertiesBits::height) ? style.height() : AUIK_SIZE_Y_FIT);
-            set_requested_size(next_size);
-        }
+        // Block owns an explicit size separately from Widget's inline size. Its default
+        // fit-content value must not mask a width/height declared by the DrawBlock style.
+        // An explicit Block::set_width()/set_height() remains the highest-priority value.
+        next_size.x = has_explicit_width()
+                          ? resolved_explicit_width()
+                          : ((style_mask & detail::StylePropertiesBits::width) ? style.width() : AUIK_SIZE_X_FIT);
+        next_size.y = has_explicit_height()
+                          ? resolved_explicit_height()
+                          : ((style_mask & detail::StylePropertiesBits::height) ? style.height() : AUIK_SIZE_Y_FIT);
+        set_requested_size(next_size);
         return out;
     }
 
@@ -1528,6 +1515,7 @@ namespace auik
         update_scroll_layout(min_size_known, draw_margin(), sum_padding(draw_padding(), content_padding()),
                              resolved_inline_spacing());
         sync_draw_bounds();
+        if (_user_bind && _user_bind->on_layout_fn) _user_bind->on_layout_fn();
     }
 
     void detail::ScrollableBlock::translate(const amal::vec2 &delta)
@@ -2345,7 +2333,12 @@ namespace auik
         return _label ? _label->text() : empty;
     }
 
-    void CollapseHeader::set_expanded(bool value) { _expanded = value; }
+    void CollapseHeader::set_expanded(bool value)
+    {
+        if (_expanded == value) return;
+        _expanded = value;
+        invalidate_layout_measure();
+    }
 
     void CollapseHeader::sync_expanded_state()
     {
@@ -2834,8 +2827,7 @@ namespace auik
                 layouts.push_back(child_i < child_layouts.size() ? child_layouts[child_i]
                                                                  : default_child_layout_flags());
             }
-            stream.write(static_cast<u64>(layouts.size()));
-            if (!layouts.empty()) stream.write(layouts.data(), layouts.size());
+            stream.write(layouts);
             stream.write(blocks);
         }
 

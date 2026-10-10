@@ -233,9 +233,6 @@ namespace auik
         void apply_edit_render_update(bool layout_dirty);
         void update_transient_draw_commands();
         bool edit_draw_slots_need_record() const;
-        bool should_show_lazy_tooltip() const;
-        void schedule_lazy_tooltip();
-        void clear_lazy_tooltip(bool clear_source);
         void on_disabled_changed(bool disabled) override;
     };
 

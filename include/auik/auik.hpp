@@ -164,10 +164,6 @@ namespace auik
     AUIK_EXPORT void resume_delayed_tasks(f64 now);
     AUIK_EXPORT f64 next_delayed_task_in(f64 now);
     AUIK_EXPORT bool dispatch_delayed_tasks(f64 now);
-    AUIK_EXPORT void show_tooltip(f32 x, const acul::string *text_source);
-    AUIK_EXPORT void hide_tooltip();
-    AUIK_EXPORT void clear_tooltip_if_source(const acul::string *text_source);
-
     // GPU cache and viewport synchronization.
     AUIK_EXPORT void sync_draw_streams();
     AUIK_EXPORT void sync_clip_rect_cache();

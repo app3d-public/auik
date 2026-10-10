@@ -51,6 +51,22 @@ namespace auik
         u32 count = 1u;
     };
 
+    struct ModelFieldChange
+    {
+        ModelRecordID record_id = AUIK_MODEL_RECORD_ID_INVALID;
+        ModelFieldID field_id = AUIK_MODEL_FIELD_ID_INVALID;
+    };
+
+    struct ModelFieldChangeBatch
+    {
+        const ModelFieldChange *changes = nullptr;
+        u32 count = 0u;
+
+        const ModelFieldChange *begin() const { return changes; }
+        const ModelFieldChange *end() const { return changes ? changes + count : nullptr; }
+        explicit operator bool() const { return changes && count != 0u; }
+    };
+
     struct ModelBatchData
     {
         const void *data = nullptr;
@@ -1092,6 +1108,7 @@ namespace auik
 
     using PFN_model_binding_dispatch = void (*)(ModelBinding *, const ModelRecordsEvent &);
     using PFN_model_binding_field_dispatch = void (*)(ModelBinding *, ModelRecordID, ModelFieldID);
+    using PFN_model_binding_field_batch_dispatch = void (*)(ModelBinding *, const ModelFieldChangeBatch &);
     using PFN_model_binding_access_field = bool (*)(ModelBinding *, ModelRecordID, ModelFieldID, ModelFieldAccess *);
 
     struct ModelBinding
@@ -1104,8 +1121,10 @@ namespace auik
         ModelRecordPresenter presenter;
         acul::unique_function<void(const ModelRecordsEvent &)> on_records = nullptr;
         acul::unique_function<void(ModelRecordID, ModelFieldID)> on_field_change = nullptr;
+        acul::unique_function<void(const ModelFieldChangeBatch &)> on_field_change_batch = nullptr;
         PFN_model_binding_dispatch on_dispatch = nullptr;
         PFN_model_binding_field_dispatch on_field_dispatch = nullptr;
+        PFN_model_binding_field_batch_dispatch on_field_batch_dispatch = nullptr;
         PFN_model_binding_access_field access_field = nullptr;
     };
 
@@ -1362,6 +1381,8 @@ namespace auik
     AUIK_EXPORT void default_dispatch_model_binding(ModelBinding *binding, const ModelRecordsEvent &event);
     AUIK_EXPORT void default_dispatch_model_binding_field(ModelBinding *binding, ModelRecordID record_id,
                                                           ModelFieldID field_id);
+    AUIK_EXPORT void default_dispatch_model_binding_field_batch(ModelBinding *binding,
+                                                                const ModelFieldChangeBatch &batch);
 
     inline void dispatch_model_binding(ModelBinding &binding, const ModelRecordsEvent &event)
     {
@@ -1375,6 +1396,17 @@ namespace auik
         assert(binding.db && binding.db->synced);
         if (binding.on_field_dispatch) binding.on_field_dispatch(&binding, record_id, field_id);
         else default_dispatch_model_binding_field(&binding, record_id, field_id);
+    }
+
+    inline void dispatch_model_binding_field_batch(ModelBinding &binding, const ModelFieldChangeBatch &batch)
+    {
+        assert(binding.db && binding.db->synced);
+        if (!batch) return;
+        if (binding.on_field_batch_dispatch) binding.on_field_batch_dispatch(&binding, batch);
+        else if (binding.on_field_dispatch)
+            for (const auto &change : batch)
+                binding.on_field_dispatch(&binding, change.record_id, change.field_id);
+        else default_dispatch_model_binding_field_batch(&binding, batch);
     }
 
     inline void Model::dispatch_records(const ModelRecordsEvent &event)

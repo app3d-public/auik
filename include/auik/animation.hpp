@@ -53,6 +53,9 @@ namespace auik
     }
     AUIK_EXPORT f64 current_animation_time();
     AUIK_EXPORT bool next_animation_frame(AnimationState &state, Widget *owner, void *user_data = nullptr);
+    AUIK_EXPORT AnimationState *animate_move(Widget &widget, amal::vec2 position, f64 duration);
+    AUIK_EXPORT AnimationState *animate_scale_to(Widget &widget, amal::vec2 size, f64 duration);
+    AUIK_EXPORT void cancel_bounds_animations(Widget &widget);
     AUIK_EXPORT AnimationState *animate_scroll_to(ScrollData &scroll, f32 offset, amal::axis axis, f64 duration,
                                                   PFN_animation_complete complete = nullptr);
 } // namespace auik

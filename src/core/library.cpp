@@ -11,7 +11,6 @@
 #include <auik/widgets/tabbar.hpp>
 #include <auik/widgets/text.hpp>
 #include <auik/widgets/titlebar.hpp>
-#include <auik/widgets/tooltip.hpp>
 #include <auik/widgets/window.hpp>
 #include <freetype/freetype.h>
 #include "pipelines/stream_data.hpp"
@@ -20,8 +19,6 @@ namespace auik
 {
     namespace
     {
-        static inline amal::vec2 get_root_overlay_depth_range() { return detail::get_global_foreground_depth_range(); }
-
         static void __update_root_widgets_layout(Viewport *viewport);
         static void __update_root_widgets_layout_fast(Viewport *viewport);
 
@@ -493,7 +490,6 @@ namespace auik
         detail::g_context = acul::alloc<detail::Context>();
         auto &ctx = detail::get_context();
         ctx.image_cache.clear();
-        ctx.tooltip = nullptr;
         ctx.transient_cache.clear();
         ctx.streams.attached_streams = create_info.streams;
         ctx.streams.stream_count = create_info.streams_count;
@@ -800,9 +796,10 @@ namespace auik
         sync_hit_rect_cache();
         assert(detail::is_hit_rects_frame_synced(ctx.frame_id) &&
                "redraw_all_commands() started with stale current-frame hit rect cache");
-        clear_hit_rects();
+        reset_clip_rect_records();
         reset_all_draw_records(ctx);
         clear_all_streams(ctx);
+        rebuild_clip_rect_records();
         for (Widget *widget : ctx.widget_tree)
             widget->update_draw_commands(DrawReasonBits::full_redraw | DrawReasonBits::record);
         ctx.dirty_flags &= ~DirtyFlagBits::hit_rect_draw;
@@ -1147,39 +1144,4 @@ namespace auik
         return !due_tasks.empty();
     }
 
-    AUIK_EXPORT void show_tooltip(f32 x, const acul::string *text_source)
-    {
-        if (!text_source || text_source->empty())
-        {
-            hide_tooltip();
-            return;
-        }
-
-        auto &ctx = detail::get_context();
-        if (!ctx.tooltip)
-        {
-            ctx.tooltip = make_tooltip();
-            ctx.tooltip->update_depth(get_root_overlay_depth_range());
-        }
-
-        ctx.tooltip->show_at(x, text_source);
-        push_widget_to_transient_cache(ctx.tooltip);
-    }
-
-    AUIK_EXPORT void hide_tooltip()
-    {
-        auto &ctx = detail::get_context();
-        if (!ctx.tooltip) return;
-
-        erase_widget_from_transient_cache(ctx.tooltip);
-        redraw_all_commands();
-        mark_host_refresh_request();
-    }
-
-    AUIK_EXPORT void clear_tooltip_if_source(const acul::string *text_source)
-    {
-        auto &ctx = detail::get_context();
-        if (!ctx.tooltip || !text_source) return;
-        ctx.tooltip->clear_if_source(text_source);
-    }
 } // namespace auik

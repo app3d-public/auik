@@ -1,23 +1,29 @@
 #include <acul/string/utils.hpp>
 #include <auik/auik.hpp>
 #include <auik/widgets/drag.hpp>
-#include <charconv>
 #include "../core/session_stream_utils.hpp"
 
 namespace auik
 {
     template <typename T>
-    static acul::string format_display_float(T value)
+    static acul::string format_display_float(T value, u8 precision)
     {
         if (value == static_cast<T>(0)) return "0";
 
         char buffer[64]{};
-        const auto result = std::to_chars(std::begin(buffer), std::end(buffer), value);
-        if (result.ec == std::errc{}) return acul::string(buffer, result.ptr);
+        const int display_precision =
+            precision == AUIK_DRAG_DISPLAY_PRECISION_AUTO ? 6 : static_cast<int>(precision);
+        const int size = acul::to_string(value, buffer, sizeof(buffer), display_precision);
+        if (size > 0)
+        {
+            char *end = buffer + size;
+            while (end > buffer && end[-1] == '0') --end;
+            if (end > buffer && end[-1] == '.') --end;
+            if (end - buffer == 2 && buffer[0] == '-' && buffer[1] == '0') return "0";
+            return acul::string(buffer, end);
+        }
 
-        // All supported standard libraries provide floating-point to_chars. Keep a deterministic fallback for
-        // platforms that report an implementation error instead of exposing binary floating-point noise.
-        return acul::format("%.6g", static_cast<f64>(value));
+        return acul::format("%.*f", display_precision, static_cast<f64>(value));
     }
 
     template <typename T>
@@ -168,7 +174,6 @@ namespace auik
             if (!assign_value(value, manual_change)) return;
             if (sync_model && _value_model_binding) set_model_binding_value<T>(*_value_model_binding, _value);
             mark_changed();
-            sync_text_from_value();
             mark_host_refresh_request();
         }
 
@@ -182,11 +187,26 @@ namespace auik
             _value_model_binding->on_field_change = [this](ModelRecordID, ModelFieldID) {
                 T value{};
                 if (!read_model_binding_value(*_value_model_binding, value)) return;
+                if (value == this->value()) return;
                 set_value(value);
+                mark_changed();
             };
             attach_model_binding(*_value_model_binding);
             T value{};
-            if (read_model_binding_value(*_value_model_binding, value)) set_value(value);
+            if (read_model_binding_value(*_value_model_binding, value))
+            {
+                set_value(value);
+                mark_changed();
+            }
+        }
+
+        template <typename T>
+        void Draggable<T>::set_display_precision(u8 value)
+        {
+            if (_display_precision == value) return;
+            _display_precision = value;
+            _value_text_dirty = true;
+            invalidate_layout_measure();
         }
 
         template <typename T>
@@ -370,21 +390,31 @@ namespace auik
         }
 
         template <typename T>
+        void Draggable<T>::on_change(ChangeEvent &event)
+        {
+            if (event.target != id()) return;
+            if (_value_text_dirty) sync_text_from_value();
+            if (_style.id == Theme::STYLE_ID_INVALID) return;
+            apply_render_update(true);
+        }
+
+        template <typename T>
         void Draggable<T>::on_key(Key key, KeyPressState state, KeyMode mods)
         {
             if (state == KeyPressState::release) return;
             if (key == Key::enter || key == Key::kp_enter)
             {
-                if (!commit_text_value()) sync_text_from_value();
+                const bool committed = commit_text_value();
+                if (!committed) sync_text_from_value();
                 _pending_text_commit = false;
-                add_render_command<KeyEventTraits>(this, [this]() { apply_render_update(true); });
+                if (!committed)
+                    add_render_command<KeyEventTraits>(this, [this]() { apply_render_update(true); });
                 focus_widget(focus_parent() ? focus_parent() : parent());
                 return;
             }
             if (key == Key::up || key == Key::down)
             {
                 step_value(key == Key::up ? 1.0 : -1.0);
-                add_render_command<KeyEventTraits>(this, [this]() { apply_render_update(true); });
                 return;
             }
             Textbox::on_key(key, state, mods);
@@ -439,7 +469,7 @@ namespace auik
         {
             acul::string out;
             if constexpr (std::is_integral_v<T>) out = acul::to_string(static_cast<int>(value));
-            else out = format_display_float(value);
+            else out = format_display_float(value, _display_precision);
 
             out += _postfix;
             return out;

@@ -294,6 +294,14 @@ namespace auik
                 return *this;
             }
 
+            // Called after a DrawBlock has arranged its children. Do not mutate the child tree here.
+            UserBind &on_layout(acul::unique_function<void()> fn)
+            {
+                on_layout_fn = std::move(fn);
+                return *this;
+            }
+
+            acul::unique_function<void()> on_layout_fn = nullptr;
             acul::unique_function<void(HoverEvent &)> on_hover_fn = nullptr;
             acul::unique_function<void(ClickEvent &)> on_click_fn = nullptr;
             acul::unique_function<void(DragEvent &)> on_drag_fn = nullptr;
@@ -393,7 +401,6 @@ namespace auik
             if (!_user_bind) _user_bind = acul::alloc<UserBind>(this);
             return *_user_bind;
         }
-
         inline u32 id() const { return _id; }
         inline bool is_attached() const { return _widget_state_flags & WidgetStateFlagBits::attached; }
         inline bool is_transient() const { return _widget_state_flags & WidgetStateFlagBits::transient; }
@@ -562,11 +569,12 @@ namespace auik
         inline void set_clip_id(u16 id) { _rect.clip_id = id; }
         inline void ensure_own_clip_rect(const amal::vec4 &rect)
         {
-            if (_rect.clip_id == 0xFFFFu) _rect.clip_id = auik::push_clip_rect(rect);
-            else update_clip_rect(_rect.clip_id, rect);
+            if (_own_clip_id == 0xFFFFu) _own_clip_id = auik::push_clip_rect(rect);
+            else update_clip_rect(_own_clip_id, rect);
+            _rect.clip_id = _own_clip_id;
         }
 
-        virtual void reset_clip_rect_records() { _rect.clip_id = 0xFFFFu; }
+        virtual void reset_clip_rect_records() { _own_clip_id = _rect.clip_id = 0xFFFFu; }
         virtual void rebuild_clip_rects() {}
         virtual void reset_draw_records() { reset_external_draw_cull_state(); }
         virtual void invalidate_style() { _widget_state_flags |= WidgetStateFlagBits::style_invalidated; }
@@ -949,6 +957,7 @@ namespace auik
         amal::vec2 _requested_size{AUIK_SIZE_X_FILL, AUIK_SIZE_Y_FIT};
         Viewport *_viewport = nullptr;
         detail::RectData _rect{};
+        u16 _own_clip_id = 0xFFFFu;
         amal::vec2 _required_size{0.0f, 0.0f};
         u8 _layout_dirty_flags = layout_dirty_all;
         StyleState _style_state = StyleState::normal;

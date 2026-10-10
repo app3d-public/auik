@@ -463,7 +463,6 @@ namespace auik
 
     void ModalQueue::rebuild_clip_rects()
     {
-        _rect.clip_id = 0xFFFFu;
         if (!active_modal())
         {
             invalidate_hit_rect(_backdrop_draw);

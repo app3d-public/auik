@@ -15,7 +15,6 @@ namespace auik
     class Image;
     class ImageButton;
     class Text;
-    class Tooltip;
     struct Viewport;
     struct DrawStream;
     struct DrawPipeline;

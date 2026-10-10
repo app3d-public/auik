@@ -24,11 +24,9 @@ multiline-caret extends @caret
 
 no-pad:
     margin: 0px
-    padding: 0px
 
 placeholder:
     margin: 0px
-    padding: 0px
     color: (230, 230, 230, 0.5)
 
 selection:
@@ -46,7 +44,6 @@ column:
 
 table:
     margin: (5px, 0px)
-    padding: 0px
     bg-color: @color-surface-dark
     border: 1px @color-border
     radius: 4px
@@ -79,7 +76,6 @@ shortcut-key:
 
 shortcut-key-text:
     margin: 0px
-    padding: 0px
     font-size: 8pt
 
 shortcut-input:
@@ -92,7 +88,6 @@ shortcut-input:
 
 shortcut-input-caret:
     margin: 0px
-    padding: 0px
     color: @color-text
 
 table-row-alt:
@@ -118,48 +113,41 @@ table-tree-resize-border:
         bg-color: @color-accent
         border: 1px @color-accent
 
-dockspace-resize-helper:
+@dockspace-resize-helper-base:
     margin: 8px
     padding: 2px
     bg-color: @color-surface-light
-    @hover:
-        bg-color: @color-surface-light
     @focus:
         bg-color: @color-accent
     @active:
         bg-color: @color-accent
 
-dockspace-resize-helper-drag:
-    margin: 8px
-    padding: 2px
-    bg-color: @color-surface-light
+dockspace-resize-helper extends @dockspace-resize-helper-base:
     @hover:
-        bg-color: @color-accent
-    @focus:
-        bg-color: @color-accent
-    @active:
+        bg-color: @color-surface-light
+
+dockspace-resize-helper-drag extends @dockspace-resize-helper-base:
+    @hover:
         bg-color: @color-accent
 
 dockspace-drop-zone:
     bg-color: (72, 114, 255, 0.5)
 
-dockspace-node:
+@dockspace-node-base:
+    min-width: 80px
+    min-height: 80px
+
+dockspace-node extends @dockspace-node-base:
     width: fill
     height: fill
-    min-width: 80px
-    min-height: 80px
 
-dockspace-node-fit-width:
+dockspace-node-fit-width extends @dockspace-node-base:
     width: fit
     height: fill
-    min-width: 80px
-    min-height: 80px
 
-dockspace-node-fit:
+dockspace-node-fit extends @dockspace-node-base:
     width: fit
     height: fit
-    min-width: 80px
-    min-height: 80px
 
 dock-node-tab-panel:
     margin: 0px
@@ -175,6 +163,7 @@ dock-tabbar-menu:
     margin: (-2px, 4px, 0px, 4px)
     padding: 6px
     radius: 3px
+    color: (220, 220, 220)
     @hover:
         bg-color: @color-hover
     @active:
@@ -227,7 +216,7 @@ tree-collapse-icon:
     padding: (0px, 3px, 0px, 7px)
     color: @color-text
 
-collapse-header:
+@collapse-header-base:
     padding: (4px, 0px)
     bg-color: @color-surface-light
     radius: 3px
@@ -236,14 +225,9 @@ collapse-header:
     @active:
         bg-color: @color-surface-light
 
-collapse-header-closed:
-    padding: (4px, 0px)
-    bg-color: @color-surface-light
-    radius: 3px
-    @hover:
-        bg-color: @color-hover
-    @active:
-        bg-color: @color-surface-light
+collapse-header extends @collapse-header-base
+
+collapse-header-closed extends @collapse-header-base
 
 collapse-header-content:
     margin: (0px, 0px)
@@ -333,7 +317,6 @@ transparent-button:
         bg-color: disabled
 
 modal-title:
-    padding: 0px
     font-family: @font(1)
 
 modal-header:
@@ -465,12 +448,6 @@ combo-box-item-multi:
     @focus:
         bg-color: @color-surface-light
 
-tree-reorder-indicator:
-    width: fill
-    height: 2px
-    margin: 0px
-    bg-color: (90, 90, 90)
-
 combo-box-item-selected:
     margin: (2px, 4px)
     padding: (4px, 8px)
@@ -594,7 +571,7 @@ titlebar-menu-bar:
     margin: (0px, 8px)
     inline-spacing: 0px
 
-menu-bar-item:
+@menu-bar-item-base:
     margin: (2px, 2px)
     padding: (2px, 8px)
     radius: 3px
@@ -605,16 +582,9 @@ menu-bar-item:
     @focus:
         bg-color: @color-hover
 
-main-menu-item:
-    margin: (2px, 2px)
-    padding: (2px, 8px)
-    radius: 3px
-    @hover:
-        bg-color: @color-hover
-    @active:
-        bg-color: @color-surface-light
-    @focus:
-        bg-color: @color-hover
+menu-bar-item extends @menu-bar-item-base
+
+main-menu-item extends @menu-bar-item-base
 
 titlebar-menu-item:
     margin: 0px
@@ -697,8 +667,8 @@ gradient-slider:
 tooltip:
     margin: 0px
     padding: (6px, 10px)
-    bg-color: @color-surface-dark
-    border: 0px @color-border
+    inline-spacing: 4px
+    bg-color: (15, 15, 16)
     radius: 3px
     color: (235, 235, 235)
 
@@ -707,7 +677,7 @@ scrollbar-track:
     padding: 2px
     bg-color: @color-surface-dark
 
-scrollbar-thumb:
+@scrollbar-thumb-base:
     margin: 0px
     padding: (0px, 4px)
     bg-color: (89, 89, 89)
@@ -716,16 +686,10 @@ scrollbar-thumb:
         bg-color: (128, 128, 128)
     @active:
         bg-color: (128, 128, 128)
+
+scrollbar-thumb extends @scrollbar-thumb-base
 
 scrollbar-track-internal:
     margin: 4px
 
-scrollbar-thumb-internal:
-    margin: 0px
-    padding: (0px, 4px)
-    bg-color: (89, 89, 89)
-    radius: 2px
-    @hover:
-        bg-color: (128, 128, 128)
-    @active:
-        bg-color: (128, 128, 128)
+scrollbar-thumb-internal extends @scrollbar-thumb-base

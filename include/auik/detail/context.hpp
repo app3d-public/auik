@@ -193,7 +193,6 @@ namespace auik
             acul::hashmap<u32, WidgetAttachBind> widget_attach_binds;
             acul::hashmap<u32, Image *> image_cache;
             acul::hashmap<u32, acul::shared_ptr<WidgetStateData>> global_cache;
-            Tooltip *tooltip = nullptr;
             acul::vector<TextureID> textures;
             acul::hashmap<u64, u32> texture_bind_slots;
             ElementID hover_id{};

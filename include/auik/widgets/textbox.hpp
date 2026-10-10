@@ -32,6 +32,8 @@ namespace auik
         AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
+        AUIK_EXPORT void reset_clip_rect_records() override;
+        AUIK_EXPORT void reset_draw_records() override;
         AUIK_EXPORT void rebuild_clip_rects() override;
         AUIK_EXPORT void update_depth(const amal::vec2 &depth_range) override;
         AUIK_EXPORT void back_hit_depth() override;
@@ -89,31 +91,22 @@ namespace auik
                 {
                     parent()->update_layout(false);
                     rebuild_selection_rect_cache();
-                    if (edit_draw_slots_need_record()) redraw_all_commands();
-                    else parent()->update_draw_commands(DrawReasonBits::layout);
+                    parent()->update_draw_commands(DrawReasonBits::layout);
                     detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
                     update_transient_draw_commands();
                     return;
                 }
                 if (has_internal_scrollbar())
                 {
-                    const size_t text_draw_count = _text.draw_record_count();
                     const f32 old_scroll_y = _scroll.content_offset.y;
                     update_layout_from_current_bounds(false);
                     if (update_content_scroll_y_for_cursor() && old_scroll_y != _scroll.content_offset.y)
                         update_layout_from_current_bounds(true);
                     rebuild_selection_rect_cache();
-                    if (_text.layout_instance_count() < text_draw_count || edit_draw_slots_need_record())
-                    {
-                        redraw_all_commands();
-                        update_transient_draw_commands();
-                        return;
-                    }
                     redraw_external(_bg.render_id != AUIK_INVALID_DRAW_DATA_ID, DrawReasonBits::layout);
                     update_transient_draw_commands();
                     return;
                 }
-                const size_t text_draw_count = _text.draw_record_count();
                 _text.set_position(_content_pos);
                 _text.set_layout_size(_content_size);
                 _text.set_clip_id(text_content_clip_id());
@@ -125,11 +118,6 @@ namespace auik
                 refresh_placeholder_layout();
                 detail::unmark_layout_dirty();
                 rebuild_selection_rect_cache();
-                if (_text.layout_instance_count() < text_draw_count || edit_draw_slots_need_record())
-                {
-                    redraw_all_commands();
-                    return;
-                }
                 reason |= DrawReasonBits::layout;
             }
             else
@@ -140,12 +128,6 @@ namespace auik
                 if (update_content_scroll_y_for_cursor() && old_scroll.y != _scroll.content_offset.y)
                     update_layout_from_current_bounds(true);
                 rebuild_selection_rect_cache();
-                if (edit_draw_slots_need_record())
-                {
-                    redraw_all_commands();
-                    update_transient_draw_commands();
-                    return;
-                }
             }
             redraw_external(_bg.render_id != AUIK_INVALID_DRAW_DATA_ID, reason);
             update_transient_draw_commands();

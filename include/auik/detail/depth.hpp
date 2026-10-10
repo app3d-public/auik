@@ -11,5 +11,5 @@ namespace auik::detail
     amal::vec2 normalize_depth_range(const amal::vec2 &src);
     amal::vec2 get_root_depth_zone_range(DepthZone zone);
     amal::vec2 get_root_depth_range(DepthZone zone, int lane_index);
-    amal::vec2 get_global_foreground_depth_range();
+    AUIK_EXPORT amal::vec2 get_global_foreground_depth_range();
 } // namespace auik::detail

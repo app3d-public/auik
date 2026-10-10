@@ -577,7 +577,7 @@ namespace auik
                                                               ? detail::set_style_selector({}, StyleState::normal)
                                                               : false);
 
-                if (prev_widget) dispatch_hover(prev_hover.widget_id, HoverState::leave);
+                if (prev_hover != hover) dispatch_hover(prev_hover.widget_id, HoverState::leave);
                 if (widget) dispatch_hover(hover.widget_id, HoverState::enter);
 
                 if (drag_selector_changed)

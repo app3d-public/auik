@@ -1,205 +1,139 @@
 #include <auik/auik.hpp>
+#include <auik/detail/context.hpp>
 #include <auik/detail/depth.hpp>
-#include <auik/pipelines.hpp>
 #include <auik/widgets/tooltip.hpp>
 
-#define AUIK_TOOLTIP_SCREEN_PADDING 8.0f
-#define AUIK_TOOLTIP_MOUSE_OFFSET_Y 18.0f
+#define AUIK_POPUP_TIP_SCREEN_PADDING 8.0f
+#define AUIK_POPUP_TIP_CURSOR_OFFSET_Y 10.0f
+#define AUIK_POPUP_TIP_SHOW_DELAY     0.35
+#define AUIK_UD_POPUP_TIP             0xB51567D1u
 
 namespace auik
 {
     namespace
     {
-        static inline amal::vec4 intersect_rect(const amal::vec4 &a, const amal::vec4 &b)
+        struct PopupTipInfo
         {
-            const amal::vec2 a_min = {a.x, a.y};
-            const amal::vec2 a_max = {a.x + a.z, a.y + a.w};
-            const amal::vec2 b_min = {b.x, b.y};
-            const amal::vec2 b_max = {b.x + b.z, b.y + b.w};
+            Widget *widget = nullptr;
+            Window *window = nullptr;
+            acul::unique_function<void(HoverEvent &)> previous_hover;
+            u64 task_owner = 0u;
+            bool tracking = false;
 
-            const amal::vec2 out_min = {amal::max(a_min.x, b_min.x), amal::max(a_min.y, b_min.y)};
-            const amal::vec2 out_max = {amal::min(a_max.x, b_max.x), amal::min(a_max.y, b_max.y)};
-            const amal::vec2 out_size = {amal::max(out_max.x - out_min.x, 0.0f),
-                                         amal::max(out_max.y - out_min.y, 0.0f)};
-            return {out_min, out_size};
+            ~PopupTipInfo()
+            {
+                cancel_delayed_tasks(task_owner);
+                if (!window) return;
+                if (window->is_transient()) erase_widget_from_transient_cache(window);
+                acul::release(window);
+            }
+        };
+
+        void hide_popup_tip(PopupTipInfo &info)
+        {
+            cancel_delayed_tasks(info.task_owner);
+            if (!info.window || !info.window->is_visible()) return;
+            info.window->unset_visible();
+            info.window->sync_widget_flags();
+            if (info.window->is_transient()) erase_widget_from_transient_cache(info.window);
+            mark_host_refresh_request();
         }
 
-        static inline f32 clamp_axis(f32 value, f32 min_value, f32 max_value)
+        void show_popup_tip(PopupTipInfo &info)
         {
-            return amal::max(min_value, amal::min(value, max_value));
+            if (!info.tracking || !info.widget || !info.window) return;
+            auto &ctx = detail::get_context();
+            const auto widget_it = ctx.id_map.find(info.widget->id());
+            if (widget_it == ctx.id_map.end() || widget_it->second != info.widget ||
+                ctx.hover_id.widget_id != info.widget->id())
+                return;
+
+            auto *window = info.window;
+            window->set_auto_position(false, false);
+            const amal::vec4 viewport = get_widget_viewport_rect(window);
+            window->set_root_viewport_origin({viewport.x, viewport.y});
+            window->set_visible();
+            window->sync_widget_flags();
+            window->update_style_invalidated();
+            window->update_layout_min_size_force();
+
+            const amal::vec2 extent{
+                amal::min(window->required_size().x,
+                          amal::max(viewport.z - AUIK_POPUP_TIP_SCREEN_PADDING * 2.0f, 0.0f)),
+                window->required_size().y};
+            const auto cursor = get_mouse_pos();
+            const amal::vec2 min_pos{viewport.x + AUIK_POPUP_TIP_SCREEN_PADDING,
+                                     viewport.y + AUIK_POPUP_TIP_SCREEN_PADDING};
+            const f32 max_x = amal::max(viewport.x + viewport.z - extent.x - AUIK_POPUP_TIP_SCREEN_PADDING,
+                                        min_pos.x);
+            const f32 x = amal::clamp(cursor.x, min_pos.x, max_x);
+            const f32 below = cursor.y + AUIK_POPUP_TIP_CURSOR_OFFSET_Y;
+            const f32 max_y = amal::max(viewport.y + viewport.w - extent.y - AUIK_POPUP_TIP_SCREEN_PADDING,
+                                        min_pos.y);
+            const f32 y = below <= max_y
+                              ? below
+                              : amal::clamp(cursor.y - extent.y - AUIK_POPUP_TIP_CURSOR_OFFSET_Y,
+                                            min_pos.y, max_y);
+
+            window->set_position({amal::floor(x), amal::floor(y)});
+            window->set_size(extent);
+            window->update_depth(detail::get_global_foreground_depth_range());
+            window->update_layout(false);
+            window->rebuild_clip_rects();
+            push_widget_to_transient_cache(window);
+            mark_host_refresh_request();
+        }
+
+        void schedule_popup_tip(PopupTipInfo &info)
+        {
+            cancel_delayed_tasks(info.task_owner);
+            detail::update_window_time(detail::get_context().window_ctx);
+            const f64 due_time = detail::get_context().window_ctx->time + AUIK_POPUP_TIP_SHOW_DELAY;
+            schedule_delayed_host_task(info.task_owner, due_time, [&info]() { show_popup_tip(info); });
         }
     } // namespace
 
-    Tooltip::Tooltip(u32 id)
-        : Widget(id, get_default_widget_flags(), EventFlagBits::none, {{0.0f, 0.0f}, AUIK_SIZE_INHERIT},
-                 AUIK_TAG_TOOLTIP),
-          _text(AUIK_TAG_ETEXT, StringView{""}, AUIK_SIZE_FIT, WidgetFlagBits::visible,
-                make_text_layout_flags(TextOverflowMode::ellipsis, TextWrapMode::none, TextLayoutWidthMode::bounds))
+    Window *make_popup_tip_window(u32 id)
     {
-        _text.set_parent(this);
-        _text.set_style_tag(AUIK_STYLE_TAG_TOOLTIP);
-        unset_visible();
+        constexpr WidgetFlags flags =
+            WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::cache_snapshot;
+        auto *window =
+            acul::alloc<Window>(id, "", amal::rect{AUIK_POS_IGNORE, AUIK_SIZE_AUTO}, WindowFlagBits::none, flags);
+        window->set_window_style_tag(AUIK_STYLE_TAG_TOOLTIP);
+        window->set_dock_style_tag(0u);
+        window->set_auto_size();
+        window->unset_visible();
+        if (auto *content = window->content_block()) content->unset_widget_flag(WidgetFlagBits::hittable);
+        return window;
     }
 
-    void Tooltip::reset_source_state()
+    bool add_popup_tip_to_widget(Widget *widget, Window *window)
     {
-        _dismissed_for_current_source = false;
-        _text_source = nullptr;
+        if (!widget || !window) return false;
+        remove_popup_tip_from_widget(widget);
+
+        auto *info = widget->emplace_user_data_tagged<PopupTipInfo>(AUIK_UD_POPUP_TIP);
+        info->widget = widget;
+        info->window = window;
+        info->task_owner = (static_cast<u64>(AUIK_UD_POPUP_TIP) << 32u) | widget->id();
+        auto &binding = widget->bind();
+        info->previous_hover = std::move(binding.on_hover_fn);
+        binding.on_hover([info](HoverEvent &event) {
+            if (info->previous_hover) info->previous_hover(event);
+            info->tracking = event.state == HoverState::enter;
+            if (info->tracking) schedule_popup_tip(*info);
+            else hide_popup_tip(*info);
+        });
+        return true;
     }
 
-    void Tooltip::show_at(f32 x, const acul::string *text_source)
+    void remove_popup_tip_from_widget(Widget *widget)
     {
-        if (!text_source || text_source->empty())
-        {
-            hide();
-            reset_source_state();
-            return;
-        }
-
-        if (_text_source == text_source && _dismissed_for_current_source) return;
-        if (_text_source != text_source) _dismissed_for_current_source = false;
-
-        _anchor_x = x;
-        _text_source = text_source;
-        _text.set_text(*text_source);
-        _text.invalidate_layout_measure();
-        set_visible();
-        sync_widget_flags();
-        update_style();
-        update_layout(false);
-
-        redraw_external(has_draw_record(), DrawReasonBits::layout | DrawReasonBits::external);
-        mark_host_refresh_request();
-    }
-
-    void Tooltip::hide()
-    {
-        unset_visible();
-        sync_widget_flags();
-        if (_text_source) _dismissed_for_current_source = true;
-        _rect.clip_id = 0xFFFFu;
-        _bg = {};
-        _text.set_text(StringView{""});
-        _text.reset_draw_records();
-    }
-
-    void Tooltip::clear_if_source(const acul::string *text_source)
-    {
-        if (_text_source != text_source) return;
-        hide();
-        reset_source_state();
-    }
-
-    StyleUpdateFlags Tooltip::update_style()
-    {
-        auto flags = resolve_style_selector(_style, id(), 0, style_state());
-        flags |= _text.update_style_invalidated();
-        return flags;
-    }
-
-    void Tooltip::update_layout_min_size_force()
-    {
-        const auto &style = get_theme()->get_style(_style.id);
-        const amal::vec2 display = get_display_size();
-        const f32 max_outer_width = amal::max(display.x - AUIK_TOOLTIP_SCREEN_PADDING * 2.0f, 0.0f);
-        const amal::vec4 padding = style.padding();
-        const f32 max_text_width = amal::max(max_outer_width - padding.x - padding.z, 1.0f);
-        if (_text.max_width() != max_text_width)
-        {
-            _text.set_max_width(max_text_width);
-            _text.invalidate_layout_measure();
-        }
-
-        if (!_text_source || _text_source->empty())
-        {
-            _text.update_layout_min_size();
-            set_required_size(_text.required_size());
-            return;
-        }
-
-        _text.update_layout_min_size();
-        set_required_size(_text.required_size());
-    }
-
-    void Tooltip::update_layout(bool min_size_known)
-    {
-        if (layout_measure_required(min_size_known)) update_layout_min_size_force();
-
-        Widget::update_layout(true);
-        const amal::vec2 display = get_display_size();
-
-        set_layout_size(required_size());
-
-        const f32 max_x = amal::max(display.x - size().x - AUIK_TOOLTIP_SCREEN_PADDING, AUIK_TOOLTIP_SCREEN_PADDING);
-        const f32 pos_x = clamp_axis(_anchor_x, AUIK_TOOLTIP_SCREEN_PADDING, max_x);
-
-        const f32 mouse_y = get_mouse_pos().y + AUIK_TOOLTIP_MOUSE_OFFSET_Y;
-        const f32 max_y = amal::max(display.y - size().y - AUIK_TOOLTIP_SCREEN_PADDING, AUIK_TOOLTIP_SCREEN_PADDING);
-        f32 pos_y = clamp_axis(mouse_y, AUIK_TOOLTIP_SCREEN_PADDING, max_y);
-        if (mouse_y > max_y)
-            pos_y = clamp_axis(get_mouse_pos().y - size().y - AUIK_TOOLTIP_MOUSE_OFFSET_Y, AUIK_TOOLTIP_SCREEN_PADDING,
-                               max_y);
-
-        set_position({pos_x, pos_y});
-
-        const amal::vec4 self_clip_rect =
-            intersect_rect({position().x, position().y, size().x, size().y}, {0.0f, 0.0f, display.x, display.y});
-        ensure_own_clip_rect(self_clip_rect);
-        _text.set_position(position());
-        _text.set_layout_size(size());
-        _text.update_layout(true);
-    }
-
-    void Tooltip::update_depth(const amal::vec2 &depth_range)
-    {
-        Widget::update_depth(depth_range);
-        amal::vec2 text_range{};
-        assign_next_depth(this->depth_range(), text_range);
-        _text.update_depth(text_range);
-    }
-
-    void Tooltip::translate(const amal::vec2 &delta)
-    {
-        if (delta.x == 0.0f && delta.y == 0.0f) return;
-        Widget::translate(delta);
-        if (clip_id() != 0xFFFFu)
-        {
-            auto clip = get_clip_rect(clip_id());
-            clip.x += delta.x;
-            clip.y += delta.y;
-            update_clip_rect(clip_id(), clip);
-        }
-        _text.translate(delta);
-    }
-
-    void Tooltip::rebuild_clip_rects()
-    {
-        _rect.clip_id = 0xFFFFu;
-        const amal::vec2 display = get_display_size();
-        const amal::vec4 self_clip_rect =
-            intersect_rect({position().x, position().y, size().x, size().y}, {0.0f, 0.0f, display.x, display.y});
-        ensure_own_clip_rect(self_clip_rect);
-        _bg = {};
-        _text.set_clip_id(clip_id());
-        _text.reset_draw_records();
-        _text.rebuild_clip_rects();
-    }
-
-    void Tooltip::draw(DrawCtx &ctx)
-    {
-        if ((!is_visible() || !_text_source || _text_source->empty()) && !(ctx.reason & DrawReasonBits::invalidate))
-            return;
-
-        auto *quads_stream = get_primary_quads_stream();
-        auto *theme = get_theme();
-        QuadsInstanceData bg{};
-        bg.rect = bounds();
-        bg.z_order = get_z_order();
-        const bool bg_visible = fill_quads_instance_by_style(theme->get_style(_style.id), clip_id(), bg);
-        emit_quads_instance(ctx, quads_stream, _bg, bg, get_rect(), bg_visible, false);
-
-        DrawCtx text_ctx = ctx;
-        text_ctx.is_hit_allowed = false;
-        _text.draw(text_ctx);
+        if (!widget) return;
+        auto *info = widget->get_user_data<PopupTipInfo>(AUIK_UD_POPUP_TIP);
+        if (!info) return;
+        auto previous_hover = std::move(info->previous_hover);
+        widget->bind().on_hover(std::move(previous_hover));
+        widget->erase_user_data(AUIK_UD_POPUP_TIP);
     }
 } // namespace auik

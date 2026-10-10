@@ -86,11 +86,17 @@ struct GeometryTabbar : auik::Tabbar
     void draw(auik::DrawCtx &) override {}
 };
 
-struct RemovingDrag : CountedWidget
+struct DeferredRemovingDrag : CountedWidget
 {
     mutable int boundary_checks = 0;
-    RemovingDrag() : CountedWidget(8101) { add_event_flags(auik::EventFlagBits::drag); }
-    void on_drag(const amal::vec2 &, auik::KeyPressState) override { auik::detail::get_context().id_map.clear(); }
+    DeferredRemovingDrag() : CountedWidget(8101) { add_event_flags(auik::EventFlagBits::drag); }
+    void on_drag(const amal::vec2 &, auik::KeyPressState) override
+    {
+        // Keep the widget registered for the entire input dispatch.
+        auik::add_render_command([widget_id = id()]() {
+            auik::detail::get_context().id_map.erase(widget_id);
+        }, true);
+    }
     bool allows_unbounded_drag() const override
     {
         ++boundary_checks;
@@ -98,7 +104,7 @@ struct RemovingDrag : CountedWidget
     }
 };
 
-int main()
+void test_dock_tree()
 {
     {
         auik::Theme theme;
@@ -182,6 +188,73 @@ int main()
     ctx.frames_in_flight = 1;
     ctx.shared_sync_state[0].buffer_versions = &versions[0];
     ctx.shared_sync_state[1].buffer_versions = &versions[1];
+    {
+        // Parent layout repeatedly supplies its inherited clip before the child
+        // rebuilds its own bounds. Neither allocation nor parent data may leak.
+        CountedWidget parent(8390), child(8391);
+        const amal::vec4 parent_bounds{0.f, 0.f, 800.f, 600.f};
+        parent.ensure_own_clip_rect(parent_bounds);
+        child.set_parent(&parent);
+        child.set_clip_id(parent.clip_id());
+        child.ensure_own_clip_rect({10.f, 10.f, 100.f, 30.f});
+        const auto child_clip = child.clip_id();
+        const auto allocated = clips.size();
+        assert(child_clip != parent.clip_id());
+        for (int i = 0; i < 100000; ++i)
+        {
+            child.set_clip_id(parent.clip_id());
+            // Column also clears the active inherited ID before rebuilding.
+            if (i % 2) child.set_clip_id(0xFFFFu);
+            const amal::vec4 bounds{float(i % 100), 10.f, 100.f, 30.f};
+            child.ensure_own_clip_rect(bounds);
+            assert(child.clip_id() == child_clip);
+            assert(clips.size() == allocated);
+            assert(clips[parent.clip_id()] == parent_bounds);
+            assert(clips[child_clip] == bounds);
+        }
+        child.reset_clip_rect_records();
+        child.set_clip_id(parent.clip_id());
+        child.ensure_own_clip_rect({20.f, 20.f, 100.f, 30.f});
+        assert(clips.size() == allocated + 1);
+        assert(child.clip_id() != child_clip && child.clip_id() != parent.clip_id());
+        child.set_parent(nullptr);
+    }
+    {
+        // A tool cursor lives only in the transient cache. Toggling its flag
+        // must also remove and restore its recorded graphics.
+        struct TransientProbe : CountedWidget
+        {
+            using CountedWidget::CountedWidget;
+            int invalidations = 0, draws = 0;
+            void draw(auik::DrawCtx &draw_ctx) override
+            {
+                if (draw_ctx.reason & auik::DrawReasonBits::invalidate) ++invalidations;
+                else ++draws;
+            }
+            void update_layout(bool) override {}
+        };
+        ctx.disposal_queue.discard();
+        ctx.dirty_flags &= ~auik::DirtyFlagBits::destroying;
+        auto *cursor = acul::alloc<TransientProbe>(8301);
+        cursor->widget_flags = auik::WidgetFlagBits::visible | auik::WidgetFlagBits::attachable;
+        cursor->sync_widget_flags();
+        auik::push_widget_to_transient_cache(cursor);
+        assert(ctx.id_map.find(cursor->id()) == ctx.id_map.end());
+        cursor->unset_visible();
+        cursor->sync_widget_flags();
+        ctx.disposal_queue.flush_main_queue();
+        assert(!cursor->is_visible() && cursor->invalidations == 1);
+        cursor->set_visible();
+        cursor->sync_widget_flags();
+        ctx.disposal_queue.flush_main_queue();
+        assert(cursor->is_visible() && cursor->draws == 1);
+        cursor->unset_visible();
+        cursor->sync_widget_flags();
+        ctx.disposal_queue.flush_main_queue();
+        auik::erase_widget_from_transient_cache(cursor);
+        acul::release(cursor);
+        ctx.dirty_flags |= auik::DirtyFlagBits::destroying;
+    }
     {
         theme.add_style(7101, auik::make_style().min_width(300.f));
         const auto resolved = theme.get_resolved_style(7101, 0, 0);
@@ -643,13 +716,15 @@ int main()
         assert(drag->value() == 15.f && drag->last_value() == 1.f);
         assert(changes == 0 && !ctx.dirty_flags);
         assert(drag->Textbox::value() == text_before);
-        drag->sync_text_presentation_from_value();
+        drag->mark_changed();
         assert(drag->Textbox::value() == "15");
-        assert(changes == 0);
+        assert(changes == 1);
+        changes = 0;
         drag->set_value(150.f);
         assert(drag->value() == 100.f && changes == 0);
         drag->set_value_internal(-5.f, true);
         assert(drag->value() == 0.f && drag->last_value() == 100.f && changes == 1);
+        assert(drag->Textbox::value() == "0");
         drag->set_value_internal(0.f, false);
         assert(changes == 1);
         bool refresh = false;
@@ -685,23 +760,30 @@ int main()
         ctx.dirty_flags |= auik::DirtyFlagBits::destroying;
     }
     {
-        RemovingDrag widget;
+        ctx.dirty_flags &= ~auik::DirtyFlagBits::destroying;
+        ctx.disposal_queue.discard();
+        DeferredRemovingDrag widget;
         ctx.io.mouse_down = true;
         ctx.io.clicked_id.widget_id = widget.id();
         ctx.io.active_mouse_buttons = auik::MouseKey::left;
         ctx.id_map.emplace(widget.id(), &widget);
         auik::detail::on_mouse_move({1.f, 0.f});
-        assert(ctx.id_map.empty() && widget.boundary_checks == 0);
+        assert(ctx.id_map.find(widget.id()) != ctx.id_map.end() && widget.boundary_checks == 1);
+        ctx.disposal_queue.flush_main_queue();
+        assert(ctx.id_map.find(widget.id()) == ctx.id_map.end());
         ctx.id_map.emplace(widget.id(), &widget);
         ctx.frame_cache.drag_widget_id = widget.id();
         ctx.frame_cache.drag_delta = {1.f, 0.f};
         ctx.frame_cache.changes = auik::detail::FrameChangesBits::drag_delta;
         auik::detail::flush_frame_changes();
-        assert(ctx.id_map.empty() && widget.boundary_checks == 0);
+        assert(ctx.id_map.find(widget.id()) != ctx.id_map.end() && widget.boundary_checks == 2);
+        ctx.disposal_queue.flush_main_queue();
+        assert(ctx.id_map.find(widget.id()) == ctx.id_map.end());
         ctx.io.mouse_down = false;
         ctx.io.clicked_id = {};
         ctx.io.drag_id = {};
         ctx.io.active_mouse_buttons = {};
+        ctx.dirty_flags |= auik::DirtyFlagBits::destroying;
     }
     for (int i = 0; i < 100; ++i)
     {

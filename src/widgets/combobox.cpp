@@ -518,6 +518,14 @@ namespace auik
         if (_popup) _popup->reset_clip_rect_records();
     }
 
+    void Combobox::reset_draw_records()
+    {
+        Widget::reset_draw_records();
+        if (_trigger) _trigger->reset_draw_records();
+        if (_label) _label->reset_draw_records();
+        if (_popup) _popup->reset_draw_records();
+    }
+
     void Combobox::rebuild_clip_rects()
     {
         assert(parent() && "Combobox must have parent");
@@ -1112,6 +1120,14 @@ namespace auik
         _label_clip_id = 0xFFFFu;
         if (_label) _label->reset_clip_rect_records();
         if (_popup) _popup->reset_clip_rect_records();
+    }
+
+    void MultipleCombobox::reset_draw_records()
+    {
+        Widget::reset_draw_records();
+        if (_trigger) _trigger->reset_draw_records();
+        if (_label) _label->reset_draw_records();
+        if (_popup) _popup->reset_draw_records();
     }
 
     void MultipleCombobox::rebuild_clip_rects()

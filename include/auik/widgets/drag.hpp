@@ -7,6 +7,7 @@
 #define AUIK_TAG_DRAG_FLOAT     0x8054A4DAu
 #define AUIK_TAG_DRAG_DOUBLE    0x73F0FEACu
 #define AUIK_DRAG_SPEED_DYNAMIC -1.0f
+#define AUIK_DRAG_DISPLAY_PRECISION_AUTO 0xFFu
 
 namespace auik
 {
@@ -30,6 +31,8 @@ namespace auik
             AUIK_EXPORT acul::string input_postfix() const;
             void set_speed(f32 value) { _speed = value; }
             f32 speed() const { return _speed; }
+            AUIK_EXPORT void set_display_precision(u8 value);
+            u8 display_precision() const { return _display_precision; }
             AUIK_EXPORT void set_limits(T min_value, T max_value);
             T min_value() const { return _min_value; }
             T max_value() const { return _max_value; }
@@ -39,6 +42,7 @@ namespace auik
             AUIK_EXPORT void on_hover(HoverState state) override;
             AUIK_EXPORT void on_click(MouseKey key, KeyPressState state, u32 click_count) override;
             AUIK_EXPORT void on_drag(const amal::vec2 &delta, KeyPressState state) override;
+            AUIK_EXPORT void on_change(ChangeEvent &event) override;
             AUIK_EXPORT void on_key(Key key, KeyPressState state, KeyMode mods) override;
             AUIK_EXPORT void on_char_input(u32 char_code, u32 count) override;
             AUIK_EXPORT bool allows_unbounded_drag() const override;
@@ -65,6 +69,7 @@ namespace auik
             f64 _drag_value = 0.0;
             f64 _active_speed = 1.0;
             T _last_value{};
+            u8 _display_precision = AUIK_DRAG_DISPLAY_PRECISION_AUTO;
             bool _value_text_dirty = true;
             u8 _interaction_flags = 0u;
             bool _pending_text_commit = false;

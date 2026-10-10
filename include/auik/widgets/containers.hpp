@@ -45,7 +45,17 @@ namespace auik
         {
         }
 
-        ~Block() { clear_children(); }
+        ~Block()
+        {
+            for (auto *child : children)
+            {
+                if (!child) continue;
+                if (child->is_attached()) child->on_detach();
+                child->set_parent(nullptr);
+                child->set_focus_parent(nullptr);
+                acul::release(child);
+            }
+        }
 
         void clear_children() { erase_children(0u, children.size()); }
         AUIK_EXPORT void erase_children(size_t first, size_t count);

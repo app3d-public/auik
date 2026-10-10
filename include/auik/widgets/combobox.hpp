@@ -39,6 +39,7 @@ namespace auik
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void reset_clip_rect_records() override;
+        AUIK_EXPORT void reset_draw_records() override;
         AUIK_EXPORT void rebuild_clip_rects() override;
         AUIK_EXPORT void invalidate_style() override;
         AUIK_EXPORT bool update_locale() override;
@@ -112,6 +113,7 @@ namespace auik
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void translate(const amal::vec2 &delta) override;
         AUIK_EXPORT void reset_clip_rect_records() override;
+        AUIK_EXPORT void reset_draw_records() override;
         AUIK_EXPORT void rebuild_clip_rects() override;
         AUIK_EXPORT void invalidate_style() override;
         AUIK_EXPORT bool update_locale() override;

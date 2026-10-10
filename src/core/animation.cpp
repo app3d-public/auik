@@ -5,11 +5,81 @@
 
 #define SCROLL_ANIMATION_X_UD_TAG 0x93A38B41u
 #define SCROLL_ANIMATION_Y_UD_TAG 0xEAA4DAFBu
+#define MOVE_ANIMATION_UD_TAG 0x714103F1u
+#define SIZE_ANIMATION_UD_TAG 0x714103F2u
 
 namespace auik
 {
     namespace
     {
+        struct BoundsAnimationData
+        {
+            AnimationState state;
+            Widget *owner = nullptr;
+            amal::vec2 from{}, to{};
+            f64 start = 0.0;
+            bool resize = false;
+
+            ~BoundsAnimationData()
+            {
+                if (detail::g_context) cancel_delayed_tasks(state.task_owner_id);
+                state.cancel(owner, this);
+            }
+        };
+
+        void apply_bounds_animation(BoundsAnimationData &data, f32 progress)
+        {
+            const auto value = data.from + (data.to - data.from) * progress;
+            if (data.resize) data.owner->set_layout_size(value);
+            else data.owner->translate(value - data.owner->position());
+        }
+
+        void start_bounds_animation(AnimationState *, Widget *, void *user_data, f64 now)
+        {
+            static_cast<BoundsAnimationData *>(user_data)->start = now;
+        }
+
+        bool tick_bounds_animation(AnimationState *state, Widget *, void *user_data, f64 now)
+        {
+            auto &data = *static_cast<BoundsAnimationData *>(user_data);
+            state->current = get_default_animation_progress(data.start, state->duration, now);
+            apply_bounds_animation(data, state->current);
+            return state->current < 1.0f;
+        }
+
+        void finish_bounds_animation(AnimationState *, Widget *, void *user_data)
+        {
+            apply_bounds_animation(*static_cast<BoundsAnimationData *>(user_data), 1.0f);
+        }
+
+        AnimationState *animate_bounds(Widget &widget, amal::vec2 target, f64 duration, bool resize)
+        {
+            const u32 tag = resize ? SIZE_ANIMATION_UD_TAG : MOVE_ANIMATION_UD_TAG;
+            widget.erase_user_data(tag);
+            const auto from = resize ? widget.size() : widget.position();
+            if (duration <= 0.0 || from == target)
+            {
+                if (resize) widget.set_layout_size(target);
+                else widget.translate(target - widget.position());
+                // Immediate placement may be requested during layout, before clip records are ready.
+                widget.sync_widget(StyleUpdateFlagBits::redraw);
+                detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
+                mark_host_refresh_request();
+                return nullptr;
+            }
+            auto *data = widget.emplace_user_data_tagged<BoundsAnimationData>(tag);
+            data->owner = &widget;
+            data->from = from;
+            data->to = target;
+            data->resize = resize;
+            data->state.duration = duration;
+            data->state.at_start = start_bounds_animation;
+            data->state.tick = tick_bounds_animation;
+            data->state.at_finish = finish_bounds_animation;
+            data->state.task_owner_id = (static_cast<u64>(tag) << 32u) | widget.id();
+            return start_animation(data->state, &widget, data);
+        }
+
         struct ScrollAnimationData
         {
             AnimationState state;
@@ -302,6 +372,22 @@ namespace auik
             if (active) next_animation_frame(state, owner, user_data);
         });
         return true;
+    }
+
+    AnimationState *animate_move(Widget &widget, amal::vec2 position, f64 duration)
+    {
+        return animate_bounds(widget, position, duration, false);
+    }
+
+    AnimationState *animate_scale_to(Widget &widget, amal::vec2 size, f64 duration)
+    {
+        return animate_bounds(widget, size, duration, true);
+    }
+
+    void cancel_bounds_animations(Widget &widget)
+    {
+        widget.erase_user_data(MOVE_ANIMATION_UD_TAG);
+        widget.erase_user_data(SIZE_ANIMATION_UD_TAG);
     }
 
     AnimationState *animate_scroll_to(ScrollData &scroll, f32 offset, amal::axis axis, f64 duration,

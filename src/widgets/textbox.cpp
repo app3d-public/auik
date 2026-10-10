@@ -410,11 +410,35 @@ namespace auik
             for (auto &rect : _edit->selection_rects) rect.offset += delta;
     }
 
+    void Textbox::reset_clip_rect_records()
+    {
+        Widget::reset_clip_rect_records();
+        _content_clip_id = 0xFFFFu;
+        _text.reset_clip_rect_records();
+        if (_scrollbar_y) _scrollbar_y->reset_clip_rect_records();
+        if (_placeholder) _placeholder->reset_clip_rect_records();
+    }
+
+    void Textbox::reset_draw_records()
+    {
+        Widget::reset_draw_records();
+        _bg = {};
+        _text.reset_draw_records();
+        if (_placeholder) _placeholder->reset_draw_records();
+        if (_scrollbar_y) _scrollbar_y->reset_draw_records();
+        if (_edit)
+        {
+            _edit->selections.clear();
+            _edit->password_dots.clear();
+            _edit->caret = {};
+            for (auto &draw : _edit->selection_drag_dots) draw = {};
+        }
+    }
+
     void Textbox::rebuild_clip_rects()
     {
         assert(parent() && "Textbox must have parent");
         set_clip_id(parent()->content_clip_id());
-        _content_clip_id = 0xFFFFu;
         update_text_content_clip_rect();
         invalidate_hit_rect(_bg);
         _text.rebuild_clip_rects();
@@ -872,7 +896,7 @@ namespace auik
 
         const auto is_word_space = [&](int index) {
             return index >= 0 && index < static_cast<int>(text.size()) &&
-                   isspace(static_cast<unsigned char>(text[index]));
+                   acul::is_space(static_cast<unsigned char>(text[index]));
         };
         const bool space_word = is_word_space(start);
         int end = space_word ? detail::next_utf8_index(text, start) : start;
@@ -1830,7 +1854,7 @@ namespace auik
     {
         extern AUIK_EXPORT const umbf::registry::BlockStream textbox{read_textbox, write_textbox};
         extern AUIK_EXPORT const umbf::registry::BlockStream multiline_textbox{read_multiline_textbox,
-                                                                        write_multiline_textbox};
+                                                                               write_multiline_textbox};
     } // namespace streams
 
 } // namespace auik

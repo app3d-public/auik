@@ -5,7 +5,6 @@
 #include <auik/widgets/text.hpp>
 #include "../core/session_stream_utils.hpp"
 
-#define AUIK_TOOLTIP_SHOW_DELAY             0.35
 #define AUIK_TEXT_SHRINK_RECORD_RATIO       8
 #define AUIK_TEXT_SHRINK_RECORD_MIN_REMOVED 64
 #define AUIK_ETEXT_CARET_ON_TIME            0.80
@@ -547,6 +546,15 @@ namespace auik
         }
 
         const u16 current_clip = clip_id();
+        // A local record request can replace live glyphs without clearing the
+        // stream. Retire their old slots before overwriting the only IDs we own.
+        // Global stream rebuilds reset the widget's records beforehand.
+        if (ctx.reason & DrawReasonBits::record)
+        {
+            if (auto *stream = get_primary_textured_quads_stream()) invalidate_text_draw_ids(stream, _draw_ids, 0);
+            _draw_ids.clear();
+            invalidate_hit_rect(_hit_id);
+        }
         if (current_clip == 0xFFFFu)
         {
             assert(_instances.empty() && "Text draw requires a valid clip rect");
@@ -701,11 +709,6 @@ namespace auik
                EventFlagBits::key_input | EventFlagBits::char_input;
     }
 
-    static u64 etext_tooltip_task_owner(u32 id)
-    {
-        return (static_cast<u64>(AUIK_TAG_TEXT) << 32u) | static_cast<u64>(id);
-    }
-
     static detail::TextEditKey map_etext_key(Key key, KeyMode mods, bool multiline, bool read_only)
     {
         detail::TextEditKey out = 0;
@@ -834,8 +837,6 @@ namespace auik
     EText::~EText()
     {
         cancel_delayed_tasks(id());
-        cancel_delayed_tasks(etext_tooltip_task_owner(id()));
-        clear_tooltip_if_source(&_text);
         acul::release(_edit);
     }
 
@@ -903,44 +904,10 @@ namespace auik
         _selection_draw_ids.clear();
     }
 
-    bool EText::should_show_lazy_tooltip() const
-    {
-        return overflow_mode() == TextOverflowMode::ellipsis && _layout_result.truncated && !_text.empty();
-    }
-
-    void EText::schedule_lazy_tooltip()
-    {
-        if (!should_show_lazy_tooltip()) return;
-        const u32 wid = id();
-        const f32 anchor_x = get_mouse_pos().x;
-        detail::update_window_time(detail::get_context().window_ctx);
-        const f64 due_time = detail::get_context().window_ctx->time + AUIK_TOOLTIP_SHOW_DELAY;
-        schedule_delayed_host_task(etext_tooltip_task_owner(wid), due_time, [this, wid, anchor_x]() {
-            if (detail::get_context().hover_id.widget_id != wid) return;
-            if (!should_show_lazy_tooltip()) return;
-            show_tooltip(anchor_x, &_text);
-        });
-    }
-
-    void EText::clear_lazy_tooltip(bool clear_source)
-    {
-        cancel_delayed_tasks(etext_tooltip_task_owner(id()));
-        add_render_command<detail::HoverEventTraits>(this, [this, clear_source]() {
-            hide_tooltip();
-            if (clear_source) clear_tooltip_if_source(&_text);
-        });
-    }
-
     void EText::on_hover(HoverState state)
     {
         detail::set_window_cursor(state == HoverState::leave ? detail::CursorID::arrow : detail::CursorID::ibeam,
                                   detail::get_context().window_ctx);
-        if (state == HoverState::leave)
-        {
-            clear_lazy_tooltip(true);
-            return;
-        }
-        if (state == HoverState::enter) schedule_lazy_tooltip();
     }
 
     void EText::on_focus(bool focused)
@@ -1347,7 +1314,7 @@ namespace auik
         if (start == static_cast<int>(value.size()) && start > 0) start = detail::prev_utf8_index(value, start);
         const auto is_word_space = [&](int index) {
             return index >= 0 && index < static_cast<int>(value.size()) &&
-                   std::isspace(static_cast<unsigned char>(value[index]));
+                   acul::is_space(static_cast<unsigned char>(value[index]));
         };
         const bool space_word = is_word_space(start);
         int end = space_word ? detail::next_utf8_index(value, start) : start;

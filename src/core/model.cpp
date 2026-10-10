@@ -544,6 +544,25 @@ namespace auik
     {
         assert(binding && binding->db && binding->db->synced);
         if (binding->on_field_change) binding->on_field_change(record_id, field_id);
+        else if (binding->on_field_change_batch)
+        {
+            const ModelFieldChange change{record_id, field_id};
+            binding->on_field_change_batch(ModelFieldChangeBatch{&change, 1u});
+        }
+    }
+
+    AUIK_EXPORT void default_dispatch_model_binding_field_batch(ModelBinding *binding,
+                                                                const ModelFieldChangeBatch &batch)
+    {
+        assert(binding && binding->db && binding->db->synced);
+        if (!batch) return;
+        if (binding->on_field_change_batch)
+        {
+            binding->on_field_change_batch(batch);
+            return;
+        }
+        if (binding->on_field_change)
+            for (const auto &change : batch) binding->on_field_change(change.record_id, change.field_id);
     }
 
     AUIK_EXPORT ModelRecord *append_model_record(ModelDB *db, ModelID model_id, ModelRecord record)
