@@ -10,6 +10,7 @@ add_test_files(auik tree_refresh tree_refresh.cpp)
 add_test_files(auik model_field_batch model_field_batch.cpp)
 add_test_files(auik text_rerecord text_rerecord.cpp)
 add_test_files(auik bounds_animation bounds_animation.cpp)
+add_test_files(auik drag_precision drag_precision.cpp)
 add_test(NAME auik_asd COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_asd.py")
 
 if(ENABLE_COVERAGE)

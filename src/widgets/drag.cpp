@@ -17,8 +17,11 @@ namespace auik
         if (size > 0)
         {
             char *end = buffer + size;
-            while (end > buffer && end[-1] == '0') --end;
-            if (end > buffer && end[-1] == '.') --end;
+            if (display_precision > 0)
+            {
+                while (end > buffer && end[-1] == '0') --end;
+                if (end > buffer && end[-1] == '.') --end;
+            }
             if (end - buffer == 2 && buffer[0] == '-' && buffer[1] == '0') return "0";
             return acul::string(buffer, end);
         }
