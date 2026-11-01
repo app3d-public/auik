@@ -14,6 +14,7 @@
 #define AUIK_TITLEBAR_HEIGHT_DEFAULT 32.0f
 #ifdef _WIN32
     #define AUIK_TITLEBAR_STATE L"AUIK_TITLEBAR_STATE"
+    #define AUIK_WIN32_TITLEBAR_HEIGHT_DIP 29
 #endif
 
 namespace auik
@@ -631,9 +632,14 @@ namespace auik
         state.frame.x = GetSystemMetricsForDpi(SM_CXFRAME, dpi);
         state.frame.y = GetSystemMetricsForDpi(SM_CYFRAME, dpi);
         state.padding = GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi);
-        const f32 scale = static_cast<f32>(dpi) / 96.0f;
-        state.caption_button_size = {GetSystemMetrics(SM_CXSIZE) * scale, GetSystemMetrics(SM_CYSIZE) * scale};
-        state.height = GetSystemMetrics(SM_CYCAPTION) * scale;
+        // Legacy caption metrics can be only 23 px at 96 DPI. A custom titlebar also
+        // hosts menus/tabs, so keep a compact 29-DIP minimum and full-height buttons.
+        // Query at the window DPI directly; GetSystemMetrics may already be scaled.
+        const i32 height = amal::max(GetSystemMetricsForDpi(SM_CYCAPTION, dpi),
+                                    MulDiv(AUIK_WIN32_TITLEBAR_HEIGHT_DIP, dpi, 96));
+        const i32 button_width = amal::max(GetSystemMetricsForDpi(SM_CXSIZE, dpi), MulDiv(46, dpi, 96));
+        state.height = static_cast<f32>(height);
+        state.caption_button_size = {static_cast<f32>(button_width), state.height};
         return previous_frame != state.frame || previous_padding != state.padding ||
                previous_button_size != state.caption_button_size || previous_height != state.height;
     }
