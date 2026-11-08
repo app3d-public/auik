@@ -94,6 +94,7 @@ namespace auik
         detail::MenuBase *menu_base() { return &_menu_base; }
         const detail::MenuBase *menu_base() const { return &_menu_base; }
         AUIK_EXPORT bool open_root_items_at(const amal::rect &anchor, MenuGroupLayer *groups);
+        AUIK_EXPORT bool open_content_at(const amal::vec2 &position);
         AUIK_EXPORT bool open_root_at(u32 element_id, const amal::rect &anchor);
         AUIK_EXPORT void close_all();
         AUIK_EXPORT void discard_popups();
@@ -313,6 +314,7 @@ namespace auik
             if (_menu) _menu->sync_selection_mode_changes();
         }
 
+        AUIK_EXPORT bool open_context_at(const amal::vec2 &position);
         AUIK_EXPORT void set_open(bool value);
         AUIK_EXPORT void discard_popup();
         bool is_open() const { return _open; }
@@ -381,6 +383,8 @@ namespace auik
         detail::PopupTrigger _button;
         MenuBar *_menu = nullptr;
         ElementID _button_hit_id{};
+        bool _context_open = false;
+        amal::vec2 _context_position{};
         amal::rect _popup_anchor_override{};
         bool _popup_anchor_overridden = false;
         bool _open = false;

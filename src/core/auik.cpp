@@ -1202,6 +1202,20 @@ namespace auik
             if (it != ctx.id_map.end() && it->second->has_event_handler(EventFlagBits::click))
                 it->second->dispatch_click(key, KeyPressState::release, 1);
 
+            if (key == MouseKey::right && !finish_active_drag && !io.active_mouse_buttons && !io.active_mods &&
+                ctx.hover_id == io.clicked_id &&
+                amal::length(io.mouse_pos - io.last_drag_pos) < AUIK_MOUSE_DOUBLE_CLICK_MAX_DIST)
+            {
+                // Re-resolve the target after its release callback, which may remove it.
+                auto clicked = ctx.id_map.find(io.clicked_id.widget_id);
+                Widget *target = clicked == ctx.id_map.end() ? nullptr : clicked->second;
+                for (auto *widget = target; widget; widget = widget->parent())
+                {
+                    if (widget->signature() != AUIK_TAG_WINDOW) continue;
+                    static_cast<Window *>(widget)->open_context_menu(io.mouse_pos);
+                    break;
+                }
+            }
             if (finish_active_drag) finish_drag(ctx, io);
             if (!io.active_mouse_buttons) io.clicked_id = {};
         }

@@ -28,6 +28,8 @@ namespace auik::detail
         bool has_group_layer() const;
         u32 element_id() const { return get_rect().id.element_id; }
         void set_element_id(u32 element_id) { get_rect().id.element_id = element_id; }
+        void on_present(acul::unique_function<void(MenuItem &)> callback) { _on_present = std::move(callback); }
+        void prepare_presentation() { if (_on_present) _on_present(*this); }
         MenuBase *owner() const { return _owner; }
         StyleUpdateFlags update_style() override { return StyleUpdateFlagBits::none; }
         void draw(DrawCtx &) override {}
@@ -35,6 +37,7 @@ namespace auik::detail
     private:
         void set_source_text(StringView text);
 
+        acul::unique_function<void(MenuItem &)> _on_present;
         MenuBase *_owner = nullptr;
         MenuGroupLayer *_group_layer = nullptr;
         acul::string _text;

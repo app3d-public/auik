@@ -117,6 +117,7 @@ namespace auik
         AUIK_EXPORT void request_undock_window(DockNodeID node);
         AUIK_EXPORT void request_close_window(DockNodeID node);
         AUIK_EXPORT void request_close_group(DockNodeID node);
+        AUIK_EXPORT bool open_window_context_menu(Window *window, const amal::vec2 &position);
         AUIK_EXPORT void clear_windows(DockNodeID node);
         AUIK_EXPORT void clear();
         AUIK_EXPORT void set_menu_group(MenuGroup group);

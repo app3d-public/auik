@@ -1348,6 +1348,7 @@ namespace auik
             {
                 auto *item = find_item(item_id);
                 if (!item) continue;
+                item->prepare_presentation();
                 auto *row = static_cast<Widget *>(acul::alloc<PopupItem>(id(), item_id, item_id, item, popup));
                 row->set_size({AUIK_SIZE_X_FILL, AUIK_SIZE_Y_FIT});
                 row->set_focus_parent(popup);
@@ -1454,6 +1455,15 @@ namespace auik
         sync_popup_item_states();
         request_redraw();
         return true;
+    }
+
+    bool MenuBar::open_content_at(const amal::vec2 &position)
+    {
+        if (_menu_base.root_layer().empty() || _menu_base.root_layer()[0]->empty()) return false;
+        MenuGroupLayer content(&_menu_base);
+        auto *group = content.add_group();
+        for (auto *item : _menu_base.root_layer()[0]->items()) _menu_base.add_existing_item(group, item);
+        return open_root_items_at({position, {0.0f, 0.0f}}, &content);
     }
 
     bool MenuBar::open_root_items_at(const amal::rect &anchor, MenuGroupLayer *layer)
@@ -1799,10 +1809,22 @@ namespace auik
 
     MenuBar::MenuGroupLayer *PopupMenu::root_items() { return _menu ? &_menu->_menu_base.root_layer() : nullptr; }
 
+    bool PopupMenu::open_context_at(const amal::vec2 &position)
+    {
+        auto *root = root_items();
+        if (!root || root->empty() || (*root)[0]->empty()) return false;
+        _context_position = position;
+        _context_open = true;
+        if (_open) open_menu();
+        else set_open(true);
+        return true;
+    }
+
     void PopupMenu::set_open(bool value)
     {
         if (_open == value) return;
         _open = value;
+        if (!value) _context_open = false;
         _button.set_open(value);
         if (_open) open_menu();
         else
@@ -1816,6 +1838,7 @@ namespace auik
     void PopupMenu::discard_popup()
     {
         _open = false;
+        _context_open = false;
         _button.set_open(false);
         if (_menu) _menu->discard_popups();
         if (_menu && detail::get_context().focus_id == _menu->id()) focus_widget(nullptr);
@@ -1840,7 +1863,8 @@ namespace auik
         _menu->update_layout_min_size();
         attach_menu_for_popup();
         _menu->update_depth(this->depth_range());
-        _menu->open_root_items_at(_popup_anchor_overridden ? _popup_anchor_override : _button.bounds(), ids);
+        if (_context_open) _menu->open_content_at(_context_position);
+        else _menu->open_root_items_at(_popup_anchor_overridden ? _popup_anchor_override : _button.bounds(), ids);
         focus_widget(_menu);
     }
 

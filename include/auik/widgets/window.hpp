@@ -119,6 +119,7 @@ namespace auik
         const MenuProxy *get_menu() const { return _menu ? &_menu : nullptr; }
         AUIK_EXPORT bool is_popup_menu() const;
         AUIK_EXPORT PopupMenu *header_popup_menu() const;
+        AUIK_EXPORT virtual bool open_context_menu(const amal::vec2 &position);
         RubberBand *rubber_band() const { return _rubber_band; }
         RubberBand *get_rubber_band() const { return _rubber_band; }
         void on_rubber_band_commit(acul::unique_function<void(RubberBandCommitEvent &)> callback)

@@ -677,6 +677,20 @@ namespace auik
         return _default_header_menu;
     }
 
+    bool Window::open_context_menu(const amal::vec2 &position)
+    {
+        if (_menu.is_menu_bar())
+        {
+            auto *menu = _menu.menu_model();
+            if (!menu->open_content_at(position)) return false;
+            focus_widget(menu);
+            return true;
+        }
+        if (parent() && parent()->signature() == AUIK_TAG_DOCKSPACE)
+            return static_cast<Dockspace *>(parent())->open_window_context_menu(this, position);
+        return is_popup_menu() && header_popup_menu()->open_context_at(position);
+    }
+
     PopupMenu *Window::ensure_header_popup_menu()
     {
         if (is_popup_menu()) return static_cast<PopupMenu *>(_menu.get_widget());

@@ -357,6 +357,16 @@ namespace auik
             else if (_menu) _menu->set_open(false);
         }
 
+        bool open_context_at(const amal::vec2 &position)
+        {
+            if (!sync_menu_model() || !_menu_owner || !_menu) return false;
+            refresh_menu_anchor();
+            if (!_menu->open_context_at(position)) return false;
+            _open = true;
+            _button.set_open(true);
+            return true;
+        }
+
         bool is_open() const { return _open; }
         bool owns_active_window_menu() const { return _menu_owner && _menu_owner == active_window(); }
 
@@ -1393,6 +1403,22 @@ namespace auik
             if (!helper.drop_zone) continue;
             helper.interactive = enabled;
         }
+    }
+
+    bool Dockspace::open_window_context_menu(Window *window, const amal::vec2 &position)
+    {
+        for (DockNodeID id = 0u; id < _tree.nodes().size(); ++id)
+        {
+            auto &node = _tree.nodes()[id];
+            if (!node.menu || active_window(node) != window) continue;
+            close_menu();
+            if (!node.menu->open_context_at(position)) return false;
+            _open_menu_node = id;
+            update_draw_commands(DrawReasonBits::layout);
+            mark_host_refresh_request();
+            return true;
+        }
+        return false;
     }
 
     void Dockspace::toggle_menu(DockNodeID node_id)

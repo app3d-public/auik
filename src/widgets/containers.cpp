@@ -920,8 +920,11 @@ namespace auik
                     if (child && !child->is_attached() && (child->widget_flags & WidgetFlagBits::attachable))
                         child->on_attach();
 
+                // A pending full pass lays out the root first, including its clip records.
                 Widget *layout_target = resolve_parent_layout_update_target(this);
                 if (!layout_target) layout_target = this;
+                if ((detail::get_context().dirty_flags & DirtyFlagBits::layout) &&
+                    layout_target->clip_id() == 0xFFFFu) return;
                 layout_target->update_depth(layout_target->depth_range());
                 layout_target->update_layout(false);
                 layout_target->update_draw_commands(DrawReasonBits::layout);

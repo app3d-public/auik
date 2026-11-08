@@ -128,6 +128,27 @@ void test_menu_hover()
             u32 suffix_ids[3];
             for (u32 i = 0; i < 3; ++i)
                 suffix_ids[i] = menu->append_item("", [&clicked, i](ClickEvent &) { clicked = i + 1; })->element_id();
+            // The pointer menu reuses panel commands and omits all service commands.
+            assert(owner.open_context_at({310, 170}) == (own_count != 0u));
+            if (own_count)
+            {
+                root.update_draw_commands(DrawReasonBits::record);
+                bool found = false;
+                for (const auto &hit : hits)
+                {
+                    if (hit.id.widget_id != menu->id() || hit.id.tag_id != AUIK_TAG_COMBO_BOX_ITEM ||
+                        hit.bounds.size.x <= 0 || hit.bounds.size.y <= 0) continue;
+                    for (auto suffix_id : suffix_ids) assert(hit.id.element_id != suffix_id);
+                    if (hit.id.element_id == (*menu)[0]->element_id())
+                    {
+                        assert(hit.bounds.offset.x >= 310 && hit.bounds.offset.y >= 170);
+                        found = true;
+                    }
+                }
+                assert(found);
+                owner.set_open(false);
+                flush(ctx);
+            }
             for (u32 index = 0; index < 3; ++index)
             {
                 owner.set_open(true);
