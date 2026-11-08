@@ -109,7 +109,11 @@ namespace auik
             entry->widget = widget;
             entry->depth.owner = widget;
             entry->depth.update_depth = [](void *owner, const amal::vec2 &range) {
-                static_cast<Widget *>(owner)->update_depth(range);
+                auto *widget = static_cast<Widget *>(owner);
+                // During first attach, expose the allocated range before user callbacks.
+                // The complete subtree is assigned once attachment/style creation has finished.
+                if (state(widget)->registered) widget->update_depth(range);
+                else widget->Widget::update_depth(range);
             };
             auto &bind = widget->bind();
             bind.on_attach_fn = attached;
@@ -198,6 +202,7 @@ namespace auik
         configure(widget, root, owner, zone);
         if (!widget->is_attached()) widget->on_attach();
         widget->update_style_invalidated();
+        detail::update_registered_depth(widget);
         widget->rebuild_clip_rects();
     }
 
@@ -251,14 +256,11 @@ namespace auik
         return entry ? entry->depth.index : global_depth_slot_count;
     }
 
-    void detail::update_registered_depths()
+    void detail::update_registered_depth(Widget *widget)
     {
-        for (auto *widget : get_context().widget_tree)
-        {
-            const auto *entry = state(widget);
-            if (entry && entry->registered && entry->depth.index < global_depth_slot_count)
-                widget->update_depth(global_depth_range(entry->depth.index));
-        }
+        const auto *entry = state(widget);
+        if (entry && entry->registered && entry->depth.index < global_depth_slot_count)
+            widget->update_depth(global_depth_range(entry->depth.index));
     }
 
     void detail::dismiss_owned_windows(Widget *owner)

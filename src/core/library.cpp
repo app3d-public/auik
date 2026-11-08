@@ -866,11 +866,6 @@ namespace auik
         if (state.invalidation_count == 0) ctx.dirty_flags &= ~DirtyFlagBits::hit_rect_sync;
     }
 
-    AUIK_EXPORT void rebuild_root_widget_depths()
-    {
-        detail::update_registered_depths();
-    }
-
     AUIK_EXPORT void add_widget_to_root(Widget *widget, DepthZone zone)
     {
         assert(widget && "widget is null");
@@ -882,6 +877,7 @@ namespace auik
         detail::register_root_widget(widget, zone);
         widget->on_attach();
         widget->update_style_invalidated();
+        detail::update_registered_depth(widget);
     }
 
     AUIK_EXPORT void mark_widget_attached_to_tree(Widget *widget)

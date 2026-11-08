@@ -51,11 +51,17 @@ namespace
     };
     struct WindowProbe : auik::Window
     {
+        int depths = 0;
         WindowProbe(u32 id) : Window(id, "", {{0, 0}, {100, 100}}, auik::WindowFlagBits::none,
                                      auik::WidgetFlagBits::visible | auik::WidgetFlagBits::attachable) {}
         auik::StyleUpdateFlags update_style() override { return {}; }
         void rebuild_clip_rects() override {}
         void draw(auik::DrawCtx &) override {}
+        void update_depth(const amal::vec2 &range) override
+        {
+            ++depths;
+            Window::update_depth(range);
+        }
     };
     struct ClippedProbe : Probe
     {
@@ -91,6 +97,7 @@ void test_depth_order()
         Probe root(8100), background(8101), foreground(8102), menu(8103), a(8104), b(8105), tip(8106);
         auto *custom = root.emplace_user_data<int>(42);
         add_widget_to_root(&root);
+        assert(root.depths == 1);
         assert(root.get_user_data<int>() == custom && *custom == 42);
         add_widget_to_root(&foreground, DepthZone::foreground);
         add_widget_to_root(&background, DepthZone::background);
@@ -311,6 +318,39 @@ void test_depth_order()
         record_layout_commands();
         remove_widget_from_root_unsync(&root);
         ctx.viewports.clear();
+        ctx.disposal_queue.discard();
+    }
+    {
+        // A window may create its content from an attach callback. Its global
+        // depth slot already exists when that callback runs.
+        WindowProbe window(8900);
+        window.set_viewport(&viewport);
+        Probe *child = nullptr;
+        set_widget_attach_callback(window.id(), [&](Widget *widget) {
+            assert(widget->depth_range() == global_depth_range(get_global_depth_index(widget)));
+            child = acul::alloc<Probe>(8901);
+            static_cast<WindowProbe *>(widget)->add_child(child);
+        });
+        add_widget_to_root(&window, DepthZone::foreground);
+        assert(window.depths == 1);
+        assert(window.depth_range() == global_depth_range(get_global_depth_index(&window)));
+        assert(child && child->get_z_order() > window.get_z_order());
+        WindowProbe popup(8902);
+        popup.set_viewport(&viewport);
+        Probe *popup_child = nullptr;
+        set_widget_attach_callback(popup.id(), [&](Widget *widget) {
+            assert(widget->depth_range() == global_depth_range(get_global_depth_index(widget)));
+            popup_child = acul::alloc<Probe>(8903);
+            static_cast<WindowProbe *>(widget)->add_child(popup_child);
+        });
+        add_overlay_window(&popup, &window);
+        assert(popup.depths == 1);
+        assert(popup.depth_range() == global_depth_range(get_global_depth_index(&popup)));
+        assert(popup_child && popup_child->get_z_order() > popup.get_z_order());
+        remove_overlay_window(&popup);
+        set_widget_attach_callback(popup.id(), nullptr);
+        remove_widget_from_root_unsync(&window);
+        set_widget_attach_callback(window.id(), nullptr);
         ctx.disposal_queue.discard();
     }
     detail::g_context = nullptr;

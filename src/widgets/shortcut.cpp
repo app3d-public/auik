@@ -287,7 +287,7 @@ namespace auik
         set_draw_block_flags(DrawBlockFlagBits::none);
         _label = make_shortcut_label(AUIK_TAG_SHORTCUT, parts);
         _label->unset_cache_snapshot();
-        _caret = make_text(AUIK_TAG_TEXT, "|");
+        _caret = make_text(AUIK_TAG_TEXT, "|", AUIK_SIZE_FIT);
         _caret->unset_cache_snapshot();
         _caret->set_style_tag(AUIK_STYLE_TAG_SHORTCUT_INPUT_CARET);
         auto *content = make_block();

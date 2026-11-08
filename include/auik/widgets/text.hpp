@@ -16,29 +16,29 @@ namespace auik
     public:
         TextFlags text_flags = TextFlagBits::none;
 
-        Text(u32 id, acul::string text, amal::vec2 max_size, WidgetFlags flags,
+        Text(u32 id, acul::string text, amal::vec2 inline_size, WidgetFlags flags,
              TextLayoutFlags layout_flags = default_text_layout_flags())
-            : Widget(id, flags, EventFlagBits::none, {{0.0f}, max_size}, AUIK_TAG_TEXT),
+            : Widget(id, flags, EventFlagBits::none, {{0.0f}, inline_size}, AUIK_TAG_TEXT),
               _text(std::move(text)),
               _style({Theme::STYLE_ID_INVALID, Theme::STYLE_ID_INVALID})
         {
             _layout_config.flags = layout_flags;
         }
-        Text(u32 id, StringView text, amal::vec2 max_size, WidgetFlags flags,
+        Text(u32 id, StringView text, amal::vec2 inline_size, WidgetFlags flags,
              TextLayoutFlags layout_flags = default_text_layout_flags())
-            : Text(id, acul::string(text.str ? text.str : ""), max_size, flags, layout_flags)
+            : Text(id, acul::string(text.str ? text.str : ""), inline_size, flags, layout_flags)
         {
             if (text.is_translated) set_translated_text_literal(text.str);
         }
-        Text(u32 id, const char *text, amal::vec2 max_size, WidgetFlags flags,
+        Text(u32 id, const char *text, amal::vec2 inline_size, WidgetFlags flags,
              TextLayoutFlags layout_flags = default_text_layout_flags())
-            : Text(id, StringView{text}, max_size, flags, layout_flags)
+            : Text(id, StringView{text}, inline_size, flags, layout_flags)
         {
         }
 
-        Text(u32 id, ModelBinding *binding, amal::vec2 max_size, WidgetFlags flags,
+        Text(u32 id, ModelBinding *binding, amal::vec2 inline_size, WidgetFlags flags,
              TextLayoutFlags layout_flags = default_text_layout_flags())
-            : Text(id, acul::string{}, max_size, flags, layout_flags)
+            : Text(id, acul::string{}, inline_size, flags, layout_flags)
         {
             set_model_binding(binding);
         }
@@ -182,9 +182,9 @@ namespace auik
     class EText : public Text
     {
     public:
-        AUIK_EXPORT EText(u32 id, acul::string text, amal::vec2 max_size, WidgetFlags flags,
+        AUIK_EXPORT EText(u32 id, acul::string text, amal::vec2 inline_size, WidgetFlags flags,
                           TextLayoutFlags layout_flags);
-        AUIK_EXPORT EText(u32 id, StringView text, amal::vec2 max_size, WidgetFlags flags,
+        AUIK_EXPORT EText(u32 id, StringView text, amal::vec2 inline_size, WidgetFlags flags,
                           TextLayoutFlags layout_flags);
         AUIK_EXPORT ~EText() override;
 
@@ -236,12 +236,12 @@ namespace auik
         void on_disabled_changed(bool disabled) override;
     };
 
-    inline Text *make_text(u32 id, StringView text = "", amal::vec2 max_size = AUIK_SIZE_FIT,
+    inline Text *make_text(u32 id, StringView text = "", amal::vec2 inline_size = AUIK_SIZE_INHERIT,
                            TextLayoutFlags layout_flags = default_text_layout_flags())
     {
         constexpr WidgetFlags flags =
             WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::cache_snapshot;
-        auto *out = acul::alloc<Text>(id, text, max_size, flags, layout_flags);
+        auto *out = acul::alloc<Text>(id, text, inline_size, flags, layout_flags);
         return out;
     }
 
@@ -254,12 +254,12 @@ namespace auik
     AUIK_EXPORT void present_model_text_record(ModelBinding *binding, ModelRecord &record, u32 record_index,
                                                Widget **widgets, u32 widget_count, void *data);
 
-    inline EText *make_etext(u32 id, StringView text = "", amal::vec2 max_size = AUIK_SIZE_FIT)
+    inline EText *make_etext(u32 id, StringView text = "", amal::vec2 inline_size = AUIK_SIZE_INHERIT)
     {
         constexpr WidgetFlags flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
                                       WidgetFlagBits::cache_snapshot | WidgetFlagBits::hittable |
                                       WidgetFlagBits::read_only;
-        auto *out = acul::alloc<EText>(id, text, max_size, flags, default_text_layout_flags());
+        auto *out = acul::alloc<EText>(id, text, inline_size, flags, default_text_layout_flags());
         if (text.is_translated) out->set_translated_text_literal(text.str);
         return out;
     }

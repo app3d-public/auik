@@ -43,12 +43,23 @@ struct DepthDrawProbe : CountedWidget
 {
     using CountedWidget::CountedWidget;
     f32 drawn_depth = -1.f;
+    int depth_updates = 0;
+    void update_depth(const amal::vec2 &range) override
+    {
+        ++depth_updates;
+        Widget::update_depth(range);
+    }
     void draw(auik::DrawCtx &) override { drawn_depth = get_z_order(); }
 };
 struct TallWindow : SizedWindow
 {
     using SizedWindow::SizedWindow;
     void update_layout_min_size_force() override { set_required_size({280.f, 220.f}); }
+};
+struct DeepWindow : SizedWindow
+{
+    using SizedWindow::SizedWindow;
+    u32 get_depth_requirement() const override { return 24u; }
 };
 struct LayoutWindow : CountedWindow
 {
@@ -659,6 +670,34 @@ void test_dock_tree()
         acul::release(space);
     }
     {
+        // A nested dock must redistribute its root's range when its depth requirement grows.
+        auto *root = auik::make_dock_layout(110);
+        auto *space = auik::make_dockspace(111);
+        auik::DockNodeSettings settings{};
+        settings.tabpanel = false;
+        settings.flags = {};
+        const auto leaf = space->create_leaf(0, settings);
+        auto *sibling = acul::alloc<DepthDrawProbe>(112);
+        sibling->set_visible();
+        sibling->sync_widget_flags();
+        root->add_child(0, space);
+        root->add_child(0, sibling);
+        auik::add_widget_to_root(root);
+        const auto sibling_range = sibling->depth_range();
+        const auto root_range = root->depth_range();
+        const int updates = sibling->depth_updates;
+        auto *window = acul::alloc<DeepWindow>(113);
+        space->add_window(leaf, window);
+        assert(root->depth_range() == root_range);
+        assert(sibling->depth_updates == updates + 1);
+        assert(sibling->depth_range() != sibling_range);
+        assert(window->depth_range().y <= space->depth_range().y);
+        assert(space->depth_range().y <= sibling->depth_range().x);
+        auik::remove_widget_from_root_unsync(root);
+        acul::release(root);
+        ctx.disposal_queue.discard();
+    }
+    {
         // A dropped leaf must use its style on the very first layout, just like a created leaf.
         theme.add_style(7005, auik::make_style().size(AUIK_SIZE_FILL).min_width(400.f));
         auto *space = auik::make_dockspace(94);
@@ -675,8 +714,8 @@ void test_dock_tree()
         auto *toolbar = acul::alloc<DepthDrawProbe>(106);
         toolbar->set_visible();
         toolbar->sync_widget_flags();
-        ctx.widget_tree.push_back(toolbar);
-        auik::rebuild_root_widget_depths();
+        auik::add_widget_to_root(toolbar);
+        const int toolbar_depth_updates = toolbar->depth_updates;
         toolbar->update_draw_commands();
         auik::enable_dockspace_drag_zones(window);
         space->update_layout(false);
@@ -685,6 +724,8 @@ void test_dock_tree()
                        {space->id(), AUIK_TAG_DOCKSPACE_RESIZE_HELPER_V, 0u});
         assert(window->parent() == space);
         assert(toolbar->drawn_depth == toolbar->get_z_order());
+        assert(toolbar->depth_updates == toolbar_depth_updates);
+        auik::remove_widget_from_root_unsync(toolbar);
         ctx.widget_tree.clear();
         acul::release(toolbar);
         const auto docked_size = window->size();

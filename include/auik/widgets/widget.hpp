@@ -31,7 +31,6 @@ namespace auik
     };
 
     constexpr inline StringView tr(const char *literal) { return {literal, true}; }
-    AUIK_EXPORT void rebuild_root_widget_depths();
     AUIK_EXPORT amal::vec2 global_depth_range(u32 index);
     AUIK_EXPORT void raise_global_depth(Widget *widget);
     AUIK_EXPORT u32 get_global_depth_index(const Widget *widget);

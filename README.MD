@@ -21,7 +21,7 @@ Auik uses an event-driven retained UI model with a multi-pipeline rendering arch
 Unlike traditional UI systems that generate a single vertex stream, Auik organizes rendering into multiple specialized draw streams and pipelines.
 
 ## Styling
-Auik includes a ASD-inspired theme system. Themes can be created either through the native C++ API or through the ASD transpiler.
+Auik includes a theme system. Themes can be created either through the native C++ API or through the ASD transpiler.
 
 ## Icons
 Auik provides an API for default icons using [Remix Icon](https://github.com/Remix-Design/RemixIcon). Icons and fonts are not bundled.

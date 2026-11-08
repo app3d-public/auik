@@ -141,7 +141,6 @@ namespace auik
     AUIK_EXPORT void set_widget_detach_callback(u32 id, acul::unique_function<void(Widget *)> callback);
 
     // Root widget ownership and focus management.
-    AUIK_EXPORT void rebuild_root_widget_depths();
     // Lays out and records a dynamically attached root. A fitted viewport change expands the refresh scope.
     AUIK_EXPORT void mark_widget_attached_to_tree(Widget *widget);
     AUIK_EXPORT void add_widget_to_root(Widget *widget, DepthZone zone = DepthZone::work);

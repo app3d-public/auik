@@ -79,7 +79,7 @@ namespace auik
             const auto *value =
                 static_cast<const acul::string *>(get_model_field_access_data(binding->db, binding->model_id, access));
             widgets[index] = make_text(make_presented_model_text_id(*binding, record, field_id),
-                                       value ? StringView{*value} : StringView{});
+                                       value ? StringView{*value} : StringView{}, AUIK_SIZE_FIT);
         }
     }
 
@@ -209,7 +209,7 @@ namespace auik
 
     Text *Text::clone(u32 id) const
     {
-        auto *out = acul::alloc<Text>(id, source_text(), style_size(), widget_flags, _layout_config.flags);
+        auto *out = acul::alloc<Text>(id, source_text(), inline_size(), widget_flags, _layout_config.flags);
         out->set_style_tag(_style.tag_id);
         out->_style_mask = _style_mask;
         out->text_flags = text_flags;
@@ -810,8 +810,8 @@ namespace auik
         u8 flags = 0;
     };
 
-    EText::EText(u32 id, acul::string text, amal::vec2 max_size, WidgetFlags flags, TextLayoutFlags layout_flags)
-        : Text(id, std::move(text), max_size, flags, layout_flags),
+    EText::EText(u32 id, acul::string text, amal::vec2 inline_size, WidgetFlags flags, TextLayoutFlags layout_flags)
+        : Text(id, std::move(text), inline_size, flags, layout_flags),
           _edit((flags & WidgetFlagBits::hittable) ? acul::alloc<ETextEditData>() : nullptr)
     {
         set_rect_tag_id(AUIK_TAG_ETEXT);
@@ -828,8 +828,8 @@ namespace auik
         }
     }
 
-    EText::EText(u32 id, StringView text, amal::vec2 max_size, WidgetFlags flags, TextLayoutFlags layout_flags)
-        : EText(id, acul::string(text.str ? text.str : ""), max_size, flags, layout_flags)
+    EText::EText(u32 id, StringView text, amal::vec2 inline_size, WidgetFlags flags, TextLayoutFlags layout_flags)
+        : EText(id, acul::string(text.str ? text.str : ""), inline_size, flags, layout_flags)
     {
         if (text.is_translated) set_translated_text_literal(text.str);
     }

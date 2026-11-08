@@ -289,11 +289,12 @@ namespace auik
 
     static bool remove_root_widget(Widget *widget) { return remove_widget_from_root_unsync(widget); }
 
-    static void refresh_root_depth_draws()
+    static void update_dock_root_depths(Widget *dock)
     {
-        // Docking changes both root membership and the destination subtree's depth requirements.
-        rebuild_root_widget_depths();
-        redraw_all_commands();
+        // A nested dock changes its ancestors' requirements too. Redistribute only that tree.
+        auto *root = dock;
+        while (root->parent()) root = root->parent();
+        root->update_depth(root->depth_range());
     }
 
     static void rerecord_root_widgets_after(Widget *anchor)
@@ -1041,7 +1042,7 @@ namespace auik
             if (has_node_menu(*n)) sync_node_menu(node, *n);
         }
         auto &map = detail::get_context().id_map;
-        if (map.find(id()) != map.end()) update_depth(this->depth_range());
+        if (map.find(id()) != map.end()) update_dock_root_depths(this);
     }
 
     bool Dockspace::dock_drag_window_to_tab_panel(Window *window, DockNodeID node_id)
@@ -1082,7 +1083,7 @@ namespace auik
         ctx.io.last_drag_pos = ctx.io.mouse_pos;
         ctx.io.drag_key_flags = ctx.io.active_mouse_buttons;
         ctx.frame_cache.drag_widget_id = node->tabbar->id();
-        update_depth(this->depth_range());
+        update_dock_root_depths(this);
         update_layout_sync(true);
 
         node = get_node(node_id);
@@ -1091,7 +1092,8 @@ namespace auik
         node->tabbar->invalidate_draw_commands(DrawReasonBits::layout);
         node->tabbar->reset_draw_records();
         node->tabbar->update_draw_commands(DrawReasonBits::layout | DrawReasonBits::record);
-        refresh_root_depth_draws();
+        // Root removal/slot compaction may invalidate retained draw records outside this dock.
+        redraw_all_commands();
         ctx.dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
         mark_host_refresh_request();
         return true;
@@ -3002,9 +3004,11 @@ namespace auik
 
         add_window(leaf_id, window);
         initialize_node_width(leaf_id);
-        update_depth(this->depth_range());
+        // add_window already redistributes depths for an attached dock hierarchy.
+        if (!is_attached()) update_dock_root_depths(this);
         update_layout_sync(true);
-        refresh_root_depth_draws();
+        // Root removal/slot compaction may invalidate retained draw records outside this dock.
+        redraw_all_commands();
     }
 
     void Dockspace::on_attach()
