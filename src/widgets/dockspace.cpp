@@ -23,6 +23,7 @@ namespace auik
     void destroy_dockspace_context()
     {
         if (!detail::g_context || !detail::g_context->dockspace_context) return;
+        detail::release_global_depth(detail::g_context->dockspace_context->drag_depth);
         acul::release(detail::g_context->dockspace_context);
         detail::g_context->dockspace_context = nullptr;
     }
@@ -59,6 +60,15 @@ namespace auik
     {
         if (!window) return;
         auto *ctx = get_dockspace_context();
+        ctx->drag_depth.owner = ctx;
+        ctx->drag_depth.update_depth = [](void *owner, const amal::vec2 &) {
+            auto *dock_ctx = static_cast<DockspaceContext *>(owner);
+            dock_ctx->drag_zones_dirty = true;
+            if (dock_ctx->drag_zones_enabled)
+                for (auto *dock : dock_ctx->docks)
+                    if (dock) dock->update_drag_zones();
+        };
+        detail::acquire_global_depth(ctx->drag_depth);
         ctx->drag_window = window;
         ctx->drag_zones_enabled = true;
         ctx->drag_zones_dirty = true;
@@ -77,6 +87,7 @@ namespace auik
         if (window && ctx->drag_window != window) return;
         ctx->drag_window = nullptr;
         ctx->drag_zones_enabled = false;
+        detail::release_global_depth(ctx->drag_depth);
         ctx->drag_zones_dirty = true;
         detail::get_context().dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
         for (auto *dock : ctx->docks)
@@ -100,9 +111,9 @@ namespace auik
         return next_range;
     }
 
-    static f32 get_dock_drop_zone_visual_depth() { return next_depth(detail::get_global_foreground_depth_range()); }
+    static f32 get_dock_drop_zone_visual_depth() { return next_depth(detail::get_dock_overlay_depth_range()); }
 
-    static amal::vec2 get_dock_drag_hit_depth_range() { return detail::get_global_foreground_depth_range(); }
+    static amal::vec2 get_dock_drag_hit_depth_range() { return detail::get_dock_overlay_depth_range(); }
 
     static f32 get_dock_tab_panel_hit_depth()
     {
@@ -280,11 +291,9 @@ namespace auik
 
     static void refresh_root_depth_draws()
     {
-        // Docking changes the root list and the depth requirements of its destination subtree.
-        // Repaint every affected root with the same depth assignment, not just the dock.
+        // Docking changes both root membership and the destination subtree's depth requirements.
         rebuild_root_widget_depths();
-        for (auto *root : detail::get_context().widget_tree)
-            if (root) root->update_draw_commands(DrawReasonBits::layout);
+        redraw_all_commands();
     }
 
     static void rerecord_root_widgets_after(Widget *anchor)
@@ -393,6 +402,15 @@ namespace auik
             return out;
         }
 
+        void invalidate_style() override
+        {
+            Widget::invalidate_style();
+            _button.invalidate_style();
+            if (_menu) _menu->invalidate_style();
+        }
+
+        bool update_locale() override { return _menu && _menu->update_locale(); }
+
         void update_depth(const amal::vec2 &dock_depth_range) override
         {
             update_depth(dock_depth_range, make_dockspace_tabbar_depth_range(dock_depth_range));
@@ -421,8 +439,15 @@ namespace auik
 
         void rebuild_clip_rects() override
         {
+            // reset_clip_rect_records cleared our inherited ID too. A full command rewrite
+            // rebuilds clips without arranging the tab panel again.
+            if (parent()) set_clip_id(parent()->content_clip_id());
             _button.rebuild_clip_rects(clip_id());
-            if (_menu) _menu->rebuild_clip_rects();
+            if (_menu)
+            {
+                _menu->set_clip_id(clip_id());
+                _menu->rebuild_clip_rects();
+            }
         }
 
         void reset_clip_rect_records() override
@@ -3163,7 +3188,6 @@ namespace auik
             stream.write(static_cast<u32>(dockspace->_policy_flags));
             write_node_settings(stream, dockspace->_new_node_settings);
             write_menu_group(stream, dockspace->_menu_group);
-            stream.write(dockspace->_open_menu_node);
 
             stream.write(static_cast<u32>(dockspace->_tree.nodes().size()));
             for (const auto &node : dockspace->_tree.nodes()) write_node(stream, node);
@@ -3176,15 +3200,12 @@ namespace auik
             stream.read(policy_flags);
             auto new_node_settings = read_node_settings(stream);
             auto menu_group = read_menu_group(stream);
-            DockNodeID open_menu_node = AUIK_DOCK_NODE_INVALID;
-            stream.read(open_menu_node);
 
             auto *dockspace = acul::alloc<Dockspace>(common.id, WidgetFlags(common.widget_flags));
             detail::apply_widget_common_data(dockspace, common);
             dockspace->_policy_flags = DockspaceFlags(policy_flags);
             dockspace->_new_node_settings = new_node_settings;
             dockspace->_menu_group = std::move(menu_group);
-            dockspace->_open_menu_node = open_menu_node;
 
             for (auto &node : dockspace->_tree.nodes()) dockspace->clear_node_chrome(node);
             dockspace->_tree.nodes().clear();

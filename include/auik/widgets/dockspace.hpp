@@ -3,6 +3,7 @@
 #include "tabbar.hpp"
 #include "detail/dock_tree.hpp"
 #include "window.hpp"
+#include "../detail/depth.hpp"
 
 #define AUIK_TAG_DOCKSPACE                 0xADEAAAECu
 #define AUIK_TAG_DOCKSPACE_NODE            0xFC263E77u
@@ -24,6 +25,7 @@ namespace auik
     {
         acul::vector<Dockspace *> docks;
         Window *drag_window = nullptr;
+        detail::GlobalDepthAllocation drag_depth;
         bool drag_zones_enabled = false;
         bool drag_zones_dirty = false;
     };

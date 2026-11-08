@@ -23,8 +23,6 @@ namespace auik
             f32 y = 0.0f;
         };
 
-        static inline amal::vec2 get_combo_popup_depth_range() { return detail::get_global_foreground_depth_range(); }
-
         static inline bool is_combo_control_element(ElementID element_id, u32 combo_id)
         {
             return element_id.widget_id == combo_id && element_id.tag_id == AUIK_TAG_COMBO_BOX;
@@ -543,7 +541,6 @@ namespace auik
         if (_trigger) _trigger->update_depth(trigger_range);
         assign_next_depth(trigger_range, _content_depth_range);
         if (_label) _label->update_depth(_content_depth_range);
-        if (_popup) static_cast<Widget *>(_popup)->update_depth(get_combo_popup_depth_range());
     }
 
     void Combobox::back_hit_depth()
@@ -579,12 +576,7 @@ namespace auik
         if (transient && draw_transient_payload && _trigger) _trigger->draw(ctx, false);
 
         if (transient) return;
-
-        if (_open && _popup)
-        {
-            DrawCtx popup_ctx = ctx;
-            _popup->draw_local(popup_ctx);
-        }
+        if (_open && _popup) _popup->draw_local(ctx);
     }
 
     void Combobox::on_focus(bool focused)
@@ -681,6 +673,7 @@ namespace auik
         if (_trigger) _trigger->set_open(true);
         update_style();
         update_popup_layout();
+        detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
         schedule_outside_click_tick();
         if (_trigger) _trigger->start_icon_animation(true);
     }
@@ -750,6 +743,7 @@ namespace auik
 
     void Combobox::update_popup_layout()
     {
+        prepare_overlay_window(_popup);
         _popup->set_window_style_tag(AUIK_STYLE_TAG_COMBO_BOX_POPUP);
         _popup->update_style_invalidated();
         _popup->window_flags = WindowFlagBits::none;
@@ -765,7 +759,7 @@ namespace auik
         _popup->attach_to_viewport(this->viewport());
         _popup->set_visible();
         _popup->sync_widget_flags();
-        static_cast<Widget *>(_popup)->update_depth(get_combo_popup_depth_range());
+        add_overlay_window(_popup, _popup->focus_parent());
         static_cast<Widget *>(_popup)->update_layout(false);
 
         const amal::vec2 content_origin = measure_popup_pos + amal::vec2{popup_padding.x, popup_padding.y};
@@ -797,7 +791,6 @@ namespace auik
         _popup->attach_to_viewport(this->viewport());
         _popup->set_visible();
         _popup->sync_widget_flags();
-        static_cast<Widget *>(_popup)->update_depth(get_combo_popup_depth_range());
         if (_center_selection_on_open) _popup->reset_content_scroll_offset();
         static_cast<Widget *>(_popup)->update_layout(false);
         if (_center_selection_on_open)
@@ -1147,7 +1140,6 @@ namespace auik
         if (_trigger) _trigger->update_depth(trigger_range);
         assign_next_depth(trigger_range, _content_depth_range);
         if (_label) _label->update_depth(_content_depth_range);
-        if (_popup) static_cast<Widget *>(_popup)->update_depth(get_combo_popup_depth_range());
     }
 
     void MultipleCombobox::back_hit_depth()
@@ -1180,11 +1172,7 @@ namespace auik
         }
         if (transient && draw_transient_payload && _trigger) _trigger->draw(ctx, false);
         if (transient) return;
-        if (_open && _popup)
-        {
-            DrawCtx popup_ctx = ctx;
-            _popup->draw_local(popup_ctx);
-        }
+        if (_open && _popup) _popup->draw_local(ctx);
     }
 
     void MultipleCombobox::on_focus(bool focused)
@@ -1293,6 +1281,7 @@ namespace auik
         if (_trigger) _trigger->set_open(true);
         update_style();
         update_popup_layout();
+        detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
         schedule_outside_click_tick();
         if (_trigger) _trigger->start_icon_animation(true);
     }
@@ -1361,6 +1350,7 @@ namespace auik
 
     void MultipleCombobox::update_popup_layout()
     {
+        prepare_overlay_window(_popup);
         _popup->set_window_style_tag(AUIK_STYLE_TAG_COMBO_BOX_POPUP);
         _popup->update_style_invalidated();
         _popup->window_flags = WindowFlagBits::none;
@@ -1376,7 +1366,7 @@ namespace auik
         _popup->attach_to_viewport(this->viewport());
         _popup->set_visible();
         _popup->sync_widget_flags();
-        static_cast<Widget *>(_popup)->update_depth(get_combo_popup_depth_range());
+        add_overlay_window(_popup, _popup->focus_parent());
         static_cast<Widget *>(_popup)->update_layout(false);
         const amal::vec2 content_origin = measure_popup_pos + amal::vec2{popup_padding.x, popup_padding.y};
         amal::vec2 cursor = content_origin;
@@ -1403,7 +1393,6 @@ namespace auik
         _popup->attach_to_viewport(this->viewport());
         _popup->set_visible();
         _popup->sync_widget_flags();
-        static_cast<Widget *>(_popup)->update_depth(get_combo_popup_depth_range());
         if (_center_selection_on_open) _popup->reset_content_scroll_offset();
         static_cast<Widget *>(_popup)->update_layout(false);
         if (_center_selection_on_open)

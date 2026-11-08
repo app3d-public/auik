@@ -4,6 +4,8 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 set(TEST_LIBRARIES auik)
 set(TEST_SOURCES "")
 
+add_test_files(auik depth_order depth_order.cpp)
+add_test_files(auik menu_hover menu_hover.cpp)
 add_test_files(auik dock_tree dock_tree.cpp)
 add_test_files(auik textbox_clip textbox_clip.cpp)
 add_test_files(auik tree_refresh tree_refresh.cpp)

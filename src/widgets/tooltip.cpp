@@ -23,8 +23,6 @@ namespace auik
             ~PopupTipInfo()
             {
                 cancel_delayed_tasks(task_owner);
-                if (!window) return;
-                if (window->is_transient()) erase_widget_from_transient_cache(window);
                 acul::release(window);
             }
         };
@@ -35,7 +33,6 @@ namespace auik
             if (!info.window || !info.window->is_visible()) return;
             info.window->unset_visible();
             info.window->sync_widget_flags();
-            if (info.window->is_transient()) erase_widget_from_transient_cache(info.window);
             mark_host_refresh_request();
         }
 
@@ -54,6 +51,7 @@ namespace auik
             window->set_root_viewport_origin({viewport.x, viewport.y});
             window->set_visible();
             window->sync_widget_flags();
+            prepare_overlay_window(window);
             window->update_style_invalidated();
             window->update_layout_min_size_force();
 
@@ -77,10 +75,11 @@ namespace auik
 
             window->set_position({amal::floor(x), amal::floor(y)});
             window->set_size(extent);
-            window->update_depth(detail::get_global_foreground_depth_range());
+            add_overlay_window(window, window->focus_parent(), DepthZone::foreground);
             window->update_layout(false);
             window->rebuild_clip_rects();
             push_widget_to_transient_cache(window);
+            detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
             mark_host_refresh_request();
         }
 
@@ -96,13 +95,14 @@ namespace auik
     Window *make_popup_tip_window(u32 id)
     {
         constexpr WidgetFlags flags =
-            WidgetFlagBits::visible | WidgetFlagBits::attachable | WidgetFlagBits::cache_snapshot;
+            WidgetFlagBits::visible | WidgetFlagBits::attachable;
         auto *window =
             acul::alloc<Window>(id, "", amal::rect{AUIK_POS_IGNORE, AUIK_SIZE_AUTO}, WindowFlagBits::none, flags);
         window->set_window_style_tag(AUIK_STYLE_TAG_TOOLTIP);
         window->set_dock_style_tag(0u);
         window->set_auto_size();
         window->unset_visible();
+        window->unset_widget_flag(WidgetFlagBits::hittable);
         if (auto *content = window->content_block()) content->unset_widget_flag(WidgetFlagBits::hittable);
         return window;
     }
@@ -111,6 +111,7 @@ namespace auik
     {
         if (!widget || !window) return false;
         remove_popup_tip_from_widget(widget);
+        window->set_focus_parent(widget);
 
         auto *info = widget->emplace_user_data_tagged<PopupTipInfo>(AUIK_UD_POPUP_TIP);
         info->widget = widget;

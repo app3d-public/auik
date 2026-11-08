@@ -1,7 +1,10 @@
 #include <auik/auik.hpp>
 #include <auik/detail/context.hpp>
+#include <auik/detail/depth.hpp>
 #include <auik/detail/events.hpp>
 #include <auik/model.hpp>
+#include <auik/widgets/window.hpp>
+#include <algorithm>
 #include <cstddef>
 
 #define AUIK_MOUSE_DOUBLE_CLICK_TIME     0.45
@@ -274,6 +277,11 @@ namespace auik
 
     Widget::~Widget()
     {
+        if (_user_bind)
+        {
+            if (_user_bind->pending_update_live) *_user_bind->pending_update_live = false;
+            if (detail::g_context && _user_bind->on_destroy_fn) _user_bind->on_destroy_fn(this);
+        }
         clear_post_effects();
         if (_user_bind)
         {
@@ -296,6 +304,11 @@ namespace auik
 
     void Widget::sync_widget_flags(EventFlags flags)
     {
+        if (!is_attached() && !is_transient())
+        {
+            event_flags = flags;
+            return;
+        }
         const bool logical_visible_changed =
             static_cast<bool>(_synced_widget_flags & WidgetFlagBits::visible) != is_logically_visible();
         const bool was_visible = is_visible();
@@ -315,10 +328,10 @@ namespace auik
 
         event_flags = flags;
         _synced_widget_flags = widget_flags;
-
-        // Before the widget participates in either draw path, synchronization only commits the requested state.
-        // Disposal-queue ordering keeps a live attached/transient widget valid until queued work completes.
-        if (!is_attached() && !is_transient()) return;
+        if (visible_changed)
+        {
+            if (_user_bind && _user_bind->on_visibility_fn && _user_bind->on_visibility_fn(this)) return;
+        }
 
         auto &ctx = detail::get_context();
         if (visible_changed || disabled_changed || read_only_changed || hittable_changed)
@@ -340,19 +353,19 @@ namespace auik
         if (ctx.dirty_flags & DirtyFlagBits::destroying) return;
 
         Widget *widget = this;
-        ctx.disposal_queue.emplace([widget, visible_changed]() {
+        detail::defer_widget_update(widget, [widget, visible_changed]() {
             auto &ctx = detail::get_context();
             if (ctx.dirty_flags & DirtyFlagBits::destroying) return;
-
             Widget *refresh_owner = widget;
             if (visible_changed)
             {
                 if (auto *layout_owner = resolve_parent_layout_update_target(widget, true))
                 {
+                    layout_owner->update_depth(layout_owner->depth_range());
                     layout_owner->update_layout(false);
                     refresh_owner = layout_owner;
                 }
-                refresh_owner->update_depth(refresh_owner->depth_range());
+                else refresh_owner->update_depth(refresh_owner->depth_range());
             }
 
             if (!widget->is_visible())
@@ -1332,6 +1345,15 @@ namespace auik
         const auto attached = ctx.id_map.find(widget->id());
         if (attached == ctx.id_map.end() || attached->second != widget) return;
 
+        // A delayed hover-leave can arrive after an ancestor has been hidden.
+        // Measuring that subtree would cache zero sizes because all its children
+        // are effectively invisible. Resolve it when the subtree is shown again.
+        if (!widget->is_visible())
+        {
+            widget->invalidate_style();
+            widget->invalidate_layout_measure();
+            return;
+        }
         const auto style_flags = widget->update_style_invalidated();
         if (style_flags == StyleUpdateFlagBits::none) return;
 
@@ -1356,6 +1378,11 @@ namespace auik
             auto it = ctx.id_map.find(owner_id);
             if (it == ctx.id_map.end() || it->second != expected_owner) return;
 
+            if (!expected_owner->is_visible())
+            {
+                expected_owner->invalidate_layout_measure();
+                return;
+            }
             const bool layout_dirty = style_flags & (StyleUpdateFlagBits::layout | StyleUpdateFlagBits::parent_layout);
             if (layout_dirty) expected_owner->update_layout(false);
             expected_owner->update_draw_commands(layout_dirty ? DrawReasonBits::layout : DrawReasonBits::external);

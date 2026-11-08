@@ -8,6 +8,7 @@
 #include <auik/widgets/rubber_band.hpp>
 #include <auik/widgets/text.hpp>
 #include <auik/widgets/window.hpp>
+#include <algorithm>
 #include <utility>
 #include "../core/session_stream_utils.hpp"
 
@@ -249,9 +250,14 @@ namespace auik
         amal::vec2 next_size = window.size();
         const amal::vec2 requested = window.style_size();
         const amal::vec2 required = amal::max(window.required_size(), min_size);
-        if (is_size_fill(requested.x)) next_size.x = viewport.z;
+        // A window initially created as fit-content can later receive an explicit size
+        // (for example, a popup frame rounded outward to the pixel grid). Do not
+        // replace that request with the fractional measured size after the auto-size probe.
+        if (is_size_concrete(requested.x)) next_size.x = requested.x;
+        else if (is_size_fill(requested.x)) next_size.x = viewport.z;
         else if (is_size_fit(requested.x) || next_size.x <= 0.0f) next_size.x = required.x;
-        if (is_size_fill(requested.y)) next_size.y = viewport.w;
+        if (is_size_concrete(requested.y)) next_size.y = requested.y;
+        else if (is_size_fill(requested.y)) next_size.y = viewport.w;
         else if (is_size_fit(requested.y) || next_size.y <= 0.0f) next_size.y = required.y;
         next_size = amal::max(next_size, min_size);
         next_size.x = amal::clamp(next_size.x, amal::min(min_size.x, viewport.z), viewport.z);
@@ -583,6 +589,7 @@ namespace auik
 
     Window::~Window()
     {
+        if (is_overlay_window(this)) remove_overlay_window(this);
         if (_default_header_menu) acul::release(_default_header_menu);
         if (_rubber_band) acul::release(_rubber_band);
         if (_header) acul::release(_header);
@@ -770,7 +777,7 @@ namespace auik
                 detail::set_widget_global_cache(id(), value);
             }
         }
-        if (!parent()) detail::setup_root_window(this);
+        if (!parent() && !is_overlay_window(this)) detail::setup_root_window(this);
         Widget::on_attach();
         if (_content_block && !_content_block->is_attached()) _content_block->on_attach();
         if (auto *menu = window_menu_widget(*this); menu && (menu->widget_flags & WidgetFlagBits::attachable))
@@ -793,7 +800,7 @@ namespace auik
 
     void Window::on_detach()
     {
-        if (!parent()) detail::teardown_root_window(this);
+        if (!parent() && !is_overlay_window(this)) detail::teardown_root_window(this);
         remove_header_menu_suffix();
         sync_header_popup_menu();
         if (auto *menu = window_menu_widget(*this); menu && (menu->widget_flags & WidgetFlagBits::attachable))
@@ -1611,7 +1618,7 @@ namespace auik
     {
         set_style_state(focused ? StyleState::focus : StyleState::normal);
         if (!focused) return;
-        if ((window_flags & WindowFlagBits::docked) || parent()) return;
+        if ((window_flags & WindowFlagBits::docked) || parent() || is_overlay_window(this)) return;
 
         auto &ctx = detail::get_context();
         auto self_it = ctx.id_map.find(id());
@@ -1647,13 +1654,10 @@ namespace auik
 
         Widget *top = tree[top_index];
         Window *top_window = as_root_window(top);
-        const amal::vec2 self_range = self_window->depth_range();
-        const amal::vec2 top_range = top->depth_range();
 
-        top->update_depth(self_range);
-        self_window->update_depth(top_range);
         tree[index] = top;
         tree[top_index] = self_window;
+        raise_global_depth(self_window);
 
         const bool self_needs_layout = needs_layout_on_active(*self_window);
         add_render_command<detail::FocusEventTraits>(self_window, [self_window, self_needs_layout]() {

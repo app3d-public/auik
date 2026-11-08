@@ -32,6 +32,10 @@ namespace auik
 
     constexpr inline StringView tr(const char *literal) { return {literal, true}; }
     AUIK_EXPORT void rebuild_root_widget_depths();
+    AUIK_EXPORT amal::vec2 global_depth_range(u32 index);
+    AUIK_EXPORT void raise_global_depth(Widget *widget);
+    AUIK_EXPORT u32 get_global_depth_index(const Widget *widget);
+
     inline acul::string translate_string(const StringView &value)
     {
         const auto locale_cb = detail::get_default_string_locale_cb();
@@ -180,6 +184,7 @@ namespace auik
     {
         struct WidgetStateAccess;
         AUIK_EXPORT void request_style_refresh(Widget *widget);
+        AUIK_EXPORT void defer_widget_update(Widget *widget, acul::unique_function<void()> update);
         AUIK_EXPORT void request_widget_refresh(Widget *widget, StyleUpdateFlags flags);
     } // namespace detail
 
@@ -301,6 +306,12 @@ namespace auik
                 return *this;
             }
 
+            // Instance lifecycle hooks are independent of public widget IDs.
+            void (*on_attach_fn)(Widget *) = nullptr;
+            void (*on_detach_fn)(Widget *) = nullptr;
+            void (*on_destroy_fn)(Widget *) = nullptr;
+            bool (*on_visibility_fn)(Widget *) = nullptr;
+            acul::shared_ptr<bool> pending_update_live;
             acul::unique_function<void()> on_layout_fn = nullptr;
             acul::unique_function<void(HoverEvent &)> on_hover_fn = nullptr;
             acul::unique_function<void(ClickEvent &)> on_click_fn = nullptr;
@@ -376,6 +387,7 @@ namespace auik
             return static_cast<T *>(get_user_data(tag));
         }
 
+        WidgetUserData *user_data_head() { return _user_data; }
         const WidgetUserData *user_data_head() const { return _user_data; }
         AUIK_EXPORT void emplace_user_data_ref_head(u32 tag, void *handle);
         AUIK_EXPORT void emplace_user_data_ref_after_head(u32 tag, void *handle);
@@ -422,7 +434,13 @@ namespace auik
         inline detail::RectData &get_rect() { return _rect; }
         inline const detail::RectData &get_rect() const { return _rect; }
         inline void set_rect_tag_id(u32 tag_id) { _rect.id.tag_id = tag_id; }
-        inline bool is_visible() const { return _widget_state_flags & WidgetStateFlagBits::visible; }
+        inline bool is_visible() const
+        {
+            // During preparation setters are authoritative; there is no live state to synchronize yet.
+            if (!is_attached() && !is_transient())
+                return is_logically_visible() && (!_parent || _parent->is_visible());
+            return _widget_state_flags & WidgetStateFlagBits::visible;
+        }
         inline bool is_logically_visible() const { return widget_flags & WidgetFlagBits::visible; }
         inline void set_visible() { set_widget_flag(WidgetFlagBits::visible); }
         inline void unset_visible() { unset_widget_flag(WidgetFlagBits::visible); }
@@ -723,8 +741,9 @@ namespace auik
         {
             // State changed before attachment has no live draw/event side effects. Commit that state as the
             // synchronization baseline so the first change made after attachment is detected correctly.
-            _synced_widget_flags = widget_flags;
+            if (!is_attached() && !is_transient()) commit_initial_widget_state();
             _widget_state_flags |= WidgetStateFlagBits::attached;
+            if (_user_bind && _user_bind->on_attach_fn) _user_bind->on_attach_fn(this);
             // Embedded implementation widgets participate in the live tree without owning an id-map entry.
             if (!(widget_flags & WidgetFlagBits::attachable)) return;
             auto &ctx = detail::get_context();
@@ -735,6 +754,11 @@ namespace auik
         }
         virtual void on_detach()
         {
+            if (_user_bind)
+            {
+                if (_user_bind->pending_update_live) *_user_bind->pending_update_live = false;
+                if (_user_bind->on_detach_fn) _user_bind->on_detach_fn(this);
+            }
             if (!(widget_flags & WidgetFlagBits::attachable))
             {
                 _widget_state_flags &= ~WidgetStateFlagBits::attached;
@@ -969,6 +993,14 @@ namespace auik
     private:
         friend struct detail::WidgetStateAccess;
 
+        void commit_initial_widget_state()
+        {
+            if (is_logically_visible() && (!_parent || _parent->is_visible()))
+                add_state_flags_inherit(WidgetStateFlagBits::visible);
+            else remove_state_flags_inherit(WidgetStateFlagBits::visible);
+            _synced_widget_flags = widget_flags;
+        }
+
         inline EventFlags resolve_event_flags(EventFlags flags) const
         {
             if (is_disabled()) return EventFlagBits::none;
@@ -1010,7 +1042,11 @@ namespace auik
         {
             static void set_transient(Widget *widget, bool transient)
             {
-                if (transient) widget->_widget_state_flags |= WidgetStateFlagBits::transient;
+                if (transient)
+                {
+                    if (!widget->is_attached() && !widget->is_transient()) widget->commit_initial_widget_state();
+                    widget->_widget_state_flags |= WidgetStateFlagBits::transient;
+                }
                 else widget->_widget_state_flags &= ~WidgetStateFlagBits::transient;
             }
         };

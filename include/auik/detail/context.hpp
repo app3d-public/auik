@@ -68,6 +68,7 @@ namespace auik
     };
 
     struct DockspaceContext;
+    inline constexpr u32 global_depth_slot_count = 32;
 
     struct DirtyFlagBits
     {
@@ -98,6 +99,12 @@ namespace auik
 
     namespace detail
     {
+        struct GlobalDepthAllocation
+        {
+            u32 index = global_depth_slot_count;
+            void *owner = nullptr;
+            void (*update_depth)(void *, const amal::vec2 &) = nullptr;
+        };
         inline constexpr DirtyMask frame_end_dirty_mask =
             static_cast<DirtyMask>(DirtyFlagBits::redraw | DirtyFlagBits::host_update);
         inline constexpr DirtyMask gpu_cache_update_dirty_mask =
@@ -188,6 +195,8 @@ namespace auik
         {
             acul::disposal_queue disposal_queue;
             acul::vector<Widget *> widget_tree;
+            GlobalDepthAllocation *global_depth_slots[global_depth_slot_count]{};
+            u32 global_depth_end = 0;
             acul::vector<Widget *> transient_cache;
             acul::hashmap<u32, Widget *> id_map;
             acul::hashmap<u32, WidgetAttachBind> widget_attach_binds;
@@ -200,7 +209,6 @@ namespace auik
             StyleSelectorTransition style_selector{};
             u32 active_id = 0;
             u32 focus_id = 0;
-            u8 root_depth_counts[3] = {};
             GPUContext *gpu_ctx = nullptr;
             WindowContext *window_ctx = nullptr;
             SoundContext *sound_ctx = nullptr;

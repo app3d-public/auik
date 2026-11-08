@@ -24,8 +24,6 @@ namespace auik
         f32 y = 0.0f;
     };
 
-    static inline amal::vec2 get_tab_popup_depth_range() { return detail::get_global_foreground_depth_range(); }
-
     static inline DropdownPopupPlacement resolve_dropdown_popup_placement(f32 control_y, f32 control_h, f32 desired_h,
                                                                           f32 min_h, f32 max_h,
                                                                           const amal::vec4 &viewport)
@@ -1418,7 +1416,6 @@ namespace auik
             }
         }
         if (_overflow_button) _overflow_button->update_depth(control_range);
-        if (_popup) _popup->update_depth(get_tab_popup_depth_range());
         if (dragging()) update_drag_depth();
     }
 
@@ -1596,11 +1593,6 @@ namespace auik
             _overflow_button->draw(invalidate_ctx, false);
         }
         else if (_overflow_button && (ctx.reason & DrawReasonBits::record)) _overflow_button->reset_draw_records();
-        if (_open && _popup)
-        {
-            DrawCtx popup_ctx = ctx;
-            _popup->draw_local(popup_ctx);
-        }
     }
 
     void Tabbar::on_focus(bool focused)
@@ -2133,7 +2125,8 @@ namespace auik
     {
         if (!_popup || _overflow_start >= _items.size()) return;
 
-        _popup->set_parent(parent());
+        prepare_overlay_window(_popup);
+        _popup->set_parent(nullptr);
         _popup->set_window_style_tag(AUIK_STYLE_TAG_TABBAR_POPUP);
         _popup->window_flags = WindowFlagBits::none;
         _popup->set_visible();
@@ -2174,7 +2167,7 @@ namespace auik
         _popup->set_position({position().x + size().x - popup_w, placement.y});
         _popup->set_size({popup_w, placement.height});
         _popup->attach_to_viewport(this->viewport());
-        _popup->update_depth(get_tab_popup_depth_range());
+        _popup->update_depth(_popup->depth_range());
         _popup->update_layout(false);
 
         content_width = amal::max(popup_w - popup_padding.x - popup_padding.z, 0.0f);
@@ -2207,6 +2200,8 @@ namespace auik
             _overflow_button->start_icon_animation(true);
         }
         update_popup_layout();
+        add_overlay_window(_popup, _popup->focus_parent());
+        detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
     }
 
     void Tabbar::close_popup(bool refresh_style)

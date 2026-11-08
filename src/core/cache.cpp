@@ -1,6 +1,7 @@
 #include <auik/auik.hpp>
 #include <auik/cache.hpp>
 #include <auik/detail/context.hpp>
+#include <auik/detail/root_registration.hpp>
 #include <auik/widgets/checkbox.hpp>
 #include <auik/widgets/color_picker.hpp>
 #include <auik/widgets/column.hpp>
@@ -82,7 +83,7 @@ namespace auik
             for (auto *root : roots)
             {
                 if (!root) continue;
-                if (root->widget_flags & WidgetFlagBits::attachable) root->on_detach();
+                if (root->is_attached()) root->on_detach();
                 acul::release(root);
             }
             roots.clear();
@@ -92,7 +93,7 @@ namespace auik
         {
             if (!root) return;
             if (!root->viewport()) root->attach_to_viewport(get_main_viewport());
-            if (root->widget_flags & WidgetFlagBits::attachable) root->on_attach();
+            root->on_attach();
             root->update_style_invalidated();
         }
 
@@ -165,7 +166,11 @@ namespace auik
         ctx.io.drag_key_flags = {};
         ctx.dirty_flags |= DirtyFlagBits::layout | DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
 
-        for (auto *root : ctx.widget_tree) attach_snapshot_root(root);
+        for (auto *root : ctx.widget_tree)
+        {
+            detail::register_root_widget(root, root->get_depth_zone());
+            attach_snapshot_root(root);
+        }
         mark_locale_changed();
         rebuild_root_widget_depths();
         if (ctx.main_viewport && ctx.main_viewport->rect.size.x > 0.0f && ctx.main_viewport->rect.size.y > 0.0f)

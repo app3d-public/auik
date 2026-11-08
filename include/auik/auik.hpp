@@ -5,6 +5,7 @@
 #include <acul/functional/unique_function.hpp>
 #include <acul/op_result.hpp>
 #include "detail/context.hpp"
+#include "detail/depth.hpp"
 #include "detail/events.hpp"
 #include "draw.hpp"
 #include "pending_filter.hpp"
@@ -144,6 +145,14 @@ namespace auik
     // Lays out and records a dynamically attached root. A fitted viewport change expands the refresh scope.
     AUIK_EXPORT void mark_widget_attached_to_tree(Widget *widget);
     AUIK_EXPORT void add_widget_to_root(Widget *widget, DepthZone zone = DepthZone::work);
+    // Refresh a reused hidden popup before its owner measures and positions it.
+    AUIK_EXPORT void prepare_overlay_window(Widget *widget);
+    // Same global depth registration as a root, serviced by its owner's root UD without tree ownership.
+    AUIK_EXPORT void add_overlay_window(Widget *widget, Widget *owner,
+                                       DepthZone zone = DepthZone::foreground);
+    AUIK_EXPORT void remove_overlay_window(Widget *widget);
+    AUIK_EXPORT bool is_overlay_window(const Widget *widget);
+
     AUIK_EXPORT void mark_locale_changed();
     AUIK_EXPORT bool remove_widget_from_root_unsync(Widget *widget);
     AUIK_EXPORT bool remove_widget_from_root_unsync(u32 id);
@@ -250,7 +259,7 @@ namespace auik
         if (ctx.dirty_flags & DirtyFlagBits::styles) update_styles();
         if (ctx.dirty_flags & detail::layout_dirty_mask) record_layout_commands();
         else if (texture_bindings_changed) redraw_all_commands();
-        else if (ctx.dirty_flags & DirtyFlagBits::clip_rect) sync_clip_rect_cache();
+        if (ctx.dirty_flags & DirtyFlagBits::clip_rect) sync_clip_rect_cache();
         if (ctx.dirty_flags & DirtyFlagBits::streams) sync_draw_streams();
         detail::clear_dirty_flags(detail::gpu_cache_update_dirty_mask);
     }
@@ -359,7 +368,7 @@ namespace auik
         assert(widget && "widget is null");
         auto &ctx = detail::get_context();
         if (ctx.dirty_flags & DirtyFlagBits::destroying) return false;
-        ctx.disposal_queue.emplace(std::forward<F>(fn));
+        detail::defer_widget_update(widget, acul::unique_function<void()>(std::forward<F>(fn)));
         mark_host_refresh_request();
         return true;
     }

@@ -189,6 +189,45 @@ void test_dock_tree()
     ctx.shared_sync_state[0].buffer_versions = &versions[0];
     ctx.shared_sync_state[1].buffer_versions = &versions[1];
     {
+        // A full command rewrite after dismissing a popup rebuilds clip IDs without running layout.
+        theme.add_style(AUIK_STYLE_TAG_DOCK_TABBAR_MENU, auik::make_style().background_color(0xffffffffu));
+        auto *space = auik::make_dockspace(8900);
+        space->set_layout_size({600.f, 400.f});
+        space->set_menu_group({""});
+        space->on_attach();
+        space->add_window(0, acul::alloc<SizedWindow>(8901));
+        space->update_layout(false);
+        auik::Widget *button = nullptr;
+        for (const auto &entry : ctx.id_map)
+            if (entry.second->get_rect().id.tag_id == AUIK_TAG_DOCKSPACE_MENU_BUTTON && entry.second->parent() == space)
+                button = entry.second;
+        assert(button && button->clip_id() != 0xFFFFu);
+        auik::QuadsInstanceData button_record{};
+        auik::DrawStream button_stream{};
+        // GPU records remain separate from their clipping metadata.
+        button_stream.runtime_data = &button_record;
+        button_stream.push_data_to_stream = [](auik::DrawStream *stream, const void *data) {
+            *static_cast<auik::QuadsInstanceData *>(stream->runtime_data) =
+                *static_cast<const auik::QuadsInstanceData *>(data);
+            return auik::DrawDataID{17u, auik::AUIK_INVALID_DRAW_DATA_ID};
+        };
+        streams[AUIK_PRIMARY_QUAD_STREAM] = &button_stream;
+        button->update_draw_commands(auik::DrawReasonBits::record);
+        assert((button_record.mask & 0xFFFFu) == space->clip_id());
+        space->reset_clip_rect_records();
+        space->reset_draw_records();
+        clips.clear();
+        gpu.push_clip_rect(&gpu, {0, 0, 1, 1}); // Force a different parent clip ID in the new pool.
+        space->rebuild_clip_rects();
+        button->update_draw_commands(auik::DrawReasonBits::record);
+        assert((button_record.mask & 0xFFFFu) != 0xFFFFu);
+        assert((button_record.mask & 0xFFFFu) == space->clip_id());
+        space->on_detach();
+        streams[AUIK_PRIMARY_QUAD_STREAM] = nullptr;
+        acul::release(space);
+        ctx.disposal_queue.discard();
+    }
+    {
         // Parent layout repeatedly supplies its inherited clip before the child
         // rebuilds its own bounds. Neither allocation nor parent data may leak.
         CountedWidget parent(8390), child(8391);
@@ -639,9 +678,7 @@ void test_dock_tree()
         ctx.widget_tree.push_back(toolbar);
         auik::rebuild_root_widget_depths();
         toolbar->update_draw_commands();
-        auto *dock_context = auik::get_dockspace_context();
-        dock_context->drag_window = window;
-        dock_context->drag_zones_enabled = true;
+        auik::enable_dockspace_drag_zones(window);
         space->update_layout(false);
         // With one leaf and no split handles, the first helper is the left root drop zone.
         space->on_drop({window->id(), AUIK_TAG_WINDOW_HEADER, 0u},

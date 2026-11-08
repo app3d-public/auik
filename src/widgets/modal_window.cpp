@@ -484,7 +484,7 @@ namespace auik
     void ModalQueue::update_active_modal_depth()
     {
         if (!active_modal()) return;
-        const amal::vec2 modal_root_range = detail::get_global_foreground_depth_range();
+        const amal::vec2 modal_root_range = depth_range();
         _rect.depth = modal_root_range.x;
         _rect.hit_depth = _rect.depth;
         amal::vec2 modal_range{};
@@ -691,6 +691,7 @@ namespace auik
             if (_modal->signature() == AUIK_TAG_MODAL_WINDOW) static_cast<ModalWindow *>(_modal)->set_queue(this);
             _modal->on_attach();
             _modal->update_style_invalidated();
+            raise_global_depth(this);
             update_active_modal_depth();
             relayout_modal_draw_commands();
             focus_widget(_modal);
@@ -790,6 +791,7 @@ namespace auik
         modal->set_queue(this);
         modal->update_style_invalidated();
         _modal = modal;
+        raise_global_depth(this);
         update_active_modal_depth();
         relayout_modal_draw_commands();
         focus_widget(modal);

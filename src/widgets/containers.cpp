@@ -922,8 +922,8 @@ namespace auik
 
                 Widget *layout_target = resolve_parent_layout_update_target(this);
                 if (!layout_target) layout_target = this;
-                layout_target->update_layout(false);
                 layout_target->update_depth(layout_target->depth_range());
+                layout_target->update_layout(false);
                 layout_target->update_draw_commands(DrawReasonBits::layout);
                 detail::get_context().dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
             },
@@ -1938,7 +1938,7 @@ namespace auik
         set_child_ref_active(active_child(), true);
         reset_clip_rect_records();
         detail::mark_layout_dirty();
-        rebuild_root_widget_depths();
+        update_depth(depth_range());
         redraw_all_commands();
     }
 

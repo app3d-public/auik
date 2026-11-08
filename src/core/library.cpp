@@ -1,7 +1,9 @@
+#include <algorithm>
 #include <auik/auik.hpp>
 #include <auik/detail/context.hpp>
 #include <auik/detail/depth.hpp>
 #include <auik/detail/events.hpp>
+#include <auik/detail/root_registration.hpp>
 #include <auik/detail/gpu_context.hpp>
 #include <auik/sound.hpp>
 #include <auik/widgets/containers.hpp>
@@ -558,6 +560,7 @@ namespace auik
         detail::g_context->dirty_flags |= DirtyFlagBits::destroying;
         cancel_all_delayed_tasks();
         detail::g_context->disposal_queue.discard();
+        for (auto *widget : detail::g_context->widget_tree) detail::dismiss_owned_windows(widget);
         for (auto *widget : detail::g_context->widget_tree) acul::release(widget);
         detail::g_context->widget_tree.clear();
         detail::g_context->transient_cache.clear();
@@ -625,6 +628,8 @@ namespace auik
             if (viewport_tree_contains(ctx.main_viewport, viewport)) continue;
             record_viewport_tree_draw_commands(viewport, reason);
         }
+        for (auto *widget : ctx.transient_cache)
+            if (widget && widget->is_visible()) widget->update_draw_commands(reason | DrawReasonBits::transient);
     }
 
     static bool record_fast_update_commands();
@@ -635,7 +640,7 @@ namespace auik
         for (Widget *widget : ctx.widget_tree)
             if (widget) widget->invalidate_style();
         for (Widget *widget : ctx.transient_cache)
-            if (widget && !widget->is_attached()) widget->invalidate_style();
+            if (widget) widget->invalidate_style();
         detail::mark_styles_dirty();
         update_styles();
     }
@@ -802,6 +807,10 @@ namespace auik
         rebuild_clip_rect_records();
         for (Widget *widget : ctx.widget_tree)
             widget->update_draw_commands(DrawReasonBits::full_redraw | DrawReasonBits::record);
+        for (auto *widget : ctx.transient_cache)
+            if (widget && widget->is_visible())
+                widget->update_draw_commands(DrawReasonBits::full_redraw | DrawReasonBits::record | DrawReasonBits::transient);
+
         ctx.dirty_flags &= ~DirtyFlagBits::hit_rect_draw;
         ctx.dirty_flags |= DirtyFlagBits::hit_rect_sync;
     }
@@ -859,22 +868,7 @@ namespace auik
 
     AUIK_EXPORT void rebuild_root_widget_depths()
     {
-        auto &ctx = detail::get_context();
-        ctx.root_depth_counts[0] = 0u;
-        ctx.root_depth_counts[1] = 0u;
-        ctx.root_depth_counts[2] = 0u;
-
-        for (Widget *widget : ctx.widget_tree)
-        {
-            if (!widget) continue;
-            const DepthZone zone = widget->get_depth_zone();
-            const u32 zone_index = static_cast<u32>(zone);
-            assert(zone_index < 3u && "Invalid root depth zone");
-            const int lane_index = ctx.root_depth_counts[zone_index];
-            assert(lane_index < 32 && "Max depth zone exceeded");
-            widget->update_depth(detail::get_root_depth_range(zone, lane_index));
-            ++ctx.root_depth_counts[zone_index];
-        }
+        detail::update_registered_depths();
     }
 
     AUIK_EXPORT void add_widget_to_root(Widget *widget, DepthZone zone)
@@ -885,22 +879,8 @@ namespace auik
         assert(widget->viewport() && "Root widget viewport is not assigned");
         widget->set_depth_zone(zone);
         ctx.widget_tree.push_back(widget);
-        if (widget->widget_flags & WidgetFlagBits::attachable) widget->on_attach();
-        if (detail::as_counted_root_window(widget))
-        {
-            u32 lane_index = 0u;
-            for (Widget *root : ctx.widget_tree)
-            {
-                if (root == widget) break;
-                if (root && root->get_depth_zone() == zone) ++lane_index;
-            }
-            assert(lane_index < 32u && "Max root window depth lanes exceeded");
-            widget->update_depth(detail::get_root_depth_range(zone, static_cast<int>(lane_index)));
-        }
-        else
-        {
-            rebuild_root_widget_depths();
-        }
+        detail::register_root_widget(widget, zone);
+        widget->on_attach();
         widget->update_style_invalidated();
     }
 
@@ -954,7 +934,7 @@ namespace auik
         for (Widget *widget : ctx.widget_tree)
             if (widget) changed |= widget->update_locale();
         for (Widget *widget : ctx.transient_cache)
-            if (widget && !widget->is_attached()) changed |= widget->update_locale();
+            if (widget) changed |= widget->update_locale();
         if (changed) ctx.dirty_flags |= DirtyFlagBits::layout | DirtyFlagBits::redraw;
         mark_host_refresh_request();
     }
@@ -966,8 +946,9 @@ namespace auik
         for (size_t i = 0; i < ctx.widget_tree.size(); ++i)
         {
             if (ctx.widget_tree[i] != widget) continue;
-            if (widget->widget_flags & WidgetFlagBits::attachable) widget->on_detach();
+            if (widget->is_attached()) widget->on_detach();
             ctx.widget_tree.erase(ctx.widget_tree.begin() + i);
+            detail::unregister_root_widget(widget);
             if (ctx.focus_id && ctx.id_map.find(ctx.focus_id) == ctx.id_map.end()) ctx.focus_id = 0u;
             if (ctx.active_id && ctx.id_map.find(ctx.active_id) == ctx.id_map.end()) ctx.active_id = 0u;
             if (ctx.hover_id && ctx.id_map.find(ctx.hover_id.widget_id) == ctx.id_map.end()) ctx.hover_id = {};
@@ -979,7 +960,6 @@ namespace auik
                 ctx.io.drag_id = {};
                 ctx.io.drag_key_flags = {};
             }
-            rebuild_root_widget_depths();
             mark_host_refresh_request();
             return true;
         }
@@ -998,7 +978,6 @@ namespace auik
     {
         if (!remove_widget_from_root_unsync(widget)) return false;
         widget->invalidate_draw_commands(DrawReasonBits::layout);
-        redraw_all_commands();
         acul::release(widget);
         return true;
     }

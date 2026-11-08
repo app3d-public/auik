@@ -41,6 +41,9 @@ namespace auik
         AUIK_EXPORT ~MenuBar() override;
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
+        AUIK_EXPORT void invalidate_style() override;
+        AUIK_EXPORT bool update_locale() override;
+        AUIK_EXPORT void reset_draw_records() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;
         AUIK_EXPORT void update_depth(const amal::vec2 &depth_range) override;
         AUIK_EXPORT void back_hit_depth() override;
@@ -316,6 +319,12 @@ namespace auik
         MenuBar *menu_model() const { return _menu; }
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
+        void invalidate_style() override
+        {
+            Widget::invalidate_style();
+            _button.invalidate_style();
+            if (_menu) _menu->invalidate_style();
+        }
         bool update_locale() override { return _menu && _menu->update_locale(); }
         AUIK_EXPORT void update_layout_min_size_force() override;
         AUIK_EXPORT void update_layout(bool min_size_known) override;

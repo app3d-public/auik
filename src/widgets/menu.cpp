@@ -29,15 +29,6 @@ namespace auik
         return popup_range;
     }
 
-    static inline amal::vec2 get_root_menu_popup_depth_range(MenuBar::PopupDepthMode mode)
-    {
-        amal::vec2 overlay_range = detail::get_global_foreground_depth_range();
-        if (mode != MenuBar::PopupDepthMode::root_overlay_next) return overlay_range;
-        amal::vec2 next_range{};
-        assign_next_depth(overlay_range, next_range);
-        return next_range;
-    }
-
     static void sync_widget_after_style_update(Widget *widget, StyleUpdateFlags style_flags)
     {
         if (!widget || style_flags == StyleUpdateFlagBits::none) return;
@@ -1101,19 +1092,40 @@ namespace auik
         Tabbar::update_layout(min_size_known);
         refresh_menu_clip_rects();
         reposition_open_popups();
+        for (auto *popup : _popups)
+            if (popup && popup->is_visible()) popup->update_layout(false);
+    }
+
+    void MenuBar::invalidate_style()
+    {
+        Tabbar::invalidate_style();
+        for (auto *popup : _popups)
+            if (popup) popup->invalidate_style();
+    }
+
+    bool MenuBar::update_locale()
+    {
+        bool changed = Tabbar::update_locale();
+        for (auto *popup : _popups)
+            if (popup) changed |= popup->update_locale();
+        return changed;
+    }
+
+    void MenuBar::reset_draw_records()
+    {
+        Tabbar::reset_draw_records();
+        _bg = {};
+        for (auto *popup : _popups)
+            if (popup) popup->reset_draw_records();
     }
 
     void MenuBar::update_depth(const amal::vec2 &depth_range)
     {
         Tabbar::update_depth(depth_range);
-        const amal::vec2 popup_range =
-            _popup_depth_mode == PopupDepthMode::workzone_overlay
-                ? get_menu_popup_depth_range(parent() ? parent()->depth_range() : this->depth_range())
-                : get_root_menu_popup_depth_range(_popup_depth_mode);
-        for (u32 i = 0; i < _popups.size(); ++i)
-        {
-            if (_popups[i]) static_cast<Widget *>(_popups[i])->update_depth(popup_range);
-        }
+        if (_popup_depth_mode != PopupDepthMode::workzone_overlay) return;
+        const auto popup_range = get_menu_popup_depth_range(parent() ? parent()->depth_range() : this->depth_range());
+        for (auto *popup : _popups)
+            if (popup) popup->update_depth(popup_range);
     }
 
     void MenuBar::back_hit_depth()
@@ -1178,8 +1190,7 @@ namespace auik
         {
             // Window draws menu popups after its content during full redraws.
             // A direct MenuBar update has no such parent pass, so refresh popups here.
-            if ((!(menu_ctx.reason & DrawReasonBits::record) && !(menu_ctx.reason & DrawReasonBits::invalidate)) &&
-                (menu_ctx.reason & (DrawReasonBits::external | DrawReasonBits::transient)))
+            if (!(menu_ctx.reason & (DrawReasonBits::record | DrawReasonBits::invalidate)))
                 draw_popups(menu_ctx);
             return;
         }
@@ -1188,8 +1199,9 @@ namespace auik
 
     void MenuBar::draw_popups(DrawCtx &ctx)
     {
-        for (auto *popup : _popups)
+        for (u32 i = 0; i < _popups.size(); ++i)
         {
+            auto *popup = _popups[i];
             if (!popup || !popup->is_visible()) continue;
             refresh_popup_clip_rect(popup);
             DrawCtx popup_ctx = ctx;
@@ -1287,7 +1299,8 @@ namespace auik
     void MenuBar::layout_popup(u32 depth, const amal::rect &anchor, const acul::vector<acul::vector<u32>> &groups)
     {
         auto *popup = ensure_popup(depth);
-        popup->set_parent(parent());
+        prepare_overlay_window(popup);
+        popup->set_parent(_popup_depth_mode == PopupDepthMode::workzone_overlay ? parent() : nullptr);
         if (popup->is_visible()) static_cast<Widget *>(popup)->invalidate_draw_commands();
         if (depth == 0u && !_open_path.empty())
         {
@@ -1352,7 +1365,11 @@ namespace auik
         const auto &popup_style = get_theme()->get_style(
             get_theme()->get_resolved_style(AUIK_STYLE_TAG_MENU_POPUP, popup->id(), 0, StyleState::normal));
         const amal::vec4 padding = popup_style.padding();
-        const f32 popup_w = content_w + padding.x + padding.z;
+        // Include the window/content container's own insets and round the frame outward.
+        // Summing row heights alone can leave less than one pixel for a fit-content body.
+        popup->update_layout_min_size_force();
+        const auto measured = popup->required_size();
+        const f32 popup_w = amal::ceil(amal::max(content_w + padding.x + padding.z, measured.x));
         const amal::vec4 popup_bounds = get_popup_bounds_rect();
         const f32 popup_y = depth == 0u ? anchor.offset.y + anchor.size.y : anchor.offset.y;
         const f32 border_thickness = amal::max(popup_style.border_thickness(), 0.0f);
@@ -1361,8 +1378,8 @@ namespace auik
         const f32 border_bottom = (border_mask & AUIK_BORDER_BOTTOM_BIT) ? border_thickness : 0.0f;
         const f32 body_top = amal::ceil(popup_y + border_top);
         const f32 body_bottom = amal::ceil(body_top + content_h + padding.y + padding.w);
-        const f32 desired_popup_h =
-            amal::max(body_bottom + border_bottom - popup_y, AUIK_MENU_POPUP_ITEM_FALLBACK_HEIGHT);
+        const f32 desired_popup_h = amal::ceil(amal::max(
+            amal::max(body_bottom + border_bottom - popup_y, measured.y), AUIK_MENU_POPUP_ITEM_FALLBACK_HEIGHT));
         const f32 available_h = amal::max(popup_bounds.y + popup_bounds.w - popup_y, 0.0f);
         const bool need_scroll = desired_popup_h > available_h;
         const f32 popup_h = need_scroll ? available_h : desired_popup_h;
@@ -1371,17 +1388,24 @@ namespace auik
         popup->sync_widget_flags();
         popup->update_style_invalidated();
         const amal::vec2 popup_size{popup_w, popup_h};
+        popup->attach_to_viewport(get_popup_viewport());
+        const auto viewport = get_widget_viewport_rect(popup);
+        // Anchors are already in absolute viewport coordinates, including on the first layout.
+        popup->set_root_viewport_origin({viewport.x, viewport.y});
+        popup->set_auto_position(false, false);
         popup->set_position(resolve_popup_position(depth, anchor, popup_size, popup->id()));
         popup->set_size(popup_size);
-        popup->attach_to_viewport(get_popup_viewport());
-        const amal::vec2 popup_range =
-            _popup_depth_mode == PopupDepthMode::workzone_overlay
-                ? get_menu_popup_depth_range(parent() ? parent()->depth_range() : this->depth_range())
-                : get_root_menu_popup_depth_range(_popup_depth_mode);
-        popup->update_depth(popup_range);
+        if (_popup_depth_mode == PopupDepthMode::workzone_overlay)
+            popup->update_depth(get_menu_popup_depth_range(parent() ? parent()->depth_range() : this->depth_range()));
+        else
+        {
+            add_overlay_window(popup, popup->focus_parent());
+        }
         refresh_popup_clip_rect(popup);
         popup->update_layout(false);
         refresh_popup_clip_rect(popup);
+        detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
+
     }
 
     amal::rect MenuBar::resolve_root_popup_anchor(const amal::rect &anchor) const
@@ -1815,7 +1839,7 @@ namespace auik
         _menu->update_style_invalidated();
         _menu->update_layout_min_size();
         attach_menu_for_popup();
-        _menu->update_depth(detail::get_global_foreground_depth_range());
+        _menu->update_depth(this->depth_range());
         _menu->open_root_items_at(_popup_anchor_overridden ? _popup_anchor_override : _button.bounds(), ids);
         focus_widget(_menu);
     }
@@ -1848,7 +1872,7 @@ namespace auik
     {
         Widget::update_depth(depth_range);
         _button.update_depth(this->depth_range());
-        if (_menu) _menu->update_depth(detail::get_global_foreground_depth_range());
+        if (_menu) _menu->update_depth(this->depth_range());
     }
 
     void PopupMenu::back_hit_depth()
