@@ -21,6 +21,12 @@ namespace auik
         detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
     }
 
+    static f32 scrollbar_reserved_thickness(detail::Scrollbar *scrollbar)
+    {
+        const auto margin = scrollbar->get_track_margin();
+        return scrollbar->get_min_track_thickness() + margin.x + margin.z;
+    }
+
     static inline void release_scrollbar(detail::Scrollbar *&scrollbar)
     {
         if (!scrollbar) return;
@@ -923,9 +929,11 @@ namespace auik
                 // A pending full pass lays out the root first, including its clip records.
                 Widget *layout_target = resolve_parent_layout_update_target(this);
                 if (!layout_target) layout_target = this;
+                // Newly attached children need their assigned depth even when layout
+                // is deferred until the root has valid clip records.
+                layout_target->update_depth(layout_target->depth_range());
                 if ((detail::get_context().dirty_flags & DirtyFlagBits::layout) &&
                     layout_target->clip_id() == 0xFFFFu) return;
-                layout_target->update_depth(layout_target->depth_range());
                 layout_target->update_layout(false);
                 layout_target->update_draw_commands(DrawReasonBits::layout);
                 detail::get_context().dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
@@ -976,13 +984,11 @@ namespace auik
         if (_scroll.scrollbar_x)
         {
             _scroll.scrollbar_x->set_clip_id(clip_id());
-            _scroll.scrollbar_x->update_depth(detail::depth_foreground_range(this->depth_range()));
             _scroll.scrollbar_x->update_style_invalidated();
         }
         if (_scroll.scrollbar_y)
         {
             _scroll.scrollbar_y->set_clip_id(clip_id());
-            _scroll.scrollbar_y->update_depth(detail::depth_foreground_range(this->depth_range()));
             _scroll.scrollbar_y->update_style_invalidated();
         }
     }
@@ -1065,9 +1071,9 @@ namespace auik
         amal::vec4 padding = base_padding;
         ensure_scrollbars();
         if (overflow.y == OverflowMode::scroll && _scroll.scrollbar_y)
-            padding.z += _scroll.scrollbar_y->get_min_track_thickness();
+            padding.z += scrollbar_reserved_thickness(_scroll.scrollbar_y);
         if (overflow.x == OverflowMode::scroll && _scroll.scrollbar_x)
-            padding.w += _scroll.scrollbar_x->get_min_track_thickness();
+            padding.w += scrollbar_reserved_thickness(_scroll.scrollbar_x);
         update_layout_min_size_with(margin, padding);
         auto required = required_size();
         required.x = amal::max(required.x, style_min.x + margin.x + margin.z);
@@ -1137,9 +1143,9 @@ namespace auik
         const bool scroll_x_enabled = overflow.x == OverflowMode::auto_ || overflow.x == OverflowMode::scroll;
         const bool scroll_y_enabled = overflow.y == OverflowMode::auto_ || overflow.y == OverflowMode::scroll;
         const f32 bar_w =
-            has_visible_scrollbar_y() && _scroll.scrollbar_y ? _scroll.scrollbar_y->get_min_track_thickness() : 0.0f;
+            has_visible_scrollbar_y() && _scroll.scrollbar_y ? scrollbar_reserved_thickness(_scroll.scrollbar_y) : 0.0f;
         const f32 bar_h =
-            has_visible_scrollbar_x() && _scroll.scrollbar_x ? _scroll.scrollbar_x->get_min_track_thickness() : 0.0f;
+            has_visible_scrollbar_x() && _scroll.scrollbar_x ? scrollbar_reserved_thickness(_scroll.scrollbar_x) : 0.0f;
         const amal::vec2 clip_pos{clip_ignores_padding_x ? position().x : content_pos.x,
                                   clip_ignores_padding_y ? position().y : content_pos.y};
         const amal::vec2 clip_view_size{
@@ -1155,8 +1161,11 @@ namespace auik
     void detail::ScrollableBlock::request_scroll_layout_update(DrawReasonFlags reason)
     {
         sync_clip_rect_cache();
-        update_layout(true);
-        update_draw_commands(reason);
+        Widget *layout_target = resolve_parent_layout_update_target(this);
+        if (!layout_target) layout_target = this;
+        layout_target->update_depth(layout_target->depth_range());
+        layout_target->update_layout(false);
+        layout_target->update_draw_commands(reason);
         auto &ctx = detail::get_context();
         ctx.dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
         mark_host_refresh_request();
@@ -1234,9 +1243,9 @@ namespace auik
             const bool need_scroll_y = scroll_y_enabled && _scroll.scrollbar_y && _scroll.scrollbar_y->is_visible();
             const bool need_scroll_x = scroll_x_enabled && _scroll.scrollbar_x && _scroll.scrollbar_x->is_visible();
             const f32 bar_w =
-                need_scroll_y && _scroll.scrollbar_y ? _scroll.scrollbar_y->get_min_track_thickness() : 0.0f;
+                need_scroll_y && _scroll.scrollbar_y ? scrollbar_reserved_thickness(_scroll.scrollbar_y) : 0.0f;
             const f32 bar_h =
-                need_scroll_x && _scroll.scrollbar_x ? _scroll.scrollbar_x->get_min_track_thickness() : 0.0f;
+                need_scroll_x && _scroll.scrollbar_x ? scrollbar_reserved_thickness(_scroll.scrollbar_x) : 0.0f;
 
             _scroll.view_size = {amal::max(raw_available_size.x - bar_w, 0.0f),
                                  amal::max(raw_available_size.y - bar_h, 0.0f)};
@@ -1318,9 +1327,9 @@ namespace auik
         const bool scroll_x_enabled = overflow_x == OverflowMode::auto_ || overflow_x == OverflowMode::scroll;
         const bool scroll_y_enabled = overflow_y == OverflowMode::auto_ || overflow_y == OverflowMode::scroll;
         const f32 bar_w =
-            scroll_y_enabled && _scroll.scrollbar_y ? _scroll.scrollbar_y->get_min_track_thickness() : 0.0f;
+            scroll_y_enabled && _scroll.scrollbar_y ? scrollbar_reserved_thickness(_scroll.scrollbar_y) : 0.0f;
         const f32 bar_h =
-            scroll_x_enabled && _scroll.scrollbar_x ? _scroll.scrollbar_x->get_min_track_thickness() : 0.0f;
+            scroll_x_enabled && _scroll.scrollbar_x ? scrollbar_reserved_thickness(_scroll.scrollbar_x) : 0.0f;
         auto with_scroll_trailing_padding = [padding](const amal::vec2 &content_size, bool scroll_x, bool scroll_y) {
             return content_size + amal::vec2{scroll_x ? padding.z : 0.0f, scroll_y ? padding.w : 0.0f};
         };
@@ -1605,16 +1614,17 @@ namespace auik
     u32 detail::ScrollableBlock::get_depth_requirement() const
     {
         u32 requirement = Block::get_depth_requirement();
-        if (_scroll.scrollbar_x && _scroll.scrollbar_x->is_visible())
-            requirement += _scroll.scrollbar_x->get_depth_requirement();
-        if (_scroll.scrollbar_y && _scroll.scrollbar_y->is_visible())
-            requirement += _scroll.scrollbar_y->get_depth_requirement();
+        const auto overflow = scroll_overflow();
+        // Reserve slots before layout decides whether the scrollbars are visible.
+        if (_scroll.scrollbar_x || overflow.x == OverflowMode::auto_ || overflow.x == OverflowMode::scroll) ++requirement;
+        if (_scroll.scrollbar_y || overflow.y == OverflowMode::auto_ || overflow.y == OverflowMode::scroll) ++requirement;
         return requirement;
     }
 
     void detail::ScrollableBlock::update_depth(const amal::vec2 &depth_range)
     {
         Widget::update_depth(depth_range);
+        ensure_scrollbars();
         DepthCursor cursor(this->depth_range(), get_depth_requirement());
         cursor.next(1u);
         auto update_layer = [&](DepthZone layer) {
@@ -1629,9 +1639,9 @@ namespace auik
         update_layer(DepthZone::background);
         update_layer(DepthZone::work);
         update_layer(DepthZone::foreground);
-        if (_scroll.scrollbar_x && _scroll.scrollbar_x->is_visible())
+        if (_scroll.scrollbar_x)
             _scroll.scrollbar_x->update_depth(cursor.next(_scroll.scrollbar_x->get_depth_requirement()));
-        if (_scroll.scrollbar_y && _scroll.scrollbar_y->is_visible())
+        if (_scroll.scrollbar_y)
             _scroll.scrollbar_y->update_depth(cursor.next(_scroll.scrollbar_y->get_depth_requirement()));
     }
 
@@ -2257,19 +2267,16 @@ namespace auik
         auto &ctx = detail::get_context();
         const auto drag_id = ctx.io.drag_id;
         const bool drag_scrollbar_y =
-            _scroll.scrollbar_y && _scroll.scrollbar_y->is_visible() && detail::is_scrollbar_y_drag(drag_id, id());
+            _scroll.scrollbar_y && _scroll.scrollbar_y->is_visible() &&
+            detail::is_scrollbar_y_drag(drag_id, get_rect().id.widget_id);
         const bool drag_scrollbar_x =
-            _scroll.scrollbar_x && _scroll.scrollbar_x->is_visible() && detail::is_scrollbar_x_drag(drag_id, id());
+            _scroll.scrollbar_x && _scroll.scrollbar_x->is_visible() &&
+            detail::is_scrollbar_x_drag(drag_id, get_rect().id.widget_id);
         if (!drag_scrollbar_y && !drag_scrollbar_x) return;
 
         const bool thumb_drag = detail::is_scrollbar_thumb_drag(drag_id);
-        if (state == KeyPressState::press)
-        {
-            if (thumb_drag && drag_scrollbar_y) _scroll.scrollbar_y->begin_thumb_drag(ctx.io.mouse_pos);
-            if (thumb_drag && drag_scrollbar_x) _scroll.scrollbar_x->begin_thumb_drag(ctx.io.mouse_pos);
-            return;
-        }
         if (state == KeyPressState::release) return;
+        // The click handler captures the grab offset before the first mouse movement.
 
         bool is_offset_changed = false;
         if (drag_scrollbar_y)

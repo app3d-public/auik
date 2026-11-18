@@ -252,7 +252,7 @@ namespace auik::detail
 
     StyleUpdateFlags Scrollbar::update_style()
     {
-        const u32 parent_id = parent() ? parent()->id() : 0u;
+        const u32 parent_id = parent() ? parent()->get_rect().id.widget_id : 0u;
         StyleUpdateFlags out = StyleUpdateFlagBits::none;
         const auto transition = detail::get_widget_style_selector_transition(parent_id);
         StyleState track_state = StyleState::normal;
@@ -273,6 +273,7 @@ namespace auik::detail
 
     void Scrollbar::rebuild_clip_rects()
     {
+        set_clip_id(parent()->clip_id());
         _thumb_rect.clip_id = clip_id();
         DrawDataID *hit_ids[] = {&_track_draw_id, &_thumb_draw_id};
         invalidate_hit_rect_batch(hit_ids, 2);
@@ -298,6 +299,11 @@ namespace auik::detail
         auto *theme = get_theme();
         auto *quads_stream = get_primary_quads_stream();
 
+        // Popup content can be rebound to its public owner's hit ID after this
+        // scrollbar was constructed. Keep both hit zones routed to that owner.
+        const u32 hit_owner = parent()->get_rect().id.widget_id;
+        _rect.id.widget_id = hit_owner;
+        _thumb_rect.id.widget_id = hit_owner;
         QuadsInstanceData track{};
         track.rect = bounds();
         track.z_order = get_z_order();

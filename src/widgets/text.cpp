@@ -447,8 +447,11 @@ namespace auik
             effective_max_width = inner_size.x;
         const bool single_line_measure_fits = !multiline() && !_layout_result.truncated && effective_max_width > 0.0f &&
                                               _layout_result.size.x <= effective_max_width;
-        const bool reuse_layout = !width_changed || width_mode != TextLayoutWidthMode::bounds ||
-                                  _layout_config.max_width > 0.0f || measure_matches_bounds || single_line_measure_fits;
+        const bool layout_fits_bounds = !multiline() || effective_max_width <= 0.0f ||
+                                        _layout_result.size.x <= effective_max_width;
+        const bool reuse_layout = layout_fits_bounds &&
+                                  (!width_changed || width_mode != TextLayoutWidthMode::bounds ||
+                                   _layout_config.max_width > 0.0f || measure_matches_bounds || single_line_measure_fits);
         const bool buffers_built = rebuild_text_buffers(inner_size, reuse_layout);
         update_content_bounds();
         set_position(outer_pos);

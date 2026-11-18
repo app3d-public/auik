@@ -396,7 +396,10 @@ namespace auik
         if (_popup)
         {
             const auto transition = detail::get_widget_style_selector_transition(id());
-            if (transition.current_id.tag_id == AUIK_TAG_WINDOW) flags |= _popup->update_style_invalidated();
+            if (transition.current_id.tag_id == AUIK_TAG_WINDOW ||
+                detail::is_scrollbar_tag(transition.current_id.tag_id) ||
+                detail::is_scrollbar_tag(transition.prev_id.tag_id))
+                flags |= _popup->update_style_invalidated();
             if (transition.prev_id.tag_id == AUIK_TAG_COMBO_BOX_ITEM &&
                 transition.prev_id.element_id < _popup->children.size())
             {
@@ -1001,7 +1004,10 @@ namespace auik
         if (_popup)
         {
             const auto transition = detail::get_widget_style_selector_transition(id());
-            if (transition.current_id.tag_id == AUIK_TAG_WINDOW) flags |= _popup->update_style_invalidated();
+            if (transition.current_id.tag_id == AUIK_TAG_WINDOW ||
+                detail::is_scrollbar_tag(transition.current_id.tag_id) ||
+                detail::is_scrollbar_tag(transition.prev_id.tag_id))
+                flags |= _popup->update_style_invalidated();
             if (transition.prev_id.tag_id == AUIK_TAG_COMBO_BOX_ITEM &&
                 transition.prev_id.element_id < _popup->children.size())
             {

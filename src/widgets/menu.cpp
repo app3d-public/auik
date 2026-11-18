@@ -1288,29 +1288,73 @@ namespace auik
         const f32 popup_y = anchor.offset.y - popup_style.padding().y - item_style.margin().y;
         const bool fits_right = right_x + popup_size.x <= max_x;
         const bool fits_left = left_x >= min_x;
-        if (fits_right) return clamp({right_x, popup_y});
-        if (fits_left) return clamp({left_x, popup_y});
+        const auto right = clamp({right_x, popup_y});
+        const auto left = clamp({left_x, popup_y});
+        if (fits_right && !fits_left) return right;
+        if (fits_left && !fits_right) return left;
 
-        const f32 space_right = max_x - anchor_right;
-        const f32 space_left = anchor_left - min_x;
-        return clamp({space_left > space_right ? left_x : right_x, popup_y});
+        auto overlap = [&](const amal::vec2 &pos) {
+            f32 area = 0.0f;
+            for (u32 i = 0u; i < depth && i < _popups.size(); ++i)
+            {
+                const auto *ancestor = _popups[i];
+                if (!ancestor || !ancestor->is_visible()) continue;
+                const auto box = ancestor->bounds();
+                // Adjacent levels share a one-pixel seam, not an occupied area.
+                const f32 width = amal::min(pos.x + popup_size.x, box.offset.x + box.size.x) -
+                                  amal::max(pos.x, box.offset.x) - 1.0f;
+                const f32 height = amal::min(pos.y + popup_size.y, box.offset.y + box.size.y) -
+                                   amal::max(pos.y, box.offset.y);
+                area += amal::max(width, 0.0f) * amal::max(height, 0.0f);
+            }
+            return area;
+        };
+        const f32 left_overlap = overlap(left), right_overlap = overlap(right);
+        if (left_overlap < right_overlap) return left;
+        if (right_overlap < left_overlap) return right;
+
+        // Continue the parent's opening direction instead of folding back over
+        // an earlier level when both sides have room.
+        if (depth > 1u && depth <= _popups.size() && _popups[depth - 1u] && _popups[depth - 2u])
+        {
+            const auto parent = _popups[depth - 1u]->bounds();
+            const auto previous = _popups[depth - 2u]->bounds();
+            if (parent.offset.x + parent.size.x * 0.5f < previous.offset.x + previous.size.x * 0.5f) return left;
+        }
+        return right;
     }
 
     void MenuBar::layout_popup(u32 depth, const amal::rect &anchor, const acul::vector<acul::vector<u32>> &groups)
     {
+        Widget *popup_owner = this;
+        if (depth == 0u && !_open_path.empty() && _open_path[0] != 0u)
+        {
+            const u32 root_index = find_index_by_element_id(_open_path[0]);
+            if (root_index < _items.size() && _items[root_index].tab) popup_owner = _items[root_index].tab;
+        }
+        else if (depth > 0u)
+        {
+            popup_owner = nullptr;
+            if (depth < _open_path.size() && depth <= _popups.size())
+                if (auto *parent_popup = _popups[depth - 1u]; parent_popup && parent_popup->is_visible())
+                    for (auto *child : parent_popup->children)
+                        if (child && child->is_visible() && child->get_rect().id.tag_id == AUIK_TAG_COMBO_BOX_ITEM &&
+                            popup_child_item_id(child) == _open_path[depth])
+                        {
+                            popup_owner = child;
+                            break;
+                        }
+            if (!popup_owner)
+            {
+                close_from_depth(depth);
+                return;
+            }
+        }
         auto *popup = ensure_popup(depth);
+        popup->set_focus_parent(popup_owner);
         prepare_overlay_window(popup);
         popup->set_parent(_popup_depth_mode == PopupDepthMode::workzone_overlay ? parent() : nullptr);
         if (popup->is_visible()) static_cast<Widget *>(popup)->invalidate_draw_commands();
-        if (depth == 0u && !_open_path.empty())
-        {
-            const u32 root_index = find_index_by_element_id(_open_path[0]);
-            if (root_index < _items.size() && _items[root_index].tab) popup->set_focus_parent(_items[root_index].tab);
-        }
-        else if (depth > 0u && depth - 1u < _open_path.size())
-        {
-            if (auto *anchor = find_popup_child(_open_path[depth - 1u])) popup->set_focus_parent(anchor);
-        }
         popup->clear_children();
         popup->update_style_invalidated();
         f32 content_w = 0.0f;
@@ -1318,7 +1362,15 @@ namespace auik
         bool needs_separator = false;
         for (const auto &group : groups)
         {
-            if (group.empty()) continue;
+            acul::vector<MenuItem *> presented;
+            for (u32 item_id : group)
+                if (auto *item = find_item(item_id))
+                {
+                    item->prepare_presentation();
+                    if (item->is_logically_visible())
+                        presented.push_back(item);
+                }
+            if (presented.empty()) continue;
             if (needs_separator)
             {
                 const auto &separator_style = get_theme()->get_style(get_theme()->get_resolved_style(
@@ -1344,11 +1396,9 @@ namespace auik
                 content_h += row->required_size().y;
                 popup->add_child(row);
             }
-            for (u32 item_id : group)
+            for (auto *item : presented)
             {
-                auto *item = find_item(item_id);
-                if (!item) continue;
-                item->prepare_presentation();
+                const u32 item_id = item->element_id();
                 auto *row = static_cast<Widget *>(acul::alloc<PopupItem>(id(), item_id, item_id, item, popup));
                 row->set_size({AUIK_SIZE_X_FILL, AUIK_SIZE_Y_FIT});
                 row->set_focus_parent(popup);
@@ -1381,9 +1431,9 @@ namespace auik
         const f32 body_bottom = amal::ceil(body_top + content_h + padding.y + padding.w);
         const f32 desired_popup_h = amal::ceil(amal::max(
             amal::max(body_bottom + border_bottom - popup_y, measured.y), AUIK_MENU_POPUP_ITEM_FALLBACK_HEIGHT));
-        const f32 available_h = amal::max(popup_bounds.y + popup_bounds.w - popup_y, 0.0f);
-        const bool need_scroll = desired_popup_h > available_h;
-        const f32 popup_h = need_scroll ? available_h : desired_popup_h;
+        // Placement can move the complete menu upward. Only constrain its
+        // height when it cannot fit anywhere in the available viewport.
+        const f32 popup_h = amal::min(desired_popup_h, amal::max(popup_bounds.w, 0.0f));
         popup->window_flags = WindowFlagBits::none;
         popup->set_visible();
         popup->sync_widget_flags();
@@ -1401,10 +1451,19 @@ namespace auik
         else
         {
             add_overlay_window(popup, popup->focus_parent());
+            if (!is_overlay_window(popup))
+            {
+                popup->set_focus_parent(this);
+                close_from_depth(depth);
+                return;
+            }
         }
         refresh_popup_clip_rect(popup);
         popup->update_layout(false);
         refresh_popup_clip_rect(popup);
+        // Reopening may reuse an attached popup after its retained records were
+        // invalidated. A redraw request alone does not record its new contents.
+        popup->update_draw_commands(DrawReasonBits::layout);
         detail::get_context().dirty_flags |= DirtyFlagBits::redraw;
 
     }
@@ -1472,8 +1531,8 @@ namespace auik
         if (!has_menu_child_groups(groups)) return false;
         close_from_depth(0);
         _open_path.clear();
-        layout_popup(0, anchor, groups);
         _open_path.push_back(0u);
+        layout_popup(0, anchor, groups);
         sync_popup_item_states();
         request_redraw();
         return true;

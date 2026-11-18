@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cstdio>
 #include <auik/auik.hpp>
 #include <auik/detail/root_registration.hpp>
 #include <auik/detail/depth.hpp>
@@ -135,15 +136,20 @@ namespace auik
             };
         }
 
-        RuntimeState &resolve_root(Widget *owner)
+        RuntimeState *resolve_root(Widget *owner)
         {
-            while (true)
+            acul::vector<Widget *> visited;
+            while (owner)
             {
-                if (auto *entry = state(owner); entry && entry->configured && entry->root) return *entry->root;
+                if (std::find(visited.begin(), visited.end(), owner) != visited.end()) return nullptr;
+                visited.push_back(owner);
+                // Cleanup still needs the root while it is being removed from the draw tree.
+                if (auto *entry = state(owner); entry && entry->configured && entry->root) return entry->root;
                 if (owner->parent()) owner = owner->parent();
                 else if (owner->focus_parent()) owner = owner->focus_parent();
-                else return ensure_state(owner);
+                else return nullptr;
             }
+            return nullptr;
         }
 
         void configure(Widget *widget, RuntimeState &root, Widget *owner, DepthZone zone)
@@ -179,18 +185,34 @@ namespace auik
 
     void add_overlay_window(Widget *widget, Widget *owner, DepthZone zone)
     {
-        assert(widget && owner && widget != owner && !widget->parent() && widget->viewport());
+        if (!widget || !owner || widget == owner || widget->parent() || !widget->viewport())
+        {
+            std::fputs("AUIK: rejected invalid overlay window registration\n", stderr);
+            return;
+        }
         if (is_overlay_window(widget))
         {
             widget->update_depth(widget->depth_range());
             return;
         }
-        auto &root = resolve_root(owner);
+        auto *root = resolve_root(owner);
         auto &ctx = detail::get_context();
-        assert(std::find(ctx.widget_tree.begin(), ctx.widget_tree.end(), root.widget) != ctx.widget_tree.end());
-        assert(std::find(ctx.widget_tree.begin(), ctx.widget_tree.end(), widget) == ctx.widget_tree.end());
-        for (auto *ancestor = owner; ancestor && ancestor != root.widget;)
+        if (!root || !root->registered ||
+            std::find(ctx.widget_tree.begin(), ctx.widget_tree.end(), root->widget) == ctx.widget_tree.end() ||
+            std::find(ctx.widget_tree.begin(), ctx.widget_tree.end(), widget) != ctx.widget_tree.end())
         {
+            std::fputs("AUIK: overlay owner has no registered root or contains a cycle\n", stderr);
+            return;
+        }
+        acul::vector<Widget *> visited;
+        for (auto *ancestor = owner; ancestor && ancestor != root->widget;)
+        {
+            if (ancestor == widget || std::find(visited.begin(), visited.end(), ancestor) != visited.end())
+            {
+                std::fputs("AUIK: rejected cyclic overlay owner chain\n", stderr);
+                return;
+            }
+            visited.push_back(ancestor);
             bind_owner_lifecycle(ancestor);
             const auto *entry = state(ancestor);
             ancestor = entry && entry->registered && entry->owner ? entry->owner :
@@ -199,7 +221,7 @@ namespace auik
         prepare_overlay_window(widget);
         widget->reset_draw_records();
         widget->reset_clip_rect_records();
-        configure(widget, root, owner, zone);
+        configure(widget, *root, owner, zone);
         if (!widget->is_attached()) widget->on_attach();
         widget->update_style_invalidated();
         detail::update_registered_depth(widget);
@@ -266,7 +288,9 @@ namespace auik
     void detail::dismiss_owned_windows(Widget *owner)
     {
         if (!g_context) return;
-        auto &root = resolve_root(owner);
+        auto *resolved = resolve_root(owner);
+        if (!resolved) return;
+        auto &root = *resolved;
         // Keep slots stable while recursively closing descendants.
         ++root.child_readers;
         const size_t count = root.children.size();
@@ -274,10 +298,19 @@ namespace auik
         {
             if (!*root.children[i].live) continue;
             auto *widget = root.children[i].widget;
+            if (widget == owner) continue;
             bool owned = false;
+            acul::vector<Widget *> visited;
             for (auto *parent = state(widget)->owner; parent;)
             {
                 if (parent == owner) { owned = true; break; }
+                if (std::find(visited.begin(), visited.end(), parent) != visited.end())
+                {
+                    std::fputs("AUIK: dismissing overlay with a cyclic owner chain\n", stderr);
+                    owned = true;
+                    break;
+                }
+                visited.push_back(parent);
                 const auto *entry = state(parent);
                 parent = entry && entry->registered && entry->owner ? entry->owner :
                          parent->parent() ? parent->parent() : parent->focus_parent();

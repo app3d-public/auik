@@ -189,6 +189,12 @@ namespace auik
     inline bool add_render_command(Widget *widget, F &&fn);
     template <class F>
     inline bool add_render_command(F &&fn, bool force = false);
+    inline bool can_update_widgets()
+    {
+        auto *ctx = detail::g_context;
+        return ctx && !(ctx->dirty_flags & DirtyFlagBits::destroying);
+    }
+
     template <class F>
     inline u64 schedule_delayed_host_task(u64 owner_id, f64 due_time, F &&fn);
 

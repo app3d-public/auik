@@ -1,7 +1,7 @@
 #pragma once
 
-// Based on Dear ImGui's imstb_textedit.h
-// (https://github.com/ocornut/imgui/blob/master/imstb_textedit.h)
+// Text-editing interface adapted from stb_textedit.h via Dear ImGui's
+// imstb_textedit.h. The implementation has been reworked for AUIK.
 
 #include <acul/scalars.hpp>
 #include <acul/vector.hpp>

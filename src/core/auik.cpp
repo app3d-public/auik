@@ -777,6 +777,14 @@ namespace auik
             if (!io.mouse_down || !io.clicked_id) return;
             if (!io.active_mouse_buttons) return;
 
+            const auto action_mods = io.active_mods &
+                (KeyModeBits::shift | KeyModeBits::control | KeyModeBits::alt | KeyModeBits::super);
+            // Keep a small, unmodified right-button movement as a context click.
+            // Do not advance last_drag_pos until a drag actually starts.
+            if (!io.drag_id && io.active_mouse_buttons == MouseKeyFlags(MouseKey::right) && !action_mods &&
+                amal::length(io.mouse_pos - io.last_drag_pos) < AUIK_MOUSE_DOUBLE_CLICK_MAX_DIST)
+                return;
+
             amal::vec2 drag_delta = delta != amal::vec2{0.0f} ? delta : io.mouse_pos - io.last_drag_pos;
             if (drag_delta == amal::vec2{0.0f}) return;
 
@@ -969,81 +977,39 @@ namespace auik
             return nullptr;
         }
 
-        static inline Widget *resolve_focus_entry(Widget *leaf)
-        {
-            if (!leaf) return nullptr;
-            return leaf->focus_parent() ? leaf->focus_parent() : leaf;
-        }
-
-        static inline void notify_focus_leaf(Context &ctx, Widget *leaf, Widget *entry, bool focused)
-        {
-            if (!leaf || leaf == entry) return;
-            if (leaf->has_event_handler(EventFlagBits::focus)) leaf->dispatch_focus(focused);
-            if (!focused && ctx.active_id != leaf->id()) leaf->set_style_state(StyleState::normal);
-            else if (focused && ctx.active_id != leaf->id()) leaf->set_style_state(resolve_focus_visual_state(leaf));
-            enqueue_style_refresh<detail::FocusEventTraits>(leaf);
-        }
-
         static void set_focus_target(Context &ctx, Widget *target)
         {
             const u32 next_focus_id = target ? target->id() : 0u;
             if (ctx.focus_id == next_focus_id) return;
 
             Widget *old_leaf = get_widget_by_id(ctx.focus_id);
-            Widget *new_leaf = target;
-            Widget *old_entry = resolve_focus_entry(old_leaf);
-            Widget *new_entry = resolve_focus_entry(new_leaf);
-
-            // If focus tree root is unchanged, keep parent focus state intact.
-            if (old_entry == new_entry)
-            {
-                ctx.focus_id = next_focus_id;
-                notify_focus_leaf(ctx, old_leaf, old_entry, false);
-                notify_focus_leaf(ctx, new_leaf, new_entry, true);
-                return;
-            }
-
             constexpr int max_path = 64;
             Widget *path_old[max_path];
             Widget *path_new[max_path];
-            int len_old = 0;
-            int len_new = 0;
-
-            for (Widget *w = old_entry; w && len_old < max_path; w = w->focus_parent()) path_old[len_old++] = w;
-            for (Widget *w = new_entry; w && len_new < max_path; w = w->focus_parent()) path_new[len_new++] = w;
-
-            int i = len_old - 1;
-            int j = len_new - 1;
-            while (i >= 0 && j >= 0 && path_old[i] == path_new[j])
-            {
-                --i;
-                --j;
-            }
-
-            // Switch current focus leaf id before callbacks so blur/gain handlers can query focus state directly.
+            int len_old = 0, len_new = 0;
+            // Include the leaves themselves. Excluding them makes a focused owner
+            // receive blur when focus moves into one of its own popup descendants.
+            for (Widget *w = old_leaf; w && len_old < max_path; w = w->focus_parent()) path_old[len_old++] = w;
+            for (Widget *w = target; w && len_new < max_path; w = w->focus_parent()) path_new[len_new++] = w;
+            int i = len_old - 1, j = len_new - 1;
+            while (i >= 0 && j >= 0 && path_old[i] == path_new[j]) { --i; --j; }
             ctx.focus_id = next_focus_id;
-
-            // Blur: leaf-side to (but excluding) LCA.
-            notify_focus_leaf(ctx, old_leaf, old_entry, false);
+            // Shared ancestors retain focus. Deliver loss/gain only to the parts
+            // of the old/new chains outside their lowest common ancestor.
             for (int k = 0; k <= i; ++k)
             {
                 Widget *w = path_old[k];
-                assert(w && "widget cannot be null");
                 if (w->has_event_handler(EventFlagBits::focus)) w->dispatch_focus(false);
                 if (ctx.active_id != w->id()) w->set_style_state(StyleState::normal);
                 enqueue_style_refresh<detail::FocusEventTraits>(w);
             }
-
-            // Focus: from LCA child down to new leaf-side.
             for (int k = j; k >= 0; --k)
             {
                 Widget *w = path_new[k];
-                assert(w && "widget cannot be null");
                 if (w->has_event_handler(EventFlagBits::focus)) w->dispatch_focus(true);
                 if (ctx.active_id != w->id()) w->set_style_state(resolve_focus_visual_state(w));
                 enqueue_style_refresh<detail::FocusEventTraits>(w);
             }
-            notify_focus_leaf(ctx, new_leaf, new_entry, true);
         }
 
         static void handle_left_mouse_press(Context &ctx, IO &io)
@@ -1202,7 +1168,9 @@ namespace auik
             if (it != ctx.id_map.end() && it->second->has_event_handler(EventFlagBits::click))
                 it->second->dispatch_click(key, KeyPressState::release, 1);
 
-            if (key == MouseKey::right && !finish_active_drag && !io.active_mouse_buttons && !io.active_mods &&
+            const auto action_mods = io.active_mods &
+                (KeyModeBits::shift | KeyModeBits::control | KeyModeBits::alt | KeyModeBits::super);
+            if (key == MouseKey::right && !finish_active_drag && !io.active_mouse_buttons && !action_mods &&
                 ctx.hover_id == io.clicked_id &&
                 amal::length(io.mouse_pos - io.last_drag_pos) < AUIK_MOUSE_DOUBLE_CLICK_MAX_DIST)
             {

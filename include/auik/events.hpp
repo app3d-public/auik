@@ -25,6 +25,7 @@ namespace auik
             resize_ns,
             resize_nwse,
             resize_nesw,
+            hand,
             max
         };
     };

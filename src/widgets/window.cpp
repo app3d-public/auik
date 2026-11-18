@@ -884,6 +884,9 @@ namespace auik
         if (_content_block && (_content_block->is_visible() || invalidating))
         {
             DrawCtx content_ctx = ctx;
+            // Internal popup content must route input to the same public owner
+            // as the window surface (a combo/menu may override this hit ID).
+            _content_block->get_rect().id.widget_id = get_rect().id.widget_id;
             _content_block->draw_local(content_ctx);
         }
 
@@ -1543,7 +1546,7 @@ namespace auik
         }
 
         const bool drag_scrollbar =
-            _content_block && detail::is_scrollbar_tag(drag_id.tag_id) && drag_id.widget_id == _content_block->id();
+            _content_block && detail::is_scrollbar_tag(drag_id.tag_id) && drag_id.widget_id == get_rect().id.widget_id;
         if (drag_scrollbar)
         {
             _content_block->on_drag(delta, state);

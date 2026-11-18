@@ -49,6 +49,13 @@ namespace
             auik::add_overlay_window(this, owner, auik::DepthZone::foreground);
         }
     };
+    struct BlockProbe : auik::Block
+    {
+        int layouts = 0;
+        BlockProbe(u32 id) : Block(id, auik::WidgetFlagBits::visible | auik::WidgetFlagBits::attachable, 0u) {}
+        void update_layout(bool) override { ++layouts; }
+        void draw(auik::DrawCtx &) override {}
+    };
     struct WindowProbe : auik::Window
     {
         int depths = 0;
@@ -351,6 +358,24 @@ void test_depth_order()
         set_widget_attach_callback(popup.id(), nullptr);
         remove_widget_from_root_unsync(&window);
         set_widget_attach_callback(window.id(), nullptr);
+        ctx.disposal_queue.discard();
+    }
+    {
+        // A full layout may be pending when a panel attaches new controls.
+        // Deferring layout must still assign their depth before the first draw.
+        BlockProbe panel(8910);
+        panel.set_viewport(&viewport);
+        add_widget_to_root(&panel);
+        ctx.dirty_flags |= DirtyFlagBits::layout;
+        panel.set_clip_id(0xFFFFu);
+        auto *control = acul::alloc<Probe>(8911);
+        panel.add_child(control);
+        ctx.disposal_queue.flush_main_queue();
+        assert(control->depths > 0);
+        assert(control->depth_range().x >= panel.depth_range().x);
+        assert(control->depth_range().y <= panel.depth_range().y);
+        assert(panel.layouts == 0);
+        remove_widget_from_root_unsync(&panel);
         ctx.disposal_queue.discard();
     }
     detail::g_context = nullptr;
