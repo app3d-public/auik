@@ -13,7 +13,7 @@
 #define AUIK_TITLEBAR_ICON_ID        0x54CC3922
 #define AUIK_TITLEBAR_HEIGHT_DEFAULT 32.0f
 #ifdef _WIN32
-    #define AUIK_TITLEBAR_STATE L"AUIK_TITLEBAR_STATE"
+    #define AUIK_TITLEBAR_STATE            L"AUIK_TITLEBAR_STATE"
     #define AUIK_WIN32_TITLEBAR_HEIGHT_DIP 29
 #endif
 
@@ -137,8 +137,10 @@ namespace auik
     {
         _menu_popup_viewport = viewport;
         for (auto *child : _children)
+        {
             if (child && child->signature() == AUIK_TAG_MENU_BAR)
                 static_cast<MenuBar *>(child)->set_popup_viewport(viewport);
+        }
     }
 
     void Titlebar::add_child(Widget *child)
@@ -186,6 +188,8 @@ namespace auik
 
         const amal::vec2 icon_size{static_cast<f32>(_icon_texture.width), static_cast<f32>(_icon_texture.height)};
         auto *icon = make_image(AUIK_TITLEBAR_ICON_ID, _icon_texture.texture_id, icon_size);
+        // The native icon is recreated with a live texture when the titlebar is laid out.
+        icon->unset_cache_snapshot();
         cache_image(icon);
         icon->set_parent(this);
         icon->set_focus_parent(this);
@@ -635,8 +639,8 @@ namespace auik
         // Legacy caption metrics can be only 23 px at 96 DPI. A custom titlebar also
         // hosts menus/tabs, so keep a compact 29-DIP minimum and full-height buttons.
         // Query at the window DPI directly; GetSystemMetrics may already be scaled.
-        const i32 height = amal::max(GetSystemMetricsForDpi(SM_CYCAPTION, dpi),
-                                    MulDiv(AUIK_WIN32_TITLEBAR_HEIGHT_DIP, dpi, 96));
+        const i32 height =
+            amal::max(GetSystemMetricsForDpi(SM_CYCAPTION, dpi), MulDiv(AUIK_WIN32_TITLEBAR_HEIGHT_DIP, dpi, 96));
         const i32 button_width = amal::max(GetSystemMetricsForDpi(SM_CXSIZE, dpi), MulDiv(46, dpi, 96));
         state.height = static_cast<f32>(height);
         state.caption_button_size = {static_cast<f32>(button_width), state.height};
