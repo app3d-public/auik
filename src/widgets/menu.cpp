@@ -249,7 +249,9 @@ namespace auik
             if (_has_next)
             {
                 right_x -= next_size.x;
-                _next_icon_rect = {{right_x, content_pos.y + amal::max((content_size.y - next_size.y) * 0.5f, 0.0f)},
+                // Keep the chevron near the row edge even when the text has a wider trailing inset.
+                const f32 icon_x = right_x + amal::max(padding.z - spacing, 0.0f);
+                _next_icon_rect = {{icon_x, content_pos.y + amal::max((content_size.y - next_size.y) * 0.5f, 0.0f)},
                                    next_size};
                 right_x -= spacing;
             }
