@@ -107,7 +107,14 @@ namespace auik
             const amal::vec2 content_pos = position() + amal::vec2{controls_padding.x, controls_padding.y};
             const amal::vec2 content_size = {amal::max(size().x - controls_padding.x - controls_padding.z, 0.0f),
                                              amal::max(size().y - controls_padding.y - controls_padding.w, 0.0f)};
-            detail::layout_child_widgets(this, _children, _child_layouts, {content_pos, content_size}, gap);
+            amal::rect row{content_pos, content_size};
+            if (!_checkbox)
+            {
+                row.size.x = amal::min(row.size.x, required_size().x - controls_margin.x - controls_margin.z -
+                                                   controls_padding.x - controls_padding.z);
+                row.offset.x += (content_size.x - row.size.x) * 0.5f;
+            }
+            detail::layout_child_widgets(this, _children, _child_layouts, row, gap);
         }
 
         void translate(const amal::vec2 &delta) override
@@ -221,12 +228,51 @@ namespace auik
 
     ModalWindow::ModalWindow(u32 id, acul::string title, const amal::rect &bounds, WindowFlags window_flags,
                              WidgetFlags widget_flags)
-        : Window(id, std::move(title), bounds, window_flags, widget_flags)
+        : Window(id, std::move(title), bounds, window_flags, widget_flags),
+          _center_on_layout(bounds.offset == amal::vec2 AUIK_POS_IGNORE)
     {
         set_window_style_tag(AUIK_STYLE_TAG_MODAL_WINDOW);
     }
 
-    void ModalWindow::update_layout(bool min_size_known) { Window::update_layout(min_size_known); }
+    void ModalWindow::update_layout(bool min_size_known)
+    {
+        if (!parent())
+        {
+            Window::update_layout(min_size_known);
+            return;
+        }
+
+        if (_center_on_layout) set_position(parent()->position());
+        const auto requested = requested_size();
+        if (is_size_fit(requested.x) || is_size_fit(requested.y))
+        {
+            if (layout_measure_required(min_size_known)) update_layout_min_size_force();
+            auto modal_size = size();
+            if (is_size_fit(requested.x)) modal_size.x = required_size().x;
+            if (is_size_fit(requested.y)) modal_size.y = required_size().y;
+            for (u32 pass = 0; pass < 3u; ++pass)
+            {
+                set_layout_size(modal_size);
+                Window::update_layout(true);
+                invalidate_layout_measure();
+                update_layout_min_size();
+                auto next_size = modal_size;
+                if (is_size_fit(requested.x)) next_size.x = required_size().x;
+                if (is_size_fit(requested.y)) next_size.y = required_size().y;
+                if (next_size == modal_size) break;
+                modal_size = next_size;
+            }
+            set_layout_size(modal_size);
+            min_size_known = true;
+        }
+
+        if (_center_on_layout)
+        {
+            set_position(parent()->position() + amal::max((parent()->size() - size()) * 0.5f, amal::vec2{0.0f}));
+            _center_on_layout = false;
+        }
+        Window::update_layout(min_size_known);
+    }
 
     void ModalWindow::close()
     {
@@ -394,40 +440,6 @@ namespace auik
         active_modal()->update_layout_min_size();
     }
 
-    void ModalQueue::layout_active_modal()
-    {
-        auto *modal = active_modal();
-        if (!modal) return;
-
-        modal->update_layout_min_size();
-        amal::vec2 modal_size = modal->size();
-        const amal::vec2 required_size = modal->required_size();
-        if (modal_size.x <= 0.0f) modal_size.x = required_size.x;
-        if (modal_size.y <= 0.0f) modal_size.y = required_size.y;
-
-        for (u32 i = 0; i < 3u; ++i)
-        {
-            modal->set_layout_size(modal_size);
-            modal->update_layout(true);
-            modal->invalidate_layout_measure();
-            modal->update_layout_min_size();
-
-            const amal::vec2 refined_required_size = modal->required_size();
-            const amal::vec2 refined_size = {amal::max(modal_size.x, refined_required_size.x), refined_required_size.y};
-            if (refined_size == modal_size) break;
-            modal_size = refined_size;
-        }
-        modal->set_size({modal_size.x, AUIK_SIZE_Y_FIT});
-        modal->set_layout_size(modal_size);
-
-        const amal::vec2 manager_pos = position();
-        const amal::vec2 manager_size = size();
-        const amal::vec2 centered_pos = {manager_pos.x + amal::max((manager_size.x - modal_size.x) * 0.5f, 0.0f),
-                                         manager_pos.y + amal::max((manager_size.y - modal_size.y) * 0.5f, 0.0f)};
-        modal->set_position(centered_pos);
-        modal->update_layout(true);
-    }
-
     void ModalQueue::update_layout(bool min_size_known)
     {
         if (layout_measure_required(min_size_known)) update_layout_min_size_force();
@@ -445,7 +457,7 @@ namespace auik
         const auto bounds_r = bounds();
         ensure_own_clip_rect({bounds_r.offset.x, bounds_r.offset.y, bounds_r.size.x, bounds_r.size.y});
 
-        layout_active_modal();
+        active_modal()->update_layout(false);
     }
 
     void ModalQueue::translate(const amal::vec2 &delta)
@@ -702,10 +714,8 @@ namespace auik
         f32 modal_width = _modal_width;
 
         auto *modal = acul::alloc<ModalWindow>(AUIK_TAG_MODAL_WINDOW, message.header,
-                                               amal::rect{{0.0f, 0.0f}, {modal_width, 0.0f}}, WindowFlagBits::movable,
+                                               amal::rect{AUIK_POS_IGNORE, {modal_width, AUIK_SIZE_Y_FIT}}, WindowFlagBits::movable,
                                                WidgetFlagBits::visible);
-        modal->set_size({modal_width, AUIK_SIZE_Y_FIT});
-
         auto *theme = get_theme();
         const auto &modal_style =
             theme->get_style(theme->get_resolved_style(AUIK_STYLE_TAG_MODAL_WINDOW, AUIK_TAG_MODAL_WINDOW, id()));
@@ -714,51 +724,46 @@ namespace auik
         f32 text_width = modal_width - modal_style.padding().x - modal_style.padding().z -
                          message_area_style.margin().x - message_area_style.margin().z -
                          message_area_style.padding().x - message_area_style.padding().z;
+        text_width = amal::max(text_width, 120.0f);
+        Image *icon = nullptr;
         if (_icon.valid)
         {
             const auto &icon_style = theme->get_style(
                 theme->get_resolved_style(AUIK_STYLE_TAG_MODAL_ICON, AUIK_MODAL_DEFAULT_ICON, AUIK_MODAL_MESSAGE_ID));
-            text_width -=
-                _icon.size.x + icon_style.margin().x + icon_style.margin().z + message_area_style.inline_spacing();
-        }
-        text_width = amal::max(text_width, 120.0f);
-        Image *icon = nullptr;
-        if (_icon.valid)
-            icon = acul::alloc<Image>(AUIK_MODAL_DEFAULT_ICON, _icon.texture_id, _icon.size, _icon.uv_rect,
+            const f32 icon_height = amal::max(icon_style.min_height(), _icon.size.y);
+            const auto icon_size = _icon.size * (icon_height / _icon.size.y);
+            icon = acul::alloc<Image>(AUIK_MODAL_DEFAULT_ICON, _icon.texture_id, icon_size, _icon.uv_rect,
                                       MODAL_INTERNAL_WIDGET_FLAGS);
+        }
         if (icon) icon->set_rect_tag_id(AUIK_STYLE_TAG_MODAL_ICON);
 
-        auto *title = acul::alloc<Text>(AUIK_MODAL_HEADER_ID, message.header, amal::vec2{text_width, 0.0f},
+        auto *title = acul::alloc<Text>(AUIK_MODAL_HEADER_ID, message.header, amal::vec2 AUIK_SIZE_FIT,
                                         MODAL_INTERNAL_WIDGET_FLAGS,
                                         make_text_layout_flags(TextOverflowMode::ellipsis, TextWrapMode::word));
         title->set_style_tag(AUIK_STYLE_TAG_MODAL_TITLE);
+        title->set_max_width(text_width);
         title->set_tight_content_height(true);
 
-        auto *body = acul::alloc<Text>(AUIK_MODAL_MESSAGE_ID, message.message, amal::vec2{text_width, 0.0f},
+        auto *body = acul::alloc<Text>(AUIK_MODAL_MESSAGE_ID, message.message, amal::vec2 AUIK_SIZE_FIT,
                                        MODAL_INTERNAL_WIDGET_FLAGS,
                                        make_text_layout_flags(TextOverflowMode::ellipsis, TextWrapMode::word));
-        body->set_style_tag(AUIK_STYLE_TAG_NO_PAD);
+        body->set_style_tag(AUIK_STYLE_TAG_MODAL_BODY);
+        body->set_max_width(text_width);
         body->set_tight_content_height(true);
-
-        auto *header_block = acul::alloc<DrawBlock>(AUIK_MODAL_HEADER_ID, MODAL_INTERNAL_WIDGET_FLAGS, AUIK_TAG_BLOCK);
-        header_block->set_style_tag(AUIK_STYLE_TAG_MODAL_HEADER);
-        header_block->add_child(title);
-
-        auto *message_block = acul::alloc<::auik::Block>(AUIK_MODAL_MESSAGE_ID, MODAL_INTERNAL_WIDGET_FLAGS, 0u);
-        message_block->add_child(header_block);
-        message_block->add_child(body);
 
         auto *message_row = acul::alloc<DrawBlock>(AUIK_MODAL_MESSAGE_ID, MODAL_INTERNAL_WIDGET_FLAGS, AUIK_TAG_BLOCK);
         message_row->set_style_tag(AUIK_STYLE_TAG_MODAL_MESSAGE_AREA);
+        const auto centered = make_layout_flags(ChildLayout::block, HAlign::center);
         if (icon)
         {
             auto *icon_box =
                 acul::alloc<DrawBlock>(AUIK_MODAL_DEFAULT_ICON, MODAL_INTERNAL_WIDGET_FLAGS, AUIK_TAG_BLOCK);
             icon_box->set_style_tag(AUIK_STYLE_TAG_MODAL_ICON);
             icon_box->add_child(icon);
-            message_row->add_child(icon_box, make_layout_flags(ChildLayout::inline_, HAlign::left, VAlign::center));
+            message_row->add_child(icon_box, centered);
         }
-        message_row->add_child(message_block, make_layout_flags(ChildLayout::inline_, HAlign::left, VAlign::center));
+        message_row->add_child(title, centered);
+        message_row->add_child(body, centered);
         modal->add_child(message_row);
 
         Checkbox *batch_checkbox = nullptr;
@@ -778,7 +783,7 @@ namespace auik
         {
             const bool is_last_button = i + 1u == message.buttons.size();
             const u32 button_style =
-                is_last_button ? AUIK_STYLE_TAG_ACCENT_TEXT_BUTTON : AUIK_STYLE_TAG_TRANSPARENT_BUTTON;
+                is_last_button ? AUIK_STYLE_TAG_MODAL_PRIMARY_BUTTON : AUIK_STYLE_TAG_TEXT_BUTTON;
             auto *button = acul::alloc<TextButton>(
                 AUIK_MODAL_BUTTON_ID, message.buttons[i].first, amal::vec2{AUIK_SIZE_X_INHERIT, AUIK_SIZE_Y_INHERIT},
                 MODAL_INTERNAL_HITTABLE_WIDGET_FLAGS, EventFlagBits::none, button_style);

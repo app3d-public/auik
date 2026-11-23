@@ -14,7 +14,8 @@
 #define AUIK_TITLEBAR_HEIGHT_DEFAULT 32.0f
 #ifdef _WIN32
     #define AUIK_TITLEBAR_STATE            L"AUIK_TITLEBAR_STATE"
-    #define AUIK_WIN32_TITLEBAR_HEIGHT_DIP 29
+    #define AUIK_WIN32_TITLEBAR_HEIGHT_DIP 36
+    #define AUIK_WIN32_CAPTION_WIDTH_DIP   46
 #endif
 
 namespace auik
@@ -131,7 +132,6 @@ namespace auik
         mark_host_refresh_request();
     }
 
-    void Titlebar::set_leading_count(u32 count) { _leading_count = count; }
 
     void Titlebar::set_menu_popup_viewport(Viewport *viewport)
     {
@@ -245,7 +245,6 @@ namespace auik
     {
         StyleUpdateFlags out = resolve_style_selector(_style, id(), 0, style_state());
         out |= resolve_style_selector(_icon_style, _icon_style.tag_id, 0, style_state());
-        out |= resolve_style_selector(_leading_region_style, _leading_region_style.tag_id, 0, style_state());
         for (auto *child : _children)
         {
             if (!child) continue;
@@ -355,9 +354,7 @@ namespace auik
         }
 
         amal::vec2 cursor = position();
-        f32 leading_region_end_x = position().x;
         f32 content_end_x = position().x;
-        u32 visible_child_index = 0u;
         for (const auto &measure : child_measures)
         {
             auto *child = measure.child;
@@ -397,22 +394,11 @@ namespace auik
                 const f32 interactive_end_x = fill_child_width ? outer_pos.x + measured_required.x : cursor.x;
                 content_end_x = amal::max(content_end_x, interactive_end_x);
             }
-            if (_leading_count > 0u && visible_child_index < _leading_count) leading_region_end_x = cursor.x;
-            ++visible_child_index;
         }
-        if (_leading_count > 0u && leading_region_end_x > position().x)
-        {
-            const amal::vec4 margin = get_theme()->get_style(_leading_region_style.id).margin();
-            const f32 x0 = position().x + margin.x;
-            const f32 y0 = position().y + margin.y;
-            const f32 x1 = leading_region_end_x + margin.z;
-            const f32 y1 = position().y + size().y - margin.w;
-            _leading_region_rect = {{x0, y0}, {amal::max(x1 - x0, 0.0f), amal::max(y1 - y0, 0.0f)}};
-        }
-        else _leading_region_rect = {};
+        _content_width = amal::max(content_end_x - position().x, 0.0f);
         if (_state)
         {
-            _state->content_end_x = amal::max(content_end_x - position().x, 0.0f);
+            _state->content_end_x = _content_width;
             _state->caption_buttons_width = _caption_buttons_width;
         }
     }
@@ -454,8 +440,8 @@ namespace auik
     void Titlebar::rebuild_clip_rects()
     {
         ensure_own_clip_rect({position().x, position().y, size().x, size().y});
-        DrawDataID *hit_ids[] = {&_bg, &_icon_bg, &_leading_region_bg};
-        invalidate_hit_rect_batch(hit_ids, 3);
+        DrawDataID *hit_ids[] = {&_bg_hit};
+        invalidate_hit_rect_batch(hit_ids, 1);
         for (auto *button : _caption_buttons)
         {
             if (!button) continue;
@@ -474,8 +460,7 @@ namespace auik
     {
         Widget::reset_draw_records();
         _bg = {};
-        _icon_bg = {};
-        _leading_region_bg = {};
+        _bg_hit = {};
         for (auto *button : _caption_buttons)
             if (button) button->reset_draw_records();
         for (auto *child : _children)
@@ -528,38 +513,18 @@ namespace auik
         auto *quads_stream = get_primary_quads_stream();
         const amal::vec2 background_range = detail::depth_background_range(depth_range());
         const f32 titlebar_bg_z = background_range.x;
-        const f32 leading_region_bg_z = next_depth(background_range);
 
         QuadsInstanceData bg_data{};
         bg_data.rect = bounds();
         bg_data.z_order = titlebar_bg_z;
         const bool bg_visible = fill_quads_instance_by_style(theme->get_style(_style.id), clip_id(), bg_data);
-        emit_quads_instance(ctx, quads_stream, _bg, bg_data, get_rect(), bg_visible, can_emit_hit(ctx));
+        emit_quads_instance(ctx, quads_stream, _bg, bg_data, get_rect(), bg_visible, false);
 
-        if (_leading_count > 0u && _leading_region_rect.size.x > 0.0f && _leading_region_rect.size.y > 0.0f)
-        {
-            QuadsInstanceData leading_region_bg{};
-            leading_region_bg.rect = _leading_region_rect;
-            leading_region_bg.z_order = leading_region_bg_z;
-            const bool leading_region_visible =
-                fill_quads_instance_by_style(theme->get_style(_leading_region_style.id), clip_id(), leading_region_bg);
-            emit_quads_instance(ctx, quads_stream, _leading_region_bg, leading_region_bg, get_rect(),
-                                leading_region_visible, false);
-        }
-
-        const Style &icon_style = theme->get_style(_icon_style.id);
-        const amal::vec4 icon_margin = icon_style.margin();
-        const bool draw_icon_background = _icon && (icon_style.mask() & detail::StylePropertiesBits::background_color);
-        if (draw_icon_background)
-        {
-            QuadsInstanceData icon_bg_data{};
-            const f32 x0 = position().x;
-            const f32 x1 = _icon->position().x + _icon->size().x + icon_margin.z;
-            icon_bg_data.rect = {{x0, position().y}, {amal::max(x1 - x0, 0.0f), size().y}};
-            icon_bg_data.z_order = next_depth(background_range);
-            const bool icon_bg_visible = fill_quads_instance_by_style(icon_style, clip_id(), icon_bg_data);
-            emit_quads_instance(ctx, quads_stream, _icon_bg, icon_bg_data, get_rect(), icon_bg_visible, false);
-        }
+        auto hit = get_rect();
+        hit.bounds.offset.x += _content_width;
+        hit.bounds.size.x = amal::max(size().x - _content_width - _caption_buttons_width, 0.0f);
+        emit_quads_instance(ctx, quads_stream, _bg_hit, bg_data, hit, false,
+                            hit.bounds.size.x > 0 && can_emit_hit(ctx));
 
         for (auto *child : _children)
         {
@@ -636,12 +601,10 @@ namespace auik
         state.frame.x = GetSystemMetricsForDpi(SM_CXFRAME, dpi);
         state.frame.y = GetSystemMetricsForDpi(SM_CYFRAME, dpi);
         state.padding = GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi);
-        // Legacy caption metrics can be only 23 px at 96 DPI. A custom titlebar also
-        // hosts menus/tabs, so keep a compact 29-DIP minimum and full-height buttons.
-        // Query at the window DPI directly; GetSystemMetrics may already be scaled.
+        // The menu and project tabs share the full-height caption button row.
         const i32 height =
             amal::max(GetSystemMetricsForDpi(SM_CYCAPTION, dpi), MulDiv(AUIK_WIN32_TITLEBAR_HEIGHT_DIP, dpi, 96));
-        const i32 button_width = amal::max(GetSystemMetricsForDpi(SM_CXSIZE, dpi), MulDiv(46, dpi, 96));
+        const i32 button_width = MulDiv(AUIK_WIN32_CAPTION_WIDTH_DIP, dpi, 96);
         state.height = static_cast<f32>(height);
         state.caption_button_size = {static_cast<f32>(button_width), state.height};
         return previous_frame != state.frame || previous_padding != state.padding ||
@@ -882,7 +845,7 @@ namespace auik
         if (!font_info) return false;
 
         Font font;
-        const u32 size = round_font_px(10.0f * dpi);
+        const u32 size = round_font_px(9.5f * dpi);
         const acul::vector<u32> codepoints{0xE921u, 0xE922u, 0xE923u, 0xE8BBu};
         const acul::vector<u32> ids{AUIK_ICON_CAP_MINIMIZE, AUIK_ICON_CAP_MAXIMIZE, AUIK_ICON_CAP_RESTORE,
                                     AUIK_ICON_CAP_CLOSE};
@@ -1001,7 +964,7 @@ namespace auik
         {
             auto *titlebar = static_cast<Titlebar *>(block);
             detail::write_widget_common_data(stream, *titlebar);
-            stream.write(titlebar->show_icon()).write(titlebar->leading_count());
+            stream.write(titlebar->show_icon());
 
             acul::vector<Widget *> children;
             const auto &source_children = TitlebarStreamAccess::children(*titlebar);
@@ -1015,8 +978,7 @@ namespace auik
         {
             const auto common = detail::read_widget_common_data(stream);
             bool show_icon = false;
-            u32 leading_count = 0u;
-            stream.read(show_icon).read(leading_count);
+            stream.read(show_icon);
 
             acul::vector<Widget *> children;
             stream.read(children);
@@ -1024,7 +986,6 @@ namespace auik
             auto *titlebar = acul::alloc<Titlebar>(common.id, WidgetFlags(common.widget_flags));
             detail::apply_widget_common_data(titlebar, common);
             titlebar->set_show_icon(show_icon);
-            titlebar->set_leading_count(leading_count);
             for (auto *child : children)
             {
                 auto *widget = dynamic_cast<Widget *>(child);

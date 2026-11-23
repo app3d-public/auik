@@ -268,6 +268,12 @@ namespace auik
         }
     } // namespace
 
+    ImageButton *make_close_button(u32 id, u32 style_tag)
+    {
+        return acul::alloc<ImageButton>(id, get_cached_image(AUIK_ICON_CLOSE), amal::vec2{}, amal::vec2 AUIK_SIZE_INHERIT,
+                                        WidgetFlagBits::visible | WidgetFlagBits::hittable, style_tag);
+    }
+
     namespace streams
     {
         extern AUIK_EXPORT const umbf::registry::BlockStream image_button{read_image_button, write_image_button};

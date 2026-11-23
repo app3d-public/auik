@@ -888,7 +888,7 @@ namespace auik
 
         for (auto &visual : _arrow_visuals) draw_arrow(ctx, visual);
 
-        const amal::vec4 content_clip = get_content_clip_rect();
+        const amal::vec4 content_clip = detail::child_culling_rect(*this, ctx);
         for (auto &row : _cells)
         {
             for (auto *cell : row)

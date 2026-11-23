@@ -156,7 +156,9 @@ namespace auik
         AUIK_EXPORT void rebuild_selection_rect_cache();
         AUIK_EXPORT void draw_background(DrawCtx &ctx, DrawStream *quads_stream);
         AUIK_EXPORT void draw_selection(DrawCtx &ctx, DrawStream *quads_stream, f32 selection_z);
-        AUIK_EXPORT void draw_text_content(DrawCtx &ctx);
+        AUIK_EXPORT virtual void draw_text_content(DrawCtx &ctx);
+        virtual amal::vec2 text_horizontal_insets() { return {}; }
+        AUIK_EXPORT f32 text_baseline() const;
         AUIK_EXPORT void draw_password_content(DrawCtx &ctx);
         AUIK_EXPORT void draw_scrollbar(DrawCtx &ctx);
         AUIK_EXPORT void draw_caret(DrawCtx &ctx);

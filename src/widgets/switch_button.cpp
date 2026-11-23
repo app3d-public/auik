@@ -1,4 +1,5 @@
 #include <auik/auik.hpp>
+#include <auik/detail/pixel_snap.hpp>
 #include <auik/pipelines.hpp>
 #include <auik/widgets/switch_button.hpp>
 #include "../core/session_stream_utils.hpp"
@@ -23,8 +24,9 @@ namespace auik
     {
         const amal::vec4 padding = track_style.padding();
         const amal::vec2 grab_size = resolve_grab_size(grab_style);
-        return {amal::max(grab_size.x * 2.0f + padding.x + padding.z, 1.0f),
-                amal::max(grab_size.y + padding.y + padding.w, 1.0f)};
+        // Snap the track size independently of its position so fractional DPI cannot change its raster size.
+        return {amal::max(amal::round(grab_size.x * 2.0f + padding.x + padding.z), 1.0f),
+                amal::max(amal::round(grab_size.y + padding.y + padding.w), 1.0f)};
     }
 
     u32 SwitchButton::track_rect_tag() const { return value() ? AUIK_TAG_SWITCH_BUTTON_ON : AUIK_TAG_SWITCH_BUTTON; }
@@ -169,15 +171,16 @@ namespace auik
         const auto &grab_style = theme->get_style(_grab_style.id);
 
         QuadsInstanceData track{};
-        track.rect = _track_rect;
+        track.rect = detail::snap_rect_offset_to_pixel_grid(_track_rect);
         track.z_order = next_depth(_track_depth_range);
         const bool track_visible = fill_quads_instance_by_style(track_style, clip_id(), track);
         auto hit_rect = get_rect();
-        hit_rect.bounds = _track_rect;
+        hit_rect.bounds = track.rect;
         emit_quads_instance(ctx, quads_stream, _track_draw, track, hit_rect, track_visible, can_emit_hit(ctx));
 
         QuadsInstanceData grab{};
         grab.rect = _grab_rect.bounds;
+        grab.rect.offset += track.rect.offset - _track_rect.offset;
         grab.z_order = _grab_rect.depth;
         const bool grab_visible = fill_quads_instance_by_style(grab_style, clip_id(), grab);
         emit_quads_instance(ctx, quads_stream, _grab_draw, grab, _grab_rect, grab_visible, false);

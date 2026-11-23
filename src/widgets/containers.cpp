@@ -856,7 +856,7 @@ namespace auik
     void Block::draw(DrawCtx &ctx)
     {
         if (!is_visible() && !(ctx.reason & DrawReasonBits::invalidate)) return;
-        const amal::vec4 content_clip = get_content_clip_rect();
+        const amal::vec4 content_clip = detail::child_culling_rect(*this, ctx);
         auto draw_layer = [&](DepthZone layer) {
             for (size_t i = 0u; i < children.size(); ++i)
             {
@@ -2154,6 +2154,7 @@ namespace auik
     void WidgetStack::draw(DrawCtx &ctx)
     {
         if (!is_visible() && !(ctx.reason & DrawReasonBits::invalidate)) return;
+        const auto content_clip = detail::child_culling_rect(*this, ctx);
         auto draw_layer = [&](DepthZone layer) {
             for (size_t i = 0u; i < _children.size(); ++i)
             {
@@ -2161,11 +2162,11 @@ namespace auik
                 if (!child || (!child->is_visible() && !(ctx.reason & DrawReasonBits::invalidate))) continue;
                 if (child->get_depth_zone() != layer) continue;
                 if (layer == DepthZone::work && child != active_child()) continue;
-                detail::draw_child_in_clip(child, ctx, get_content_clip_rect());
+                detail::draw_child_in_clip(child, ctx, content_clip);
             }
         };
         draw_layer(DepthZone::background);
-        if (auto *child = active_child()) detail::draw_child_in_clip(child, ctx, get_content_clip_rect());
+        if (auto *child = active_child()) detail::draw_child_in_clip(child, ctx, content_clip);
         draw_layer(DepthZone::foreground);
     }
 
@@ -2462,7 +2463,8 @@ namespace auik
         const amal::vec2 label_required = _label ? _label->required_size() : amal::vec2{0.0f, 0.0f};
         const f32 spacing = amal::max(style.inline_spacing(), 0.0f);
         const f32 header_w = padding.x + padding.z + trigger_required.x + spacing + label_required.x;
-        const f32 header_h = padding.y + padding.w + amal::max(trigger_required.y, label_required.y);
+        const f32 header_h = amal::max(style.min_height(),
+                                      padding.y + padding.w + amal::max(trigger_required.y, label_required.y));
 
         const amal::vec2 content_required = compute_content_min_size();
         const amal::vec2 content_outer = _expanded
@@ -2510,7 +2512,8 @@ namespace auik
 
         const amal::vec2 trigger_required = _trigger ? _trigger->required_size() : amal::vec2{0.0f, 0.0f};
         const amal::vec2 label_required = _label ? _label->required_size() : amal::vec2{0.0f, 0.0f};
-        const f32 header_h = padding.y + padding.w + amal::max(trigger_required.y, label_required.y);
+        const f32 header_h = amal::max(style.min_height(),
+                                      padding.y + padding.w + amal::max(trigger_required.y, label_required.y));
         _header_rect.id = make_element_id(id(), current_header_style_tag());
         _header_rect.bounds = {position(), {size().x, header_h}};
         _header_rect.clip_id = clip_id();
@@ -2689,7 +2692,7 @@ namespace auik
                     fill_quads_instance_by_style(get_theme()->get_style(_content_style.id), clip_id(), content_bg);
             }
             emit_quads_instance(ctx, quads_stream, _content_bg, content_bg, _content_rect, content_bg_visible, false);
-            const amal::vec4 content_clip = get_content_clip_rect();
+            const amal::vec4 content_clip = detail::child_culling_rect(*this, ctx);
             for (auto *child : children)
             {
                 if (!child || (!child->is_visible() && !(ctx.reason & DrawReasonBits::invalidate))) continue;
@@ -2763,11 +2766,8 @@ namespace auik
         auto *layout_parent = parent();
         if (!layout_parent || clip_id() == 0xFFFFu || layout_parent->clip_id() == 0xFFFFu) return;
 
-        auto &ctx = detail::get_context();
-        ctx.dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
-        layout_parent->update_layout(false);
-        layout_parent->update_draw_commands(DrawReasonBits::layout);
-        mark_host_refresh_request();
+        // Arrange from the owning window so margins start from the parent's allocated bounds.
+        sync_widget(StyleUpdateFlagBits::layout | StyleUpdateFlagBits::parent_layout | StyleUpdateFlagBits::redraw);
     }
 
     StyleUpdateFlags Dummy::update_style()

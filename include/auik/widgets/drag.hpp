@@ -26,9 +26,6 @@ namespace auik
             bool is_manual_change() const { return _manual_change; }
             AUIK_EXPORT void set_model_binding(ModelBinding *binding);
             ModelBinding *model_binding() const { return _value_model_binding; }
-            AUIK_EXPORT void set_postfix(StringView value);
-            const acul::string &postfix() const { return _postfix; }
-            AUIK_EXPORT acul::string input_postfix() const;
             void set_speed(f32 value) { _speed = value; }
             f32 speed() const { return _speed; }
             AUIK_EXPORT void set_display_precision(u8 value);
@@ -63,7 +60,6 @@ namespace auik
             T _min_value{};
             T _max_value{};
             f32 _speed = 1.0f;
-            acul::string _postfix;
             f64 _drag_origin_value = 0.0;
             f64 _drag_delta_steps = 0.0;
             f64 _drag_value = 0.0;
@@ -77,7 +73,7 @@ namespace auik
         };
     } // namespace detail
 
-    class DragInt final : public detail::Draggable<int>
+    class DragInt : public detail::Draggable<int>
     {
     public:
         AUIK_EXPORT DragInt(u32 id, int value, int min_value, int max_value, f32 speed, amal::vec2 inline_size,
@@ -88,7 +84,7 @@ namespace auik
         virtual u32 signature() const noexcept override { return AUIK_TAG_DRAG_INT; }
     };
 
-    class DragFloat final : public detail::Draggable<f32>
+    class DragFloat : public detail::Draggable<f32>
     {
     public:
         AUIK_EXPORT DragFloat(u32 id, f32 value, f32 min_value, f32 max_value, f32 speed, amal::vec2 inline_size,
@@ -99,7 +95,7 @@ namespace auik
         virtual u32 signature() const noexcept override { return AUIK_TAG_DRAG_FLOAT; }
     };
 
-    class DragDouble final : public detail::Draggable<f64>
+    class DragDouble : public detail::Draggable<f64>
     {
     public:
         AUIK_EXPORT DragDouble(u32 id, f64 value, f64 min_value, f64 max_value, f32 speed, amal::vec2 inline_size,
@@ -109,6 +105,38 @@ namespace auik
 
         virtual u32 signature() const noexcept override { return AUIK_TAG_DRAG_DOUBLE; }
     };
+
+    namespace detail
+    {
+        template <class Drag>
+        class DragWithAffixes final : public Drag
+        {
+        public:
+            using Drag::Drag;
+            AUIK_EXPORT ~DragWithAffixes() override;
+
+            AUIK_EXPORT void set_prefix(StringView text);
+            AUIK_EXPORT void set_suffix(StringView text);
+            AUIK_EXPORT bool update_locale() override;
+            AUIK_EXPORT StyleUpdateFlags update_style() override;
+            AUIK_EXPORT void reset_draw_records() override;
+            AUIK_EXPORT void update_depth(const amal::vec2 &depth_range) override;
+
+        protected:
+            AUIK_EXPORT amal::vec2 text_horizontal_insets() override;
+            AUIK_EXPORT void draw_text_content(DrawCtx &ctx) override;
+
+        private:
+            void set_affix(Text *&affix, StringView text);
+
+            Text *_prefix = nullptr;
+            Text *_suffix = nullptr;
+        };
+    } // namespace detail
+
+    using DragIntEx = detail::DragWithAffixes<DragInt>;
+    using DragFloatEx = detail::DragWithAffixes<DragFloat>;
+    using DragDoubleEx = detail::DragWithAffixes<DragDouble>;
 
     inline DragInt *make_drag_int(u32 id, int value, int min_value = std::numeric_limits<int>::lowest(),
                                   int max_value = std::numeric_limits<int>::max(), f32 speed = 1.0f,
@@ -163,6 +191,57 @@ namespace auik
         return acul::alloc<DragDouble>(id, binding, min_value, max_value, speed, inline_size,
                                        WidgetFlagBits::visible | WidgetFlagBits::attachable |
                                            WidgetFlagBits::cache_snapshot);
+    }
+
+    inline DragIntEx *make_drag_int_ex(u32 id, int value, int min_value = std::numeric_limits<int>::lowest(),
+                                       int max_value = std::numeric_limits<int>::max(), f32 speed = 1.0f,
+                                       amal::vec2 inline_size = AUIK_SIZE_INHERIT)
+    {
+        return acul::alloc<DragIntEx>(id, value, min_value, max_value, speed, inline_size,
+                                      WidgetFlagBits::visible | WidgetFlagBits::attachable);
+    }
+
+    inline DragIntEx *make_drag_int_ex(u32 id, ModelBinding *binding,
+                                       int min_value = std::numeric_limits<int>::lowest(),
+                                       int max_value = std::numeric_limits<int>::max(), f32 speed = 1.0f,
+                                       amal::vec2 inline_size = AUIK_SIZE_INHERIT)
+    {
+        return acul::alloc<DragIntEx>(id, binding, min_value, max_value, speed, inline_size,
+                                      WidgetFlagBits::visible | WidgetFlagBits::attachable);
+    }
+
+    inline DragFloatEx *make_drag_float_ex(u32 id, f32 value, f32 min_value = std::numeric_limits<f32>::lowest(),
+                                           f32 max_value = std::numeric_limits<f32>::max(), f32 speed = 1.0f,
+                                           amal::vec2 inline_size = AUIK_SIZE_INHERIT)
+    {
+        return acul::alloc<DragFloatEx>(id, value, min_value, max_value, speed, inline_size,
+                                        WidgetFlagBits::visible | WidgetFlagBits::attachable);
+    }
+
+    inline DragFloatEx *make_drag_float_ex(u32 id, ModelBinding *binding,
+                                           f32 min_value = std::numeric_limits<f32>::lowest(),
+                                           f32 max_value = std::numeric_limits<f32>::max(), f32 speed = 1.0f,
+                                           amal::vec2 inline_size = AUIK_SIZE_INHERIT)
+    {
+        return acul::alloc<DragFloatEx>(id, binding, min_value, max_value, speed, inline_size,
+                                        WidgetFlagBits::visible | WidgetFlagBits::attachable);
+    }
+
+    inline DragDoubleEx *make_drag_double_ex(u32 id, f64 value, f64 min_value = std::numeric_limits<f64>::lowest(),
+                                             f64 max_value = std::numeric_limits<f64>::max(), f32 speed = 1.0f,
+                                             amal::vec2 inline_size = AUIK_SIZE_INHERIT)
+    {
+        return acul::alloc<DragDoubleEx>(id, value, min_value, max_value, speed, inline_size,
+                                         WidgetFlagBits::visible | WidgetFlagBits::attachable);
+    }
+
+    inline DragDoubleEx *make_drag_double_ex(u32 id, ModelBinding *binding,
+                                             f64 min_value = std::numeric_limits<f64>::lowest(),
+                                             f64 max_value = std::numeric_limits<f64>::max(), f32 speed = 1.0f,
+                                             amal::vec2 inline_size = AUIK_SIZE_INHERIT)
+    {
+        return acul::alloc<DragDoubleEx>(id, binding, min_value, max_value, speed, inline_size,
+                                         WidgetFlagBits::visible | WidgetFlagBits::attachable);
     }
 
     namespace streams

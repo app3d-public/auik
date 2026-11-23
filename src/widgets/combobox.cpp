@@ -53,9 +53,8 @@ namespace auik
                                                                               f32 desired_h, f32 min_h, f32 max_h,
                                                                               const amal::vec4 &viewport)
         {
-            const f32 gap = 0.0f;
-            const f32 below_space = amal::max(viewport.y + viewport.w - (control_y + control_h + gap), 0.0f);
-            const f32 above_space = amal::max(control_y - gap - viewport.y, 0.0f);
+            const f32 below_space = amal::max(viewport.y + viewport.w - (control_y + control_h), 0.0f);
+            const f32 above_space = amal::max(control_y - viewport.y, 0.0f);
             // For dropdowns min-height is a placement threshold, not a request to stretch short content.
             const f32 bounded_h = amal::min(desired_h, max_h);
             const bool fits_below = bounded_h <= below_space;
@@ -63,7 +62,7 @@ namespace auik
             const f32 available_h = place_above ? above_space : below_space;
             const f32 popup_h = amal::min(bounded_h, available_h);
             const bool need_scroll = desired_h > popup_h;
-            const f32 popup_y = place_above ? control_y - gap - popup_h + 1.0f : control_y + control_h + gap - 1.0f;
+            const f32 popup_y = place_above ? control_y - popup_h : control_y + control_h;
             return {place_above, need_scroll, popup_h, popup_y};
         }
 
@@ -111,7 +110,8 @@ namespace auik
         _trigger->set_update_target(this);
         _trigger->set_hit_id(make_element_id(id, AUIK_TAG_COMBO_BOX, 0u));
         _label = acul::alloc<Text>(AUIK_TAG_TEXT, "", amal::vec2{0.0f, 0.0f}, WidgetFlagBits::visible);
-        _label->set_style_tag(AUIK_STYLE_TAG_NO_PAD);
+        _label->set_style_mask(detail::StylePropertiesBits::text_color | detail::StylePropertiesBits::text_size |
+                               detail::StylePropertiesBits::font);
         _label->set_width_mode(TextLayoutWidthMode::bounds);
         _label->set_overflow_mode(TextOverflowMode::ellipsis);
         _label->set_parent(this);
@@ -392,6 +392,8 @@ namespace auik
             _trigger->set_open(_open);
             flags |= _trigger->update_style(id(), parent_id, control_state);
         }
+        _label->set_style_tag(_style.tag_id);
+        _label->set_style_state(control_state);
         flags |= _label->update_style_invalidated();
         if (_popup)
         {
@@ -455,7 +457,9 @@ namespace auik
         if (fill_width()) min_size.x = compact_width;
         if (fill_height()) min_size.y = 0.0f;
         if (min_size.x <= 0.0f) min_size.x = is_width_fixed() ? 140.0f : compact_width;
-        if (min_size.y <= 0.0f) min_size.y = amal::max(label_required.y, icon_height) + padding.y + padding.w;
+        const f32 label_height = amal::max(label_required.y, style.text_size());
+        const f32 content_min_height = amal::max(label_height, icon_height) + padding.y + padding.w;
+        min_size.y = amal::max(min_size.y, content_min_height);
         set_required_size({min_size.x + margin.x + margin.z, min_size.y + margin.y + margin.w});
     }
 
@@ -866,7 +870,8 @@ namespace auik
         _trigger->set_update_target(this);
         _trigger->set_hit_id(make_element_id(id, AUIK_TAG_COMBO_BOX, 0u));
         _label = acul::alloc<Text>(AUIK_TAG_TEXT, "", amal::vec2{0.0f, 0.0f}, WidgetFlagBits::visible);
-        _label->set_style_tag(AUIK_STYLE_TAG_NO_PAD);
+        _label->set_style_mask(detail::StylePropertiesBits::text_color | detail::StylePropertiesBits::text_size |
+                               detail::StylePropertiesBits::font);
         _label->set_width_mode(TextLayoutWidthMode::bounds);
         _label->set_overflow_mode(TextOverflowMode::ellipsis);
         _label->set_parent(this);
@@ -1000,6 +1005,8 @@ namespace auik
             _trigger->set_open(_open);
             flags |= _trigger->update_style(id(), parent_id, control_state);
         }
+        _label->set_style_tag(_style.tag_id);
+        _label->set_style_state(control_state);
         flags |= _label->update_style_invalidated();
         if (_popup)
         {
@@ -1063,7 +1070,9 @@ namespace auik
         if (fill_width()) min_size.x = compact_width;
         if (fill_height()) min_size.y = 0.0f;
         if (min_size.x <= 0.0f) min_size.x = is_width_fixed() ? 140.0f : compact_width;
-        if (min_size.y <= 0.0f) min_size.y = amal::max(label_required.y, icon_height) + padding.y + padding.w;
+        const f32 label_height = amal::max(label_required.y, style.text_size());
+        const f32 content_min_height = amal::max(label_height, icon_height) + padding.y + padding.w;
+        min_size.y = amal::max(min_size.y, content_min_height);
         set_required_size({min_size.x + margin.x + margin.z, min_size.y + margin.y + margin.w});
     }
 

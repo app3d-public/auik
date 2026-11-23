@@ -1,19 +1,16 @@
 #pragma once
 
-#include "tabbar.hpp"
-#include "detail/dock_tree.hpp"
-#include "window.hpp"
 #include "../detail/depth.hpp"
+#include "detail/dock_tree.hpp"
+#include "tabbar.hpp"
+#include "window.hpp"
 
 #define AUIK_TAG_DOCKSPACE                 0xADEAAAECu
 #define AUIK_TAG_DOCKSPACE_NODE            0xFC263E77u
 #define AUIK_TAG_DOCKSPACE_RESIZE_HELPER_V 0xDA69EE34u
 #define AUIK_TAG_DOCKSPACE_RESIZE_HELPER_H 0x9FBF83ACu
 #define AUIK_TAG_DOCKSPACE_TAB_PANEL       0x44306332u
-#define AUIK_TAG_DOCKSPACE_MENU_BUTTON     0xF26C91A4u
-#define AUIK_TAG_DOCKSPACE_MENU_ITEM       0x7B1C71E2u
 #define AUIK_DOCKSPACE_TABBAR_ID_BASE      0x84D64482u
-#define AUIK_DOCKSPACE_MENU_ID_BASE        0x2C4F6D10u
 #define AUIK_DOCK_NODE_INVALID             0xFFFFFFFFu
 
 namespace auik
@@ -59,7 +56,8 @@ namespace auik
         {
             none = 0x0,
             docking = 0x1,
-            tabpanel = 0x2
+            tabpanel = 0x2,
+            collapse = 0x4
         };
         using flag_bitmask = std::true_type;
     };
@@ -92,7 +90,15 @@ namespace auik
         friend struct DockspaceStreamAccess;
 
     public:
-        using MenuGroup = acul::vector<acul::string>;
+        // The window is attached to the root. The source leaf may already be gone.
+        void on_tab_undock(acul::unique_function<void(Window *)> callback) { _on_tab_undock = std::move(callback); }
+
+        using PFN_on_node_attach = acul::unique_function<void(DockNodeID, auik::Block &, Tabbar &)>;
+        using PFN_on_tab_attach = acul::unique_function<void(DockNodeID, Window *)>;
+        void on_node_attach(PFN_on_node_attach callback) { _on_node_attach = std::move(callback); }
+        void on_tab_attach(PFN_on_tab_attach callback) { _on_tab_attach = std::move(callback); }
+        using PFN_on_tab_switched = acul::unique_function<void(DockNodeID, Window *, Window *)>;
+        void on_tab_switched(PFN_on_tab_switched callback) { _on_tab_switched = std::move(callback); }
 
         AUIK_EXPORT explicit Dockspace(u32 id, WidgetFlags widget_flags);
         AUIK_EXPORT ~Dockspace() override;
@@ -114,14 +120,10 @@ namespace auik
         AUIK_EXPORT void undock_window(DockNodeID node, Window *window);
         AUIK_EXPORT void close_window(DockNodeID node, Window *window);
         AUIK_EXPORT void close_group(DockNodeID node);
-        AUIK_EXPORT void request_undock_window(DockNodeID node);
-        AUIK_EXPORT void request_close_window(DockNodeID node);
-        AUIK_EXPORT void request_close_group(DockNodeID node);
-        AUIK_EXPORT bool open_window_context_menu(Window *window, const amal::vec2 &position);
+        AUIK_EXPORT bool node_collapsed(DockNodeID node) const;
+        AUIK_EXPORT void set_node_collapsed(DockNodeID node, bool collapsed);
         AUIK_EXPORT void clear_windows(DockNodeID node);
         AUIK_EXPORT void clear();
-        AUIK_EXPORT void set_menu_group(MenuGroup group);
-        const MenuGroup &menu_group() const { return _menu_group; }
 
         AUIK_EXPORT StyleUpdateFlags update_style() override;
         AUIK_EXPORT void update_layout_min_size_force() override;
@@ -150,7 +152,10 @@ namespace auik
         umbf::Block *as_snapshot_block() noexcept override { return this; }
 
     private:
-        class DockMenu;
+        acul::unique_function<void(Window *)> _on_tab_undock;
+        PFN_on_node_attach _on_node_attach;
+        PFN_on_tab_attach _on_tab_attach;
+        PFN_on_tab_switched _on_tab_switched;
 
         struct Node
         {
@@ -162,9 +167,10 @@ namespace auik
             acul::vector<amal::rect> undocked_bounds;
             acul::vector<acul::string> tab_titles;
             Tabbar *tabbar = nullptr;
-            DockMenu *menu = nullptr;
+            auik::Block *header = nullptr;
             detail::RectData tab_panel_rect{};
             DrawDataID tab_panel_draw{};
+            DrawDataID rounded_mask_draw{};
             amal::rect bounds{};
             amal::rect content_bounds{};
             amal::vec2 requested_size{0.0f, 0.0f};
@@ -173,6 +179,7 @@ namespace auik
             size_t active_window_index = static_cast<size_t>(-1);
             bool record_active_window = false;
             bool content_collapsed = false;
+            f32 expanded_height = 0.0f;
         };
 
         struct ResizeHelperVisual
@@ -195,7 +202,7 @@ namespace auik
         const Node *get_node(DockNodeID node) const;
         DockNodeID create_node(DockNodeID parent, bool split, DockNodeSettings settings,
                                size_t position = static_cast<size_t>(-1));
-        void clear_node_windows(Node &node);
+        void clear_node_windows(Node &node, Window *retained = nullptr);
         void clear_node_chrome(Node &node);
         void attach_window(Window *window);
         void detach_window(Window *window, const amal::rect *undocked_bounds = nullptr);
@@ -203,13 +210,7 @@ namespace auik
         f32 preserved_node_size(const Node &node, amal::axis axis) const;
         Window *extract_window(Node &node, Window *window, amal::rect *out_undocked_bounds = nullptr);
         void remove_empty_node(DockNodeID node);
-        void close_menu();
-        void toggle_menu(DockNodeID node);
-        void queue_menu_action(DockNodeID node, u32 action);
-        void execute_menu_action(DockNodeID node, u32 action);
-        bool has_node_menu(const Node &node) const;
-        void sync_node_menu(DockNodeID node_id, Node &node);
-        void draw_node_menu(DrawCtx &ctx, DockNodeID node_id, Node &node);
+        void notify_tab_switched(DockNodeID id, Node &node, Window *previous);
         bool needs_node_tab_panel(const Node &node) const;
         amal::vec2 measure_node(DockNodeID node);
         void layout_node(DockNodeID node, const amal::rect &bounds);
@@ -238,28 +239,32 @@ namespace auik
         void draw_resize_helpers(DrawCtx &ctx);
         void draw_node_tab_panel(DrawCtx &ctx, DockNodeID node_id, Node &node);
         void draw_node(DrawCtx &ctx, DockNodeID node);
+        void draw_surfaces(DrawCtx &ctx);
+        void draw_node_mask(DrawCtx &ctx, Node &node);
+        void clear_node_mask(Node &node);
         ResizeHelperVisual *resize_helper_from_element(u32 element_id);
         const ResizeHelperVisual *resize_helper_from_element(u32 element_id) const;
         void update_layout_sync(bool force_record = false, bool min_size_known = false);
+        void restore_node_height(Node &node);
 
         detail::DockTree<Node> _tree;
         acul::vector<ResizeHelperVisual> _resize_helpers;
         acul::vector<f32> _resize_basis;
         size_t _resize_helper_count = 0u;
         size_t _resizing_helper = static_cast<size_t>(-1);
-        DockMenu *_deferred_menu_popup_draw = nullptr;
         amal::vec2 _resize_drag_accum{0.0f, 0.0f};
         f32 _resize_helper_depth = 0.0f;
         f32 _tab_panel_depth = 0.0f;
         amal::vec2 _tabbar_depth_range{0.0f, 0.0f};
-        DockNodeID _open_menu_node = AUIK_DOCK_NODE_INVALID;
         bool _drag_zones_dirty = true;
         DockspaceFlags _policy_flags{DockspaceFlagBits::docking | DockspaceFlagBits::tabpanel};
+        acul::vector<DrawDataID> _surface_draws;
+        StyleSelector _surface_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_DOCKSPACE};
+        StyleSelector _leaf_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_DOCKSPACE_NODE};
         StyleSelector _resize_helper_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_DOCKSPACE_RESIZE_HELPER};
         StyleSelector _resize_helper_drag_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_DOCKSPACE_RESIZE_HELPER_DRAG};
         StyleSelector _tab_panel_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_DOCK_NODE_TAB_PANEL};
         DockNodeSettings _new_node_settings{};
-        MenuGroup _menu_group;
     };
 
     inline Dockspace *make_dockspace(u32 id)
@@ -268,10 +273,9 @@ namespace auik
                                               WidgetFlagBits::hittable | WidgetFlagBits::cache_snapshot);
     }
 
-    inline Window *make_dock_window(u32 id, Dockspace *dockspace, StringView title = "", const amal::rect &bounds = {})
+    inline Window *make_dock_window(u32 id, StringView title = "", const amal::rect &bounds = {})
     {
         auto *window = make_decorated_window(id, title, bounds);
-        window->set_parent(dockspace);
         window->window_flags |= WindowFlagBits::docked;
         return window;
     }

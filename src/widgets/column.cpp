@@ -392,7 +392,7 @@ namespace auik
     void Column::draw(DrawCtx &ctx)
     {
         if (!is_visible() && !(ctx.reason & DrawReasonBits::invalidate)) return;
-        const amal::vec4 content_clip = get_content_clip_rect();
+        const amal::vec4 content_clip = detail::child_culling_rect(*this, ctx);
         for (auto *slot : _columns)
         {
             if (!slot || (!slot->is_visible() && !(ctx.reason & DrawReasonBits::invalidate))) continue;

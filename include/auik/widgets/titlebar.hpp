@@ -8,7 +8,6 @@
 
 #define AUIK_TAG_TITLEBAR                    0xDBECC2C6u
 #define AUIK_TAG_TITLEBAR_ICON               0x5A7E4E91u
-#define AUIK_TAG_TITLEBAR_LEADING_REGION     0xB20D45EFu
 #define AUIK_TAG_WINDOW_CAPTION_BUTTON       0xEF0A4C09u
 #define AUIK_TAG_WINDOW_CAPTION_CLOSE_BUTTON 0x561CF733u
 #define AUIK_WINDOW_CAPTION_BTN_MIN          0
@@ -74,8 +73,6 @@ namespace auik
 
         AUIK_EXPORT void set_show_icon(bool value);
         bool show_icon() const { return _show_icon; }
-        AUIK_EXPORT void set_leading_count(u32 count);
-        u32 leading_count() const { return _leading_count; }
         AUIK_EXPORT void set_menu_popup_viewport(Viewport *viewport);
         AUIK_EXPORT void add_child(Widget *child);
         AUIK_EXPORT void add_children(const acul::vector<Widget *> &children);
@@ -114,18 +111,15 @@ namespace auik
         void ensure_caption_buttons();
 
         DrawDataID _bg;
-        DrawDataID _icon_bg;
-        DrawDataID _leading_region_bg;
+        DrawDataID _bg_hit;
+        f32 _content_width = 0.0f;
         StyleSelector _style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_TITLEBAR};
         StyleSelector _icon_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_TITLEBAR_ICON};
-        StyleSelector _leading_region_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_TITLEBAR_LEADING_REGION};
         acul::vector<Widget *> _children;
         Image *_icon = nullptr;
         ImageButton *_caption_buttons[AUIK_WINDOW_CAPTION_BTN_COUNT]{};
         detail::ImageTextureResource _icon_texture{};
         f32 _caption_buttons_width = 0.0f;
-        u32 _leading_count = 0u;
-        amal::rect _leading_region_rect{};
         Viewport *_menu_popup_viewport = nullptr;
         bool _show_icon = false;
         TitlebarState *_state = nullptr;

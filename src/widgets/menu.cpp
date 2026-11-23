@@ -693,7 +693,12 @@ namespace auik
 
     MenuBar::MenuItem *MenuBar::append_item(StringView text, acul::unique_function<void(ClickEvent &)> callback)
     {
-        return append_root_suffix_item(text, std::move(callback));
+        _menu_base.root_layer().add_groups(1u);
+        auto *item = _menu_base.root_layer()[0]->add_item(text);
+        if (callback) item->bind().on_click(std::move(callback));
+        append_root_tab(item);
+        rebuild_items();
+        return item;
     }
 
     void MenuBar::add_items(u32 count)
@@ -795,118 +800,6 @@ namespace auik
             append_root_tab(item);
         }
         rebuild_items();
-    }
-
-    MenuBar::RuntimeSuffixGroup &MenuBar::ensure_runtime_suffix_group(u32 group_index)
-    {
-        while (_runtime_suffix_groups.size() <= group_index) _runtime_suffix_groups.push_back({});
-        auto &group = _runtime_suffix_groups[group_index];
-        if (!group.group)
-        {
-            _menu_base.root_layer().add_groups(static_cast<u32>(_menu_base.root_layer().size()) + 1u);
-            group.group = _menu_base.root_layer()[_menu_base.root_layer().size() - 1u];
-        }
-        return group;
-    }
-
-    const MenuBar::RuntimeSuffixGroup *MenuBar::runtime_suffix_group(u32 group_index) const
-    {
-        return group_index < _runtime_suffix_groups.size() ? &_runtime_suffix_groups[group_index] : nullptr;
-    }
-
-    u32 MenuBar::push_root_suffix_group()
-    {
-        const u32 group_index = static_cast<u32>(_runtime_suffix_groups.size());
-        _runtime_suffix_groups.push_back({});
-        bool has_root_items = !_items.empty();
-        if (!has_root_items)
-            for (const auto &group : _runtime_suffix_groups)
-                if (!group.empty())
-                {
-                    has_root_items = true;
-                    break;
-                }
-        return group_index;
-    }
-
-    void MenuBar::pop_root_suffix_group()
-    {
-        if (_runtime_suffix_groups.empty()) return;
-        erase_root_suffix_group(static_cast<u32>(_runtime_suffix_groups.size()) - 1u);
-    }
-
-    MenuBar::MenuItem *MenuBar::append_root_suffix_item(acul::string text,
-                                                        acul::unique_function<void(ClickEvent &)> callback)
-    {
-        return append_root_suffix_item(StringView{text}, std::move(callback));
-    }
-
-    MenuBar::MenuItem *MenuBar::append_root_suffix_item(StringView text,
-                                                        acul::unique_function<void(ClickEvent &)> callback)
-    {
-        if (_runtime_suffix_groups.empty()) push_root_suffix_group();
-        return append_root_suffix_item(static_cast<u32>(_runtime_suffix_groups.size()) - 1u, text, std::move(callback));
-    }
-
-    u32 MenuBar::append_root_suffix_separator()
-    {
-        if (_runtime_suffix_groups.empty()) push_root_suffix_group();
-        return append_root_suffix_separator(static_cast<u32>(_runtime_suffix_groups.size()) - 1u);
-    }
-
-    MenuBar::MenuItem *MenuBar::append_root_suffix_item(u32 group_index, acul::string text,
-                                                        acul::unique_function<void(ClickEvent &)> callback)
-    {
-        return append_root_suffix_item(group_index, StringView{text}, std::move(callback));
-    }
-
-    MenuBar::MenuItem *MenuBar::append_root_suffix_item(u32 group_index, StringView text,
-                                                        acul::unique_function<void(ClickEvent &)> callback)
-    {
-        auto &suffix = ensure_runtime_suffix_group(group_index);
-        if (!suffix.group) return nullptr;
-        auto *item = suffix.group->add_item(text);
-        if (!item) return nullptr;
-        if (callback) item->bind().on_click(std::move(callback));
-        return item;
-    }
-
-    u32 MenuBar::append_root_suffix_separator(u32 group_index)
-    {
-        (void)group_index;
-        return 0u;
-    }
-
-    bool MenuBar::has_root_suffix(u32 group_index) const
-    {
-        const auto *group = runtime_suffix_group(group_index);
-        return group && !group->empty();
-    }
-
-    bool MenuBar::root_suffix_ends_with_separator(u32 group_index) const
-    {
-        (void)group_index;
-        return false;
-    }
-
-    void MenuBar::erase_root_suffix_group(u32 group_index)
-    {
-        auto *group = group_index < _runtime_suffix_groups.size() ? &_runtime_suffix_groups[group_index] : nullptr;
-        if (!group) return;
-        discard_popups();
-        if (group->empty())
-        {
-            if (group_index + 1u == _runtime_suffix_groups.size())
-            {
-                _runtime_suffix_groups.pop_back();
-            }
-            return;
-        }
-        _menu_base.release_group_items(group->group);
-        if (group_index + 1u == _runtime_suffix_groups.size())
-        {
-            _runtime_suffix_groups.pop_back();
-        }
     }
 
     acul::vector<u32> MenuBar::root_ids() const
@@ -1847,14 +1740,18 @@ namespace auik
     }
 
     PopupMenu::PopupMenu(MenuBar *menu, WidgetFlags widget_flags, bool selected_enabled)
-        : Widget(menu ? (menu->id() + AUIK_TAG_MENU_POPUP) : AUIK_TAG_POPUP_MENU,
-                 widget_flags | WidgetFlagBits::hittable, EventFlagBits::click | EventFlagBits::focus,
+        : PopupMenu(menu ? menu->id() + AUIK_TAG_MENU_POPUP : AUIK_TAG_POPUP_MENU, menu, widget_flags, selected_enabled)
+    {
+    }
+
+    PopupMenu::PopupMenu(u32 id, MenuBar *menu, WidgetFlags widget_flags, bool selected_enabled)
+        : Widget(id, widget_flags | WidgetFlagBits::hittable, EventFlagBits::click | EventFlagBits::focus,
                  {{0.0f, 0.0f}, AUIK_SIZE_INHERIT}, AUIK_TAG_POPUP_MENU),
           _button(AUIK_STYLE_TAG_DOCK_TABBAR_MENU, AUIK_TAG_POPUP_MENU_BUTTON, AUIK_ICON_MENU, AUIK_ICON_MENU, false),
           _menu(menu ? menu : acul::alloc<MenuBar>(AUIK_TAG_MENU_POPUP, acul::vector<StringView>{}))
     {
         set_button_update_target(this);
-        set_button_hit_id(make_element_id(id(), AUIK_TAG_POPUP_MENU_BUTTON, 0u));
+        set_button_hit_id(make_element_id(id, AUIK_TAG_POPUP_MENU_BUTTON, 0u));
         _button.set_element_id(0u);
         _menu->set_focus_parent(this);
         _menu->set_popup_depth_mode(MenuBar::PopupDepthMode::root_overlay_next);
@@ -1945,6 +1842,7 @@ namespace auik
 
     void PopupMenu::update_layout(bool min_size_known)
     {
+        if (parent()) set_clip_id(parent()->content_clip_id());
         if (layout_measure_required(min_size_known)) update_layout_min_size_force();
         Widget::update_layout(true);
         _button.update_layout(bounds(), clip_id());
@@ -1990,6 +1888,7 @@ namespace auik
 
     void PopupMenu::rebuild_clip_rects()
     {
+        if (parent()) set_clip_id(parent()->content_clip_id());
         _button.rebuild_clip_rects(clip_id());
         if (_menu) _menu->rebuild_clip_rects();
     }
@@ -2169,7 +2068,7 @@ namespace auik
             }
             for (size_t i = 1u; i < blocks.size(); ++i)
                 if (blocks[i]) acul::release(blocks[i]);
-            auto *popup = acul::alloc<PopupMenu>(menu, WidgetFlags(common.widget_flags));
+            auto *popup = acul::alloc<PopupMenu>(common.id, menu, WidgetFlags(common.widget_flags), false);
             detail::apply_widget_common_data(popup, common);
             return popup;
         }

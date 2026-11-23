@@ -102,6 +102,8 @@ namespace auik
         return acul::alloc<ImageButton>(id, image, image_size, size, widget_flags, style_tag);
     }
 
+    AUIK_EXPORT ImageButton *make_close_button(u32 id, u32 style_tag = AUIK_STYLE_TAG_CLOSE_BUTTON);
+
     namespace streams
     {
         extern AUIK_EXPORT const umbf::registry::BlockStream image_button;

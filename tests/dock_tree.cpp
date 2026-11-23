@@ -188,7 +188,7 @@ void test_dock_tree()
         return static_cast<std::uint16_t>(clips.size() - 1);
     };
     gpu.update_clip_rect = [](auto *, std::uint16_t id, const amal::vec4 &rect) { clips[id] = rect; };
-    gpu.get_clip_rect = [](auto *, std::uint16_t id) { return &clips[id]; };
+    gpu.get_clip_rect = [](auto *, std::uint16_t id) { return id < clips.size() ? &clips[id] : nullptr; };
     gpu.push_hit_rect = [](auto *, const auik::detail::RectData &rect) -> std::uint32_t {
         hits.push_back(rect);
         return static_cast<std::uint32_t>(hits.size() - 1);
@@ -200,18 +200,149 @@ void test_dock_tree()
     ctx.shared_sync_state[0].buffer_versions = &versions[0];
     ctx.shared_sync_state[1].buffer_versions = &versions[1];
     {
+        // Restored preference panels can drop their children before the first clip layout.
+        auik::DrawStream invalidation_stream{};
+        for (auto *&stream : streams) stream = &invalidation_stream;
+        auto *layout = auik::make_dock_layout(8695);
+        auto *panel = auik::make_block(8696);
+        panel->set_parent(layout);
+        panel->add_child(auik::make_collapse_header(8697, "Options"));
+        panel->on_attach();
+        panel->clear_children();
+        panel->on_detach();
+        acul::release(panel);
+        acul::release(layout);
+        for (auto *&stream : streams) stream = nullptr;
+    }
+    {
+        CountedWidget parent(8698);
+        auik::Window window(8699, "Preferences", {}, auik::WindowFlagBits::decorated,
+                            auik::WidgetFlagBits::visible);
+        window.set_parent(&parent);
+        auto &widget = static_cast<auik::Widget &>(window);
+        widget.on_attach();
+        window.set_header(nullptr);
+        assert(window.header());
+        widget.on_detach();
+    }
+    {
+        auik::DrawStream invalidation_stream{};
+        for (auto *&stream : streams) stream = &invalidation_stream;
+        umbf::registry::HashResolver resolver;
+        auik::insert_umbf_streams(resolver);
+        umbf::registry::resolver = &resolver;
+        acul::bin_stream snapshot;
+        auto *original = auik::make_dockspace(8700);
+        auto *panel = auik::make_dock_window(8701, "Inspector");
+        panel->set_menu_bar(auik::make_menu_bar(8702));
+        original->add_window(original->root_node(), panel);
+        auik::streams::dockspace.write(snapshot, original);
+        acul::release(original);
+        auto *restored = static_cast<auik::Dockspace *>(auik::streams::dockspace.read(snapshot));
+        unsigned headers = 0, attachments = 0;
+        auik::Window *selected = nullptr;
+        unsigned switches = 0;
+        restored->on_node_attach([&](auik::DockNodeID, auik::Block &, auik::Tabbar &tabs) {
+            assert(tabs.empty());
+            ++headers;
+        });
+        restored->on_tab_attach([&](auik::DockNodeID, auik::Window *window) {
+            if (window->id() == 8701) assert(window->menu_bar() && window->menu_bar()->id() == 8702);
+            ++attachments;
+        });
+        restored->on_tab_switched([&](auik::DockNodeID node, auik::Window *previous, auik::Window *window) {
+            assert(previous == selected);
+            if (previous) assert(previous->id() == (switches == 1 ? 8701u : 8704u));
+            assert(node == restored->root_node());
+            selected = window;
+            ++switches;
+        });
+        restored->on_attach();
+        assert(headers == 1 && attachments == 1 && switches == 1 && selected && selected->id() == 8701);
+        auto *second = auik::make_dock_window(8704, "Second");
+        restored->add_window(restored->root_node(), second);
+        assert(attachments == 2 && switches == 2 && selected == second);
+        restored->clear_windows(restored->root_node());
+        assert(switches == 3 && !selected);
+        restored->on_detach();
+        acul::release(restored);
+        ctx.disposal_queue.discard();
+        umbf::registry::resolver = nullptr;
+        for (auto *&stream : streams) stream = nullptr;
+    }
+    {
+        umbf::registry::HashResolver resolver;
+        auik::insert_umbf_streams(resolver);
+        umbf::registry::resolver = &resolver;
+
+        auto *original = auik::make_dockspace(8710);
+        original->set_policy_flags(original->policy_flags() | auik::DockspaceFlagBits::collapse);
+        original->set_split_axis(original->root_node(), amal::axis::y);
+        const auto top = original->create_leaf(original->root_node());
+        const auto bottom = original->create_leaf(original->root_node());
+        auto *inspector = auik::make_dock_window(8711, "Inspector");
+        auto *attributes = auik::make_dock_window(8712, "Attributes");
+        original->add_window(top, inspector);
+        original->add_window(bottom, attributes);
+        original->set_layout_size({640.0f, 480.0f});
+        original->update_layout(false);
+        const f32 expanded_boundary = attributes->position().y;
+        original->set_node_collapsed(top, true);
+        original->update_layout(false);
+        const f32 collapsed_boundary = attributes->position().y;
+        assert(collapsed_boundary < expanded_boundary);
+
+        acul::bin_stream snapshot;
+        auik::streams::dockspace.write(snapshot, original);
+        original->set_node_collapsed(top, false);
+        original->update_layout(false);
+        assert(amal::abs(attributes->position().y - expanded_boundary) < 1.0f);
+        acul::release(original);
+        auto *restored = static_cast<auik::Dockspace *>(auik::streams::dockspace.read(snapshot));
+        assert(restored->node_collapsed(top) && !restored->node_collapsed(bottom));
+        restored->on_attach();
+        restored->set_layout_size({640.0f, 480.0f});
+        restored->update_layout(false);
+        auto *restored_inspector = auik::get_widget_by_id(8711);
+        auto *restored_attributes = auik::get_widget_by_id(8712);
+        assert(restored_inspector && !restored_inspector->is_visible());
+        assert(restored_attributes && restored_attributes->is_visible());
+        assert(amal::abs(restored_attributes->position().y - collapsed_boundary) < 1.0f);
+
+        restored->set_node_collapsed(top, false);
+        restored->update_layout(false);
+        assert(restored_inspector->is_visible());
+        assert(amal::abs(restored_attributes->position().y - expanded_boundary) < 1.0f);
+
+        for (int cycle = 0; cycle < 4; ++cycle)
+        {
+            restored->set_node_collapsed(top, true);
+            restored->update_layout(false);
+            assert(amal::abs(restored_attributes->position().y - collapsed_boundary) < 1.0f);
+            restored->set_node_collapsed(top, false);
+            restored->update_layout(false);
+            assert(amal::abs(restored_attributes->position().y - expanded_boundary) < 1.0f);
+        }
+
+        restored->on_detach();
+        acul::release(restored);
+        ctx.disposal_queue.discard();
+        umbf::registry::resolver = nullptr;
+    }
+    {
         // A full command rewrite after dismissing a popup rebuilds clip IDs without running layout.
         theme.add_style(AUIK_STYLE_TAG_DOCK_TABBAR_MENU, auik::make_style().background_color(0xffffffffu));
         auto *space = auik::make_dockspace(8900);
         space->set_layout_size({600.f, 400.f});
-        space->set_menu_group({""});
+        auik::Widget *button = nullptr;
+        space->on_node_attach([&](auik::DockNodeID, auik::Block &row, auik::Tabbar &tabs) {
+            assert(tabs.empty());
+            button = auik::make_popup_menu(8902);
+            row.add_child(button, auik::make_layout_flags(auik::ChildLayout::inline_, auik::HAlign::right));
+        });
         space->on_attach();
         space->add_window(0, acul::alloc<SizedWindow>(8901));
         space->update_layout(false);
-        auik::Widget *button = nullptr;
-        for (const auto &entry : ctx.id_map)
-            if (entry.second->get_rect().id.tag_id == AUIK_TAG_DOCKSPACE_MENU_BUTTON && entry.second->parent() == space)
-                button = entry.second;
         assert(button && button->clip_id() != 0xFFFFu);
         auik::QuadsInstanceData button_record{};
         auik::DrawStream button_stream{};
@@ -507,7 +638,8 @@ void test_dock_tree()
 
         auik::Tabbar *tabbar = nullptr;
         for (const auto &entry : ctx.id_map)
-            if (entry.second->parent() == space && entry.second->signature() == AUIK_TAG_TABBAR)
+            if (entry.second->signature() == AUIK_TAG_TABBAR && entry.second->parent() &&
+                entry.second->parent()->parent() == space)
                 tabbar = static_cast<auik::Tabbar *>(entry.second);
         assert(tabbar && tabbar->child_size() == 2u);
         auto select_tab = [&](u32 index) {
@@ -531,7 +663,14 @@ void test_dock_tree()
 
         // The preserve policy belongs to docking. Once detached, width remains fixed but height
         // returns to the floating window's normal fit-content behavior.
+        unsigned undocked = 0;
+        space->on_tab_undock([&](auik::Window *floating) {
+            assert(floating == preserved && floating->parent() == nullptr);
+            assert(!(floating->window_flags & auik::WindowFlagBits::docked));
+            ++undocked;
+        });
         space->undock_window(tabs_node, preserved);
+        assert(undocked == 1);
         assert(auik::is_size_fit(preserved->requested_size().y));
         assert(preserved->parent() == nullptr);
         assert(auik::remove_widget_from_root_unsync(preserved));
@@ -744,7 +883,8 @@ void test_dock_tree()
         space->add_window(0, acul::alloc<CountedWindow>(97));
         auto find_tabbar = [&]() -> auik::Tabbar * {
             for (const auto &entry : ctx.id_map)
-                if (entry.second->parent() == space && entry.second->signature() == AUIK_TAG_TABBAR)
+                if (entry.second->signature() == AUIK_TAG_TABBAR && entry.second->parent() &&
+                    entry.second->parent()->parent() == space)
                     return static_cast<auik::Tabbar *>(entry.second);
             return nullptr;
         };
@@ -754,6 +894,7 @@ void test_dock_tree()
         tabs->set_item_style_tag(7010);
         tabs->set_selected_item_style_tag(7010);
         space->set_layout_size({1000.f, 400.f});
+        space->rebuild_clip_rects();
         tabs->set_position({100.f, 0.f});
         tabs->set_layout_size({200.f, 30.f});
         // The menu adds 40 pixels to the panel beyond the tabbar's own layout area.
@@ -906,6 +1047,134 @@ void test_dock_tree()
         theme.set_var(0x8202u, 1.f); // Invalidates the resolved style pool.
         acul::release(space);
         assert(CountedWindow::live == 0);
+    }
+    {
+        // Padding and the shared gap are present with interactive, hidden resize helpers.
+        theme.add_style(AUIK_STYLE_TAG_DOCKSPACE,
+                        auik::make_style().padding(amal::vec4{8.0f}).inline_spacing(8.0f));
+        auto *space = auik::make_dockspace(8800);
+        space->set_layout_size({640.0f, 480.0f});
+        auto settings = auik::make_dockspace_settings(auik::DockspaceResizeFlagBits::resize_helper);
+        settings.tabpanel = false;
+        const auto left = space->create_leaf(space->root_node(), settings);
+        const auto right = space->create_split(space->root_node(), amal::axis::y, settings);
+        auto *viewport_window = acul::alloc<SizedWindow>(8801);
+        auto *top_window = acul::alloc<SizedWindow>(8802);
+        auto *bottom_window = acul::alloc<SizedWindow>(8803);
+        space->add_window(left, viewport_window);
+        space->add_window(space->create_leaf(right, settings), top_window);
+        space->add_window(space->create_leaf(right, settings), bottom_window);
+        space->update_layout(false);
+        assert(viewport_window->position() == amal::vec2(8.0f, 8.0f));
+        assert(top_window->position().x - (viewport_window->position().x + viewport_window->size().x) == 8.0f);
+        assert(bottom_window->position().y - (top_window->position().y + top_window->size().y) == 8.0f);
+        assert(bottom_window->position() + bottom_window->size() == amal::vec2(632.0f, 472.0f));
+        auik::DrawStream invalidation_stream{};
+        for (auto *&stream : streams) stream = &invalidation_stream;
+        const auto previous_width = viewport_window->size().x;
+        auik::detail::WindowContext window_context{};
+        window_context.set_cursor = [](auto, auto *) {};
+        ctx.window_ctx = &window_context;
+        ctx.io.drag_id = auik::make_element_id(space->id(), AUIK_TAG_DOCKSPACE_RESIZE_HELPER_V, 0);
+        space->on_drag({-20.0f, 0.0f}, auik::KeyPressState::press);
+        space->on_drag({}, auik::KeyPressState::release);
+        ctx.io.drag_id = {};
+        ctx.window_ctx = nullptr;
+        assert(viewport_window->size().x == previous_width - 20.0f);
+        assert(top_window->position().x - (viewport_window->position().x + viewport_window->size().x) == 8.0f);
+        acul::release(space);
+        for (auto *&stream : streams) stream = nullptr;
+    }
+    {
+        auto *grid = auik::make_grid_layout(8900, 1, 2);
+        grid->set_layout_size({640.0f, 480.0f});
+        grid->set_column_resizable(true);
+        auto *left = acul::alloc<CountedWidget>(8901);
+        auto *right = acul::alloc<CountedWidget>(8902);
+        grid->set_cell(0, 0, left);
+        grid->set_cell(0, 1, right);
+        grid->update_layout(false);
+        grid->set_clip_id(auik::push_clip_rect({0.f, 0.f, 640.f, 480.f}));
+        grid->rebuild_clip_rects();
+        const auto previous_right_x = right->position().x;
+
+        auik::DrawStream invalidation_stream{};
+        for (auto *&stream : streams) stream = &invalidation_stream;
+        auik::detail::WindowContext window_context{};
+        window_context.set_cursor = [](auto, auto *) {};
+        ctx.window_ctx = &window_context;
+        ctx.io.drag_id = auik::make_element_id(grid->id(), AUIK_TAG_GRID_LAYOUT_RESIZE_HELPER_V, 0);
+        grid->on_drag({20.0f, 0.0f}, auik::KeyPressState::press);
+        grid->on_drag({}, auik::KeyPressState::release);
+        ctx.io.drag_id = {};
+        ctx.window_ctx = nullptr;
+
+        assert(amal::abs(right->position().x - previous_right_x - 20.0f) < 0.01f);
+        acul::release(grid);
+        for (auto *&stream : streams) stream = nullptr;
+    }
+    {
+        auto *space = auik::make_dockspace(9000);
+        const auto node = space->root_node();
+        auto *window = acul::alloc<CountedWindow>(9001);
+        window->set_visible();
+        space->add_window(node, window);
+        space->set_node_collapsed(node, true);
+        assert(!space->node_collapsed(node) && window->is_visible());
+
+        const auto flags = space->policy_flags();
+        space->set_policy_flags(flags | auik::DockspaceFlagBits::collapse);
+        space->set_node_collapsed(node, true);
+        assert(space->node_collapsed(node) && !window->is_visible());
+        space->set_node_collapsed(node, false);
+        assert(!space->node_collapsed(node) && window->is_visible());
+        space->set_node_collapsed(node, true);
+        space->set_policy_flags(flags);
+        assert(!space->node_collapsed(node) && window->is_visible());
+        acul::release(space);
+    }
+    {
+        auik::Theme rounded_theme;
+        rounded_theme.add_style(AUIK_STYLE_TAG_DOCKSPACE_NODE, auik::make_style().border_radius(8.f));
+        rounded_theme.add_style(AUIK_STYLE_TAG_DOCKED_WINDOW, auik::make_style().background_color(0xff333333u));
+        ctx.theme = &rounded_theme;
+        acul::vector<auik::QuadsInstanceData> records;
+        auik::DrawStream stream{};
+        stream.runtime_data = &records;
+        stream.push_data_to_stream = [](auto *stream, const void *data) {
+            auto &quads = *static_cast<decltype(records) *>(stream->runtime_data);
+            const auto index = static_cast<u32>(quads.size());
+            quads.push_back(*static_cast<const auik::QuadsInstanceData *>(data));
+            return auik::DrawDataID{index, auik::AUIK_INVALID_DRAW_DATA_ID};
+        };
+        stream.update_data_in_stream = [](auto *stream, auik::DrawDataID id, const void *data) {
+            (*static_cast<decltype(records) *>(stream->runtime_data))[id.render_id] =
+                *static_cast<const auik::QuadsInstanceData *>(data);
+        };
+        stream.invalidate_data_in_stream = [](auto *, auik::DrawDataID) {};
+        streams[AUIK_PRIMARY_QUAD_STREAM] = &stream;
+        auto *dock = auik::make_dockspace(9010);
+        dock->set_policy_flags(auik::DockspaceFlagBits::none);
+        dock->set_layout_size({640.f, 480.f});
+        dock->add_window(dock->root_node(), acul::alloc<auik::Window>(
+            9011, "", amal::rect{}, auik::WindowFlagBits::none, auik::WidgetFlagBits::visible));
+        dock->update_depth({0.f, 1.f});
+        dock->update_layout(false);
+        auik::DrawCtx draw{auik::DrawReasonBits::record};
+        draw.is_hit_allowed = false;
+        dock->draw(draw);
+        assert(records.size() >= 2u);
+        assert(records[0].mask & (AUIK_INVERT_RADIUS_BIT << 20u));
+        assert(records[0].background_color == 0u);
+        assert(records[1].background_color == 0xff333333u && records[0].z_order > records[1].z_order);
+        dock->draw(draw);
+        size_t mask_count = 0u;
+        for (const auto &record : records)
+            if (record.mask & (AUIK_INVERT_RADIUS_BIT << 20u)) ++mask_count;
+        assert(mask_count == 1u);
+        acul::release(dock);
+        streams[AUIK_PRIMARY_QUAD_STREAM] = nullptr;
+        ctx.theme = &theme;
     }
     auik::detail::g_context = nullptr;
     puts("PASS: tree order, stable IDs, detach/reset; 100 container lifetime cycles");

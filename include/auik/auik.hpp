@@ -74,7 +74,7 @@ namespace auik
         u32 frames_in_flight = 0;
         u32 max_textures_size = 32;
         SyncOptions sync_options{};
-        WidgetCreateOptions widget_create_options{};
+        PFN_translate_string string_locale = nullptr;
 
         CreateInfo &set_gpu_backend(detail::GPUContext *gpu_backend)
         {
@@ -119,9 +119,9 @@ namespace auik
             return *this;
         }
 
-        CreateInfo &set_widget_create_options(const WidgetCreateOptions &value)
+        CreateInfo &set_locale_callback(PFN_translate_string value)
         {
-            widget_create_options = value;
+            string_locale = value;
             return *this;
         }
     };

@@ -37,6 +37,7 @@ namespace auik
             decorated = 0x4,
             docked = 0x8,
             dockable = 0x10,
+            closable = 0x20,
             rubber_band = 0x100
         };
 
@@ -44,12 +45,6 @@ namespace auik
     };
 
     using WindowFlags = acul::flags<WindowFlagBits>;
-    enum class WindowMenuType : u8
-    {
-        menu_bar,
-        popup
-    };
-
     constexpr inline WindowFlags get_decorated_window_flags()
     {
         return WindowFlagBits::resizable | WindowFlagBits::movable | WindowFlagBits::decorated |
@@ -57,6 +52,14 @@ namespace auik
     }
     constexpr inline WindowFlags get_fixed_window_flags() { return WindowFlagBits::decorated; }
     constexpr inline WindowFlags get_popup_window_flags() { return WindowFlagBits::movable; }
+
+    // Window takes ownership of its header. The localized name supplies the dock tab label.
+    class WindowHeader : public DrawBlock
+    {
+    public:
+        using DrawBlock::DrawBlock;
+        virtual Text *name() const = 0;
+    };
 
     class AUIK_CLASS_EXPORT Window : public Widget, public umbf::Block
     {
@@ -79,8 +82,11 @@ namespace auik
         WindowFlags window_flags;
 
         AUIK_EXPORT Window(u32 id, StringView title, const amal::rect &bounds, WindowFlags window_flags,
-                           WidgetFlags widget_flags);
+                           WidgetFlags widget_flags, WindowHeader *header = nullptr);
         AUIK_EXPORT ~Window() override;
+        // Takes ownership. Passing nullptr reinstates the default decorated header.
+        AUIK_EXPORT void set_header(WindowHeader *header);
+        WindowHeader *header() const { return _header; }
 
         AUIK_EXPORT void clear_children();
         AUIK_EXPORT void erase_children(size_t first, size_t count);
@@ -90,14 +96,8 @@ namespace auik
         }
         AUIK_EXPORT void add_child(Widget *child, ChildLayoutFlags layout = default_child_layout_flags());
         AUIK_EXPORT void add_children(const acul::vector<Widget *> &new_children);
-        AUIK_EXPORT void
-        set_menu(MenuProxy &&menu,
-                 PFN_window_menu_suffix_create window_menu_suffix_create = detail::get_default_menu_suffix_create_cb());
-        AUIK_EXPORT void
-        set_menu(detail::MenuBase *menu,
-                 PFN_window_menu_suffix_create window_menu_suffix_create = detail::get_default_menu_suffix_create_cb());
-        AUIK_EXPORT Widget *take_menu_widget();
-        AUIK_EXPORT void set_menu_widget(Widget *menu);
+        AUIK_EXPORT void set_menu_bar(MenuBar *menu);
+        MenuBar *menu_bar() const { return _menu_bar; }
         AUIK_EXPORT void override_content_clip_rect(const amal::vec4 &rect);
         const amal::vec2 &min_size() const { return _min_size; }
         void set_auto_size(bool width = true, bool height = true)
@@ -115,10 +115,8 @@ namespace auik
             _move_drag_active = true;
             _resize_dir = {0, 0};
         }
-        MenuProxy *get_menu() { return _menu ? &_menu : nullptr; }
-        const MenuProxy *get_menu() const { return _menu ? &_menu : nullptr; }
-        AUIK_EXPORT bool is_popup_menu() const;
-        AUIK_EXPORT PopupMenu *header_popup_menu() const;
+
+        void on_context_menu(acul::unique_function<bool(const amal::vec2 &)> fn) { _context_menu = std::move(fn); }
         AUIK_EXPORT virtual bool open_context_menu(const amal::vec2 &position);
         RubberBand *rubber_band() const { return _rubber_band; }
         RubberBand *get_rubber_band() const { return _rubber_band; }
@@ -201,15 +199,16 @@ namespace auik
 
     private:
         acul::string _title;
+        bool _translated_title = false;
         amal::vec2 _min_size{0.0f, 0.0f};
         amal::bvec2 _auto_size{false, false};
         amal::bvec2 _auto_position{false, false};
         bool _auto_position_resolved = false;
-        class WindowHeader *_header = nullptr;
-        MenuProxy _menu{};
-        PopupMenu *_default_header_menu = nullptr;
-        PFN_window_menu_suffix_create _window_menu_suffix_create = nullptr;
-        u32 _header_menu_suffix_group = 0xFFFFu;
+        WindowHeader *_header = nullptr;
+        class DefaultWindowHeader *_default_header = nullptr;
+        void ensure_header(StringView title);
+        acul::unique_function<bool(const amal::vec2 &)> _context_menu;
+        MenuBar *_menu_bar = nullptr;
         RubberBand *_rubber_band = nullptr;
         acul::unique_function<void(RubberBandCommitEvent &)> _on_rubber_band_commit = nullptr;
         amal::ivec2 _resize_dir{0, 0};
@@ -252,18 +251,15 @@ namespace auik
         AUIK_EXPORT virtual void on_hover(HoverState state) override;
         AUIK_EXPORT virtual void on_click(MouseKey key, KeyPressState state, u32 click_count) override;
         AUIK_NO_EXPORT const Style &resolved_window_style() const;
-        AUIK_NO_EXPORT PopupMenu *ensure_header_popup_menu();
-        AUIK_NO_EXPORT void install_header_menu_suffix();
-        AUIK_NO_EXPORT void remove_header_menu_suffix();
-        AUIK_NO_EXPORT void sync_header_popup_menu();
     };
 
     inline Window *make_decorated_window(u32 id, StringView title = "",
-                                         const amal::rect &bounds = {AUIK_POS_IGNORE, AUIK_SIZE_AUTO})
+                                         const amal::rect &bounds = {AUIK_POS_IGNORE, AUIK_SIZE_AUTO},
+                                         WindowHeader *header = nullptr)
     {
         constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
                                              WidgetFlagBits::cache_snapshot | WidgetFlagBits::hittable;
-        return acul::alloc<Window>(id, title, bounds, get_decorated_window_flags(), widget_flags);
+        return acul::alloc<Window>(id, title, bounds, get_decorated_window_flags(), widget_flags, header);
     }
 
     inline Window *make_popup_window(u32 id, const amal::rect &bounds = {AUIK_POS_IGNORE, AUIK_SIZE_AUTO})

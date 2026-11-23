@@ -67,6 +67,7 @@ namespace auik
         void invoke_close_callback();
 
         ModalQueue *_queue = nullptr;
+        bool _center_on_layout = false;
         acul::unique_function<void()> _on_close = nullptr;
     };
 
@@ -141,7 +142,6 @@ namespace auik
         Widget *active_modal() const { return _modal; }
         void release_pending_entries();
         void erase_entry(size_t index);
-        void layout_active_modal();
         void update_active_modal_depth();
         void rebuild_modal();
         void apply_button(u32 button_index);
@@ -160,7 +160,8 @@ namespace auik
         int _prevent_close_count = 0;
     };
 
-    inline ModalWindow *make_modal_window(u32 id, const acul::string &title = "", const amal::rect &bounds = {})
+    inline ModalWindow *make_modal_window(u32 id, const acul::string &title = "",
+                                          const amal::rect &bounds = {AUIK_POS_IGNORE, AUIK_SIZE_FIT})
     {
         return acul::alloc<ModalWindow>(id, title, bounds, WindowFlagBits::movable, WidgetFlagBits::visible);
     }

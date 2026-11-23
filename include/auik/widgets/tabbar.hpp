@@ -261,7 +261,7 @@ namespace auik
         AUIK_EXPORT bool update_drag_realtime_order(f32 delta_x);
         AUIK_EXPORT bool swap_drag_with_neighbor(u32 drag_index, u32 neighbor_index);
         AUIK_EXPORT void update_drag_depth();
-        virtual StyleState resolve_tab_item_state(u32 index,
+        AUIK_EXPORT virtual StyleState resolve_tab_item_state(u32 index,
                                                   const detail::WidgetStyleSelectorTransition &transition) const;
         virtual bool auto_select_first_item() const { return true; }
         AUIK_EXPORT StyleUpdateFlags update_item_state(u32 index,
@@ -283,7 +283,7 @@ namespace auik
         AUIK_EXPORT void update_item_text(u32 index, StringView text);
         AUIK_EXPORT void sync_selection_from_model_binding();
         AUIK_EXPORT void sync_changed_from_model_binding();
-        AUIK_EXPORT Item create_item(u32 element_id, StringView text);
+        AUIK_EXPORT virtual Item create_tab_item(u32 element_id, StringView text);
         AUIK_EXPORT void release_item(Item &item);
         AUIK_EXPORT void sync_items();
 

@@ -1,6 +1,6 @@
-@color-surface: (42, 42, 43)
-@color-surface-light: (65, 65, 65)
-@color-surface-dark: (31, 31, 31)
+@color-surface: (38, 38, 39)
+@color-surface-light: (58, 58, 59)
+@color-surface-dark: (30, 30, 31)
 @color-hover: (255, 255, 255, 0.15)
 @color-border: (51, 51, 51)
 @color-accent: (72, 114, 255)
@@ -11,8 +11,8 @@
 global at #0:
     color: @color-text
     font-family: @font(0)
-    font-size: 9pt
-    margin: (5px, 0px)
+    font-size: 8.8pt
+    margin: (3px, 0px)
     inline-spacing: 4px
     size: (fill, fit)
 
@@ -70,15 +70,18 @@ shortcut:
 
 shortcut-key:
     margin: 0px
-    padding: (2px, 6px)
+    padding: (4px, 8px)
     bg-color: @color-surface-light
-    radius: 3px
+    radius: 5px
 
 shortcut-key-text:
     margin: 0px
     font-size: 8pt
 
 shortcut-input:
+    align:
+        horizontal: center
+        vertical: center
     margin: (8px, 0px)
     padding: (8px, 10px)
     min-height: 36px
@@ -133,21 +136,12 @@ dockspace-resize-helper-drag extends @dockspace-resize-helper-base:
 dockspace-drop-zone:
     bg-color: (72, 114, 255, 0.5)
 
-@dockspace-node-base:
-    min-width: 80px
-    min-height: 80px
+dockspace:
+    padding: 0px
+    inline-spacing: 0px
 
-dockspace-node extends @dockspace-node-base:
-    width: fill
-    height: fill
-
-dockspace-node-fit-width extends @dockspace-node-base:
-    width: fit
-    height: fill
-
-dockspace-node-fit extends @dockspace-node-base:
-    width: fit
-    height: fit
+dockspace-node:
+    radius: 0px
 
 dock-node-tab-panel:
     margin: 0px
@@ -162,17 +156,8 @@ dock-tabbar:
 dock-tabbar-menu:
     margin: (-2px, 4px, 0px, 4px)
     padding: 6px
-    radius: 3px
+    radius: 5px
     color: (220, 220, 220)
-    @hover:
-        bg-color: @color-hover
-    @active:
-        bg-color: disabled
-
-window-header-menu:
-    margin: 0px
-    padding: 6px
-    radius: 4px
     @hover:
         bg-color: @color-hover
     @active:
@@ -183,13 +168,13 @@ dock-tab-item:
     padding: (4px, 12px)
     @hover:
         bg-color: @color-hover
-        radius: 3px
+        radius: 5px
 
 dock-tab-item-selected:
     margin: (0px, 2px)
     padding: (4px, 12px)
     bg-color: @color-surface-light
-    radius: 3px
+    radius: 5px
     @hover:
         bg-color: (255, 255, 255, 0.22)
 
@@ -208,8 +193,8 @@ tree-row-alt:
 
 tree-line:
     margin: 0px
-    bg-color: (70, 70, 70)
-    border: 2px solid
+    bg-color: (255, 255, 255, 0.2)
+    border: 1px solid
 
 tree-collapse-icon:
     margin: (4px, 0px)
@@ -218,8 +203,8 @@ tree-collapse-icon:
 
 @collapse-header-base:
     padding: (4px, 0px)
-    bg-color: @color-surface-light
-    radius: 3px
+    bg-color: (52, 52, 53)
+    radius: 6px
     @hover:
         bg-color: @color-hover
     @active:
@@ -231,10 +216,10 @@ collapse-header-closed extends @collapse-header-base
 
 collapse-header-content:
     margin: (0px, 0px)
-    padding: (4px, 0px, 4px, 8px)
+    padding: (5px, 0px, 5px, 4px)
 
 collapse-header-trigger:
-    margin: (0px, 8px)
+    margin: (0px, 6px, 0px, 9px)
 
 window:
     min-width: 160px
@@ -256,22 +241,19 @@ modal-backdrop:
     bg-color: (0, 0, 0, 0.5)
 
 modal-window:
-    padding: (8px, 10px)
+    padding: (12px, 16px)
     bg-color: @color-surface
-    border: 1px @color-border
-    radius: 6px
+    border: 1px (70, 70, 73)
+    radius: 10px
 
 window-header:
-    padding: (8px, 8px)
+    margin: 0px
+    padding: 6px
     bg-color: @color-surface-dark
-    radius: (6px, 6px, 0px, 0px)
+    radius: (10px, 10px, 0px, 0px)
 
 titlebar:
     bg-color: @color-surface-dark
-
-titlebar-leading-region:
-    margin: 0px
-    bg-color: @color-surface-light
 
 titlebar-icon:
     margin: (0px, 8px)
@@ -279,11 +261,12 @@ titlebar-icon:
 text-button:
     width: fit
     height: fit
-    padding: (4px, 14px)
+    padding: (6px, 16px)
+    font-size: @(12px * @dpi)
     align:
         horizontal: center
     bg-color: @color-surface-light
-    radius: 3px
+    radius: 5px
     @hover:
         bg-color: @color-hover
     @active:
@@ -293,15 +276,16 @@ accent-text-button:
     min-width: 60px
     width: fit
     height: fit
-    padding: (4px, 10px)
+    padding: (6px, 16px)
+    font-size: @(12px * @dpi)
     align:
         horizontal: center
-    bg-color: @color-accent
-    radius: 3px
+    bg-color: @color-surface-light
+    radius: 5px
     @hover:
-        bg-color: @color-accent-hover
+        bg-color: @color-hover
     @active:
-        bg-color: @color-accent
+        bg-color: @color-surface-light
 
 transparent-button:
     min-width: 60px
@@ -309,26 +293,26 @@ transparent-button:
     height: fit
     align:
         horizontal: center
-    padding: (4px, 10px)
-    radius: 3px
+    padding: (6px, 16px)
+    font-size: @(12px * @dpi)
+    radius: 5px
     @hover:
         bg-color: @color-hover
     @active:
         bg-color: disabled
 
 modal-title:
+    margin: (10px, 0px, 10px, 0px)
+    font-size: @(17px * @dpi)
     font-family: @font(1)
 
-modal-header:
-    margin-bottom: 8px
-
 modal-message-area:
-    margin: (8px, 8px, 4px, 8px)
+    margin: (16px, 10px, 12px, 10px)
 
 modal-icon:
     width: fit
     height: fit
-    margin-right: 22px
+    margin: (0px, 0px, 10px, 0px)
 
 modal-batch-label:
     font-size: @(11px * @dpi)
@@ -345,11 +329,23 @@ image-button:
     @active:
         bg-color: @color-surface-light
 
-textbox:
+@textbox-base:
+    align:
+        vertical: center
+    inline-spacing: @(7px * @dpi)
     min-width: 160px
-    padding: (4px, 8px)
+    padding: (4px, 9px)
+    font-size: @(13px * @dpi)
     bg-color: @color-surface-light
-    radius: 4px
+    radius: 6px
+
+textbox extends @textbox-base
+
+textbox-affix:
+    margin: 0px
+    padding: 0px
+    font-size: @(11px * @dpi)
+    color: (164, 164, 168)
 
 multiline-textbox:
     min-width: 160px
@@ -363,18 +359,18 @@ multiline-textbox:
     radius: 4px
 
 checkbox:
-    padding: 3px
+    padding: @(3px * @dpi)
     bg-color: @color-surface-light
-    radius: 3px
+    radius: @(4px * @dpi)
     @hover:
         bg-color: @color-hover
     @active:
         bg-color: @color-surface-light
 
 radio-button:
-    padding: 10px
+    padding: @(9px * @dpi)
     bg-color: @color-surface-light
-    radius: 10px
+    radius: @(9px * @dpi)
     @hover:
         bg-color: @color-hover
     @active:
@@ -382,52 +378,53 @@ radio-button:
 
 radio-button-indicator:
     margin: 0px
-    padding: 5px
+    padding: @(4px * @dpi)
     bg-color: @color-text
-    radius: 5px
+    radius: @(4px * @dpi)
 
 switch-button:
-    padding: 2px
+    padding: (@(4px * @dpi), @(6px * @dpi))
     bg-color: @color-surface-light
-    radius: 10px
+    radius: @(8px * @dpi)
     @hover:
         bg-color: @color-hover
     @active:
         bg-color: @color-surface-light
 
 switch-button-on:
-    padding: 2px
+    padding: (@(4px * @dpi), @(6px * @dpi))
     bg-color: @color-accent
-    radius: 10px
+    radius: @(8px * @dpi)
     @hover:
         bg-color: @color-accent-hover
 
 switch-button-grab:
-    padding: 8px
+    padding: @(5px * @dpi)
     bg-color: @color-text
-    radius: 8px
+    radius: @(5px * @dpi)
 
 combo-box:
-    padding: (4px, 8px)
+    padding: (4px, 9px)
+    font-size: @(13px * @dpi)
     bg-color: @color-surface-light
-    radius: 3px
+    radius: 6px
     @hover:
         bg-color: @color-hover
     @focus:
-        radius: (4px, 4px, 0px, 0px)
+        radius: (6px, 6px, 0px, 0px)
 
 combo-box-popup:
     margin: 0px
     padding: (2px, 0px)
     max-height: @(280px * @dpi)
     bg-color: @color-surface-dark
-    radius: (0px, 0px, 4px, 4px)
+    radius: (0px, 0px, 6px, 6px)
     overflow: auto
 
 combo-box-item:
     margin: (2px, 4px)
-    padding: (3px, 8px)
-    radius: 3px
+    padding: (4px, 8px)
+    radius: 5px
     @hover:
         bg-color: @color-hover
     @active:
@@ -438,7 +435,7 @@ combo-box-item:
 combo-box-item-multi:
     margin: (2px, 4px)
     padding: (3px, 26px, 3px, 6px)
-    radius: 3px
+    radius: 5px
     align:
         vertical: center
     @hover:
@@ -452,7 +449,7 @@ combo-box-item-selected:
     margin: (2px, 4px)
     padding: (4px, 8px)
     bg-color: @color-accent
-    radius: 3px
+    radius: 5px
     @hover:
         bg-color: @color-accent-hover
     @focus:
@@ -468,7 +465,7 @@ tabbar-item:
     align:
         vertical: center
     bg-color: @color-surface-light
-    radius: 3px
+    radius: 5px
     @hover:
         bg-color: @color-hover
 
@@ -478,7 +475,7 @@ tabbar-item-selected:
     align:
         vertical: center
     bg-color: @color-accent
-    radius: 3px
+    radius: 5px
     @hover:
         bg-color: @color-accent-hover
     @focus:
@@ -512,7 +509,7 @@ tabbar-popup:
 tabbar-popup-item:
     margin: (2px, 4px)
     padding: (4px, 8px)
-    radius: 3px
+    radius: 5px
     @hover:
         bg-color: @color-hover
     @active:
@@ -574,7 +571,7 @@ titlebar-menu-bar:
 @menu-bar-item-base:
     margin: (2px, 2px)
     padding: (2px, 8px)
-    radius: 3px
+    radius: 5px
     @hover:
         bg-color: @color-hover
     @active:
@@ -591,7 +588,7 @@ titlebar-menu-item:
     padding: (4px, 8px)
     align:
         vertical: center
-    radius: 3px
+    radius: 5px
     @hover:
         bg-color: @color-hover
     @active:
@@ -604,9 +601,9 @@ menu-shortcut:
     color: (184, 184, 184)
 
 menu-popup:
-    padding: (2px, 0px)
-    bg-color: (25, 25, 25)
-    radius: (0px, 0px, 4px, 4px)
+    padding: 4px
+    bg-color: @color-surface-dark
+    radius: 6px
     overflow: auto
 
 separator:
@@ -615,7 +612,7 @@ separator:
     bg-color: (77, 77, 77)
 
 slider:
-    padding: (4px, 0px)
+    padding: (2.5px, 0px)
     bg-color: @color-surface-light
     radius: 2.5px
     @active:
@@ -669,17 +666,16 @@ tooltip:
     padding: (6px, 10px)
     inline-spacing: 4px
     bg-color: (15, 15, 16)
-    radius: 3px
+    radius: 5px
     color: (235, 235, 235)
 
 scrollbar-track:
     margin: 0px
     padding: 2px
-    bg-color: @color-surface-dark
 
 @scrollbar-thumb-base:
     margin: 0px
-    padding: (0px, 4px)
+    padding: (0px, 3px)
     bg-color: (89, 89, 89)
     radius: 2px
     @hover:
@@ -693,3 +689,12 @@ scrollbar-track-internal:
     margin: 4px
 
 scrollbar-thumb-internal extends @scrollbar-thumb-base
+
+modal-primary-button extends @accent-text-button:
+    bg-color: @color-accent
+    @hover:
+        bg-color: @color-accent-hover
+
+modal-body:
+    margin: 0px
+    color: (196, 196, 200)

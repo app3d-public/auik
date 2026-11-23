@@ -295,7 +295,7 @@ namespace auik
         content->set_size(AUIK_SIZE_FIT);
         content->add_child(_label, make_layout_flags(ChildLayout::inline_, HAlign::left, VAlign::center));
         content->add_child(_caret, make_layout_flags(ChildLayout::inline_, HAlign::left, VAlign::center));
-        add_child(content, make_layout_flags(ChildLayout::block, HAlign::center, VAlign::center));
+        add_child(content);
         set_parts(parts);
     }
 

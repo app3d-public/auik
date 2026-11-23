@@ -116,37 +116,12 @@ namespace auik
         friend class PopupMenu;
 
         class PopupItem;
-        struct RuntimeSuffixGroup
-        {
-            MenuGroup *group = nullptr;
-            bool empty() const { return !group || group->empty(); }
-            u32 size() const { return group ? static_cast<u32>(group->size()) : 0u; }
-        };
-
         MenuItem *create_item(StringView text, Widget *parent = nullptr);
         MenuItem *find_item(u32 element_id);
         const MenuItem *find_item(u32 element_id) const;
         detail::Selectable *create_root_tab(MenuItem *item);
         void append_root_tab(MenuItem *item);
         void release_root_tabs();
-        RuntimeSuffixGroup &ensure_runtime_suffix_group(u32 group_index);
-        const RuntimeSuffixGroup *runtime_suffix_group(u32 group_index) const;
-        u32 push_root_suffix_group();
-        u32 root_suffix_group_count() const { return static_cast<u32>(_runtime_suffix_groups.size()); }
-        void pop_root_suffix_group();
-        MenuItem *append_root_suffix_item(acul::string text,
-                                          acul::unique_function<void(ClickEvent &)> callback = nullptr);
-        MenuItem *append_root_suffix_item(StringView text,
-                                          acul::unique_function<void(ClickEvent &)> callback = nullptr);
-        u32 append_root_suffix_separator();
-        MenuItem *append_root_suffix_item(u32 group_index, acul::string text,
-                                          acul::unique_function<void(ClickEvent &)> callback = nullptr);
-        MenuItem *append_root_suffix_item(u32 group_index, StringView text,
-                                          acul::unique_function<void(ClickEvent &)> callback = nullptr);
-        u32 append_root_suffix_separator(u32 group_index);
-        void erase_root_suffix_group(u32 group_index);
-        bool has_root_suffix(u32 group_index) const;
-        bool root_suffix_ends_with_separator(u32 group_index) const;
         acul::vector<acul::vector<u32>> group_layer_ids(const MenuGroupLayer *layer) const;
         acul::vector<u32> root_ids() const;
         void open_root(u32 element_id);
@@ -192,7 +167,6 @@ namespace auik
 
         DrawDataID _bg{};
         detail::MenuBase _menu_base;
-        acul::vector<RuntimeSuffixGroup> _runtime_suffix_groups;
         acul::vector<Window *> _popups;
         acul::vector<u32> _open_path;
         StyleSelector _menu_style{Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_WINDOW_MENU_BAR};
@@ -239,6 +213,7 @@ namespace auik
 
         AUIK_EXPORT PopupMenu(u32 id, const acul::vector<StringView> &items, WidgetFlags widget_flags,
                               bool selected_enabled);
+        AUIK_EXPORT PopupMenu(u32 id, MenuBar *menu, WidgetFlags widget_flags, bool selected_enabled);
         AUIK_EXPORT explicit PopupMenu(MenuBar *menu, WidgetFlags widget_flags = detail::get_tabbar_widget_flags(),
                                        bool selected_enabled = false);
         AUIK_EXPORT ~PopupMenu() override;
@@ -246,38 +221,6 @@ namespace auik
         MenuBar::MenuItem *item(u32 element_id) { return _menu ? _menu->item(element_id) : nullptr; }
         MenuBar::MenuItem *operator[](size_t index) { return _menu ? (*_menu)[index] : nullptr; }
         acul::vector<u32> element_ids() const { return _menu ? _menu->element_ids() : acul::vector<u32>{}; }
-
-        u32 push_suffix_group() { return _menu ? _menu->push_root_suffix_group() : 0u; }
-        u32 suffix_group_count() const { return _menu ? _menu->root_suffix_group_count() : 0u; }
-        void pop_suffix_group()
-        {
-            if (_menu) _menu->pop_root_suffix_group();
-        }
-
-        MenuBar::MenuItem *add_suffix_item(u32 group_index, acul::string text,
-                                           acul::unique_function<void(ClickEvent &)> callback = nullptr)
-        {
-            return _menu ? _menu->append_root_suffix_item(group_index, std::move(text), std::move(callback)) : nullptr;
-        }
-
-        u32 add_suffix_separator(u32 group_index)
-        {
-            return _menu ? _menu->append_root_suffix_separator(group_index) : 0u;
-        }
-
-        void erase_suffix_group(u32 group_index)
-        {
-            if (_menu) _menu->erase_root_suffix_group(group_index);
-        }
-
-        bool has_suffix_items(u32 group_index) const { return _menu && _menu->has_root_suffix(group_index); }
-
-        u32 suffix_item_count(u32 group_index) const
-        {
-            if (!_menu) return 0u;
-            const auto *group = _menu->runtime_suffix_group(group_index);
-            return group ? group->size() : 0u;
-        }
 
         void set_popup_anchor_override(const amal::rect &anchor)
         {
@@ -396,164 +339,6 @@ namespace auik
                                              WidgetFlagBits::cache_snapshot | WidgetFlagBits::hittable;
         return acul::alloc<PopupMenu>(id, items, widget_flags, selected_enabled);
     }
-
-    class MenuProxy
-    {
-    public:
-        using value_type = MenuBar::value_type;
-        using iterator = MenuBar::iterator;
-        using const_iterator = MenuBar::const_iterator;
-
-        MenuProxy() = default;
-        explicit MenuProxy(Widget *widget) : _widget(widget) {}
-        ~MenuProxy()
-        {
-            if (_widget) acul::release(_widget);
-        }
-
-        MenuProxy(const MenuProxy &) = delete;
-        MenuProxy &operator=(const MenuProxy &) = delete;
-        MenuProxy(MenuProxy &&other) noexcept : _widget(other._widget) { other._widget = nullptr; }
-        MenuProxy &operator=(MenuProxy &&other) noexcept
-        {
-            if (this == &other) return *this;
-            reset();
-            _widget = other._widget;
-            other._widget = nullptr;
-            return *this;
-        }
-
-        Widget *get_widget() const { return _widget; }
-        Widget *operator->() const { return _widget; }
-        void reset(Widget *widget = nullptr)
-        {
-            if (_widget == widget) return;
-            if (_widget) acul::release(_widget);
-            _widget = widget;
-        }
-        Widget *release()
-        {
-            auto *widget = _widget;
-            _widget = nullptr;
-            return widget;
-        }
-        void set_menu_bar(MenuBar *menu) { reset(menu); }
-        void set_popup_menu(PopupMenu *menu) { reset(menu); }
-        bool valid() const { return menu_model() != nullptr; }
-        explicit operator bool() const { return valid(); }
-        bool is_menu_bar() const { return _widget && _widget->signature() == AUIK_TAG_MENU_BAR; }
-        bool is_popup_menu() const { return _widget && _widget->signature() == AUIK_TAG_POPUP_MENU; }
-
-        MenuBar *menu_model() const
-        {
-            if (is_menu_bar()) return static_cast<MenuBar *>(_widget);
-            if (is_popup_menu()) return static_cast<PopupMenu *>(_widget)->menu_model();
-            return nullptr;
-        }
-        MenuBar *menu_bar() const { return menu_model(); }
-        MenuBar *get_menu_bar() const { return menu_model(); }
-
-        acul::vector<u32> element_ids() const
-        {
-            auto *model = menu_model();
-            return model ? model->element_ids() : acul::vector<u32>{};
-        }
-
-        size_t item_count() const { return element_ids().size(); }
-        iterator begin()
-        {
-            auto *model = menu_model();
-            return model ? model->begin() : iterator{};
-        }
-        iterator end()
-        {
-            auto *model = menu_model();
-            return model ? model->end() : iterator{};
-        }
-        const_iterator begin() const
-        {
-            auto *model = menu_model();
-            return model ? model->cbegin() : const_iterator{};
-        }
-        const_iterator end() const
-        {
-            auto *model = menu_model();
-            return model ? model->cend() : const_iterator{};
-        }
-        const_iterator cbegin() const
-        {
-            auto *model = menu_model();
-            return model ? model->cbegin() : const_iterator{};
-        }
-        const_iterator cend() const
-        {
-            auto *model = menu_model();
-            return model ? model->cend() : const_iterator{};
-        }
-        bool empty() const
-        {
-            auto *model = menu_model();
-            return !model || model->empty();
-        }
-        size_t child_size() const
-        {
-            auto *model = menu_model();
-            return model ? model->child_size() : 0u;
-        }
-        value_type front()
-        {
-            auto *model = menu_model();
-            return model ? model->front() : nullptr;
-        }
-        value_type back()
-        {
-            auto *model = menu_model();
-            return model ? model->back() : nullptr;
-        }
-        const value_type front() const
-        {
-            auto *model = menu_model();
-            return model ? model->front() : nullptr;
-        }
-        const value_type back() const
-        {
-            auto *model = menu_model();
-            return model ? model->back() : nullptr;
-        }
-        value_type *data()
-        {
-            auto *model = menu_model();
-            return model ? model->data() : nullptr;
-        }
-        const value_type *data() const
-        {
-            auto *model = menu_model();
-            return model ? model->data() : nullptr;
-        }
-        MenuBar::MenuItem *item(u32 element_id) const
-        {
-            auto *model = menu_model();
-            return model ? model->item(element_id) : nullptr;
-        }
-        MenuBar::MenuItem *operator[](size_t index) const
-        {
-            auto *model = menu_model();
-            return model ? (*model)[index] : nullptr;
-        }
-        MenuBar::MenuGroup *add_group(u32 element_id, const acul::vector<StringView> &items) const
-        {
-            auto *model = menu_model();
-            auto *item = model ? model->item(element_id) : nullptr;
-            if (!item) return nullptr;
-            auto *layer = item->add_group_layer(1u);
-            auto *group = layer ? (*layer)[0] : nullptr;
-            if (group) group->add_items(items);
-            return group;
-        }
-
-    private:
-        Widget *_widget = nullptr;
-    };
 
     namespace streams
     {

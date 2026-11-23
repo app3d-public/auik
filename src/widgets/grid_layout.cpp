@@ -2,6 +2,7 @@
 #include <auik/pipelines.hpp>
 #include <auik/widgets/detail/draw_cull.hpp>
 #include <auik/widgets/grid_layout.hpp>
+#include <cmath>
 
 namespace auik
 {
@@ -267,7 +268,7 @@ namespace auik
     void GridLayout::draw(DrawCtx &ctx)
     {
         if (!is_visible() && !(ctx.reason & DrawReasonBits::invalidate)) return;
-        const amal::vec4 content_clip = get_content_clip_rect();
+        const amal::vec4 content_clip = detail::child_culling_rect(*this, ctx);
         for (auto &cell : _cells)
             if (cell.widget && (cell.widget->is_visible() || (ctx.reason & DrawReasonBits::invalidate)))
                 detail::draw_child_in_clip(cell.widget, ctx, content_clip);
@@ -283,6 +284,13 @@ namespace auik
             const Style &style = get_theme()->get_style(style_id);
             QuadsInstanceData data{};
             data.rect = helper.rect.bounds;
+            const auto axis = helper.axis == amal::axis::x ? 0 : 1;
+            const f32 thickness = style.size()[axis];
+            if (thickness > 0.0f && thickness < data.rect.size[axis])
+            {
+                data.rect.offset[axis] = std::floor(data.rect.offset[axis] + (data.rect.size[axis] - thickness) * 0.5f);
+                data.rect.size[axis] = thickness;
+            }
             data.z_order = helper.rect.depth;
             const bool visible = (helper.visible || active) && fill_quads_instance_by_style(style, clip_id(), data);
             emit_quads_instance(ctx, stream, helper.draw, data, helper.rect, visible, true);
@@ -326,7 +334,6 @@ namespace auik
             detail::get_context().dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
             update_draw_commands(DrawReasonBits::external);
             mark_host_refresh_request();
-            return;
         }
 
         if (state == KeyPressState::release)

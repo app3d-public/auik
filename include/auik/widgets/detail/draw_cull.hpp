@@ -4,6 +4,12 @@
 
 namespace auik::detail
 {
+    // Invalidating recorded commands can precede the first layout after session restore.
+    inline amal::vec4 child_culling_rect(const Widget &owner, const DrawCtx &ctx)
+    {
+        return ctx.reason & DrawReasonBits::invalidate ? amal::vec4{} : owner.get_content_clip_rect();
+    }
+
     inline void draw_child_in_clip(Widget *child, DrawCtx &ctx, const amal::vec4 &clip_rect)
     {
         if (!child) return;

@@ -1,6 +1,8 @@
 #include <acul/string/utils.hpp>
 #include <auik/auik.hpp>
 #include <auik/widgets/drag.hpp>
+#include <charconv>
+#include <cmath>
 #include "../core/session_stream_utils.hpp"
 
 namespace auik
@@ -126,18 +128,88 @@ namespace auik
 
         static inline void clear_drag_interaction_flags(u8 &flags, u8 bits) { flags &= static_cast<u8>(~bits); }
 
-        template <typename T>
-        static inline TextFlags drag_text_flags()
+        class NumericExpression
         {
-            if constexpr (std::is_integral_v<T>)
-                return TextFlagBits::chars_decimal | TextFlagBits::chars_no_blank | TextFlagBits::chars_ascii;
-            else return TextFlagBits::chars_scientific | TextFlagBits::chars_ascii;
-        }
+        public:
+            explicit NumericExpression(const acul::string &text) : _cursor(text.c_str()), _end(_cursor + text.size()) {}
+
+            bool parse(f64 &value)
+            {
+                if (!expression(value, 0) || !std::isfinite(value)) return false;
+                skip_spaces();
+                return _cursor == _end;
+            }
+
+        private:
+            void skip_spaces()
+            {
+                while (_cursor < _end && acul::is_space(*_cursor)) ++_cursor;
+            }
+
+            bool expression(f64 &value, unsigned depth)
+            {
+                if (!term(value, depth)) return false;
+                for (;;)
+                {
+                    skip_spaces();
+                    const char op = *_cursor;
+                    if (op != '+' && op != '-') return true;
+                    ++_cursor;
+                    f64 rhs;
+                    if (!term(rhs, depth)) return false;
+                    value += op == '+' ? rhs : -rhs;
+                }
+            }
+
+            bool term(f64 &value, unsigned depth)
+            {
+                if (!factor(value, depth)) return false;
+                for (;;)
+                {
+                    skip_spaces();
+                    const char op = *_cursor;
+                    if (op != '*' && op != '/') return true;
+                    ++_cursor;
+                    f64 rhs;
+                    if (!factor(rhs, depth) || (op == '/' && rhs == 0.0)) return false;
+                    value = op == '*' ? value * rhs : value / rhs;
+                }
+            }
+
+            bool factor(f64 &value, unsigned depth)
+            {
+                skip_spaces();
+                const bool negative = *_cursor == '-';
+                if (negative || *_cursor == '+')
+                {
+                    ++_cursor;
+                    skip_spaces();
+                }
+                if (*_cursor == '(')
+                {
+                    if (depth >= 32) return false;
+                    ++_cursor;
+                    if (!expression(value, depth + 1) || *_cursor != ')') return false;
+                    ++_cursor;
+                }
+                else
+                {
+                    const auto result = std::from_chars(_cursor, _end, value);
+                    if (result.ec != std::errc{} || !std::isfinite(value)) return false;
+                    _cursor = result.ptr;
+                }
+                if (negative) value = -value;
+                return true;
+            }
+
+            const char *_cursor;
+            const char *_end;
+        };
 
         template <typename T>
         Draggable<T>::Draggable(u32 id, u32 tag_id, T value, T min_value, T max_value, f32 speed,
                                 amal::vec2 inline_size, WidgetFlags flags)
-            : Textbox(id, "", inline_size, flags, AUIK_STYLE_TAG_TEXTBOX, drag_text_flags<T>()),
+            : Textbox(id, "", inline_size, flags, AUIK_STYLE_TAG_TEXTBOX, TextFlagBits::chars_ascii),
               _value(value),
               _min_value(min_value),
               _max_value(max_value),
@@ -210,30 +282,6 @@ namespace auik
             _display_precision = value;
             _value_text_dirty = true;
             invalidate_layout_measure();
-        }
-
-        template <typename T>
-        void Draggable<T>::set_postfix(StringView value)
-        {
-            _postfix = value.is_translated ? translate_string(value) : acul::string(value.str ? value.str : "");
-            // Numeric-only filtering would make the displayed postfix impossible to enter manually. Once a
-            // draggable has a postfix, keep the input ASCII-only and let the integration validate or convert the
-            // suffix from input_postfix() on commit.
-            text_flags = _postfix.empty() ? drag_text_flags<T>() : TextFlagBits::chars_ascii;
-            _value_text_dirty = true;
-            invalidate_layout_measure();
-        }
-
-        template <typename T>
-        acul::string Draggable<T>::input_postfix() const
-        {
-            const acul::string text = acul::trim(Textbox::value());
-            if (text.empty()) return {};
-
-            const char *ptr = text.c_str();
-            f32 parsed = 0.0f;
-            if (!acul::stof(ptr, parsed)) return {};
-            return acul::trim(acul::string(ptr));
         }
 
         template <typename T>
@@ -474,7 +522,6 @@ namespace auik
             if constexpr (std::is_integral_v<T>) out = acul::to_string(static_cast<int>(value));
             else out = format_display_float(value, _display_precision);
 
-            out += _postfix;
             return out;
         }
 
@@ -484,10 +531,11 @@ namespace auik
             const acul::string text = acul::trim(Textbox::value());
             if (text.empty()) return false;
 
-            const char *ptr = text.c_str();
-            f32 parsed = 0.0f;
-            if (!acul::stof(ptr, parsed)) return false;
-            out = clamp_value(cast_drag_value<T>(parsed), _min_value, _max_value);
+            f64 parsed = 0.0;
+            if (!NumericExpression(text).parse(parsed)) return false;
+            const f64 lo = static_cast<f64>(amal::min(_min_value, _max_value));
+            const f64 hi = static_cast<f64>(amal::max(_min_value, _max_value));
+            out = cast_drag_value<T>(amal::clamp(parsed, lo, hi));
             return true;
         }
 
@@ -642,6 +690,130 @@ namespace auik
             return widget;
         }
     } // namespace
+
+    namespace detail
+    {
+        template <class Drag>
+        DragWithAffixes<Drag>::~DragWithAffixes()
+        {
+            acul::release(_prefix);
+            acul::release(_suffix);
+        }
+
+        template <class Drag>
+        bool DragWithAffixes<Drag>::update_locale()
+        {
+            bool changed = Drag::update_locale();
+            if (_prefix) changed |= _prefix->update_locale();
+            if (_suffix) changed |= _suffix->update_locale();
+            return changed;
+        }
+
+        template <class Drag>
+        StyleUpdateFlags DragWithAffixes<Drag>::update_style()
+        {
+            auto flags = Drag::update_style();
+            if (_prefix) flags |= _prefix->update_style_invalidated();
+            if (_suffix) flags |= _suffix->update_style_invalidated();
+            return flags;
+        }
+
+        template <class Drag>
+        void DragWithAffixes<Drag>::reset_draw_records()
+        {
+            Drag::reset_draw_records();
+            if (_prefix) _prefix->reset_draw_records();
+            if (_suffix) _suffix->reset_draw_records();
+        }
+
+        template <class Drag>
+        void DragWithAffixes<Drag>::update_depth(const amal::vec2 &depth_range)
+        {
+            Drag::update_depth(depth_range);
+            if (_prefix) _prefix->update_depth(this->_text.depth_range());
+            if (_suffix) _suffix->update_depth(this->_text.depth_range());
+        }
+
+        template <class Drag>
+        amal::vec2 DragWithAffixes<Drag>::text_horizontal_insets()
+        {
+            const auto spacing = get_theme()->get_style(this->_style.id).inline_spacing();
+            const auto width = [spacing](Text *label) -> f32 {
+                if (!label || label->text().empty()) return 0.0f;
+                label->update_style_invalidated();
+                label->update_layout_min_size();
+                return label->required_size().x + spacing;
+            };
+            return {width(_prefix), width(_suffix)};
+        }
+
+        template <class Drag>
+        void DragWithAffixes<Drag>::set_affix(Text *&affix, StringView text)
+        {
+            if (!affix && (!text.str || !text.str[0])) return;
+            if (!affix)
+            {
+                affix = acul::alloc<Text>(AUIK_TAG_TEXT, text, amal::vec2 AUIK_SIZE_FIT, WidgetFlagBits::visible);
+                affix->set_parent(this);
+                affix->set_style_tag(AUIK_STYLE_TAG_TEXTBOX_AFFIX);
+                affix->invalidate_style();
+                affix->update_depth(this->_text.depth_range());
+            }
+            else affix->set_text(text.str ? text : StringView{""});
+            this->invalidate_layout_measure();
+        }
+
+        template <class Drag>
+        void DragWithAffixes<Drag>::set_prefix(StringView text) { set_affix(_prefix, text); }
+        template <class Drag>
+        void DragWithAffixes<Drag>::set_suffix(StringView text) { set_affix(_suffix, text); }
+
+        template <class Drag>
+        void DragWithAffixes<Drag>::draw_text_content(DrawCtx &ctx)
+        {
+            if (!_prefix && !_suffix)
+            {
+                Drag::draw_text_content(ctx);
+                return;
+            }
+            const auto &style = get_theme()->get_style(this->_style.id);
+            const f32 inner_right = this->position().x + this->size().x - style.padding().z;
+            const auto &layout = this->_text.layout_result();
+            const f32 baseline = this->text_baseline();
+            auto draw_affix = [&](Text *affix, f32 x) {
+                DrawCtx affix_ctx = ctx;
+                affix_ctx.is_hit_allowed = false;
+                if (ctx.reason & DrawReasonBits::invalidate)
+                {
+                    affix->draw_local(affix_ctx);
+                    return;
+                }
+                affix->update_layout_min_size();
+                const f32 width = affix->required_size().x;
+                const bool fits = !affix->text().empty() && x + width <= inner_right;
+                if (fits)
+                {
+                    affix->set_position({x, baseline - affix->layout_result().ascender});
+                    affix->set_layout_size({width, this->_content_size.y});
+                    affix->set_clip_id(this->clip_id());
+                    affix->update_layout(true);
+                }
+                if (!fits) affix_ctx.reason |= DrawReasonBits::invalidate;
+                affix->draw_local(affix_ctx);
+            };
+            if (_prefix) draw_affix(_prefix, this->position().x + style.padding().x);
+            Drag::draw_text_content(ctx);
+            if (_suffix)
+            {
+                const f32 text_width = layout.lines.empty() ? 0.0f : layout.lines.front().width;
+                draw_affix(_suffix, this->_content_pos.x + amal::min(text_width, this->_content_size.x) + style.inline_spacing());
+            }
+        }
+
+        template class DragWithAffixes<DragInt>;
+        template class DragWithAffixes<DragFloat>;
+        template class DragWithAffixes<DragDouble>;
+    } // namespace detail
 
     namespace streams
     {

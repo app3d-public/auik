@@ -87,28 +87,9 @@ namespace auik
                 (border_mask & AUIK_BORDER_BOTTOM_BIT) ? thickness : 0.0f};
     }
 
-    static inline Widget *window_menu_widget(const Window &window)
-    {
-        auto *menu = window.get_menu();
-        return menu ? menu->get_widget() : nullptr;
-    }
-
-    static inline bool owns_window_menu_tree(const Window &window)
-    {
-        return window.get_menu() && !is_docked_window(window);
-    }
-    static inline MenuBar *window_menu_bar(const Window &window)
-    {
-        auto *menu = window.get_menu();
-        return menu && menu->is_menu_bar() ? menu->menu_bar() : nullptr;
-    }
     static inline bool owns_classic_menu_bar_tree(const Window &window)
     {
-        return owns_window_menu_tree(window) && window_menu_bar(window);
-    }
-    static inline bool owns_popup_menu_tree(const Window &window)
-    {
-        return !is_docked_window(window) && window.header_popup_menu();
+        return window.menu_bar() && !is_docked_window(window);
     }
 
     static inline void get_window_resize_direction(const detail::RectData &rect, const amal::vec2 &mouse_pos,
@@ -293,19 +274,27 @@ namespace auik
         return amal::max(body_bottom - window_top, 0.0f);
     }
 
-    class WindowHeader final : public Widget
+    class DefaultWindowHeader final : public WindowHeader
     {
     public:
-        explicit WindowHeader(Widget *parent, StringView text, bool hittable)
-            : Widget(AUIK_TAG_WINDOW_HEADER,
-                     WidgetFlagBits::visible | (hittable ? WidgetFlagBits::hittable : WidgetFlagBits::none),
-                     EventFlagBits::none, {}, AUIK_TAG_WINDOW_HEADER),
+        explicit DefaultWindowHeader(Window *parent, StringView text, bool hittable)
+            : WindowHeader(AUIK_TAG_WINDOW_HEADER,
+                           WidgetFlagBits::visible | (hittable ? WidgetFlagBits::hittable : WidgetFlagBits::none),
+                           AUIK_TAG_WINDOW_HEADER),
               _style({Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_WINDOW_HEADER}),
               _title_text(text.str ? text.str : ""),
               _title(acul::alloc<Text>(AUIK_TAG_WINDOW_HEADER, _title_text, amal::vec2{0.0f, 0.0f},
                                        WidgetFlagBits::visible))
         {
             assert(parent);
+            if (parent->window_flags & WindowFlagBits::closable)
+            {
+                _close = acul::alloc<ImageButton>(
+                    AUIK_TAG_CLOSE_BUTTON, get_cached_image(AUIK_ICON_CLOSE), amal::vec2{}, amal::vec2 AUIK_SIZE_FIT,
+                    WidgetFlagBits::visible | WidgetFlagBits::hittable, AUIK_STYLE_TAG_CLOSE_BUTTON);
+                _close->set_parent(this);
+                _close->get_rect().id = make_element_id(parent->id(), AUIK_TAG_CLOSE_BUTTON);
+            }
             set_parent(parent);
             _title->set_style_tag(AUIK_STYLE_TAG_NO_PAD);
             _title->set_parent(this);
@@ -313,21 +302,12 @@ namespace auik
             _rect.clip_id = parent->clip_id();
             if (text.is_translated) _title->set_translated_text_literal(text.str);
         }
-        ~WindowHeader() override { acul::release(_title); }
-
-        void set_menu(PopupMenu *menu)
+        ~DefaultWindowHeader() override
         {
-            if (_menu == menu) return;
-            _menu = menu;
-            if (_menu)
-            {
-                _menu->set_button_update_target(parent());
-                _menu->set_button_hit_id(make_element_id(parent()->id(), AUIK_TAG_POPUP_MENU_BUTTON, 0u));
-                _menu->set_button_style_tag(AUIK_STYLE_TAG_WINDOW_HEADER_MENU);
-            }
-            if (_title) _title->reset_draw_records();
-            _title_draw_dirty = true;
+            if (_close) acul::release(_close);
+            acul::release(_title);
         }
+
         void set_title(StringView title)
         {
             const acul::string next = title.str ? title.str : "";
@@ -341,13 +321,22 @@ namespace auik
             _title_draw_dirty = true;
         }
 
-        const Text *title_text() const { return _title; }
+        Text *name() const override { return _title; }
+        u16 content_clip_id() const override { return clip_id(); }
 
-        f32 compute_height() const
+        void update_layout_min_size_force() override
         {
             auto *theme = get_theme();
             const auto &style = theme->get_style(_style.id);
-            return style.text_size() + style.padding().y * 2.0f;
+            _title->update_layout_min_size();
+            f32 content_height = amal::max(style.text_size(), _title->required_size().y);
+            if (_close)
+            {
+                _close->update_layout_min_size();
+                content_height = amal::max(content_height, _close->required_size().y);
+            }
+            const auto padding = style.padding();
+            set_required_size({0.0f, content_height + padding.y + padding.w});
         }
 
         StyleUpdateFlags update_style() override
@@ -366,7 +355,7 @@ namespace auik
             StyleUpdateFlags flags = resolve_style_selector(_style, id(), parent_id, style_state());
             const auto &style = get_theme()->get_style(_style.id);
             flags |= _title->update_style_invalidated();
-            if (_menu) flags |= _menu->update_style_invalidated();
+            if (_close) flags |= _close->update_style_invalidated();
             if (_resolved_text_color != style.text_color())
             {
                 _resolved_text_color = style.text_color();
@@ -377,7 +366,6 @@ namespace auik
         bool update_locale() override
         {
             bool changed = _title && _title->update_locale();
-            if (_menu) changed |= _menu->update_locale();
             return changed;
         }
         void update_layout(bool min_size_known) override
@@ -390,18 +378,16 @@ namespace auik
             const amal::vec2 content_size = {amal::max(size().x - padding.x - padding.z, 0.0f),
                                              amal::max(size().y - padding.y - padding.w, 0.0f)};
             amal::vec2 title_size = content_size;
-            if (_menu)
+            if (_close)
             {
-                _menu->update_layout_min_size();
-                const amal::vec2 menu_size = _menu->required_size();
-                const f32 spacing = menu_size.x > 0.0f ? style.inline_spacing() : 0.0f;
-                const amal::vec2 menu_pos = {content_pos.x + amal::max(content_size.x - menu_size.x, 0.0f),
-                                             position().y + amal::max(size().y - menu_size.y, 0.0f) * 0.5f};
-                _menu->set_position(menu_pos);
-                _menu->set_layout_size(menu_size);
-                _menu->set_clip_id(clip_id());
-                _menu->update_layout(true);
-                title_size.x = amal::max(title_size.x - menu_size.x - spacing, 0.0f);
+                _close->update_layout_min_size();
+                const auto extent = _close->required_size();
+                _close->set_position({content_pos.x + amal::max(title_size.x - extent.x, 0.0f),
+                                      position().y + (size().y - extent.y) * 0.5f});
+                _close->set_layout_size(extent);
+                _close->set_clip_id(clip_id());
+                _close->update_layout(true);
+                title_size.x = amal::max(title_size.x - extent.x - style.inline_spacing(), 0.0f);
             }
             _title->update_layout_min_size();
             const f32 title_h = _title->required_size().y;
@@ -416,36 +402,35 @@ namespace auik
             if (delta.x == 0.0f && delta.y == 0.0f) return;
             Widget::translate(delta);
             _title->translate(delta);
-            if (_menu) _menu->translate(delta);
+            if (_close) _close->translate(delta);
         }
 
         void update_depth(const amal::vec2 &depth_range) override
         {
             Widget::update_depth(depth_range);
-            const u32 menu_requirement = _menu ? _menu->get_depth_requirement() : 0u;
-            DepthCursor cursor(this->depth_range(), 2u + menu_requirement);
+            DepthCursor cursor(this->depth_range(), 2u + (_close ? 1u : 0u));
             const amal::vec2 bg_range = cursor.next(1u);
             const amal::vec2 text_range = cursor.next(1u);
             get_rect().depth = next_depth(bg_range);
             get_rect().hit_depth = get_rect().depth;
             _title->update_depth(text_range);
-            if (_menu) _menu->update_depth(cursor.next(menu_requirement));
+            if (_close) _close->update_depth(cursor.next(1u));
         }
 
-        u32 get_depth_requirement() const override { return 2u + (_menu ? _menu->get_depth_requirement() : 0u); }
+        u32 get_depth_requirement() const override { return 2u + (_close ? 1u : 0u); }
 
         void back_hit_depth() override
         {
             Widget::back_hit_depth();
             _title->back_hit_depth();
-            if (_menu) _menu->back_hit_depth();
+            if (_close) _close->back_hit_depth();
         }
 
         void restore_hit_depth() override
         {
             Widget::restore_hit_depth();
             _title->restore_hit_depth();
-            if (_menu) _menu->restore_hit_depth();
+            if (_close) _close->restore_hit_depth();
         }
 
         void rebuild_clip_rects() override
@@ -453,12 +438,9 @@ namespace auik
             _rect.clip_id = _parent->clip_id();
             invalidate_hit_rect(_bg);
             _title->set_clip_id(clip_id());
+            if (_close) _close->set_clip_id(clip_id());
             _title->rebuild_clip_rects();
-            if (_menu)
-            {
-                _menu->set_clip_id(clip_id());
-                _menu->rebuild_clip_rects();
-            }
+            if (_close) _close->rebuild_clip_rects();
             _title_draw_dirty = true;
         }
 
@@ -466,19 +448,22 @@ namespace auik
         {
             Widget::reset_clip_rect_records();
             if (_title) _title->reset_clip_rect_records();
-            if (_menu) _menu->reset_clip_rect_records();
+            if (_close) _close->reset_clip_rect_records();
         }
 
         void reset_draw_records() override
         {
             _bg = {};
             _title->reset_draw_records();
-            if (_menu) _menu->reset_draw_records();
+            if (_close) _close->reset_draw_records();
             _title_draw_dirty = true;
         }
 
         void draw(DrawCtx &ctx) override
         {
+            // An attach callback can replace this header before it has any draw records.
+            if ((ctx.reason & DrawReasonBits::invalidate) && _style.id == Theme::STYLE_ID_INVALID) return;
+
             auto *theme = get_theme();
             auto *quads_stream = get_primary_quads_stream();
 
@@ -490,11 +475,7 @@ namespace auik
 
             DrawCtx title_ctx = ctx;
             _title->draw_local(title_ctx);
-            if (_menu)
-            {
-                DrawCtx menu_ctx = ctx;
-                _menu->draw_button(menu_ctx);
-            }
+            if (_close) _close->draw_local(title_ctx);
             _title_draw_dirty = false;
         }
 
@@ -503,26 +484,28 @@ namespace auik
         StyleSelector _style;
         acul::string _title_text;
         Text *_title = nullptr;
-        PopupMenu *_menu = nullptr;
+        ImageButton *_close = nullptr;
         u32 _resolved_text_color{0};
         bool _title_draw_dirty = true;
     };
 
-    static inline f32 get_window_header_height(const Widget *header, const Window &window)
+    static inline f32 get_window_header_height(Widget *header, const Window &window)
     {
         if (!header || is_docked_window(window)) return 0.0f;
-        return static_cast<const WindowHeader *>(header)->compute_height();
+        header->update_layout_min_size_force();
+        return header->required_size().y;
     }
 
     Window::Window(u32 id, StringView title, const amal::rect &bounds, WindowFlags in_window_flags,
-                   WidgetFlags in_widget_flags)
+                   WidgetFlags in_widget_flags, WindowHeader *header)
         : Widget(id, in_widget_flags, EventFlagBits::click | EventFlagBits::drag | EventFlagBits::focus, bounds,
                  AUIK_TAG_WINDOW),
           _content_block(acul::alloc<ContentBlock>(id, WidgetFlagBits::visible | WidgetFlagBits::hittable,
                                                    AUIK_TAG_WINDOW_CONTENT)),
           children(_content_block->children),
           window_flags(in_window_flags),
-          _title(title.str ? title.str : "")
+          _title(title.str ? title.str : ""),
+          _translated_title(title.is_translated)
     {
         set_position(bounds.offset);
         set_size(bounds.size);
@@ -537,8 +520,14 @@ namespace auik
         _auto_position = {is_fit_axis(bounds.offset.x), is_fit_axis(bounds.offset.y)};
         clear_window_frame_hitbox_flag(*this);
         _resize_hit_rect = detail::make_rect_data(id, AUIK_TAG_HITBOX);
-        if (window_flags & WindowFlagBits::decorated)
-            _header = acul::alloc<WindowHeader>(this, title, window_flags & WindowFlagBits::movable);
+        _header = header;
+        if (_header)
+        {
+            _header->set_parent(this);
+            _header->set_focus_parent(this);
+            _header->get_rect().id = make_element_id(id, AUIK_TAG_WINDOW_HEADER);
+        }
+        if (window_flags & WindowFlagBits::decorated) ensure_header(title);
         if (window_flags & WindowFlagBits::rubber_band)
         {
             _rubber_band = acul::alloc<RubberBand>(id, WidgetFlagBits::none);
@@ -576,24 +565,53 @@ namespace auik
         return changed;
     }
 
-    void Window::set_title(StringView title)
+    void Window::ensure_header(StringView title)
     {
-        _title = title.str ? title.str : "";
-        if (_header) _header->set_title(title);
+        if (_header) return;
+        _default_header = acul::alloc<DefaultWindowHeader>(this, title, window_flags & WindowFlagBits::movable);
+        _header = _default_header;
     }
 
-    const Text *Window::title_text() const
+    void Window::set_header(WindowHeader *header)
     {
-        return _header ? static_cast<const WindowHeader *>(_header)->title_text() : nullptr;
+        if (header && header == _header) return;
+        if (_header)
+        {
+            if (_header->is_attached()) _header->on_detach();
+            if (is_attached()) _header->invalidate_draw_commands(DrawReasonBits::layout);
+            acul::release(_header);
+        }
+        _default_header = nullptr;
+        _header = header;
+        if (_header)
+        {
+            _header->set_parent(this);
+            _header->set_focus_parent(this);
+            _header->get_rect().id = make_element_id(id(), AUIK_TAG_WINDOW_HEADER);
+            if (is_attached() && (_header->widget_flags & WidgetFlagBits::attachable)) _header->on_attach();
+        }
+        else if (window_flags & WindowFlagBits::decorated) ensure_header(StringView{_title.c_str(), _translated_title});
+        invalidate_layout_measure();
+        if (is_attached()) detail::mark_layout_dirty();
     }
+
+    void Window::set_title(StringView title)
+    {
+        _translated_title = title.is_translated;
+        _title = title.str ? title.str : "";
+        if (_default_header) _default_header->set_title(title);
+        else if (_header && _header->name()) _header->name()->set_text(title);
+    }
+
+    const Text *Window::title_text() const { return _header ? _header->name() : nullptr; }
 
     Window::~Window()
     {
         if (is_overlay_window(this)) remove_overlay_window(this);
-        if (_default_header_menu) acul::release(_default_header_menu);
         if (_rubber_band) acul::release(_rubber_band);
         if (_header) acul::release(_header);
         if (_content_block) acul::release(_content_block);
+        if (_menu_bar) acul::release(_menu_bar);
     }
 
     void Window::clear_children()
@@ -620,130 +638,35 @@ namespace auik
         if (_content_block) _content_block->add_children(new_children);
     }
 
-    void Window::set_menu(MenuProxy &&menu, PFN_window_menu_suffix_create window_menu_suffix_create)
+    template <class T>
+    static void replace_window_menu(Window &window, T *&slot, T *next)
     {
-        _window_menu_suffix_create = window_menu_suffix_create;
-        set_menu_widget(menu.release());
-    }
-
-    void Window::set_menu(detail::MenuBase *menu, PFN_window_menu_suffix_create window_menu_suffix_create)
-    {
-        MenuProxy proxy{};
-        if (menu)
+        if (slot == next) return;
+        if (slot && slot->is_attached()) slot->on_detach();
+        if (slot) acul::release(slot);
+        slot = next;
+        if (slot)
         {
-            auto *widget = menu->owner_widget();
-            if (widget && widget->signature() == AUIK_TAG_MENU_BAR)
-            {
-                auto *menu_bar = static_cast<MenuBar *>(widget);
-                if (detail::get_default_window_menu_type() == AUIK_WINDOW_MENU_TYPE_POPUP)
-                    proxy.set_popup_menu(acul::alloc<PopupMenu>(menu_bar));
-                else proxy.set_menu_bar(menu_bar);
-            }
-            else proxy.reset(widget);
+            slot->set_parent(&window);
+            slot->set_focus_parent(&window);
+            slot->attach_to_viewport(window.viewport());
+            if (window.is_attached()) slot->on_attach();
         }
-        set_menu(std::move(proxy), window_menu_suffix_create);
+        window.invalidate_layout_measure();
+        if (window.is_attached()) detail::mark_layout_dirty();
     }
 
-    void Window::set_menu_widget(Widget *menu)
-    {
-        if (_menu.get_widget() == menu) return;
-        _menu.reset(menu);
-
-        auto *widget = window_menu_widget(*this);
-        if (widget)
-        {
-            widget->set_parent(this);
-            widget->set_focus_parent(this);
-            widget->attach_to_viewport(viewport());
-        }
-        sync_header_popup_menu();
-    }
-
-    Widget *Window::take_menu_widget()
-    {
-        auto *widget = _menu.get_widget();
-        if (!widget) return nullptr;
-        remove_header_menu_suffix();
-        _menu.release();
-        sync_header_popup_menu();
-        return widget;
-    }
-
-    bool Window::is_popup_menu() const { return _menu.is_popup_menu(); }
-
-    PopupMenu *Window::header_popup_menu() const
-    {
-        if (is_popup_menu()) return static_cast<PopupMenu *>(_menu.get_widget());
-        return _default_header_menu;
-    }
+    void Window::set_menu_bar(MenuBar *menu) { replace_window_menu(*this, _menu_bar, menu); }
 
     bool Window::open_context_menu(const amal::vec2 &position)
     {
-        if (_menu.is_menu_bar())
+        if (auto *menu = menu_bar())
         {
-            auto *menu = _menu.menu_model();
             if (!menu->open_content_at(position)) return false;
             focus_widget(menu);
             return true;
         }
-        if (parent() && parent()->signature() == AUIK_TAG_DOCKSPACE)
-            return static_cast<Dockspace *>(parent())->open_window_context_menu(this, position);
-        return is_popup_menu() && header_popup_menu()->open_context_at(position);
-    }
-
-    PopupMenu *Window::ensure_header_popup_menu()
-    {
-        if (is_popup_menu()) return static_cast<PopupMenu *>(_menu.get_widget());
-        if (!_default_header_menu)
-        {
-            _default_header_menu = acul::alloc<PopupMenu>(id() + AUIK_TAG_POPUP_MENU, acul::vector<StringView>{},
-                                                          detail::get_tabbar_widget_flags(), false);
-        }
-        _default_header_menu->set_parent(this);
-        _default_header_menu->set_focus_parent(this);
-        _default_header_menu->attach_to_viewport(viewport());
-        return _default_header_menu;
-    }
-
-    void Window::remove_header_menu_suffix()
-    {
-        if (_header_menu_suffix_group == 0xFFFFu) return;
-        if (auto *menu = header_popup_menu())
-        {
-            menu->erase_suffix_group(_header_menu_suffix_group);
-        }
-        _header_menu_suffix_group = 0xFFFFu;
-    }
-
-    void Window::install_header_menu_suffix()
-    {
-        if ((window_flags & WindowFlagBits::docked) || !(window_flags & WindowFlagBits::decorated)) return;
-        if (_header_menu_suffix_group != 0xFFFFu) return;
-        const auto suffix_create =
-            _window_menu_suffix_create ? _window_menu_suffix_create : detail::get_default_menu_suffix_create_cb();
-        if (!suffix_create) return;
-        auto *menu = ensure_header_popup_menu();
-        if (!menu) return;
-
-        const u32 group = menu->push_suffix_group();
-        const u32 suffix_count_before = menu->suffix_item_count(group);
-        suffix_create(this, menu->menu_model());
-        const u32 suffix_count = menu->suffix_item_count(group);
-        if (suffix_count == suffix_count_before) menu->erase_suffix_group(group);
-        else _header_menu_suffix_group = group;
-    }
-
-    void Window::sync_header_popup_menu()
-    {
-        PopupMenu *menu = is_popup_menu() ? static_cast<PopupMenu *>(_menu.get_widget()) : _default_header_menu;
-        if (_header)
-        {
-            _header->set_title(_title);
-            const bool has_window_header_menu = is_popup_menu();
-            const bool show_menu = (window_flags & WindowFlagBits::decorated) && !is_docked_window(*this) && menu &&
-                                   (_header_menu_suffix_group != 0xFFFFu || has_window_header_menu);
-            _header->set_menu(show_menu ? menu : nullptr);
-        }
+        return _context_menu && _context_menu(position);
     }
 
     void Window::override_content_clip_rect(const amal::vec4 &rect)
@@ -793,14 +716,10 @@ namespace auik
         }
         if (!parent() && !is_overlay_window(this)) detail::setup_root_window(this);
         Widget::on_attach();
+        if (_header && (_header->widget_flags & WidgetFlagBits::attachable) && !_header->is_attached())
+            _header->on_attach();
         if (_content_block && !_content_block->is_attached()) _content_block->on_attach();
-        if (auto *menu = window_menu_widget(*this); menu && (menu->widget_flags & WidgetFlagBits::attachable))
-            menu->on_attach();
-        install_header_menu_suffix();
-        sync_header_popup_menu();
-        if (header_popup_menu() == _default_header_menu && owns_popup_menu_tree(*this) && _default_header_menu &&
-            (_default_header_menu->widget_flags & WidgetFlagBits::attachable))
-            _default_header_menu->on_attach();
+        if (_menu_bar && !_menu_bar->is_attached()) _menu_bar->on_attach();
         if (_rubber_band && (_rubber_band->widget_flags & WidgetFlagBits::attachable)) _rubber_band->on_attach();
     }
 
@@ -815,13 +734,8 @@ namespace auik
     void Window::on_detach()
     {
         if (!parent() && !is_overlay_window(this)) detail::teardown_root_window(this);
-        remove_header_menu_suffix();
-        sync_header_popup_menu();
-        if (auto *menu = window_menu_widget(*this); menu && (menu->widget_flags & WidgetFlagBits::attachable))
-            menu->on_detach();
-        if (_default_header_menu && owns_popup_menu_tree(*this) &&
-            (_default_header_menu->widget_flags & WidgetFlagBits::attachable))
-            _default_header_menu->on_detach();
+        if (_menu_bar && _menu_bar->is_attached()) _menu_bar->on_detach();
+        if (_header && _header != _default_header && _header->is_attached()) _header->on_detach();
         if (_content_block && _content_block->is_attached()) _content_block->on_detach();
         Widget::on_detach();
     }
@@ -832,9 +746,7 @@ namespace auik
         if ((flags & WidgetStateFlagBits::visible) && !is_visible()) flags &= ~WidgetStateFlagBits::visible;
         if (_header) _header->add_state_flags_inherit(flags);
         if (_content_block) _content_block->add_state_flags_inherit(flags);
-        if (auto *menu = window_menu_widget(*this); menu) menu->add_state_flags_inherit(flags);
-        if (_default_header_menu && _default_header_menu != window_menu_widget(*this))
-            _default_header_menu->add_state_flags_inherit(flags);
+        if (_menu_bar) _menu_bar->add_state_flags_inherit(flags);
         if (_rubber_band) _rubber_band->add_state_flags_inherit(flags);
     }
 
@@ -843,9 +755,7 @@ namespace auik
         Widget::remove_state_flags_inherit(flags);
         if (_header) _header->remove_state_flags_inherit(flags);
         if (_content_block) _content_block->remove_state_flags_inherit(flags);
-        if (auto *menu = window_menu_widget(*this); menu) menu->remove_state_flags_inherit(flags);
-        if (_default_header_menu && _default_header_menu != window_menu_widget(*this))
-            _default_header_menu->remove_state_flags_inherit(flags);
+        if (_menu_bar) _menu_bar->remove_state_flags_inherit(flags);
         if (_rubber_band) _rubber_band->remove_state_flags_inherit(flags);
     }
 
@@ -871,8 +781,7 @@ namespace auik
             DrawCtx header_ctx = ctx;
             _header->draw_local(header_ctx);
         }
-        auto *classic_menu = window_menu_bar(*this);
-        auto *header_menu = header_popup_menu();
+        auto *classic_menu = menu_bar();
         const bool invalidating = ctx.reason & DrawReasonBits::invalidate;
         const bool draw_menu_bar =
             classic_menu && owns_classic_menu_bar_tree(*this) && (classic_menu->is_visible() || invalidating);
@@ -902,12 +811,6 @@ namespace auik
             DrawCtx menu_popup_ctx = ctx;
             classic_menu->draw_popups(menu_popup_ctx);
         }
-        if (owns_popup_menu_tree(*this) && header_menu)
-        {
-            DrawCtx menu_popup_ctx = ctx;
-            header_menu->draw_popups(menu_popup_ctx);
-        }
-
         if ((window_flags & WindowFlagBits::resizable) && !(window_flags & WindowFlagBits::docked))
         {
             emit_quads_hit_rect_only(ctx, _resize_hit_draw_id, _resize_hit_rect, can_emit_hit(ctx));
@@ -972,16 +875,14 @@ namespace auik
     void Window::update_depth(const amal::vec2 &depth_range)
     {
         clear_window_frame_hitbox_flag(*this);
-        if ((window_flags & WindowFlagBits::decorated) && !_header)
-            _header = acul::alloc<WindowHeader>(this, _title, window_flags & WindowFlagBits::movable);
-        sync_header_popup_menu();
+        if ((window_flags & WindowFlagBits::decorated) && !_header) ensure_header(_title);
         const f32 prev_resize_hit_depth = _resize_hit_depth;
         Widget::update_depth(depth_range);
 
         u32 content_requirement = _content_block ? _content_block->get_depth_requirement() : 1u;
 
         u32 content_chrome_requirement = content_requirement;
-        if (auto *classic_menu = window_menu_bar(*this))
+        if (auto *classic_menu = menu_bar())
             content_chrome_requirement = amal::max(content_chrome_requirement, classic_menu->get_depth_requirement());
         if (_header && !is_docked_window(*this))
             content_chrome_requirement = amal::max(content_chrome_requirement, _header->get_depth_requirement());
@@ -1004,7 +905,7 @@ namespace auik
         const amal::vec2 child_work_range = detail::depth_work_range(content_chrome_range);
         if (_content_block) _content_block->update_depth(child_work_range);
 
-        if (auto *classic_menu = window_menu_bar(*this)) classic_menu->update_depth(child_work_range);
+        if (auto *classic_menu = menu_bar()) classic_menu->update_depth(child_work_range);
         if (_header && !is_docked_window(*this)) _header->update_depth(child_work_range);
 
         if (_rubber_band) _rubber_band->update_depth(foreground_range);
@@ -1015,7 +916,7 @@ namespace auik
         u32 content_requirement = _content_block ? _content_block->get_depth_requirement() : 1u;
 
         u32 content_chrome_requirement = content_requirement;
-        if (auto *classic_menu = window_menu_bar(*this))
+        if (auto *classic_menu = menu_bar())
             content_chrome_requirement = amal::max(content_chrome_requirement, classic_menu->get_depth_requirement());
         if ((window_flags & WindowFlagBits::decorated) && !(window_flags & WindowFlagBits::docked))
             content_chrome_requirement =
@@ -1031,7 +932,7 @@ namespace auik
         Widget::back_hit_depth();
         _resize_hit_rect.hit_depth = get_rect().hit_depth;
         if (_header) _header->back_hit_depth();
-        if (_menu) _menu->back_hit_depth();
+        if (_menu_bar) _menu_bar->back_hit_depth();
         if (_rubber_band) _rubber_band->back_hit_depth();
         if (_content_block) _content_block->back_hit_depth();
     }
@@ -1042,7 +943,7 @@ namespace auik
         _resize_hit_rect.hit_depth = _resize_hit_depth;
         detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
         if (_header) _header->restore_hit_depth();
-        if (_menu) _menu->restore_hit_depth();
+        if (_menu_bar) _menu_bar->restore_hit_depth();
         if (_rubber_band) _rubber_band->restore_hit_depth();
         if (_content_block) _content_block->restore_hit_depth();
     }
@@ -1058,10 +959,9 @@ namespace auik
         if (_content_block && _content_block->apply_window_style(_window_style.id, window_style))
             _content_block->invalidate_layout_measure();
         if (_content_block) out |= _content_block->update_style_invalidated();
-        if (_menu) out |= _menu->update_style_invalidated();
+        if (_menu_bar) out |= _menu_bar->update_style_invalidated();
 
-        if ((window_flags & WindowFlagBits::decorated) && !_header)
-            _header = acul::alloc<WindowHeader>(this, _title, window_flags & WindowFlagBits::movable);
+        if ((window_flags & WindowFlagBits::decorated) && !_header) ensure_header(_title);
         if (window_flags & WindowFlagBits::decorated)
         {
             if (window_flags & WindowFlagBits::movable) _header->widget_flags |= WidgetFlagBits::hittable;
@@ -1070,13 +970,13 @@ namespace auik
         }
         else
         {
-            if (_header)
+            if (_default_header)
             {
-                acul::release(_header);
+                acul::release(_default_header);
+                _default_header = nullptr;
                 _header = nullptr;
             }
         }
-        sync_header_popup_menu();
 
         if (_rubber_band) out |= _rubber_band->update_style_invalidated();
         return out;
@@ -1087,9 +987,7 @@ namespace auik
         Widget::reset_clip_rect_records();
         _resize_hit_rect.clip_id = 0xFFFFu;
         if (_header) _header->reset_clip_rect_records();
-        if (_menu) _menu->reset_clip_rect_records();
-        if (_default_header_menu && _default_header_menu != window_menu_widget(*this))
-            _default_header_menu->reset_clip_rect_records();
+        if (_menu_bar) _menu_bar->reset_clip_rect_records();
         if (_content_block) _content_block->reset_clip_rect_records();
         if (_rubber_band) _rubber_band->reset_clip_rect_records();
     }
@@ -1102,19 +1000,14 @@ namespace auik
 
         if (_header && !is_docked_window(*this))
         {
-            _header->rebuild_clip_rects();
             _header->set_clip_id(clip_id());
+            _header->rebuild_clip_rects();
         }
 
-        if (_menu && owns_window_menu_tree(*this))
+        if (!is_docked_window(*this) && _menu_bar)
         {
-            _menu->set_clip_id(clip_id());
-            _menu->rebuild_clip_rects();
-        }
-        if (_default_header_menu && owns_popup_menu_tree(*this) && header_popup_menu() == _default_header_menu)
-        {
-            _default_header_menu->set_clip_id(clip_id());
-            _default_header_menu->rebuild_clip_rects();
+            _menu_bar->set_clip_id(clip_id());
+            _menu_bar->rebuild_clip_rects();
         }
 
         if (_content_block) _content_block->rebuild_clip_rects();
@@ -1128,8 +1021,7 @@ namespace auik
         _bg_draw_id = {};
         _resize_hit_draw_id = {};
         if (_header) _header->reset_draw_records();
-        if (_menu) _menu->reset_draw_records();
-        if (_default_header_menu) _default_header_menu->reset_draw_records();
+        if (_menu_bar) _menu_bar->reset_draw_records();
         if (_rubber_band) _rubber_band->reset_draw_records();
         if (_content_block) _content_block->reset_draw_records();
     }
@@ -1139,8 +1031,7 @@ namespace auik
         Widget::invalidate_style();
         if (_content_block) _content_block->invalidate_style();
         if (_header) _header->invalidate_style();
-        if (_menu) _menu->invalidate_style();
-        if (_default_header_menu) _default_header_menu->invalidate_style();
+        if (_menu_bar) _menu_bar->invalidate_style();
         if (_rubber_band) _rubber_band->invalidate_style();
     }
 
@@ -1149,8 +1040,7 @@ namespace auik
         bool changed = Widget::update_locale();
         if (_content_block) changed |= _content_block->update_locale();
         if (_header) changed |= _header->update_locale();
-        if (_menu) changed |= _menu->update_locale();
-        if (_default_header_menu) changed |= _default_header_menu->update_locale();
+        if (_menu_bar) changed |= _menu_bar->update_locale();
         if (_rubber_band) changed |= _rubber_band->update_locale();
         return changed;
     }
@@ -1159,7 +1049,7 @@ namespace auik
     {
         const amal::vec4 border = window_border_insets(resolved_window_style());
         f32 menu_height = 0.0f;
-        if (auto *classic_menu = window_menu_bar(*this);
+        if (auto *classic_menu = menu_bar();
             classic_menu && owns_classic_menu_bar_tree(*this) && classic_menu->is_visible())
         {
             classic_menu->set_layout_size({amal::max(size().x - border.x - border.z, 0.0f), 0.0f});
@@ -1215,7 +1105,7 @@ namespace auik
         // ends up fractionally smaller than the content and spuriously enables a scrollbar.
         if (!parent() && !(window_flags & WindowFlagBits::docked) && _auto_size.y && is_size_fit(style_size().y))
         {
-            auto *classic_menu = window_menu_bar(*this);
+            auto *classic_menu = menu_bar();
             const bool layout_menu_bar =
                 classic_menu && owns_classic_menu_bar_tree(*this) && classic_menu->is_visible();
             const f32 menu_height = layout_menu_bar ? classic_menu->required_size().y : 0.0f;
@@ -1241,7 +1131,7 @@ namespace auik
             ensure_own_clip_rect(self_clip_rect);
             fill_window_resize_hit_rect(id(), bounds(), _resize_hit_depth, clip_id(), _resize_hit_rect);
 
-            auto *classic_menu = window_menu_bar(*this);
+            auto *classic_menu = menu_bar();
             const bool layout_menu_bar =
                 classic_menu && owns_classic_menu_bar_tree(*this) && classic_menu->is_visible();
             const f32 menu_height = layout_menu_bar ? classic_menu->required_size().y : 0.0f;
@@ -1256,7 +1146,6 @@ namespace auik
             const f32 header_bottom_y =
                 (_header && !is_docked_window(*this)) ? snap_layout_start(header_top_y + header_height) : header_top_y;
             const f32 menu_top_y = header_bottom_y;
-            sync_header_popup_menu();
             const f32 menu_bottom_y = layout_menu_bar ? snap_layout_start(menu_top_y + menu_height) : menu_top_y;
             const f32 body_top_y = snap_layout_start(menu_bottom_y);
             const f32 body_bottom_y = snap_layout_end(position().y + size().y - border.w);
@@ -1308,7 +1197,7 @@ namespace auik
         fill_window_resize_hit_rect(id(), bounds(), _resize_hit_depth, clip_id(), _resize_hit_rect);
 
         f32 menu_height = 0.0f;
-        if (auto *classic_menu = window_menu_bar(*this);
+        if (auto *classic_menu = menu_bar();
             classic_menu && owns_classic_menu_bar_tree(*this) && classic_menu->is_visible())
         {
             const bool menu_width_changed = classic_menu->size().x != inner_width;
@@ -1333,10 +1222,7 @@ namespace auik
         const f32 header_bottom_y =
             (_header && !is_docked_window(*this)) ? snap_layout_start(header_top_y + header_height) : header_top_y;
         const f32 menu_top_y = header_bottom_y;
-        auto *classic_menu = window_menu_bar(*this);
-        if (!(window_flags & WindowFlagBits::decorated) && (is_popup_menu() || _header_menu_suffix_group != 0xFFFFu))
-            assert(false && "PopupMenu requires window decoration");
-        sync_header_popup_menu();
+        auto *classic_menu = menu_bar();
         const bool layout_menu_bar = classic_menu && owns_classic_menu_bar_tree(*this) && classic_menu->is_visible();
         const f32 menu_bottom_y = layout_menu_bar ? snap_layout_start(menu_top_y + menu_height) : menu_top_y;
         const f32 body_top_y = snap_layout_start(menu_bottom_y);
@@ -1352,7 +1238,6 @@ namespace auik
             _header->set_layout_size({inner_width, header_layout_height});
             _header->update_layout(true);
         }
-        if (_menu)
         {
             if (classic_menu)
             {
@@ -1413,7 +1298,7 @@ namespace auik
         if (clip_id() != 0xFFFFu) update_clip_rect(clip_id(), self_clip_rect);
 
         if (_header && !is_docked_window(*this)) _header->translate(applied_delta);
-        if (auto *classic_menu = window_menu_bar(*this)) classic_menu->translate(applied_delta);
+        if (auto *classic_menu = menu_bar()) classic_menu->translate(applied_delta);
         if (_rubber_band) _rubber_band->translate(applied_delta);
         if (_content_block) _content_block->translate(applied_delta);
     }
@@ -1447,14 +1332,11 @@ namespace auik
         (void)click_count;
 
         auto &ctx = detail::get_context();
-        if (ctx.hover_id.widget_id == id() && ctx.hover_id.tag_id == AUIK_TAG_POPUP_MENU_BUTTON)
+        if ((window_flags & WindowFlagBits::closable) && ctx.hover_id == make_element_id(id(), AUIK_TAG_CLOSE_BUTTON))
         {
-            _move_drag_active = false;
-            _resize_dir = {0, 0};
-            if (auto *menu = header_popup_menu()) menu->on_click(key, state, click_count);
+            add_render_command([window_id = id()] { remove_widget(window_id); });
             return;
         }
-
         _move_drag_active =
             ((window_flags & WindowFlagBits::decorated) && ctx.hover_id.tag_id == AUIK_TAG_WINDOW_HEADER) ||
             (!(window_flags & WindowFlagBits::decorated) && ctx.hover_id.widget_id == id() &&
@@ -1732,25 +1614,6 @@ namespace auik
             src->children.clear();
         }
 
-        void write_window_menu(acul::bin_stream &stream, const Window &window)
-        {
-            auto *proxy = window.get_menu();
-            Widget *menu = proxy ? proxy->get_widget() : nullptr;
-            stream.write(menu != nullptr);
-            if (!menu) return;
-            stream.write(menu);
-        }
-
-        Widget *read_window_menu(acul::bin_stream &stream)
-        {
-            bool has_menu = false;
-            stream.read(has_menu);
-            if (!has_menu) return nullptr;
-            Widget *widget = nullptr;
-            stream.read(widget);
-            return widget;
-        }
-
         void write_window(acul::bin_stream &stream, umbf::Block *block)
         {
             auto *widget = static_cast<Window *>(block);
@@ -1758,13 +1621,16 @@ namespace auik
             const Text *title_text = widget->title_text();
             const bool translated = title_text && title_text->is_translated_text();
             const char *literal = translated ? title_text->translated_text_literal() : nullptr;
-            detail::write_localized_string(stream, translated ? acul::string(literal ? literal : "") : widget->title(),
+            detail::write_localized_string(stream,
+                                           translated ? acul::string(literal ? literal : "")
+                                                      : (title_text ? title_text->text() : widget->title()),
                                            translated);
             stream.write(static_cast<u32>(widget->window_flags))
                 .write(widget->window_style_tag())
                 .write(widget->dock_style_tag())
                 .write(static_cast<Widget *>(widget->content_block()));
-            write_window_menu(stream, *widget);
+            stream.write(widget->menu_bar() != nullptr);
+            if (widget->menu_bar()) stream.write(static_cast<Widget *>(widget->menu_bar()));
         }
 
         umbf::Block *read_window(acul::bin_stream &stream)
@@ -1793,7 +1659,15 @@ namespace auik
             }
             else if (content_block) acul::release(content_block);
             detail::apply_widget_common_data(widget, common);
-            if (auto *menu = read_window_menu(stream)) widget->set_menu_widget(menu);
+            bool present = false;
+            stream.read(present);
+            if (present)
+            {
+                Widget *menu = nullptr;
+                stream.read(menu);
+                if (auto *bar = dynamic_cast<MenuBar *>(menu)) widget->set_menu_bar(bar);
+                else if (menu) acul::release(menu);
+            }
             return widget;
         }
 

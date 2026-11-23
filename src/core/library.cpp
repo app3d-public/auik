@@ -509,7 +509,7 @@ namespace auik
         }
         ctx.host_refresh_request = create_info.sync_options.host_refresh_request;
         ctx.pending_filter = create_info.sync_options.pending_filter;
-        ctx.widget_create_options = create_info.widget_create_options;
+        ctx.string_locale = create_info.string_locale;
         detail::init_atlas_state(ctx.atlas_state);
         ctx.raw_mouse_mode = false;
         if (ctx.window_ctx) ctx.window_ctx->is_unbound_mode = false;

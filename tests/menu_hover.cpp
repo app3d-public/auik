@@ -247,9 +247,15 @@ static void run_popup_tests(bool comboboxes)
                 owner.update_layout(false);
                 auto *menu = owner.menu_model();
                 u32 clicked = 0;
-                u32 suffix_ids[3];
+                auto &groups = menu->menu_base()->root_layer();
+                groups.add_groups(2);
+                u32 command_ids[3];
                 for (u32 i = 0; i < 3; ++i)
-                    suffix_ids[i] = menu->append_item("", [&clicked, i](ClickEvent &) { clicked = i + 1; })->element_id();
+                {
+                    auto *command = groups[1]->add_item("");
+                    command->bind().on_click([&clicked, i](ClickEvent &) { clicked = i + 1; });
+                    command_ids[i] = command->element_id();
+                }
                 // The pointer menu reuses panel commands and omits all service commands.
                 assert(owner.open_context_at({310, 170}) == (own_count != 0u));
                 if (own_count)
@@ -260,7 +266,7 @@ static void run_popup_tests(bool comboboxes)
                     {
                         if (hit.id.widget_id != menu->id() || hit.id.tag_id != AUIK_TAG_COMBO_BOX_ITEM ||
                             hit.bounds.size.x <= 0 || hit.bounds.size.y <= 0) continue;
-                        for (auto suffix_id : suffix_ids) assert(hit.id.element_id != suffix_id);
+                        for (auto command_id : command_ids) assert(hit.id.element_id != command_id);
                         if (hit.id.element_id == (*menu)[0]->element_id())
                         {
                             assert(hit.bounds.offset.x >= 310 && hit.bounds.offset.y >= 170);
@@ -275,7 +281,7 @@ static void run_popup_tests(bool comboboxes)
                 {
                     owner.set_open(true);
                     root.update_draw_commands(DrawReasonBits::record);
-                    ElementID target{menu->id(), AUIK_TAG_COMBO_BOX_ITEM, suffix_ids[index]};
+                    ElementID target{menu->id(), AUIK_TAG_COMBO_BOX_ITEM, command_ids[index]};
                     amal::vec2 center{};
                     bool found = false;
                     for (const auto &hit : hits)

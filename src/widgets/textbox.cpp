@@ -230,11 +230,11 @@ namespace auik
         }
         if (_scrollbar_y) flags |= _scrollbar_y->update_style_invalidated();
         _text.set_style_tag(style_tag());
-        _text.update_style_invalidated();
+        flags |= _text.update_style_invalidated();
         if (apply_textbox_text_extras(_text, style)) _text.invalidate_layout_measure();
         if (_placeholder)
         {
-            _placeholder->update_style_invalidated();
+            flags |= _placeholder->update_style_invalidated();
             if (apply_textbox_text_extras(*_placeholder, style)) _placeholder->invalidate_layout_measure();
         }
         return flags;
@@ -270,11 +270,13 @@ namespace auik
             text_h = amal::max(text_h, _placeholder->required_size().y);
         }
 
+        const auto insets = text_horizontal_insets();
+        text_w += insets.x + insets.y;
         amal::vec2 min_size = {is_width_fixed() ? style_size().x : 0.0f, is_height_fixed() ? style_size().y : 0.0f};
         if (fill_height()) min_size.y = 0.0f;
         if (min_size.x <= 0.0f) min_size.x = text_w + padding.x + padding.z;
-        if (!is_height_fixed() && size().y > 0.0f && !should_resize_to_content()) min_size.y = size().y;
-        if (min_size.y <= 0.0f) min_size.y = amal::max(text_h, style.text_size()) + padding.y + padding.w;
+        const f32 content_min_height = amal::max(text_h, style.text_size()) + padding.y + padding.w;
+        min_size.y = amal::max(min_size.y, content_min_height);
         min_size.x = amal::max(min_size.x, style.min_width());
         min_size.y = amal::max(min_size.y, style.min_height());
         set_required_size({min_size.x + margin.x + margin.z, min_size.y + margin.y + margin.w});
@@ -297,7 +299,7 @@ namespace auik
             (!fill_height() && should_resize_to_content()))
             box_size.y = required_size().y - margin.y - margin.w;
         box_size.x = amal::max(box_size.x, 1.0f);
-        box_size.y = amal::max(box_size.y, style.text_size() + padding.y + padding.w);
+        box_size.y = amal::max(box_size.y, required_size().y - margin.y - margin.w);
 
         const amal::vec2 box_pos = {layout_origin.x + margin.x, layout_origin.y + margin.y};
         set_position(box_pos);
@@ -309,6 +311,9 @@ namespace auik
         _content_pos = {box_pos.x + padding.x, box_pos.y + padding.y};
         _content_size = {amal::max(box_size.x - padding.x - padding.z, 0.0f),
                          amal::max(box_size.y - padding.y - padding.w, 0.0f)};
+        const auto insets = text_horizontal_insets();
+        _content_pos.x += insets.x;
+        _content_size.x = amal::max(_content_size.x - insets.x - insets.y, 0.0f);
         if (should_resize_to_content())
         {
             _text.set_position(_content_pos);
@@ -505,6 +510,17 @@ namespace auik
 
         draw_caret(ctx);
         draw_selection_drag_icon(ctx, selection_z);
+    }
+
+    f32 Textbox::text_baseline() const
+    {
+        const auto &style = get_theme()->get_style(_style.id);
+        const auto &layout = _text.layout_result();
+        const f32 ascender = layout.lines.empty()
+                                 ? static_cast<f32>(style.text_size())
+                                 : layout.ascender;
+        const f32 metrics_height = amal::max(ascender - layout.descender, 0.0f);
+        return _text.position().y + ascender + resolve_textbox_align_y_offset(style, _content_size.y, metrics_height);
     }
 
     void Textbox::draw_background(DrawCtx &ctx, DrawStream *quads_stream)

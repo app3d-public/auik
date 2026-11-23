@@ -1249,7 +1249,7 @@ namespace auik
                 }
             }
         }
-        const amal::vec4 content_clip = get_content_clip_rect();
+        const amal::vec4 content_clip = detail::child_culling_rect(*this, ctx);
         for (auto *cell : _header)
         {
             if (!cell) continue;

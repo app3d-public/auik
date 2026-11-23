@@ -312,7 +312,7 @@ namespace auik
         refresh_layout_owner(*this);
     }
 
-    Tabbar::Item Tabbar::create_item(u32 element_id, StringView text)
+    Tabbar::Item Tabbar::create_tab_item(u32 element_id, StringView text)
     {
         Item item{};
         item.element_id = element_id;
@@ -339,10 +339,7 @@ namespace auik
 
         if (closable())
         {
-            item.close_button =
-                acul::alloc<ImageButton>(AUIK_TAG_CLOSE_BUTTON, get_cached_image(AUIK_ICON_CLOSE),
-                                         amal::vec2{0.0f, 0.0f}, amal::vec2{AUIK_SIZE_X_INHERIT, AUIK_SIZE_Y_INHERIT},
-                                         WidgetFlagBits::visible | WidgetFlagBits::hittable, _close_button_style_tag);
+            item.close_button = make_close_button(AUIK_TAG_CLOSE_BUTTON, _close_button_style_tag);
             item.close_button->set_parent(this);
             item.close_button->get_rect().id = make_element_id(id(), AUIK_TAG_CLOSE_BUTTON, element_id);
             item.close_button->set_focus_parent(this);
@@ -612,7 +609,7 @@ namespace auik
         for (u32 i = 0; i < items.size(); ++i)
         {
             const u32 element_id = _next_element_id++;
-            _items.push_back(create_item(element_id, items[i]));
+            _items.push_back(create_tab_item(element_id, items[i]));
         }
         if (!_items.empty() && auto_select_first_item()) _items[0].tab->set_selected(true);
         rebuild_items();
@@ -622,7 +619,7 @@ namespace auik
     {
         index = amal::min(index, static_cast<u32>(_items.size()));
         const u32 element_id = _next_element_id++;
-        _items.insert(_items.begin() + index, create_item(element_id, item));
+        _items.insert(_items.begin() + index, create_tab_item(element_id, item));
         if (_items.size() == 1u && auto_select_first_item())
         {
             if (_items[0].tab) _items[0].tab->set_selected(true);
@@ -946,7 +943,7 @@ namespace auik
                 change_required = change_icon->required_size();
             }
         }
-        if (closable() && index < _items.size())
+        if (index < _items.size())
         {
             auto *close_button = _items[index].close_button;
             if (close_button)
@@ -1022,8 +1019,8 @@ namespace auik
         set_layout_size(widget_size);
         Widget::update_layout(true);
 
-        if (detail::is_fast_layout_update() && !popup() && !scroll() && !movable() && !closable() &&
-            !_on_changed_icon_create)
+        if (detail::is_fast_layout_update() && !popup() && !scroll() && !movable() && !_on_changed_icon_create &&
+            std::none_of(_items.begin(), _items.end(), [](const auto &item) { return item.close_button != nullptr; }))
         {
             const f32 content_x = position().x + padding.x;
             const f32 content_y = position().y + padding.y;
@@ -1137,14 +1134,8 @@ namespace auik
             amal::vec2 close_required{0.0f, 0.0f};
             auto *change_icon = i < _items.size() ? _items[i].change_icon : nullptr;
             auto *close_button = i < _items.size() ? _items[i].close_button : nullptr;
-            if (change_icon)
-            {
-                change_required = change_icon->required_size();
-            }
-            if (close_button && closable())
-            {
-                close_required = close_button->required_size();
-            }
+            if (change_icon) change_required = change_icon->required_size();
+            if (close_button) close_required = close_button->required_size();
             const amal::vec2 slot_required{amal::max(change_required.x, close_required.x),
                                            amal::max(change_required.y, close_required.y)};
             const bool fits_popup = cursor_x + required.x <= visible_tabs_right;
@@ -1153,13 +1144,13 @@ namespace auik
             const bool hovered = element_id != 0u && is_tabbar_item_hovered(id(), _item_style_tag, element_id);
             const bool changed = i < _items.size() && _items[i].changed && change_icon;
             const bool show_change_icon = visible && changed && !hovered;
-            const bool show_close_button = visible && close_button && closable() && (!changed || hovered);
+            const bool show_close_button = visible && (hovered || !changed);
             if (!visible && _overflow_start == _items.size()) _overflow_start = i;
             if (visible) ++_visible_count;
             if (!popup() || visible) tab->set_visible();
             else tab->unset_visible();
             tab->sync_widget_flags();
-            if (close_button)
+            if (close_button && closable())
             {
                 if (show_close_button) close_button->set_visible();
                 else close_button->unset_visible();
@@ -1180,8 +1171,8 @@ namespace auik
             amal::vec2 drag_visual_offset{0.0f, 0.0f};
             if (movable() && i == drag_index && _drag_moved)
             {
-                const amal::vec2 visual_pos = resolve_drag_visual_position(
-                    tab_base_pos, {_drag_position_x, tab_base_pos.y}, {required.x, tab_h});
+                const amal::vec2 visual_pos =
+                    resolve_drag_visual_position(tab_base_pos, {_drag_position_x, tab_base_pos.y}, {required.x, tab_h});
                 _drag_position_x = visual_pos.x;
                 drag_visual_offset.x = visual_pos.x - tab_base_pos.x;
             }
@@ -1224,8 +1215,7 @@ namespace auik
                 if (item.change_icon) item.change_icon->translate({dx, 0.0f});
                 if (item.close_button) item.close_button->translate({dx, 0.0f});
             }
-            if (movable() && drag_index < _items.size())
-                _drag_position_x += dx;
+            if (movable() && drag_index < _items.size()) _drag_position_x += dx;
             detail::get_context().dirty_flags |= DirtyFlagBits::hit_rect_update;
         }
 
@@ -1615,14 +1605,16 @@ namespace auik
         auto slot_needs_refresh = [&](u32 index) {
             if (index >= _items.size()) return false;
             auto &item = _items[index];
-            if (!item.changed || !item.change_icon) return false;
+            const bool changed_icon = item.changed && item.change_icon;
+            const bool has_default_close = closable() && item.close_button;
+            if (!changed_icon && !has_default_close) return false;
             const u32 element_id = item.element_id;
             if (element_id == 0u) return false;
             const bool hovered = is_tabbar_item_hovered(id(), _item_style_tag, element_id);
-            const bool want_change_visible = !hovered;
-            const bool want_close_visible = hovered && item.close_button && closable();
-            return item.change_icon->is_visible() != want_change_visible ||
-                   (item.close_button && item.close_button->is_visible() != want_close_visible);
+            const bool want_change_visible = changed_icon && !hovered;
+            const bool want_close_visible = has_default_close && (hovered || !changed_icon);
+            return (item.change_icon && item.change_icon->is_visible() != want_change_visible) ||
+                   (has_default_close && item.close_button->is_visible() != want_close_visible);
         };
         bool slot_changed = false;
         auto check_slot = [&](const ElementID &element_id) {
@@ -1949,7 +1941,7 @@ namespace auik
 
         const auto hover_id = detail::get_context().hover_id;
         if (hover_id.widget_id != id()) return;
-        if (hover_id.tag_id == AUIK_TAG_CLOSE_BUTTON)
+        if (closable() && hover_id.tag_id == AUIK_TAG_CLOSE_BUTTON)
         {
             add_render_command<detail::ClickEventTraits>(this, [this, element_id = hover_id.element_id]() {
                 close_item(element_id);
@@ -2031,8 +2023,8 @@ namespace auik
         {
             const auto drag_bounds = drag_tab->bounds();
             const auto &ctx = detail::get_context();
-            const f32 candidate_x = ctx.raw_mouse_mode ? _drag_position_x + delta.x
-                                                       : ctx.io.mouse_pos.x - _drag_grab_offset.x;
+            const f32 candidate_x =
+                ctx.raw_mouse_mode ? _drag_position_x + delta.x : ctx.io.mouse_pos.x - _drag_grab_offset.x;
             _drag_position_x =
                 resolve_drag_visual_position(drag_bounds.offset, {candidate_x, drag_bounds.offset.y}, drag_bounds.size)
                     .x;

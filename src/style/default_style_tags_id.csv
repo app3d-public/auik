@@ -28,10 +28,9 @@ dock-tab-item-selected,0x2948A97F
 dock-tabbar,0x6525D522
 dock-tabbar-menu,0x4986BB32
 docked-window,0x06FFC182
+dockspace,0x00505265
 dockspace-drop-zone,0x63C55107
 dockspace-node,0xBFDC4506
-dockspace-node-fit,0x61168F8D
-dockspace-node-fit-width,0xA0506791
 dockspace-resize-helper,0x5FD17F53
 dockspace-resize-helper-drag,0x25F62CA2
 global,0x00000000
@@ -46,10 +45,11 @@ menu-popup,0x657446C3
 menu-shortcut,0x38F82579
 modal-backdrop,0x52D1C7A0
 modal-batch-label,0xF6575AC2
+modal-body,0x8470218F
 modal-controls-area,0xF27D7204
-modal-header,0x15C39263
 modal-icon,0xE02BC99E
 modal-message-area,0xC2803F64
+modal-primary-button,0xBE077113
 modal-title,0xCED96079
 modal-window,0x928407FE
 multiline-caret,0x6F32B234
@@ -93,9 +93,9 @@ table-tree-resize-border,0x56DEA60A
 text-button,0xB0CFEF4B
 text-drag-icon,0xF67AC9E8
 textbox,0xFD48AA2F
+textbox-affix,0x1CA63C59
 titlebar,0x1B0FAC37
 titlebar-icon,0xFF3F65D1
-titlebar-leading-region,0xA353C301
 titlebar-menu-bar,0xBB91FD86
 titlebar-menu-item,0xF663F1C5
 tooltip,0x562B8FAF
@@ -109,5 +109,4 @@ window,0x9AC9A862
 window-caption-button,0x060955B4
 window-caption-close-button,0x6E25085F
 window-header,0x98911FB1
-window-header-menu,0x840A119C
 window-menu-bar,0xBB7B1FA6
