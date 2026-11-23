@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <auik/auik.hpp>
 #include <auik/detail/depth.hpp>
 #include <auik/pipelines.hpp>
@@ -2179,7 +2180,6 @@ namespace auik
         }
 
         const auto *theme = get_theme();
-        const auto &surface = theme->get_style(_surface_style.id);
         const auto &leaf_style = theme->get_style(_leaf_style.id);
         QuadsInstanceData mask{};
         const u32 corners = leaf_style.corner_mask() & 0xFu;
@@ -2189,8 +2189,6 @@ namespace auik
             mask.rect = node.content_collapsed ? node.tab_panel_rect.bounds : node.bounds;
             mask.z_order = next_depth(detail::depth_foreground_range(depth_range()));
             mask.border_radius = radius;
-            if (surface.mask() & detail::StylePropertiesBits::background_color)
-                mask.background_color = surface.background_color();
             mask.mask = static_cast<u32>(clip_id()) | (corners << 16u) |
                         (static_cast<u32>(AUIK_HAS_RADIUS_BIT | AUIK_INVERT_RADIUS_BIT) << 20u);
         }
@@ -2222,24 +2220,30 @@ namespace auik
             data.mask = clip_id();
             emit(data);
         };
-        if (root && !(ctx.reason & DrawReasonBits::invalidate))
+        if (root && (surface.mask() & detail::StylePropertiesBits::background_color) &&
+            !(ctx.reason & DrawReasonBits::invalidate))
         {
             const auto outer = bounds();
             const auto inner = root->bounds;
             const auto outer_end = outer.offset + outer.size;
             const auto inner_end = inner.offset + inner.size;
-            const bool has_background = surface.mask() & detail::StylePropertiesBits::background_color;
-            if (has_background)
-            {
-                // The host can render content behind the UI surface, as App3D does for the scene.
-                // Only paint the space outside the leaf windows so that transparent leaves still expose it.
-                emit_background({outer.offset, {outer.size.x, inner.offset.y - outer.offset.y}});
-                emit_background({{outer.offset.x, inner_end.y}, {outer.size.x, outer_end.y - inner_end.y}});
-                emit_background({{outer.offset.x, inner.offset.y}, {inner.offset.x - outer.offset.x, inner.size.y}});
-                emit_background({{inner_end.x, inner.offset.y}, {outer_end.x - inner_end.x, inner.size.y}});
-            }
+            emit_background({outer.offset, {outer.size.x, inner.offset.y - outer.offset.y}});
+            emit_background({{outer.offset.x, inner_end.y}, {outer.size.x, outer_end.y - inner_end.y}});
+            emit_background({{outer.offset.x, inner.offset.y}, {inner.offset.x - outer.offset.x, inner.size.y}});
+            emit_background({{inner_end.x, inner.offset.y}, {outer_end.x - inner_end.x, inner.size.y}});
 
             auto draw_node_surfaces = [&](auto &self, const Node &node) -> void {
+                // Paint a vertical panel stack once, leaving occupied tabless leaves open to the host.
+                if (node.axis == amal::axis::y && !node.children.empty() &&
+                    std::all_of(node.children.begin(), node.children.end(), [this](DockNodeID id) {
+                        const auto *child = get_node(id);
+                        return child && child->children.empty() &&
+                               (child->windows.empty() || needs_node_tab_panel(*child));
+                    }))
+                {
+                    emit_background(node.bounds);
+                    return;
+                }
                 if (!node.children.empty())
                 {
                     const auto axis = node.axis;
@@ -2251,24 +2255,18 @@ namespace auik
                         const auto *child = get_node(child_id);
                         if (!child) continue;
                         const f32 next = axis_size(child->bounds.offset, axis);
-                        if (has_background)
-                            emit_background({make_axis_size(axis, cursor, cross_origin),
-                                             make_axis_size(axis, next - cursor, cross_extent)});
+                        emit_background({make_axis_size(axis, cursor, cross_origin),
+                                         make_axis_size(axis, next - cursor, cross_extent)});
                         self(self, *child);
                         cursor = next + axis_size(child->bounds.size, axis);
                     }
-                    if (has_background)
-                        emit_background(
-                            {make_axis_size(axis, cursor, cross_origin),
-                             make_axis_size(axis, axis_size(node.bounds.offset + node.bounds.size, axis) - cursor,
-                                            cross_extent)});
+                    emit_background(
+                        {make_axis_size(axis, cursor, cross_origin),
+                         make_axis_size(axis, axis_size(node.bounds.offset + node.bounds.size, axis) - cursor,
+                                        cross_extent)});
                     return;
                 }
-                if (node.windows.empty())
-                {
-                    if (has_background) emit_background(node.bounds);
-                    return;
-                }
+                if (node.windows.empty() || needs_node_tab_panel(node)) emit_background(node.bounds);
             };
             draw_node_surfaces(draw_node_surfaces, *root);
         }

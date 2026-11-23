@@ -1173,7 +1173,42 @@ void test_dock_tree()
             if (record.mask & (AUIK_INVERT_RADIUS_BIT << 20u)) ++mask_count;
         assert(mask_count == 1u);
         acul::release(dock);
-        streams[AUIK_PRIMARY_QUAD_STREAM] = nullptr;
+
+        constexpr u32 dock_color = 0xff414141u;
+        rounded_theme.add_style(AUIK_STYLE_TAG_DOCKSPACE, auik::make_style().background_color(dock_color));
+        // Tab panels may invalidate text records even for empty labels.
+        auik::DrawStream unused_stream{};
+        for (auto *&entry : streams)
+            if (!entry) entry = &unused_stream;
+        records.clear();
+        dock = auik::make_dockspace(9020);
+        dock->set_policy_flags(auik::DockspaceFlagBits::tabpanel);
+        dock->set_split_axis(dock->root_node(), amal::axis::x);
+        dock->set_layout_size({640.f, 480.f});
+        const auto viewport = dock->create_leaf(dock->root_node(),
+            auik::make_dockspace_settings(auik::DockspaceResizeFlagBits::none, auik::TabbarFlagBits::none, false));
+        const auto panels = dock->create_split(dock->root_node(), amal::axis::y);
+        const auto top = dock->create_leaf(panels);
+        const auto bottom = dock->create_leaf(panels);
+        for (const auto node : {viewport, top, bottom})
+            dock->add_window(node, auik::make_dock_window(9021u + node, ""));
+        dock->update_depth({0.f, 1.f});
+        dock->update_layout(false);
+        dock->draw(draw);
+
+        assert(records.size() > 1u && records.front().background_color == dock_color);
+        assert(records.front().rect.offset.x > 0.f && records.front().rect.offset.y == 0.f);
+        assert(records.front().rect.size.y == 480.f);
+        assert(records.front().rect.offset.x + records.front().rect.size.x == 640.f);
+        size_t backgrounds = 0u;
+        for (const auto &record : records)
+        {
+            if (record.background_color == dock_color) ++backgrounds;
+            if (record.mask & (AUIK_INVERT_RADIUS_BIT << 20u)) assert(record.background_color == 0u);
+        }
+        assert(backgrounds == 1u);
+        acul::release(dock);
+        for (auto *&entry : streams) entry = nullptr;
         ctx.theme = &theme;
     }
     auik::detail::g_context = nullptr;
