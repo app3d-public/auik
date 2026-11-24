@@ -310,21 +310,11 @@ namespace auik
     void Column::reset_clip_rect_records()
     {
         Widget::reset_clip_rect_records();
-        _clip_rects_need_layout = true;
         for (auto *slot : _columns)
             if (slot) slot->reset_clip_rect_records();
     }
 
-    void Column::rebuild_clip_rects()
-    {
-        if (_clip_rects_need_layout) return;
-        update_column_clip_rects();
-        for (auto *slot : _columns)
-        {
-            if (!slot || !slot->is_visible()) continue;
-            slot->rebuild_clip_rects();
-        }
-    }
+    void Column::rebuild_clip_rects() { update_column_clip_rects(); }
 
     void Column::reset_draw_records()
     {
@@ -471,7 +461,6 @@ namespace auik
                 child->rebuild_clip_rects();
             }
         }
-        _clip_rects_need_layout = false;
     }
 
     namespace
