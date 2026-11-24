@@ -1077,7 +1077,8 @@ namespace auik
         auto *quads_stream = get_primary_quads_stream();
         QuadsInstanceData bg{};
         bg.rect = bounds();
-        bg.z_order = get_z_order();
+        // The bar surface sits behind its tabs, including each tab's hover and active backgrounds.
+        bg.z_order = depth_range().x;
         const bool visible = fill_quads_instance_by_style(get_theme()->get_style(_menu_style.id), clip_id(), bg);
         emit_quads_instance(menu_ctx, quads_stream, _bg, bg, get_rect(), visible, can_emit_hit(menu_ctx));
         Tabbar::draw(menu_ctx);

@@ -88,7 +88,6 @@ namespace auik
         acul::vector<f32> _column_widths;
         StyleSelector _style;
         ModelBinding *_model_binding = nullptr;
-        bool _clip_rects_need_layout = true;
     };
 
     inline Block *make_column_block(u32 owner_id) { return acul::alloc<ColumnBlock>(owner_id); }
