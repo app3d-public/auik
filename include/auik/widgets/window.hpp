@@ -53,14 +53,6 @@ namespace auik
     constexpr inline WindowFlags get_fixed_window_flags() { return WindowFlagBits::decorated; }
     constexpr inline WindowFlags get_popup_window_flags() { return WindowFlagBits::movable; }
 
-    // Window takes ownership of its header. The localized name supplies the dock tab label.
-    class WindowHeader : public DrawBlock
-    {
-    public:
-        using DrawBlock::DrawBlock;
-        virtual Text *name() const = 0;
-    };
-
     class AUIK_CLASS_EXPORT Window : public Widget, public umbf::Block
     {
     private:
@@ -82,11 +74,12 @@ namespace auik
         WindowFlags window_flags;
 
         AUIK_EXPORT Window(u32 id, StringView title, const amal::rect &bounds, WindowFlags window_flags,
-                           WidgetFlags widget_flags, WindowHeader *header = nullptr);
+                           WidgetFlags widget_flags, DrawBlock *header = nullptr);
         AUIK_EXPORT ~Window() override;
-        // Takes ownership. Passing nullptr reinstates the default decorated header.
-        AUIK_EXPORT void set_header(WindowHeader *header);
-        WindowHeader *header() const { return _header; }
+        AUIK_EXPORT void set_header(DrawBlock *header);
+        AUIK_EXPORT void sync_window_flags();
+        AUIK_EXPORT void bind_header_title(Text *text);
+        DrawBlock *header() const { return _header; }
 
         AUIK_EXPORT void clear_children();
         AUIK_EXPORT void erase_children(size_t first, size_t count);
@@ -124,9 +117,8 @@ namespace auik
         {
             _on_rubber_band_commit = std::move(callback);
         }
-        const acul::string &title() const { return _title; }
+        StringView get_title() const { return _title; }
         AUIK_EXPORT void set_title(StringView title);
-        AUIK_EXPORT const Text *title_text() const;
         auik::Block *content_block() { return _content_block; }
         const auik::Block *content_block() const { return _content_block; }
         ScrollData *scroll_data() { return _content_block ? _content_block->scroll_data() : nullptr; }
@@ -198,15 +190,14 @@ namespace auik
         umbf::Block *as_snapshot_block() noexcept override { return this; }
 
     private:
-        acul::string _title;
-        bool _translated_title = false;
+        acul::string _title_storage;
+        StringView _title;
         amal::vec2 _min_size{0.0f, 0.0f};
         amal::bvec2 _auto_size{false, false};
         amal::bvec2 _auto_position{false, false};
         bool _auto_position_resolved = false;
-        WindowHeader *_header = nullptr;
-        class DefaultWindowHeader *_default_header = nullptr;
-        void ensure_header(StringView title);
+        DrawBlock *_header = nullptr;
+        Text *_header_title = nullptr;
         acul::unique_function<bool(const amal::vec2 &)> _context_menu;
         MenuBar *_menu_bar = nullptr;
         RubberBand *_rubber_band = nullptr;
@@ -254,12 +245,19 @@ namespace auik
     };
 
     inline Window *make_decorated_window(u32 id, StringView title = "",
-                                         const amal::rect &bounds = {AUIK_POS_IGNORE, AUIK_SIZE_AUTO},
-                                         WindowHeader *header = nullptr)
+                                         const amal::rect &bounds = {AUIK_POS_IGNORE, AUIK_SIZE_AUTO})
     {
         constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
                                              WidgetFlagBits::cache_snapshot | WidgetFlagBits::hittable;
-        return acul::alloc<Window>(id, title, bounds, get_decorated_window_flags(), widget_flags, header);
+        return acul::alloc<Window>(id, title, bounds, get_decorated_window_flags(), widget_flags);
+    }
+
+    inline Window *make_decorated_window(u32 id, DrawBlock *header,
+                                         const amal::rect &bounds = {AUIK_POS_IGNORE, AUIK_SIZE_AUTO})
+    {
+        constexpr WidgetFlags widget_flags = WidgetFlagBits::visible | WidgetFlagBits::attachable |
+                                             WidgetFlagBits::cache_snapshot | WidgetFlagBits::hittable;
+        return acul::alloc<Window>(id, StringView{}, bounds, get_decorated_window_flags(), widget_flags, header);
     }
 
     inline Window *make_popup_window(u32 id, const amal::rect &bounds = {AUIK_POS_IGNORE, AUIK_SIZE_AUTO})

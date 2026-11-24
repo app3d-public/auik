@@ -137,20 +137,6 @@ namespace auik
 
     static f32 axis_size(const amal::vec2 &value, amal::axis axis) { return axis == amal::axis::x ? value.x : value.y; }
 
-    static acul::string window_tab_title(Window *window)
-    {
-        if (!window) return {};
-        if (const auto *text = window->title_text()) return text->text();
-        return window->title();
-    }
-
-    static StringView window_tab_title_view(Window *window)
-    {
-        if (!window) return {};
-        if (const auto *text = window->title_text()) return text->source_text();
-        return {window->title()};
-    }
-
     static f32 cross_size(const amal::vec2 &value, amal::axis axis)
     {
         return axis == amal::axis::x ? value.y : value.x;
@@ -398,6 +384,7 @@ namespace auik
         window->set_focus_parent(this);
         window->window_flags |= WindowFlagBits::docked;
         window->window_flags &= ~(WindowFlagBits::movable | WindowFlagBits::resizable);
+        window->sync_window_flags();
         window->reset_clip_rect_records();
         window->update_style_invalidated();
         auto &map = detail::get_context().id_map;
@@ -449,7 +436,6 @@ namespace auik
                 *out_undocked_bounds = i < node.undocked_bounds.size() ? node.undocked_bounds[i] : window->bounds();
             node.windows.erase(node.windows.begin() + i);
             if (i < node.undocked_bounds.size()) node.undocked_bounds.erase(node.undocked_bounds.begin() + i);
-            node.tab_titles.clear();
             node.active_window_index = node.windows.empty()
                                            ? static_cast<size_t>(-1)
                                            : amal::min(selected - (i < selected ? 1u : 0u), node.windows.size() - 1u);
@@ -486,6 +472,7 @@ namespace auik
         detach_window(extracted, &undocked_bounds);
         extracted->window_flags |= WindowFlagBits::decorated | WindowFlagBits::movable | WindowFlagBits::resizable;
         extracted->window_flags &= ~WindowFlagBits::docked;
+        extracted->sync_window_flags();
         extracted->reset_draw_records();
         extracted->set_auto_position(false, false);
         if (node->windows.empty()) remove_empty_node(node_id);
@@ -521,7 +508,6 @@ namespace auik
                 detach_window(window, i < node->undocked_bounds.size() ? &node->undocked_bounds[i] : nullptr);
                 node->windows.erase(node->windows.begin() + i);
                 if (i < node->undocked_bounds.size()) node->undocked_bounds.erase(node->undocked_bounds.begin() + i);
-                if (i < node->tab_titles.size()) node->tab_titles.erase(node->tab_titles.begin() + i);
                 node->active_window_index = static_cast<size_t>(-1);
                 node->record_active_window = true;
                 node->tabbar->close_item(element_id);
@@ -691,7 +677,6 @@ namespace auik
             }
         }
         detail::get_context().dirty_flags |= DirtyFlagBits::redraw | DirtyFlagBits::hit_rect_update;
-        node.tab_titles.clear();
         node.tab_panel_rect.bounds = {};
         node.tab_panel_draw = {};
     }
@@ -794,13 +779,15 @@ namespace auik
                 node.header->on_attach();
         }
 
-        bool same_titles = node.tab_titles.size() == node.windows.size();
+        bool same_titles = node.tabbar->child_size() == node.windows.size();
         if (same_titles)
         {
             for (size_t i = 0; i < node.windows.size(); ++i)
             {
-                const acul::string title = window_tab_title(node.windows[i]);
-                if (node.tab_titles[i] != title)
+                const auto title = node.windows[i]->get_title();
+                const auto current = node.tabbar->item_at(static_cast<u32>(i))->source_text();
+                if (current.is_translated != title.is_translated ||
+                    std::strcmp(current.str ? current.str : "", title.str ? title.str : "") != 0)
                 {
                     same_titles = false;
                     break;
@@ -819,16 +806,9 @@ namespace auik
             return;
         }
 
-        acul::vector<acul::string> titles;
         acul::vector<StringView> title_views;
-        titles.reserve(node.windows.size());
         title_views.reserve(node.windows.size());
-        for (auto *window : node.windows)
-        {
-            titles.push_back(window_tab_title(window));
-            title_views.push_back(window_tab_title_view(window));
-        }
-        node.tab_titles = titles;
+        for (auto *window : node.windows) title_views.push_back(window->get_title());
         node.tabbar->set_items(title_views);
         for (size_t i = 0; i < node.windows.size() && i < node.tabbar->child_size(); ++i)
             node.tabbar->set_item_user_data(static_cast<u32>(i), node.windows[i]);
@@ -1711,10 +1691,8 @@ namespace auik
             bool order_changed = false;
             acul::vector<Window *> windows;
             acul::vector<amal::rect> undocked_bounds;
-            acul::vector<acul::string> tab_titles;
             windows.reserve(node.windows.size());
             undocked_bounds.reserve(node.undocked_bounds.size());
-            tab_titles.reserve(node.tab_titles.size());
 
             for (u32 i = 0u; i < node.tabbar->child_size(); ++i)
             {
@@ -1734,14 +1712,12 @@ namespace auik
                 if (old_index != i) order_changed = true;
                 windows.push_back(node.windows[old_index]);
                 if (old_index < node.undocked_bounds.size()) undocked_bounds.push_back(node.undocked_bounds[old_index]);
-                if (old_index < node.tab_titles.size()) tab_titles.push_back(node.tab_titles[old_index]);
             }
 
             if (order_valid && order_changed)
             {
                 node.windows = std::move(windows);
                 node.undocked_bounds = std::move(undocked_bounds);
-                node.tab_titles = std::move(tab_titles);
                 for (size_t i = 0; i < node.windows.size(); ++i)
                     node.tabbar->set_item_user_data(static_cast<u32>(i), node.windows[i]);
             }
@@ -1885,6 +1861,7 @@ namespace auik
         detach_window(extracted, &drag_bounds);
         extracted->window_flags |= WindowFlagBits::decorated | WindowFlagBits::movable | WindowFlagBits::resizable;
         extracted->window_flags &= ~WindowFlagBits::docked;
+        extracted->sync_window_flags();
         extracted->set_auto_position(false, false);
         extracted->set_position(drag_bounds.offset);
         extracted->reset_draw_records();

@@ -1,5 +1,4 @@
 #pragma once
-
 #include "../detail/depth.hpp"
 #include "detail/dock_tree.hpp"
 #include "tabbar.hpp"
@@ -165,7 +164,6 @@ namespace auik
             acul::vector<DockNodeID> children;
             acul::vector<Window *> windows;
             acul::vector<amal::rect> undocked_bounds;
-            acul::vector<acul::string> tab_titles;
             Tabbar *tabbar = nullptr;
             auik::Block *header = nullptr;
             detail::RectData tab_panel_rect{};

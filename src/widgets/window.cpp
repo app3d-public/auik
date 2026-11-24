@@ -59,20 +59,6 @@ namespace auik
         return static_cast<Window *>(widget);
     }
 
-    static inline bool is_widget_in_focus_chain(u32 widget_id)
-    {
-        if (widget_id == 0u) return false;
-        auto &ctx = detail::get_context();
-        auto it = ctx.id_map.find(ctx.focus_id);
-        Widget *node = it != ctx.id_map.end() ? it->second : nullptr;
-        while (node)
-        {
-            if (node->id() == widget_id) return true;
-            node = node->focus_parent();
-        }
-        return false;
-    }
-
     static inline f32 snap_layout_start(f32 value) { return amal::ceil(value); }
 
     static inline f32 snap_layout_end(f32 value) { return amal::floor(value); }
@@ -274,221 +260,6 @@ namespace auik
         return amal::max(body_bottom - window_top, 0.0f);
     }
 
-    class DefaultWindowHeader final : public WindowHeader
-    {
-    public:
-        explicit DefaultWindowHeader(Window *parent, StringView text, bool hittable)
-            : WindowHeader(AUIK_TAG_WINDOW_HEADER,
-                           WidgetFlagBits::visible | (hittable ? WidgetFlagBits::hittable : WidgetFlagBits::none),
-                           AUIK_TAG_WINDOW_HEADER),
-              _style({Theme::STYLE_ID_INVALID, AUIK_STYLE_TAG_WINDOW_HEADER}),
-              _title_text(text.str ? text.str : ""),
-              _title(acul::alloc<Text>(AUIK_TAG_WINDOW_HEADER, _title_text, amal::vec2{0.0f, 0.0f},
-                                       WidgetFlagBits::visible))
-        {
-            assert(parent);
-            if (parent->window_flags & WindowFlagBits::closable)
-            {
-                _close = acul::alloc<ImageButton>(
-                    AUIK_TAG_CLOSE_BUTTON, get_cached_image(AUIK_ICON_CLOSE), amal::vec2{}, amal::vec2 AUIK_SIZE_FIT,
-                    WidgetFlagBits::visible | WidgetFlagBits::hittable, AUIK_STYLE_TAG_CLOSE_BUTTON);
-                _close->set_parent(this);
-                _close->get_rect().id = make_element_id(parent->id(), AUIK_TAG_CLOSE_BUTTON);
-            }
-            set_parent(parent);
-            _title->set_style_tag(AUIK_STYLE_TAG_NO_PAD);
-            _title->set_parent(this);
-            _rect.id.widget_id = parent->id();
-            _rect.clip_id = parent->clip_id();
-            if (text.is_translated) _title->set_translated_text_literal(text.str);
-        }
-        ~DefaultWindowHeader() override
-        {
-            if (_close) acul::release(_close);
-            acul::release(_title);
-        }
-
-        void set_title(StringView title)
-        {
-            const acul::string next = title.str ? title.str : "";
-            if (_title_text == next && (!title.is_translated || (_title && _title->is_translated_text()))) return;
-            _title_text = next;
-            if (_title)
-            {
-                _title->set_text(title);
-                _title->reset_draw_records();
-            }
-            _title_draw_dirty = true;
-        }
-
-        Text *name() const override { return _title; }
-        u16 content_clip_id() const override { return clip_id(); }
-
-        void update_layout_min_size_force() override
-        {
-            auto *theme = get_theme();
-            const auto &style = theme->get_style(_style.id);
-            _title->update_layout_min_size();
-            f32 content_height = amal::max(style.text_size(), _title->required_size().y);
-            if (_close)
-            {
-                _close->update_layout_min_size();
-                content_height = amal::max(content_height, _close->required_size().y);
-            }
-            const auto padding = style.padding();
-            set_required_size({0.0f, content_height + padding.y + padding.w});
-        }
-
-        StyleUpdateFlags update_style() override
-        {
-            const u32 parent_id = parent() ? parent()->id() : 0u;
-            StyleState state = StyleState::normal;
-            if (parent())
-            {
-                const auto transition = detail::get_widget_style_selector_transition(parent_id);
-                if (transition.current_id.tag_id == AUIK_TAG_WINDOW_HEADER) state = transition.current_state;
-                const auto ps = parent()->style_state();
-                if (ps == StyleState::active || ps == StyleState::focus) state = ps;
-                if (is_widget_in_focus_chain(parent_id)) state = StyleState::focus;
-            }
-            set_style_state(state);
-            StyleUpdateFlags flags = resolve_style_selector(_style, id(), parent_id, style_state());
-            const auto &style = get_theme()->get_style(_style.id);
-            flags |= _title->update_style_invalidated();
-            if (_close) flags |= _close->update_style_invalidated();
-            if (_resolved_text_color != style.text_color())
-            {
-                _resolved_text_color = style.text_color();
-                _title_draw_dirty = true;
-            }
-            return flags;
-        }
-        bool update_locale() override
-        {
-            bool changed = _title && _title->update_locale();
-            return changed;
-        }
-        void update_layout(bool min_size_known) override
-        {
-            (void)min_size_known;
-            Widget::update_layout(true);
-            const auto &style = get_theme()->get_style(_style.id);
-            const amal::vec4 padding = style.padding();
-            const amal::vec2 content_pos = {position().x + padding.x, position().y + padding.y};
-            const amal::vec2 content_size = {amal::max(size().x - padding.x - padding.z, 0.0f),
-                                             amal::max(size().y - padding.y - padding.w, 0.0f)};
-            amal::vec2 title_size = content_size;
-            if (_close)
-            {
-                _close->update_layout_min_size();
-                const auto extent = _close->required_size();
-                _close->set_position({content_pos.x + amal::max(title_size.x - extent.x, 0.0f),
-                                      position().y + (size().y - extent.y) * 0.5f});
-                _close->set_layout_size(extent);
-                _close->set_clip_id(clip_id());
-                _close->update_layout(true);
-                title_size.x = amal::max(title_size.x - extent.x - style.inline_spacing(), 0.0f);
-            }
-            _title->update_layout_min_size();
-            const f32 title_h = _title->required_size().y;
-            _title->set_position({content_pos.x, content_pos.y + amal::floor((content_size.y - title_h) * 0.5f)});
-            _title->set_layout_size({title_size.x, title_h});
-            _title->update_layout(true);
-            _title->set_clip_id(clip_id());
-        }
-
-        void translate(const amal::vec2 &delta) override
-        {
-            if (delta.x == 0.0f && delta.y == 0.0f) return;
-            Widget::translate(delta);
-            _title->translate(delta);
-            if (_close) _close->translate(delta);
-        }
-
-        void update_depth(const amal::vec2 &depth_range) override
-        {
-            Widget::update_depth(depth_range);
-            DepthCursor cursor(this->depth_range(), 2u + (_close ? 1u : 0u));
-            const amal::vec2 bg_range = cursor.next(1u);
-            const amal::vec2 text_range = cursor.next(1u);
-            get_rect().depth = next_depth(bg_range);
-            get_rect().hit_depth = get_rect().depth;
-            _title->update_depth(text_range);
-            if (_close) _close->update_depth(cursor.next(1u));
-        }
-
-        u32 get_depth_requirement() const override { return 2u + (_close ? 1u : 0u); }
-
-        void back_hit_depth() override
-        {
-            Widget::back_hit_depth();
-            _title->back_hit_depth();
-            if (_close) _close->back_hit_depth();
-        }
-
-        void restore_hit_depth() override
-        {
-            Widget::restore_hit_depth();
-            _title->restore_hit_depth();
-            if (_close) _close->restore_hit_depth();
-        }
-
-        void rebuild_clip_rects() override
-        {
-            _rect.clip_id = _parent->clip_id();
-            invalidate_hit_rect(_bg);
-            _title->set_clip_id(clip_id());
-            if (_close) _close->set_clip_id(clip_id());
-            _title->rebuild_clip_rects();
-            if (_close) _close->rebuild_clip_rects();
-            _title_draw_dirty = true;
-        }
-
-        void reset_clip_rect_records() override
-        {
-            Widget::reset_clip_rect_records();
-            if (_title) _title->reset_clip_rect_records();
-            if (_close) _close->reset_clip_rect_records();
-        }
-
-        void reset_draw_records() override
-        {
-            _bg = {};
-            _title->reset_draw_records();
-            if (_close) _close->reset_draw_records();
-            _title_draw_dirty = true;
-        }
-
-        void draw(DrawCtx &ctx) override
-        {
-            // An attach callback can replace this header before it has any draw records.
-            if ((ctx.reason & DrawReasonBits::invalidate) && _style.id == Theme::STYLE_ID_INVALID) return;
-
-            auto *theme = get_theme();
-            auto *quads_stream = get_primary_quads_stream();
-
-            QuadsInstanceData data{};
-            data.rect = bounds();
-            data.z_order = get_z_order();
-            const bool bg_visible = fill_quads_instance_by_style(theme->get_style(_style.id), clip_id(), data);
-            emit_quads_instance(ctx, quads_stream, _bg, data, get_rect(), bg_visible, can_emit_hit(ctx));
-
-            DrawCtx title_ctx = ctx;
-            _title->draw_local(title_ctx);
-            if (_close) _close->draw_local(title_ctx);
-            _title_draw_dirty = false;
-        }
-
-    private:
-        DrawDataID _bg;
-        StyleSelector _style;
-        acul::string _title_text;
-        Text *_title = nullptr;
-        ImageButton *_close = nullptr;
-        u32 _resolved_text_color{0};
-        bool _title_draw_dirty = true;
-    };
-
     static inline f32 get_window_header_height(Widget *header, const Window &window)
     {
         if (!header || is_docked_window(window)) return 0.0f;
@@ -497,15 +268,15 @@ namespace auik
     }
 
     Window::Window(u32 id, StringView title, const amal::rect &bounds, WindowFlags in_window_flags,
-                   WidgetFlags in_widget_flags, WindowHeader *header)
+                   WidgetFlags in_widget_flags, DrawBlock *header)
         : Widget(id, in_widget_flags, EventFlagBits::click | EventFlagBits::drag | EventFlagBits::focus, bounds,
                  AUIK_TAG_WINDOW),
           _content_block(acul::alloc<ContentBlock>(id, WidgetFlagBits::visible | WidgetFlagBits::hittable,
                                                    AUIK_TAG_WINDOW_CONTENT)),
           children(_content_block->children),
           window_flags(in_window_flags),
-          _title(title.str ? title.str : ""),
-          _translated_title(title.is_translated)
+          _title_storage(title.str ? title.str : ""),
+          _title(_title_storage.c_str(), title.is_translated)
     {
         set_position(bounds.offset);
         set_size(bounds.size);
@@ -520,14 +291,13 @@ namespace auik
         _auto_position = {is_fit_axis(bounds.offset.x), is_fit_axis(bounds.offset.y)};
         clear_window_frame_hitbox_flag(*this);
         _resize_hit_rect = detail::make_rect_data(id, AUIK_TAG_HITBOX);
-        _header = header;
-        if (_header)
+        if (_title_storage.empty())
         {
-            _header->set_parent(this);
-            _header->set_focus_parent(this);
-            _header->get_rect().id = make_element_id(id, AUIK_TAG_WINDOW_HEADER);
+            _title.str = nullptr;
+            _title.is_translated = false;
         }
-        if (window_flags & WindowFlagBits::decorated) ensure_header(title);
+        if (header) set_header(header);
+        sync_window_flags();
         if (window_flags & WindowFlagBits::rubber_band)
         {
             _rubber_band = acul::alloc<RubberBand>(id, WidgetFlagBits::none);
@@ -565,45 +335,94 @@ namespace auik
         return changed;
     }
 
-    void Window::ensure_header(StringView title)
+    void Window::sync_window_flags()
     {
-        if (_header) return;
-        _default_header = acul::alloc<DefaultWindowHeader>(this, title, window_flags & WindowFlagBits::movable);
-        _header = _default_header;
+        if (!(window_flags & WindowFlagBits::decorated)) set_header(nullptr);
+        else if (!_header)
+        {
+            auto *header = acul::alloc<DrawBlock>(AUIK_TAG_WINDOW_HEADER, WidgetFlagBits::visible,
+                                                  AUIK_TAG_WINDOW_HEADER);
+            header->set_style_tag(AUIK_STYLE_TAG_WINDOW_HEADER);
+            header->set_size({AUIK_SIZE_X_FILL, AUIK_SIZE_Y_FIT});
+            header->set_draw_block_flags(DrawBlockFlagBits::none);
+            auto *title = make_text(AUIK_TAG_TEXT, _title, AUIK_SIZE_FIT);
+            title->set_style_tag(AUIK_STYLE_TAG_NO_PAD);
+            header->add_child(title, make_layout_flags(ChildLayout::inline_, HAlign::left, VAlign::center));
+            set_header(header);
+            bind_header_title(title);
+        }
+        if (_header && _header->id() == AUIK_TAG_WINDOW_HEADER)
+        {
+            const bool closable = window_flags & WindowFlagBits::closable;
+            const bool has_close = _header->children.size() > 1u;
+            if (closable && !has_close)
+            {
+                auto *close = make_close_button(AUIK_TAG_CLOSE_BUTTON);
+                close->set_size(AUIK_SIZE_FIT);
+                close->get_rect().id = make_element_id(id(), AUIK_TAG_CLOSE_BUTTON);
+                _header->add_child(close, make_layout_flags(ChildLayout::inline_, HAlign::right, VAlign::center));
+            }
+            else if (!closable && has_close)
+            {
+                auto *close = _header->children[1];
+                if (close->clip_id() != 0xFFFFu && !close->is_attached())
+                {
+                    close->update_style_invalidated();
+                    close->invalidate_draw_commands(DrawReasonBits::layout);
+                }
+                _header->erase_children(1u, 1u);
+            }
+        }
+        if (_header)
+        {
+            _header->sync_widget_flags();
+            if (window_flags & WindowFlagBits::movable) _header->widget_flags |= WidgetFlagBits::hittable;
+            else _header->widget_flags &= ~WidgetFlagBits::hittable;
+        }
+        invalidate_style();
+        invalidate_layout_measure();
+        if (is_attached()) detail::mark_layout_dirty();
     }
 
-    void Window::set_header(WindowHeader *header)
+    void Window::set_header(DrawBlock *header)
     {
-        if (header && header == _header) return;
+        if (header == _header) return;
+        _header_title = nullptr;
         if (_header)
         {
             if (_header->is_attached()) _header->on_detach();
             if (is_attached()) _header->invalidate_draw_commands(DrawReasonBits::layout);
             acul::release(_header);
         }
-        _default_header = nullptr;
         _header = header;
         if (_header)
         {
             _header->set_parent(this);
             _header->set_focus_parent(this);
             _header->get_rect().id = make_element_id(id(), AUIK_TAG_WINDOW_HEADER);
+            if (!(window_flags & WindowFlagBits::movable)) _header->widget_flags &= ~WidgetFlagBits::hittable;
             if (is_attached() && (_header->widget_flags & WidgetFlagBits::attachable)) _header->on_attach();
         }
-        else if (window_flags & WindowFlagBits::decorated) ensure_header(StringView{_title.c_str(), _translated_title});
         invalidate_layout_measure();
         if (is_attached()) detail::mark_layout_dirty();
     }
 
-    void Window::set_title(StringView title)
+    void Window::bind_header_title(Text *text)
     {
-        _translated_title = title.is_translated;
-        _title = title.str ? title.str : "";
-        if (_default_header) _default_header->set_title(title);
-        else if (_header && _header->name()) _header->name()->set_text(title);
+        _header_title = text;
+        if (_header_title) _header_title->set_text(_title);
     }
 
-    const Text *Window::title_text() const { return _header ? _header->name() : nullptr; }
+    void Window::set_title(StringView title)
+    {
+        if (_title.str == title.str && _title.is_translated == title.is_translated) return;
+        _title_storage = title.str ? title.str : "";
+        _title.str = _title_storage.empty() ? nullptr : _title_storage.c_str();
+        _title.is_translated = _title.str && title.is_translated;
+        if (_header_title) _header_title->set_text(_title);
+        invalidate_layout_measure();
+        if (is_attached()) detail::mark_layout_dirty();
+    }
 
     Window::~Window()
     {
@@ -735,7 +554,7 @@ namespace auik
     {
         if (!parent() && !is_overlay_window(this)) detail::teardown_root_window(this);
         if (_menu_bar && _menu_bar->is_attached()) _menu_bar->on_detach();
-        if (_header && _header != _default_header && _header->is_attached()) _header->on_detach();
+        if (_header && _header->is_attached()) _header->on_detach();
         if (_content_block && _content_block->is_attached()) _content_block->on_detach();
         Widget::on_detach();
     }
@@ -875,7 +694,6 @@ namespace auik
     void Window::update_depth(const amal::vec2 &depth_range)
     {
         clear_window_frame_hitbox_flag(*this);
-        if ((window_flags & WindowFlagBits::decorated) && !_header) ensure_header(_title);
         const f32 prev_resize_hit_depth = _resize_hit_depth;
         Widget::update_depth(depth_range);
 
@@ -961,22 +779,7 @@ namespace auik
         if (_content_block) out |= _content_block->update_style_invalidated();
         if (_menu_bar) out |= _menu_bar->update_style_invalidated();
 
-        if ((window_flags & WindowFlagBits::decorated) && !_header) ensure_header(_title);
-        if (window_flags & WindowFlagBits::decorated)
-        {
-            if (window_flags & WindowFlagBits::movable) _header->widget_flags |= WidgetFlagBits::hittable;
-            else _header->widget_flags &= ~WidgetFlagBits::hittable;
-            out |= _header->update_style_invalidated();
-        }
-        else
-        {
-            if (_default_header)
-            {
-                acul::release(_default_header);
-                _default_header = nullptr;
-                _header = nullptr;
-            }
-        }
+        if (_header) out |= _header->update_style_invalidated();
 
         if (_rubber_band) out |= _rubber_band->update_style_invalidated();
         return out;
@@ -1618,13 +1421,8 @@ namespace auik
         {
             auto *widget = static_cast<Window *>(block);
             detail::write_widget_common_data(stream, *widget);
-            const Text *title_text = widget->title_text();
-            const bool translated = title_text && title_text->is_translated_text();
-            const char *literal = translated ? title_text->translated_text_literal() : nullptr;
-            detail::write_localized_string(stream,
-                                           translated ? acul::string(literal ? literal : "")
-                                                      : (title_text ? title_text->text() : widget->title()),
-                                           translated);
+            const auto title = widget->get_title();
+            detail::write_localized_string(stream, acul::string(title.str ? title.str : ""), title.is_translated);
             stream.write(static_cast<u32>(widget->window_flags))
                 .write(widget->window_style_tag())
                 .write(widget->dock_style_tag())

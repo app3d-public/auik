@@ -161,9 +161,10 @@ namespace auik
     };
 
     inline ModalWindow *make_modal_window(u32 id, const acul::string &title = "",
-                                          const amal::rect &bounds = {AUIK_POS_IGNORE, AUIK_SIZE_FIT})
+                                          const amal::rect &bounds = {AUIK_POS_IGNORE, AUIK_SIZE_FIT},
+                                          WindowFlags flags = WindowFlagBits::movable)
     {
-        return acul::alloc<ModalWindow>(id, title, bounds, WindowFlagBits::movable, WidgetFlagBits::visible);
+        return acul::alloc<ModalWindow>(id, title, bounds, flags, WidgetFlagBits::visible);
     }
 
     inline ModalQueue *make_modal_queue(u32 id)
