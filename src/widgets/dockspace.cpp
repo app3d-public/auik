@@ -1,4 +1,3 @@
-#include <algorithm>
 #include <auik/auik.hpp>
 #include <auik/detail/depth.hpp>
 #include <auik/pipelines.hpp>
@@ -1946,10 +1945,10 @@ namespace auik
                 window->update_depth(content_range);
             }
         }
-        get_rect().depth = next_depth(detail::depth_background_range(this->depth_range()));
+        DepthCursor backgrounds(detail::depth_background_range(this->depth_range()), 2u);
+        get_rect().depth = next_depth(backgrounds.next());
         get_rect().hit_depth = get_rect().depth;
-        const amal::vec2 dock_bg_range = detail::depth_background_range(this->depth_range());
-        _tab_panel_depth = dock_bg_range.x;
+        _tab_panel_depth = next_depth(backgrounds.next());
         const amal::vec2 dock_fg_range = detail::depth_foreground_range(this->depth_range());
         const amal::vec2 helper_range = detail::depth_foreground_range(dock_fg_range);
         _resize_helper_depth = next_depth(helper_range);
@@ -2180,6 +2179,7 @@ namespace auik
         }
 
         const auto *theme = get_theme();
+        const auto &surface = theme->get_style(_surface_style.id);
         const auto &leaf_style = theme->get_style(_leaf_style.id);
         QuadsInstanceData mask{};
         const u32 corners = leaf_style.corner_mask() & 0xFu;
@@ -2189,6 +2189,8 @@ namespace auik
             mask.rect = node.content_collapsed ? node.tab_panel_rect.bounds : node.bounds;
             mask.z_order = next_depth(detail::depth_foreground_range(depth_range()));
             mask.border_radius = radius;
+            if (surface.mask() & detail::StylePropertiesBits::background_color)
+                mask.background_color = surface.background_color();
             mask.mask = static_cast<u32>(clip_id()) | (corners << 16u) |
                         (static_cast<u32>(AUIK_HAS_RADIUS_BIT | AUIK_INVERT_RADIUS_BIT) << 20u);
         }
@@ -2215,7 +2217,7 @@ namespace auik
         auto emit_background = [&](const amal::rect &rect) {
             QuadsInstanceData data{};
             data.rect = rect;
-            data.z_order = next_depth(detail::depth_background_range(depth_range()));
+            data.z_order = get_rect().depth;
             data.background_color = surface.background_color();
             data.mask = clip_id();
             emit(data);
@@ -2233,17 +2235,6 @@ namespace auik
             emit_background({{inner_end.x, inner.offset.y}, {outer_end.x - inner_end.x, inner.size.y}});
 
             auto draw_node_surfaces = [&](auto &self, const Node &node) -> void {
-                // Paint a vertical panel stack once, leaving occupied tabless leaves open to the host.
-                if (node.axis == amal::axis::y && !node.children.empty() &&
-                    std::all_of(node.children.begin(), node.children.end(), [this](DockNodeID id) {
-                        const auto *child = get_node(id);
-                        return child && child->children.empty() &&
-                               (child->windows.empty() || needs_node_tab_panel(*child));
-                    }))
-                {
-                    emit_background(node.bounds);
-                    return;
-                }
                 if (!node.children.empty())
                 {
                     const auto axis = node.axis;
@@ -2266,7 +2257,7 @@ namespace auik
                                         cross_extent)});
                     return;
                 }
-                if (node.windows.empty() || needs_node_tab_panel(node)) emit_background(node.bounds);
+                if (node.windows.empty()) emit_background(node.bounds);
             };
             draw_node_surfaces(draw_node_surfaces, *root);
         }

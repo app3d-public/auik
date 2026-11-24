@@ -627,9 +627,6 @@ namespace auik
                 if (!valid_tree_rect_size(rect.size)) return;
                 QuadsInstanceData line{};
                 line.rect = rect;
-                // Guides sit above the tree background but below row contents, so opaque parts of labels and
-                // icons naturally hide the connector passing underneath them.
-                line.z_order = detail::depth_foreground_range(depth_range()).x;
                 _tree_line_data.push_back(line);
             };
             // Continue the vertical guides of ancestor levels which still have following siblings.
@@ -646,7 +643,9 @@ namespace auik
             // of the label contents and is therefore emitted for both leaves and expandable nodes.
             const f32 own_axis = node_axis_centers[node];
             const f32 own_line_x = amal::round(own_axis - half_line);
-            const f32 own_bottom = node_is_last_sibling(node) ? row_mid_y : amal::round(cursor_y + row_h);
+            const f32 branch_y = amal::round(row_mid_y - half_line);
+            const f32 own_bottom =
+                node_is_last_sibling(node) ? branch_y + line_thickness : amal::round(cursor_y + row_h);
             if (node_has_children(node))
             {
                 const f32 arrow_h = amal::min(tree_icon_outer_size(icon_style, tree_icon_size).y, row_h);
@@ -665,11 +664,13 @@ namespace auik
                           {line_thickness, amal::max(own_bottom - amal::round(cursor_y), 0.0f)}});
             }
 
-            const f32 branch_start = amal::round(own_axis + line_margin.x);
+            const f32 branch_origin = amal::round(own_axis + line_margin.x);
+            const f32 branch_start = amal::max(branch_origin, own_line_x + line_thickness);
             // Snap the connector length independently of its position. Rounding both endpoints made an otherwise
             // identical branch alternate by one pixel between hierarchy levels at fractional DPI scales.
             const f32 branch_width = amal::round(node_branch_ends[node] - own_axis - line_margin.x - line_margin.z);
-            add_line({{branch_start, row_mid_y - half_line}, {amal::max(branch_width, 0.0f), line_thickness}});
+            add_line({{branch_start, branch_y},
+                      {amal::max(branch_width - (branch_start - branch_origin), 0.0f), line_thickness}});
 
             cursor_y += row_h;
         }
@@ -814,7 +815,9 @@ namespace auik
     void Tree::update_depth(const amal::vec2 &depth_range)
     {
         Widget::update_depth(depth_range);
-        const amal::vec2 content_range = detail::depth_foreground_range(this->depth_range());
+        // Reserve the upper half of the foreground range for the guides and disclosure arrows.
+        const auto foreground = detail::depth_foreground_range(this->depth_range());
+        const auto content_range = detail::depth_slice(foreground, 0u, 2u);
         for (auto &row : _cells)
         {
             for (auto *cell : row)
@@ -883,10 +886,7 @@ namespace auik
                                                             _resize_border_style.tag_id, id(), clip_id(), resize_hit);
             }
 
-            draw_tree_lines(ctx, quads_stream);
         }
-
-        for (auto &visual : _arrow_visuals) draw_arrow(ctx, visual);
 
         const amal::vec4 content_clip = detail::child_culling_rect(*this, ctx);
         for (auto &row : _cells)
@@ -898,6 +898,8 @@ namespace auik
                 detail::draw_child_in_clip(cell, cell_ctx, content_clip);
             }
         }
+        draw_tree_lines(ctx, quads_stream);
+        for (auto &visual : _arrow_visuals) draw_arrow(ctx, visual);
     }
 
     bool Tree::update_locale()
@@ -1219,8 +1221,11 @@ namespace auik
             return;
         }
 
+        const auto foreground = detail::depth_foreground_range(depth_range());
+        const f32 guide_depth = detail::depth_slice(foreground, 1u, 2u).x;
         for (auto &line : _tree_line_data)
         {
+            line.z_order = guide_depth;
             line.mask = static_cast<u32>(clip_id());
             line.background_color = style.background_color();
             line.border_color = 0u;

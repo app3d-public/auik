@@ -1175,7 +1175,10 @@ void test_dock_tree()
         acul::release(dock);
 
         constexpr u32 dock_color = 0xff414141u;
+        constexpr u32 panel_color = 0xff1e1e1eu;
         rounded_theme.add_style(AUIK_STYLE_TAG_DOCKSPACE, auik::make_style().background_color(dock_color));
+        rounded_theme.add_style(AUIK_STYLE_TAG_DOCK_NODE_TAB_PANEL,
+                                auik::make_style().background_color(panel_color).padding({0.f, 4.f, 0.f, 4.f}));
         // Tab panels may invalidate text records even for empty labels.
         auik::DrawStream unused_stream{};
         for (auto *&entry : streams)
@@ -1196,17 +1199,39 @@ void test_dock_tree()
         dock->update_layout(false);
         dock->draw(draw);
 
-        assert(records.size() > 1u && records.front().background_color == dock_color);
-        assert(records.front().rect.offset.x > 0.f && records.front().rect.offset.y == 0.f);
-        assert(records.front().rect.size.y == 480.f);
-        assert(records.front().rect.offset.x + records.front().rect.size.x == 640.f);
-        size_t backgrounds = 0u;
+        size_t masks = 0u;
+        size_t panel_backgrounds = 0u;
+        f32 nearest_panel_depth = 0.f;
         for (const auto &record : records)
         {
-            if (record.background_color == dock_color) ++backgrounds;
-            if (record.mask & (AUIK_INVERT_RADIUS_BIT << 20u)) assert(record.background_color == 0u);
+            if (record.mask & (AUIK_INVERT_RADIUS_BIT << 20u))
+            {
+                assert(record.background_color == dock_color);
+                ++masks;
+            }
+            else if (record.background_color == dock_color)
+            {
+                // Dock background strips stay in the gaps between the occupied leaves.
+                for (const auto &mask : records)
+                {
+                    if (!(mask.mask & (AUIK_INVERT_RADIUS_BIT << 20u))) continue;
+                    const auto bounds = mask.rect;
+                    const auto end = record.rect.offset + record.rect.size;
+                    const auto bounds_end = bounds.offset + bounds.size;
+                    assert(end.x <= bounds.offset.x || end.y <= bounds.offset.y ||
+                           record.rect.offset.x >= bounds_end.x || record.rect.offset.y >= bounds_end.y);
+                }
+            }
+            else if (record.background_color == panel_color)
+            {
+                assert(record.z_order > dock->get_rect().depth);
+                nearest_panel_depth = amal::max(nearest_panel_depth, record.z_order);
+                ++panel_backgrounds;
+            }
         }
-        assert(backgrounds == 1u);
+        assert(masks == 3u && panel_backgrounds == 2u);
+        for (const auto &record : records)
+            if (record.mask & (AUIK_INVERT_RADIUS_BIT << 20u)) assert(record.z_order > nearest_panel_depth);
         acul::release(dock);
         for (auto *&entry : streams) entry = nullptr;
         ctx.theme = &theme;
