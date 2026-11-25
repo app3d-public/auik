@@ -2,7 +2,7 @@
 
 #include <acul/vector.hpp>
 #include <amal/geometric.hpp>
-#include "../detail/vertex_draw.hpp"
+#include "../detail/vertex_draw/gradients.hpp"
 #include "../model.hpp"
 #include "../pipelines.hpp"
 #include "image.hpp"

@@ -1,6 +1,6 @@
 #include <auik/auik.hpp>
 #include <acul/assert.hpp>
-#include <auik/detail/vertex_draw.hpp>
+#include <auik/detail/rect.hpp>
 #include <auik/pipelines.hpp>
 #include <auik/widgets/image.hpp>
 #include "../core/session_stream_utils.hpp"

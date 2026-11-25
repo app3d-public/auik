@@ -1,5 +1,6 @@
 #include <amal/trigonometric.hpp>
-#include <auik/detail/vertex_draw.hpp>
+#include <auik/detail/rect.hpp>
+#include <auik/detail/vertex_draw/gradients.hpp>
 #include <algorithm>
 #include <cmath>
 
