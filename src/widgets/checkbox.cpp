@@ -1,4 +1,5 @@
 #include <auik/auik.hpp>
+#include <acul/assert.hpp>
 #include <auik/detail/pixel_snap.hpp>
 #include <auik/pipelines.hpp>
 #include <auik/widgets/checkbox.hpp>
@@ -87,7 +88,7 @@ namespace auik
         set_position(pos);
         set_layout_size(widget_size);
         Widget::update_layout(true);
-        assert(parent() && "Checkbox must have parent");
+        ACUL_ASSERT(parent() && "Checkbox must have parent");
         set_clip_id(parent()->content_clip_id());
 
         const amal::vec2 box_size = resolve_box_size(style);
@@ -108,7 +109,7 @@ namespace auik
 
     void Checkbox::rebuild_clip_rects()
     {
-        assert(parent() && "Checkbox must have parent");
+        ACUL_ASSERT(parent() && "Checkbox must have parent");
         set_clip_id(parent()->content_clip_id());
         DrawDataID *hit_ids[] = {&_box_bg, &_checkmark_draw};
         invalidate_hit_rect_batch(hit_ids, 2);

@@ -1,4 +1,5 @@
 #include <auik/auik.hpp>
+#include <acul/assert.hpp>
 #include <auik/detail/vertex_draw.hpp>
 #include <auik/pipelines.hpp>
 #include <auik/widgets/image.hpp>
@@ -19,13 +20,13 @@ namespace auik
         set_position(layout_origin);
         set_layout_size(required_size());
         Widget::update_layout(true);
-        assert(parent() && "Image must have parent");
+        ACUL_ASSERT(parent() && "Image must have parent");
         set_clip_id(parent()->content_clip_id());
     }
 
     void Image::rebuild_clip_rects()
     {
-        assert(parent() && "Image must have parent");
+        ACUL_ASSERT(parent() && "Image must have parent");
         set_clip_id(parent()->content_clip_id());
     }
 
@@ -41,7 +42,7 @@ namespace auik
             _texture_id.bind_slot = get_texture_bind_slot(_texture_id.handle);
 
         if (_texture_id.bind_slot == AUIK_INVALID_DRAW_DATA_ID) return;
-        assert(_texture_id.bind_slot <= 0xFFFFu && "AUIK Image texture slot overflow");
+        ACUL_ASSERT(_texture_id.bind_slot <= 0xFFFFu && "AUIK Image texture slot overflow");
 
         TexturesInstanceData image_data{};
         image_data.rect = bounds();
@@ -99,13 +100,13 @@ namespace auik
         set_position({layout_origin.x + margin.x, layout_origin.y + margin.y});
         set_layout_size(layout_size);
         Widget::update_layout(true);
-        assert(parent() && "CheckerImage must have parent");
+        ACUL_ASSERT(parent() && "CheckerImage must have parent");
         set_clip_id(parent()->content_clip_id());
     }
 
     void CheckerImage::rebuild_clip_rects()
     {
-        assert(parent() && "CheckerImage must have parent");
+        ACUL_ASSERT(parent() && "CheckerImage must have parent");
         set_clip_id(parent()->content_clip_id());
     }
 

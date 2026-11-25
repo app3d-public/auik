@@ -1,4 +1,5 @@
 #include <auik/auik.hpp>
+#include <acul/assert.hpp>
 #include <auik/detail/pixel_snap.hpp>
 #include <auik/pipelines.hpp>
 #include <auik/widgets/image_button.hpp>
@@ -140,7 +141,7 @@ namespace auik
         set_position(pos);
         set_layout_size(widget_size);
         Widget::update_layout(true);
-        assert(parent() && "ImageButton must have parent");
+        ACUL_ASSERT(parent() && "ImageButton must have parent");
         set_clip_id(parent()->content_clip_id());
 
         const amal::vec2 max_image_size = {amal::max(widget_size.x - padding.x - padding.z, 0.0f),
@@ -166,7 +167,7 @@ namespace auik
 
     void ImageButton::rebuild_clip_rects()
     {
-        assert(parent() && "ImageButton must have parent");
+        ACUL_ASSERT(parent() && "ImageButton must have parent");
         const u16 next_clip_id = parent()->content_clip_id();
         const bool clip_changed = clip_id() != next_clip_id || _image_rect.clip_id != next_clip_id;
         set_clip_id(next_clip_id);
@@ -222,7 +223,7 @@ namespace auik
             texture_id.bind_slot = get_texture_bind_slot(texture_id.handle);
         if (texture_id.bind_slot == AUIK_INVALID_DRAW_DATA_ID) return;
         if (!_image) _texture_id.bind_slot = texture_id.bind_slot;
-        assert(texture_id.bind_slot <= 0xFFFFu && "AUIK ImageButton texture slot overflow");
+        ACUL_ASSERT(texture_id.bind_slot <= 0xFFFFu && "AUIK ImageButton texture slot overflow");
 
         TexturesInstanceData image_data{};
         image_data.rect = _image_rect.bounds;

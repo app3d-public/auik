@@ -1,4 +1,5 @@
 #include <auik/model.hpp>
+#include <acul/assert.hpp>
 #include <cstring>
 
 namespace auik
@@ -271,7 +272,7 @@ namespace auik
 
     AUIK_EXPORT void *get_model_field_access_data(ModelDB *db, ModelID model_id, const ModelFieldAccess &access)
     {
-        assert(db && db->synced);
+        ACUL_ASSERT(db && db->synced, nullptr);
         auto *model = is_model_field_access_valid(db, model_id, access) ? find_model(db, model_id) : nullptr;
         return model ? model->field_data(access.record_id, access.field_id) : nullptr;
     }
@@ -279,7 +280,7 @@ namespace auik
     AUIK_EXPORT const void *get_model_field_access_data(const ModelDB *db, ModelID model_id,
                                                         const ModelFieldAccess &access)
     {
-        assert(db && db->synced);
+        ACUL_ASSERT(db && db->synced, nullptr);
         const auto *model = is_model_field_access_valid(const_cast<ModelDB *>(db), model_id, access)
                                 ? find_const_model(db, model_id)
                                 : nullptr;
@@ -289,14 +290,14 @@ namespace auik
     AUIK_EXPORT bool write_model_field_access(ModelDB *db, ModelID model_id, const ModelFieldAccess &access,
                                               const void *src)
     {
-        assert(db && db->synced);
+        ACUL_ASSERT(db && db->synced, false);
         auto *model = is_model_field_access_valid(db, model_id, access) ? find_model(db, model_id) : nullptr;
         return model && model->write_field(access.record_id, access.field_id, src);
     }
 
     AUIK_EXPORT ModelField *resolve_model_field(ModelDB *db, ModelID model_id, const ModelFieldAccess &access)
     {
-        assert(db && db->synced);
+        ACUL_ASSERT(db && db->synced, nullptr);
         auto *model = is_model_field_access_valid(db, model_id, access) ? find_model(db, model_id) : nullptr;
         auto *record = model ? model->find_record(access.record_id) : nullptr;
         return record ? find_model_field(*record, access.field_id) : nullptr;
@@ -305,7 +306,7 @@ namespace auik
     AUIK_EXPORT const ModelField *resolve_model_field(const ModelDB *db, ModelID model_id,
                                                       const ModelFieldAccess &access)
     {
-        assert(db && db->synced);
+        ACUL_ASSERT(db && db->synced, nullptr);
         const auto *model = is_model_field_access_valid(const_cast<ModelDB *>(db), model_id, access)
                                 ? find_const_model(db, model_id)
                                 : nullptr;
@@ -336,7 +337,7 @@ namespace auik
     AUIK_EXPORT bool access_model_binding_field(ModelBinding &binding, ModelRecordID record_id, ModelFieldID field_id,
                                                 ModelFieldAccess &out)
     {
-        assert(binding.db && binding.db->synced);
+        ACUL_ASSERT(binding.db && binding.db->synced, false);
         if (binding.access_field) return binding.access_field(&binding, record_id, field_id, &out);
         return default_access_model_binding_field(&binding, record_id, field_id, &out);
     }
@@ -433,7 +434,7 @@ namespace auik
 
     AUIK_EXPORT ModelRecordID *find_model_binding_record(ModelBinding &binding, ModelRecordID record_id)
     {
-        assert(binding.db && binding.db->synced);
+        ACUL_ASSERT(binding.db && binding.db->synced, nullptr);
         for (auto &record : binding.records)
             if (record == record_id) return &record;
         return nullptr;
@@ -441,7 +442,7 @@ namespace auik
 
     AUIK_EXPORT void attach_model_binding(ModelBinding &binding)
     {
-        assert(binding.db && binding.db->synced);
+        ACUL_ASSERT(binding.db && binding.db->synced);
         auto *model = find_model(binding.db, binding.model_id);
         if (!model) return;
         erase_model_binding_ptr(model->bindings, &binding);
@@ -494,7 +495,7 @@ namespace auik
 
     AUIK_EXPORT void rebuild_model_binding_records(ModelBinding &binding)
     {
-        assert(binding.db && binding.db->synced);
+        ACUL_ASSERT(binding.db && binding.db->synced);
         detach_model_binding_fields(binding);
         binding.records.clear();
         auto *model = find_model(binding.db, binding.model_id);
@@ -512,7 +513,7 @@ namespace auik
 
     AUIK_EXPORT void default_dispatch_model_binding(ModelBinding *binding, const ModelRecordsEvent &event)
     {
-        assert(binding && binding->db && binding->db->synced);
+        ACUL_ASSERT(binding && binding->db && binding->db->synced);
         switch (event.op)
         {
             case ModelRecordsOp::create:
@@ -542,7 +543,7 @@ namespace auik
     AUIK_EXPORT void default_dispatch_model_binding_field(ModelBinding *binding, ModelRecordID record_id,
                                                           ModelFieldID field_id)
     {
-        assert(binding && binding->db && binding->db->synced);
+        ACUL_ASSERT(binding && binding->db && binding->db->synced);
         if (binding->on_field_change) binding->on_field_change(record_id, field_id);
         else if (binding->on_field_change_batch)
         {
@@ -554,7 +555,7 @@ namespace auik
     AUIK_EXPORT void default_dispatch_model_binding_field_batch(ModelBinding *binding,
                                                                 const ModelFieldChangeBatch &batch)
     {
-        assert(binding && binding->db && binding->db->synced);
+        ACUL_ASSERT(binding && binding->db && binding->db->synced);
         if (!batch) return;
         if (binding->on_field_change_batch)
         {
@@ -659,9 +660,9 @@ namespace auik
     AUIK_EXPORT bool process_model_binding_field_batch(ModelBinding &binding, ModelFieldID field_id,
                                                        ModelPipelineNode *pipeline, void *dst, u32 dst_stride)
     {
-        assert(binding.db && binding.db->synced);
+        ACUL_ASSERT(binding.db && binding.db->synced, false);
         auto *model = find_model(binding.db, binding.model_id);
-        if (!binding.db || !binding.db->synced || !model || !pipeline || !dst || dst_stride == 0u ||
+        if (!model || !pipeline || !dst || dst_stride == 0u ||
             binding.records.empty())
             return false;
 

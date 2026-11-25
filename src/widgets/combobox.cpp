@@ -1,4 +1,5 @@
 #include <auik/auik.hpp>
+#include <acul/assert.hpp>
 #include <auik/detail/depth.hpp>
 #include <auik/detail/rect.hpp>
 #include <auik/pipelines.hpp>
@@ -533,7 +534,7 @@ namespace auik
 
     void Combobox::rebuild_clip_rects()
     {
-        assert(parent() && "Combobox must have parent");
+        ACUL_ASSERT(parent() && "Combobox must have parent");
         set_clip_id(parent()->content_clip_id());
         if (_trigger) _trigger->rebuild_clip_rects(clip_id());
         sync_combo_label_clip(_label, _label_rect, clip_id(), _label_clip_id);
@@ -1140,7 +1141,7 @@ namespace auik
 
     void MultipleCombobox::rebuild_clip_rects()
     {
-        assert(parent() && "MultipleCombobox must have parent");
+        ACUL_ASSERT(parent() && "MultipleCombobox must have parent");
         set_clip_id(parent()->content_clip_id());
         if (_trigger) _trigger->rebuild_clip_rects(clip_id());
         sync_combo_label_clip(_label, _label_rect, clip_id(), _label_clip_id);

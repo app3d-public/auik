@@ -1,6 +1,7 @@
 #pragma once
 
 #include <acul/any.hpp>
+#include <acul/assert.hpp>
 #include <acul/enum.hpp>
 #include <acul/hash/hashmap.hpp>
 #include <acul/hash/utils.hpp>
@@ -536,7 +537,7 @@ namespace auik
         void create_extra_storage(size_t storage_size)
         {
             if (storage_size == 0u) return;
-            assert(storage_size <= UINT32_MAX && "style extra storage is too large");
+            ACUL_ASSERT(storage_size <= UINT32_MAX && "style extra storage is too large");
             const size_t allocation_size = extra_header_size() + storage_size;
             const size_t node_count = (allocation_size + sizeof(StyleExtra) - 1u) / sizeof(StyleExtra);
             _extra = acul::mem_allocator<StyleExtra>::allocate(node_count);
@@ -651,8 +652,8 @@ namespace auik
 
         const Style &get_style(StyleID id) const
         {
-            assert(id != STYLE_ID_INVALID);
-            assert(id < _resolved_pool.size());
+            static const Style empty_style;
+            ACUL_ASSERT(id < _resolved_pool.size() && _resolved_pool[id], empty_style);
             return *_resolved_pool[id];
         }
 

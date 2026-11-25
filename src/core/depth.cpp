@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <acul/assert.hpp>
 #include <acul/exception/exception.hpp>
 #include <auik/detail/depth.hpp>
 #include <auik/widgets/widget.hpp>
@@ -56,7 +57,7 @@ namespace auik::detail
     {
         if (allocation.index == global_depth_slot_count) return;
         auto &ctx = get_context();
-        assert(ctx.global_depth_slots[allocation.index] == &allocation);
+        ACUL_ASSERT(allocation.index < global_depth_slot_count && ctx.global_depth_slots[allocation.index] == &allocation);
         ctx.global_depth_slots[allocation.index] = nullptr;
         allocation.index = global_depth_slot_count;
         while (ctx.global_depth_end && !ctx.global_depth_slots[ctx.global_depth_end - 1]) --ctx.global_depth_end;
@@ -119,7 +120,7 @@ namespace auik
 {
     amal::vec2 global_depth_range(u32 index)
     {
-        assert(index < global_depth_slot_count && "Global depth index must be in [0, 32)");
+        ACUL_ASSERT(index < global_depth_slot_count && "Global depth index must be in [0, 32)", amal::vec2{});
         constexpr f32 step = 1.0f / global_depth_slot_count;
         return {static_cast<f32>(index) * step, static_cast<f32>(index + 1u) * step};
     }

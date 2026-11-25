@@ -1,4 +1,5 @@
 #include <auik/auik.hpp>
+#include <acul/assert.hpp>
 #include <auik/detail/depth.hpp>
 #include <auik/widgets/slider.hpp>
 #include "../core/session_stream_utils.hpp"
@@ -392,7 +393,7 @@ namespace auik
         set_position(pos);
         set_layout_size(slider_size);
         Widget::update_layout(true);
-        assert(parent() && "Slider must have parent");
+        ACUL_ASSERT(parent() && "Slider must have parent");
         set_clip_id(parent()->content_clip_id());
         _grab_hit_rect.clip_id = clip_id();
 
@@ -414,7 +415,7 @@ namespace auik
 
     void Slider::rebuild_clip_rects()
     {
-        assert(parent() && "Slider must have parent");
+        ACUL_ASSERT(parent() && "Slider must have parent");
         set_clip_id(parent()->content_clip_id());
         DrawDataID *hit_ids[] = {&_track_visual.background_draw_id, &_track_visual.fill_draw_id,
                                  &_track_visual.border_draw_id, &_grab_draw_id};
@@ -802,7 +803,7 @@ namespace auik
         set_position(pos);
         set_layout_size(slider_size);
         Widget::update_layout(true);
-        assert(parent() && "GradientSlider must have parent");
+        ACUL_ASSERT(parent() && "GradientSlider must have parent");
         set_clip_id(parent()->content_clip_id());
         _grab_hit_rect.clip_id = clip_id();
 
@@ -841,7 +842,7 @@ namespace auik
 
     void GradientSlider::rebuild_clip_rects()
     {
-        assert(parent() && "GradientSlider must have parent");
+        ACUL_ASSERT(parent() && "GradientSlider must have parent");
         set_clip_id(parent()->content_clip_id());
         DrawDataID *hit_ids[] = {&_track_visual.background_draw_id,
                                  &_track_visual.fill_draw_id,
@@ -1273,7 +1274,7 @@ namespace auik
         set_position(pos);
         set_layout_size(slider_size);
         Widget::update_layout(true);
-        assert(parent() && "TransparencySlider must have parent");
+        ACUL_ASSERT(parent() && "TransparencySlider must have parent");
         set_clip_id(parent()->content_clip_id());
         _grab_hit_rect.clip_id = clip_id();
 
@@ -1321,7 +1322,7 @@ namespace auik
 
     void TransparencySlider::rebuild_clip_rects()
     {
-        assert(parent() && "TransparencySlider must have parent");
+        ACUL_ASSERT(parent() && "TransparencySlider must have parent");
         set_clip_id(parent()->content_clip_id());
         DrawDataID *hit_ids[] = {&_track_visual.background_draw_id,
                                  &_track_visual.fill_draw_id,
@@ -1742,7 +1743,7 @@ namespace auik
         set_position(pos);
         set_layout_size(slider_size);
         Widget::update_layout(true);
-        assert(parent() && "RangeSlider must have parent");
+        ACUL_ASSERT(parent() && "RangeSlider must have parent");
         set_clip_id(parent()->content_clip_id());
         _from_hit_rect.clip_id = clip_id();
         _to_hit_rect.clip_id = clip_id();
@@ -1767,7 +1768,7 @@ namespace auik
 
     void RangeSlider::rebuild_clip_rects()
     {
-        assert(parent() && "RangeSlider must have parent");
+        ACUL_ASSERT(parent() && "RangeSlider must have parent");
         set_clip_id(parent()->content_clip_id());
         DrawDataID *hit_ids[] = {&_track_visual.background_draw_id, &_track_visual.fill_draw_id, &_from_draw_id,
                                  &_to_draw_id};

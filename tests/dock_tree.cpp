@@ -222,6 +222,8 @@ void test_dock_tree()
         auto &widget = static_cast<auik::Widget &>(window);
         widget.on_attach();
         window.set_header(nullptr);
+        assert(!window.header());
+        window.sync_window_flags();
         assert(window.header());
         widget.on_detach();
     }

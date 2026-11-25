@@ -1,4 +1,5 @@
 #include <auik/detail/context.hpp>
+#include <assert.h>
 #include <auik/detail/gpu_context.hpp>
 #include <auik/detail/pixel_snap.hpp>
 #include <auik/pipelines.hpp>
@@ -9,7 +10,7 @@ namespace auik::detail
 {
     static void sync_frame_to_master(DrawStream *stream, StreamSyncState *state, Context &ctx, u32 frame_id)
     {
-        assert(stream && state->buffer_versions);
+        assert(stream && state && state->buffer_versions);
         if (state->buffer_versions[frame_id] == state->master_version) return;
         ctx.gpu_ctx->quads.copy_stream_frame_data(stream, frame_id, state->master_id);
         state->buffer_versions[frame_id] = state->master_version;
@@ -67,7 +68,8 @@ namespace auik::detail
         mark_master_mutation(state, frame_id, ctx.frames_in_flight);
         stream->flags |= StreamFlagBits::invalidate;
         ctx.dirty_flags |= DirtyFlagBits::streams;
-        assert(gpu_ctx->quads.push_data_batch_to_stream && "GPU quads batch push dispatch is not initialized");
+        assert(gpu_ctx && gpu_ctx->quads.push_data_batch_to_stream &&
+                     "GPU quads batch push dispatch is not initialized");
         acul::vector<QuadsInstanceData> copies;
         copies.resize(count);
         const auto *src = static_cast<const QuadsInstanceData *>(data);
@@ -143,7 +145,8 @@ namespace auik::detail
         mark_master_mutation(state, ctx.frame_id, ctx.frames_in_flight);
         stream->flags |= StreamFlagBits::invalidate;
         ctx.dirty_flags |= DirtyFlagBits::streams;
-        assert(ctx.gpu_ctx->quads.update_stream_data_batch && "GPU quads batch update dispatch is not initialized");
+        assert(ctx.gpu_ctx && ctx.gpu_ctx->quads.update_stream_data_batch &&
+                     "GPU quads batch update dispatch is not initialized");
         acul::vector<QuadsInstanceData> copies;
         copies.resize(count);
         const auto *src = static_cast<const QuadsInstanceData *>(data);
@@ -179,7 +182,7 @@ namespace auik::detail
         assert(stream && "Null stream provided");
         auto *state = static_cast<StreamSyncState *>(stream->runtime_data);
         auto &ctx = get_context();
-        assert(state->buffer_versions);
+        assert(state && state->buffer_versions);
         if (state->buffer_versions[frame_id] != state->master_version)
         {
             ctx.gpu_ctx->quads.copy_stream_frame_data(stream, frame_id, state->master_id);

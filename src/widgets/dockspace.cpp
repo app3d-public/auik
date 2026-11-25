@@ -1,4 +1,5 @@
 #include <auik/auik.hpp>
+#include <acul/assert.hpp>
 #include <auik/detail/depth.hpp>
 #include <auik/pipelines.hpp>
 #include <auik/widgets/detail/popup_trigger.hpp>
@@ -295,7 +296,7 @@ namespace auik
 
     DockNodeID Dockspace::create_node(DockNodeID parent, bool split, DockNodeSettings settings, size_t position)
     {
-        assert(parent < _tree.nodes().size() && "parent dock node is invalid");
+        ACUL_REQUIRE(parent < _tree.nodes().size() && "parent dock node is invalid");
         DockNodeID id = static_cast<DockNodeID>(_tree.nodes().size());
         Node node{};
         node.parent = parent;
@@ -551,7 +552,7 @@ namespace auik
     void Dockspace::add_window(DockNodeID node, Window *window)
     {
         auto *n = get_node(node);
-        assert(n && "dock node is invalid");
+        ACUL_ASSERT(n && "dock node is invalid");
         assert(window && "window is null");
         auto *previous = active_window(*n);
         n->undocked_bounds.push_back(window->bounds());

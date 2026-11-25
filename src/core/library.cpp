@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <acul/assert.hpp>
 #include <auik/auik.hpp>
 #include <auik/detail/context.hpp>
 #include <auik/detail/depth.hpp>
@@ -820,7 +821,7 @@ namespace auik
         auto &ctx = detail::get_context();
         auto &state = detail::get_clip_rects_sync_state();
         const u32 frame_id = ctx.frame_id;
-        assert(state.buffer_versions);
+        assert(state.buffer_versions && ctx.frame_id < ctx.frames_in_flight);
         if (state.buffer_versions[frame_id] == state.master_version)
         {
             if (state.invalidation_count == 0) ctx.dirty_flags &= ~DirtyFlagBits::clip_rect;
@@ -853,6 +854,7 @@ namespace auik
         auto *gpu = ctx.gpu_ctx;
         assert(gpu && "GPU context is not initialized");
         auto &state = detail::get_hit_rects_sync_state();
+        assert(state.buffer_versions && ctx.frame_id < ctx.frames_in_flight);
         const u32 frame_id = ctx.frame_id;
         if (state.buffer_versions[frame_id] == state.master_version)
         {
@@ -871,7 +873,7 @@ namespace auik
         assert(widget && "widget is null");
         assert(widget->parent() == nullptr && "Root widget must not have a parent");
         auto &ctx = detail::get_context();
-        assert(widget->viewport() && "Root widget viewport is not assigned");
+        ACUL_ASSERT(widget->viewport() && "Root widget viewport is not assigned");
         widget->set_depth_zone(zone);
         ctx.widget_tree.push_back(widget);
         detail::register_root_widget(widget, zone);
@@ -883,14 +885,14 @@ namespace auik
     AUIK_EXPORT void mark_widget_attached_to_tree(Widget *widget)
     {
         if (!widget || !widget->is_attached()) return;
-        assert(!widget->parent() && "Dynamically attached widget must be a root widget");
+        ACUL_ASSERT(!widget->parent() && "Dynamically attached widget must be a root widget");
         auto &ctx = detail::get_context();
         if (ctx.dirty_flags & DirtyFlagBits::destroying) return;
 
         widget->invalidate_layout_measure();
         widget->reset_external_draw_cull_state();
         auto *viewport = widget->viewport();
-        assert(viewport && "Root widget viewport is not assigned");
+        ACUL_ASSERT(viewport && "Root widget viewport is not assigned");
 
         const amal::vec4 viewport_rect = get_viewport_rect(viewport);
         update_root_widget_layout(widget, viewport, viewport_rect);

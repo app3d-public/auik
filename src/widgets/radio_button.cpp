@@ -1,4 +1,5 @@
 #include <auik/auik.hpp>
+#include <acul/assert.hpp>
 #include <auik/pipelines.hpp>
 #include <auik/widgets/radio_button.hpp>
 #include "../core/session_stream_utils.hpp"
@@ -86,7 +87,7 @@ namespace auik
         set_position(pos);
         set_layout_size(widget_size);
         Widget::update_layout(true);
-        assert(parent() && "RadioButton must have parent");
+        ACUL_ASSERT(parent() && "RadioButton must have parent");
         set_clip_id(parent()->content_clip_id());
 
         const amal::vec2 background_size = resolve_background_size(background_style);
@@ -107,7 +108,7 @@ namespace auik
 
     void RadioButton::rebuild_clip_rects()
     {
-        assert(parent() && "RadioButton must have parent");
+        ACUL_ASSERT(parent() && "RadioButton must have parent");
         set_clip_id(parent()->content_clip_id());
         DrawDataID *hit_ids[] = {&_background_draw, &_indicator_draw};
         invalidate_hit_rect_batch(hit_ids, 2);

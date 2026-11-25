@@ -1,4 +1,5 @@
 #include <auik/theme.hpp>
+#include <assert.h>
 
 namespace auik
 {
@@ -77,12 +78,6 @@ namespace auik
             need_inh &= ~(take_inh | disable_inh);
         };
 
-        const auto get_desc = [&](u32 key, StyleState source_state) -> const Style * {
-            const StyleID style_id = get(key, source_state);
-            if (style_id == STYLE_ID_INVALID) return nullptr;
-            return _style_options_pool[style_id];
-        };
-
         const auto apply_from_key = [&](u32 key, bool inheritable_only, u8 source_id) {
             auto consume_cache_key = [&](const Style *desc, StyleState source_state) {
                 if (!desc) return;
@@ -102,11 +97,11 @@ namespace auik
                 acul::hash_combine(resolve_seed, static_cast<u32>(used));
             };
 
-            const Style *desc_state = get_desc(key, state);
+            const Style *desc_state = get_desc_style(key, state);
             consume_cache_key(desc_state, state);
 
             if (!use_normal_fallback) return;
-            const Style *desc_normal = get_desc(key, StyleState::normal);
+            const Style *desc_normal = get_desc_style(key, StyleState::normal);
             consume_cache_key(desc_normal, StyleState::normal);
         };
 

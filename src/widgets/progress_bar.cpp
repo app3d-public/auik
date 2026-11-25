@@ -1,4 +1,5 @@
 #include <auik/auik.hpp>
+#include <acul/assert.hpp>
 #include <auik/detail/depth.hpp>
 #include <auik/widgets/progress_bar.hpp>
 #include "../core/session_stream_utils.hpp"
@@ -153,7 +154,7 @@ namespace auik
         set_position({layout_origin.x + margin.x, layout_origin.y + margin.y});
         set_layout_size(body_size);
         Widget::update_layout(true);
-        assert(parent() && "ProgressBar must have parent");
+        ACUL_ASSERT(parent() && "ProgressBar must have parent");
         set_clip_id(parent()->content_clip_id());
         rebuild_cached_visuals();
     }
@@ -169,7 +170,7 @@ namespace auik
 
     void ProgressBar::rebuild_clip_rects()
     {
-        assert(parent() && "ProgressBar must have parent");
+        ACUL_ASSERT(parent() && "ProgressBar must have parent");
         set_clip_id(parent()->content_clip_id());
         rebuild_cached_visuals();
     }

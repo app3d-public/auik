@@ -1,4 +1,5 @@
 #include <auik/detail/atlas.hpp>
+#include <assert.h>
 #include <auik/detail/context.hpp>
 
 namespace auik::detail
@@ -193,7 +194,7 @@ namespace auik::detail
     {
         out.clear();
         if (images.empty()) return true;
-        assert (g_context && g_context->gpu_ctx);
+        assert(g_context && g_context->gpu_ctx);
 
         auto &state = g_context->atlas_state;
         auto *gpu_ctx = g_context->gpu_ctx;

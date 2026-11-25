@@ -3,7 +3,7 @@
 #include <acul/vector.hpp>
 #include <utility>
 #include <cstdint>
-#include <cassert>
+#include <acul/assert.hpp>
 
 namespace auik::detail
 {
@@ -29,7 +29,7 @@ namespace auik::detail
 
         NodeID append(NodeID parent, Node node, size_t position = static_cast<size_t>(-1))
         {
-            assert(parent < _nodes.size() && "parent dock node is invalid");
+            ACUL_ASSERT(parent < _nodes.size() && "parent dock node is invalid", invalid_node);
             const NodeID id = static_cast<NodeID>(_nodes.size());
             node.parent = parent;
             _nodes.push_back(std::move(node));

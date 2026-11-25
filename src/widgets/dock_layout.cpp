@@ -1,4 +1,5 @@
 #include <auik/widgets/dock_layout.hpp>
+#include <acul/assert.hpp>
 #include "../core/session_stream_utils.hpp"
 
 namespace auik
@@ -125,7 +126,7 @@ namespace auik
 
     DockLayoutNodeID DockLayout::create_node(DockLayoutNodeID parent, bool split, DockLayoutNodeSettings settings)
     {
-        assert(parent < _tree.nodes().size() && "parent dock node is invalid");
+        ACUL_REQUIRE(parent < _tree.nodes().size() && "parent dock node is invalid");
         DockLayoutNodeID id = static_cast<DockLayoutNodeID>(_tree.nodes().size());
         Node node{};
         node.parent = parent;

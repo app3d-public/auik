@@ -1,4 +1,5 @@
 #include <auik/auik.hpp>
+#include <acul/assert.hpp>
 #include <auik/detail/depth.hpp>
 #include <auik/pipelines.hpp>
 #include <auik/sound.hpp>
@@ -88,7 +89,7 @@ namespace auik
         void update_layout(bool min_size_known) override
         {
             if (layout_measure_required(min_size_known)) update_layout_min_size_force();
-            assert(parent() && "ModalControlsRow must have parent");
+            ACUL_ASSERT(parent() && "ModalControlsRow must have parent");
             set_clip_id(parent()->content_clip_id());
 
             const auto &controls_style = get_theme()->get_style(_controls_style.id);

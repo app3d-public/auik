@@ -1,8 +1,8 @@
 #pragma once
 
+#include <assert.h>
 #include <acul/scalars.hpp>
 #include <auik/symbol_export.h>
-#include <cassert>
 
 namespace auik
 {

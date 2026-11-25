@@ -1,4 +1,5 @@
 #include <acul/hash/utils.hpp>
+#include <acul/assert.hpp>
 #include <auik/auik.hpp>
 #include <auik/detail/context.hpp>
 #include <auik/pipelines.hpp>
@@ -436,7 +437,7 @@ namespace auik
         amal::vec2 outer_size = resolve_text_size(*this, required_inner, margin);
         set_layout_size(outer_size);
         const bool width_changed = layout_width_dirty();
-        assert(parent() && "Text must have parent");
+        ACUL_ASSERT(parent() && "Text must have parent");
         set_clip_id(parent()->content_clip_id());
         const amal::vec2 inner_size = {amal::max(outer_size.x - padding.x - padding.z, 0.0f),
                                        amal::max(outer_size.y - padding.y - padding.w, 0.0f)};
@@ -503,7 +504,7 @@ namespace auik
     void Text::rebuild_clip_rects()
     {
         // Text uses parent's clip to avoid stale per-text clip rects on parent translate.
-        assert(parent() && "Text must have parent");
+        ACUL_ASSERT(parent() && "Text must have parent");
         set_clip_id(parent()->content_clip_id());
     }
 

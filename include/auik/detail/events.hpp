@@ -1,6 +1,7 @@
 #pragma once
 
 #include <acul/enum.hpp>
+#include <assert.h>
 #include <acul/pair.hpp>
 #include <acul/scalars.hpp>
 #include <amal/rect.hpp>
@@ -108,12 +109,14 @@ namespace auik::detail
     inline void *get_window_handle(WindowContext *window_ctx)
     {
         assert(window_ctx && "auik window context is not initialized");
+        assert(window_ctx->get_window_handle);
         return window_ctx->get_window_handle(window_ctx);
     }
 
     inline void set_window_cursor(CursorID::enum_type id, WindowContext *window_ctx)
     {
         assert(window_ctx && "auik window context is not initialized");
+        assert(window_ctx->set_cursor);
         window_ctx->set_cursor(id, window_ctx);
     }
 
@@ -141,6 +144,7 @@ namespace auik::detail
     inline void destroy_window_context(WindowContext *window_ctx)
     {
         assert(window_ctx && "auik window context is not initialized");
+        assert(window_ctx->destroy_backend);
         window_ctx->destroy_backend(window_ctx);
     }
 

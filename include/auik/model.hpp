@@ -1,6 +1,7 @@
 #pragma once
 
 #include <acul/functional/unique_function.hpp>
+#include <acul/assert.hpp>
 #include <acul/hash/hashmap.hpp>
 #include <acul/hash/hashset.hpp>
 #include <acul/hash/utils.hpp>
@@ -1373,7 +1374,7 @@ namespace auik
 
     inline void bind_model_record(ModelBinding &binding, ModelRecordID record_id)
     {
-        assert(binding.db && binding.db->synced);
+        ACUL_ASSERT(binding.db && binding.db->synced);
         binding.records.push_back(record_id);
     }
 
@@ -1386,21 +1387,21 @@ namespace auik
 
     inline void dispatch_model_binding(ModelBinding &binding, const ModelRecordsEvent &event)
     {
-        assert(binding.db && binding.db->synced);
+        ACUL_ASSERT(binding.db && binding.db->synced);
         if (binding.on_dispatch) binding.on_dispatch(&binding, event);
         else default_dispatch_model_binding(&binding, event);
     }
 
     inline void dispatch_model_binding_field(ModelBinding &binding, ModelRecordID record_id, ModelFieldID field_id)
     {
-        assert(binding.db && binding.db->synced);
+        ACUL_ASSERT(binding.db && binding.db->synced);
         if (binding.on_field_dispatch) binding.on_field_dispatch(&binding, record_id, field_id);
         else default_dispatch_model_binding_field(&binding, record_id, field_id);
     }
 
     inline void dispatch_model_binding_field_batch(ModelBinding &binding, const ModelFieldChangeBatch &batch)
     {
-        assert(binding.db && binding.db->synced);
+        ACUL_ASSERT(binding.db && binding.db->synced);
         if (!batch) return;
         if (binding.on_field_batch_dispatch) binding.on_field_batch_dispatch(&binding, batch);
         else if (binding.on_field_dispatch)

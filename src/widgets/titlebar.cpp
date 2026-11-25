@@ -1,4 +1,5 @@
 #include <auik/auik.hpp>
+#include <acul/assert.hpp>
 #include <auik/detail/depth.hpp>
 #include <auik/detail/platform.hpp>
 #include <auik/pipelines.hpp>
@@ -26,7 +27,7 @@ namespace auik
 
     inline void destroy_titlebar_state(TitlebarState *state)
     {
-        assert(state->destroy && "destroy function is null");
+        assert(state && state->destroy && "destroy function is null");
         state->destroy(state);
     }
 
@@ -909,8 +910,8 @@ namespace auik
         auto *wnd_ctx = detail::get_context().window_ctx;
         assert(wnd_ctx && "window context is null");
 
-        HWND hwnd = (HWND)wnd_ctx->get_window_handle(wnd_ctx);
-        assert(hwnd && "window handle is null");
+        HWND hwnd = static_cast<HWND>(detail::get_window_handle(wnd_ctx));
+        ACUL_ASSERT(hwnd && "window handle is null", false);
         const UINT dpi_value = GetDpiForWindow(hwnd);
         const f32 dpi = static_cast<f32>(dpi_value) / 96.0f;
         if (!add_window_caption_button_icons(fonts, dpi)) return false;

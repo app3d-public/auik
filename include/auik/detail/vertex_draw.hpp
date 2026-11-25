@@ -1,6 +1,7 @@
 #pragma once
 
 #include <auik/pipelines.hpp>
+#include <assert.h>
 
 namespace auik::detail
 {
@@ -37,8 +38,8 @@ namespace auik::detail
 
     inline amal::vec4 sample_gradient_color(const amal::vec4 *colors, u32 count, f32 t)
     {
+        if (count == 0u) return amal::vec4{1.0f};
         assert(colors && "colors is null");
-        if (count == 0u) return {1.0f, 1.0f, 1.0f, 1.0f};
         if (count == 1u) return colors[0];
 
         const f32 clamped_t = amal::clamp(t, 0.0f, 1.0f);

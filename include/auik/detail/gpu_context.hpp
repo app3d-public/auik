@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <assert.h>
 #include <amal/vector.hpp>
 #include "events.hpp"
 #include "fwd.hpp"
@@ -113,7 +114,7 @@ namespace auik::detail
 
     inline bool create_atlas_texture(GPUContext *gpu_context, AtlasTextureResource *resource, const umbf::Image2D &image)
     {
-        assert(gpu_context->create_atlas_texture);
+        assert(gpu_context && gpu_context->create_atlas_texture);
         return gpu_context->create_atlas_texture(gpu_context, resource, image);
     }
 
@@ -126,13 +127,13 @@ namespace auik::detail
     inline bool upload_atlas_texture(GPUContext *gpu_context, AtlasTextureResource *resource, const umbf::Image2D &image,
                                      u32 width, u32 height, i32 x, i32 y)
     {
-        assert(gpu_context->upload_atlas_texture);
+        assert(gpu_context && gpu_context->upload_atlas_texture);
         return gpu_context->upload_atlas_texture(gpu_context, resource, image, width, height, x, y);
     }
 
     inline bool create_image_texture(GPUContext *gpu_context, ImageTextureResource *resource, const umbf::Image2D &image)
     {
-        assert(gpu_context->create_image_texture);
+        assert(gpu_context && gpu_context->create_image_texture);
         return gpu_context->create_image_texture(gpu_context, resource, image);
     }
 
@@ -149,13 +150,13 @@ namespace auik::detail
 
     inline void copy_clip_rects_frame(GPUContext *gpu_context, u32 frame_id, u32 master_id)
     {
-        assert(gpu_context->copy_clip_rects_frame);
+        assert(gpu_context && gpu_context->copy_clip_rects_frame);
         gpu_context->copy_clip_rects_frame(gpu_context, frame_id, master_id);
     }
 
     inline void copy_hit_rects_frame(GPUContext *gpu_context, u32 frame_id, u32 master_id)
     {
-        assert(gpu_context->copy_hit_rects_frame);
+        assert(gpu_context && gpu_context->copy_hit_rects_frame);
         gpu_context->copy_hit_rects_frame(gpu_context, frame_id, master_id);
     }
 } // namespace auik::detail

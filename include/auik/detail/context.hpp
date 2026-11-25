@@ -1,6 +1,7 @@
 #pragma once
 
 #include <acul/disposal_queue.hpp>
+#include <acul/assert.hpp>
 #include <acul/enum.hpp>
 #include <acul/event.hpp>
 #include <acul/functional/unique_function.hpp>
@@ -234,7 +235,7 @@ namespace auik
             auto &ctx = get_context();
             auto &state = get_clip_rects_sync_state();
             const u32 frame_id = ctx.frame_id;
-            assert(state.buffer_versions);
+            assert(state.buffer_versions && frame_id < ctx.frames_in_flight);
             if (state.buffer_versions[frame_id] == state.master_version)
             {
                 if (state.invalidation_count == 0) ctx.dirty_flags &= ~DirtyFlagBits::clip_rect;
@@ -249,6 +250,7 @@ namespace auik
 
         inline void mark_shared_buffer_mutation(SharedBufferSyncState &state, u32 frame_id, u32 frames_in_flight)
         {
+            assert(state.buffer_versions && frame_id < frames_in_flight);
             const bool already_mutating_same_frame = (state.master_id == frame_id) &&
                                                      (state.master_version != state.stage_version) &&
                                                      (state.buffer_versions[frame_id] == state.master_version);
@@ -257,7 +259,6 @@ namespace auik
             // Buffers can carry different content with the same version.
             state.master_version = amal::max(state.master_version, state.stage_version) + 1;
             state.master_id = frame_id;
-            assert(state.buffer_versions);
             state.buffer_versions[frame_id] = state.master_version;
             state.invalidation_count = (frames_in_flight > 0) ? (frames_in_flight - 1) : 0;
         }
@@ -279,7 +280,7 @@ namespace auik
 #ifndef NDEBUG
         inline bool is_shared_buffer_frame_synced(const SharedBufferSyncState &state, u32 frame_id)
         {
-            assert(state.buffer_versions);
+            assert(state.buffer_versions && frame_id < get_context().frames_in_flight);
             return state.buffer_versions[frame_id] == state.master_version;
         }
 
@@ -396,7 +397,7 @@ namespace auik
 
         inline void set_widget_global_cache(u32 widget_id, acul::shared_ptr<WidgetStateData> state)
         {
-            assert(state && "Widget state is null");
+            ACUL_ASSERT(state && "Widget state is null");
             state->widget_id = widget_id;
             get_context().global_cache[widget_id] = std::move(state);
         }
@@ -535,7 +536,7 @@ namespace auik
         assert(gpu && gpu->get_clip_rect && "GPU clip rect dispatch is not initialized");
         detail::sync_current_clip_rect_frame();
         auto *rect = gpu->get_clip_rect(gpu, clip_id);
-        assert(rect && "Invalid clip rect id");
+        ACUL_REQUIRE(rect && "Invalid clip rect id");
         return *rect;
     }
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "widget.hpp"
+#include <acul/assert.hpp>
 
 #define AUIK_TAG_IMAGE         0x8F9A3C21u
 #define AUIK_TAG_CHECKER_IMAGE 0x3F7C2B91u
@@ -90,19 +91,19 @@ namespace auik
 
     inline void cache_image(u32 id, Image *image)
     {
-        assert(image && "image is null");
+        ACUL_ASSERT(image && "image is null");
         detail::get_context().image_cache[id] = image;
     }
 
     inline void cache_image(Image *image)
     {
-        assert(image && "image is null");
+        ACUL_ASSERT(image && "image is null");
         cache_image(image->id(), image);
     }
 
     inline Image *get_cached_image(u32 id)
     {
-        assert(id > 0 && "invalid id");
+        ACUL_ASSERT(id > 0 && "invalid id", nullptr);
         auto &cache = detail::get_context().image_cache;
         auto it = cache.find(id);
         return it == cache.end() ? nullptr : it->second;

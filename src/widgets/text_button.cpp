@@ -1,4 +1,5 @@
 #include <auik/auik.hpp>
+#include <acul/assert.hpp>
 #include <auik/pipelines.hpp>
 #include <auik/widgets/text_button.hpp>
 #include "../core/session_stream_utils.hpp"
@@ -98,7 +99,7 @@ namespace auik
         set_position(pos);
         set_layout_size(button_size);
         Widget::update_layout(true);
-        assert(parent() && "TextButton must have parent");
+        ACUL_ASSERT(parent() && "TextButton must have parent");
         set_clip_id(parent()->content_clip_id());
 
         const amal::vec4 padding = style.padding();
@@ -130,7 +131,7 @@ namespace auik
 
     void TextButton::rebuild_clip_rects()
     {
-        assert(parent() && "TextButton must have parent");
+        ACUL_ASSERT(parent() && "TextButton must have parent");
         set_clip_id(parent()->content_clip_id());
         invalidate_hit_rect(_bg);
         _text->set_clip_id(clip_id());

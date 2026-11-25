@@ -1,4 +1,5 @@
 #include <auik/auik.hpp>
+#include <acul/assert.hpp>
 #include <auik/detail/context.hpp>
 #include <auik/detail/depth.hpp>
 #include <auik/detail/events.hpp>
@@ -565,7 +566,7 @@ namespace auik
                 auto it = ctx.id_map.find(id);
                 if (it == ctx.id_map.end()) return;
                 Widget *widget = it->second;
-                assert(widget && "widget is null");
+                ACUL_ASSERT(widget && "widget is null");
                 enqueue_hover_dispatch(widget, state);
                 if (apply_hover_style_state(*widget, state)) enqueue_style_refresh<detail::HoverEventTraits>(widget);
             };
@@ -747,9 +748,12 @@ namespace auik
                 {
                     Widget *widget = it->second;
                     assert(widget && "widget is null");
-                    if (widget->has_event_handler(EventFlagBits::hover)) widget->dispatch_hover(HoverState::leave);
-                    if (apply_hover_style_state(*widget, HoverState::leave))
-                        enqueue_style_refresh<detail::HoverEventTraits>(widget);
+                    if (widget)
+                    {
+                        if (widget->has_event_handler(EventFlagBits::hover)) widget->dispatch_hover(HoverState::leave);
+                        if (apply_hover_style_state(*widget, HoverState::leave))
+                            enqueue_style_refresh<detail::HoverEventTraits>(widget);
+                    }
                 }
             }
             set_window_cursor(CursorID::arrow, ctx.window_ctx);

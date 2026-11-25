@@ -1,6 +1,7 @@
 #pragma once
 
 #include <acul/enum.hpp>
+#include <assert.h>
 #include <acul/scalars.hpp>
 #include "detail/context.hpp"
 
@@ -103,7 +104,7 @@ namespace auik
 
     inline DrawDataID push_data_to_stream(DrawStream *stream, void *data)
     {
-        assert(stream->push_data_to_stream);
+        assert(stream && stream->push_data_to_stream && data);
         return stream->push_data_to_stream(stream, data);
     }
 
@@ -118,7 +119,7 @@ namespace auik
 
     inline void update_data_in_stream(DrawStream *stream, DrawDataID draw_data_id, void *data)
     {
-        assert(stream->update_data_in_stream);
+        assert(stream && stream->update_data_in_stream && data);
         stream->update_data_in_stream(stream, draw_data_id, data);
     }
 

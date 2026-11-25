@@ -1,4 +1,5 @@
 #include <amal/trigonometric.hpp>
+#include <acul/assert.hpp>
 #include <auik/auik.hpp>
 #include <auik/detail/depth.hpp>
 #include <auik/widgets/color_picker.hpp>
@@ -344,7 +345,7 @@ namespace auik
         set_layout_size({side, side});
         set_required_size({side + margin.x + margin.z, side + margin.y + margin.w});
         Widget::update_layout(true);
-        assert(parent() && "CircleColorPicker must have parent");
+        ACUL_ASSERT(parent() && "CircleColorPicker must have parent");
         set_clip_id(parent()->content_clip_id());
         _grab_hit_rect.clip_id = clip_id();
         if (can_translate_cache) translate_cached_visuals(next_pos - old_pos);
@@ -362,7 +363,7 @@ namespace auik
 
     void CircleColorPicker::rebuild_clip_rects()
     {
-        assert(parent() && "CircleColorPicker must have parent");
+        ACUL_ASSERT(parent() && "CircleColorPicker must have parent");
         set_clip_id(parent()->content_clip_id());
         DrawDataID *hit_ids[] = {&_wheel_draw_id, &_grab_draw_id, &_grab_back_draw_id};
         invalidate_hit_rect_batch(hit_ids, 3);
@@ -717,7 +718,7 @@ namespace auik
         set_position(next_pos);
         set_layout_size(widget_size);
         Widget::update_layout(true);
-        assert(parent() && "GradientColorPicker must have parent");
+        ACUL_ASSERT(parent() && "GradientColorPicker must have parent");
         set_clip_id(parent()->content_clip_id());
         _grab_hit_rect.clip_id = clip_id();
         if (can_translate_cache) translate_cached_visuals(next_pos - old_pos);
@@ -739,7 +740,7 @@ namespace auik
 
     void GradientColorPicker::rebuild_clip_rects()
     {
-        assert(parent() && "GradientColorPicker must have parent");
+        ACUL_ASSERT(parent() && "GradientColorPicker must have parent");
         set_clip_id(parent()->content_clip_id());
         DrawDataID *hit_ids[] = {&_gradient_draw_id, &_grab_draw_id, &_grab_back_draw_id};
         invalidate_hit_rect_batch(hit_ids, 3);
@@ -1099,7 +1100,7 @@ namespace auik
         set_layout_size({side, side});
         set_required_size({side + margin.x + margin.z, side + margin.y + margin.w});
         Widget::update_layout(true);
-        assert(parent() && "SquareColorPicker must have parent");
+        ACUL_ASSERT(parent() && "SquareColorPicker must have parent");
         set_clip_id(parent()->content_clip_id());
         _ring_grab_hit_rect.clip_id = clip_id();
         if (can_translate_cache) translate_cached_visuals(next_pos - old_pos);
@@ -1117,7 +1118,7 @@ namespace auik
 
     void SquareColorPicker::rebuild_clip_rects()
     {
-        assert(parent() && "SquareColorPicker must have parent");
+        ACUL_ASSERT(parent() && "SquareColorPicker must have parent");
         set_clip_id(parent()->content_clip_id());
         DrawDataID *hit_ids[] = {&_ring_draw_id, &_ring_grab_draw_id, &_ring_grab_back_draw_id};
         invalidate_hit_rect_batch(hit_ids, 3);

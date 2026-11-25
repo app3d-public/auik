@@ -1,4 +1,5 @@
 #include <auik/auik.hpp>
+#include <acul/assert.hpp>
 #include <auik/pipelines.hpp>
 #include <auik/widgets/textbox.hpp>
 #include <cctype>
@@ -305,7 +306,7 @@ namespace auik
         set_position(box_pos);
         set_layout_size(box_size);
         Widget::update_layout(true);
-        assert(parent() && "Textbox must have parent");
+        ACUL_ASSERT(parent() && "Textbox must have parent");
         set_clip_id(parent()->content_clip_id());
 
         _content_pos = {box_pos.x + padding.x, box_pos.y + padding.y};
@@ -442,7 +443,7 @@ namespace auik
 
     void Textbox::rebuild_clip_rects()
     {
-        assert(parent() && "Textbox must have parent");
+        ACUL_ASSERT(parent() && "Textbox must have parent");
         set_clip_id(parent()->content_clip_id());
         update_text_content_clip_rect();
         invalidate_hit_rect(_bg);

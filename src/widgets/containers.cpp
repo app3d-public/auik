@@ -1,4 +1,5 @@
 #include <auik/auik.hpp>
+#include <acul/assert.hpp>
 #include <auik/detail/depth.hpp>
 #include <auik/detail/rect.hpp>
 #include <auik/pipelines.hpp>
@@ -542,8 +543,8 @@ namespace auik
 
     void Block::add_children(const acul::vector<Widget *> &new_children, const acul::vector<ChildLayoutFlags> &layouts)
     {
-        assert((layouts.empty() || layouts.size() == new_children.size()) && "child layout count mismatch");
-        if ((!layouts.empty() && layouts.size() != new_children.size()) || new_children.empty()) return;
+        ACUL_ASSERT((layouts.empty() || layouts.size() == new_children.size()) && "child layout count mismatch");
+        if (new_children.empty()) return;
 
         acul::vector<ChildLayoutFlags> explicit_layouts;
         explicit_layouts.reserve(new_children.size());
@@ -606,8 +607,8 @@ namespace auik
 
     void Block::set_child_layout(size_t index, ChildLayoutFlags layout)
     {
-        assert(index < _child_layouts.size() && "child index out of range");
-        assert(index < _explicit_child_layouts.size() && "child explicit layout index out of range");
+        ACUL_ASSERT(index < _child_layouts.size() && "child index out of range");
+        ACUL_ASSERT(index < _explicit_child_layouts.size() && "child explicit layout index out of range");
         _explicit_child_layouts[index] = layout;
         refresh_child_layout(index);
     }
@@ -1606,6 +1607,7 @@ namespace auik
 
     void detail::ScrollableBlock::invalidate_style()
     {
+        _scroll.style_id = Theme::STYLE_ID_INVALID;
         Block::invalidate_style();
         if (_scroll.scrollbar_x) _scroll.scrollbar_x->invalidate_style();
         if (_scroll.scrollbar_y) _scroll.scrollbar_y->invalidate_style();

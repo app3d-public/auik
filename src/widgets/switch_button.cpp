@@ -1,4 +1,5 @@
 #include <auik/auik.hpp>
+#include <acul/assert.hpp>
 #include <auik/detail/pixel_snap.hpp>
 #include <auik/pipelines.hpp>
 #include <auik/widgets/switch_button.hpp>
@@ -112,7 +113,7 @@ namespace auik
         set_position(pos);
         set_layout_size(widget_size);
         Widget::update_layout(true);
-        assert(parent() && "SwitchButton must have parent");
+        ACUL_ASSERT(parent() && "SwitchButton must have parent");
         set_clip_id(parent()->content_clip_id());
 
         const amal::vec2 track_size = resolve_track_size(track_style, grab_style);
@@ -133,7 +134,7 @@ namespace auik
 
     void SwitchButton::rebuild_clip_rects()
     {
-        assert(parent() && "SwitchButton must have parent");
+        ACUL_ASSERT(parent() && "SwitchButton must have parent");
         set_clip_id(parent()->content_clip_id());
         DrawDataID *hit_ids[] = {&_track_draw, &_grab_draw};
         invalidate_hit_rect_batch(hit_ids, 2);

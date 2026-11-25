@@ -1,4 +1,5 @@
 #include <auik/auik.hpp>
+#include <acul/assert.hpp>
 #include <auik/detail/rect.hpp>
 #include <auik/widgets/column.hpp>
 #include <auik/widgets/containers.hpp>
@@ -106,43 +107,45 @@ namespace auik
 
     void Column::add_child(size_t column_index, Widget *child, ChildLayoutFlags layout)
     {
-        assert(column_index < _columns.size() && "column index out of range");
+        ACUL_ASSERT(column_index < _columns.size() && "column index out of range");
         _columns[column_index]->add_child(child, layout);
     }
 
     void Column::set_child_layout(size_t column_index, size_t row_index, ChildLayoutFlags layout)
     {
-        assert(column_index < _columns.size() && "column index out of range");
+        ACUL_ASSERT(column_index < _columns.size() && "column index out of range");
         _columns[column_index]->set_child_layout(row_index, layout);
     }
 
     const Column::ColumnChildren &Column::column_children(size_t index) const
     {
-        assert(index < _columns.size() && "column index out of range");
+        static const ColumnChildren empty;
+        ACUL_ASSERT(index < _columns.size() && "column index out of range", empty);
         return _columns[index]->children;
     }
 
     Column::ColumnChildren &Column::column_children(size_t index)
     {
-        assert(index < _columns.size() && "column index out of range");
+        ACUL_REQUIRE(index < _columns.size() && "column index out of range");
         return _columns[index]->children;
     }
 
     const acul::vector<ChildLayoutFlags> &Column::column_layouts(size_t index) const
     {
-        assert(index < _columns.size() && "column index out of range");
+        static const acul::vector<ChildLayoutFlags> empty;
+        ACUL_ASSERT(index < _columns.size() && "column index out of range", empty);
         return _columns[index]->child_layouts();
     }
 
     ::auik::Block *&Column::operator[](size_t index)
     {
-        assert(index < _columns.size() && "column index out of range");
+        ACUL_REQUIRE(index < _columns.size() && "column index out of range");
         return _columns[index];
     }
 
     const ::auik::Block *Column::operator[](size_t index) const
     {
-        assert(index < _columns.size() && "column index out of range");
+        ACUL_ASSERT(index < _columns.size() && "column index out of range", nullptr);
         return _columns[index];
     }
 

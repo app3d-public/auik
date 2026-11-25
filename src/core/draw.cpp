@@ -1,4 +1,5 @@
 #include <auik/draw.hpp>
+#include <acul/assert.hpp>
 #include <auik/pipelines.hpp>
 
 namespace auik
@@ -305,7 +306,7 @@ namespace auik
         }
 
         const u32 data_stride = infer_stream_item_stride(stream);
-        assert(data_stride && "Cannot resolve stream item stride for mixed batch emit");
+        ACUL_ASSERT(data_stride && "Cannot resolve stream item stride for mixed batch emit");
         const auto *bytes = static_cast<const u8 *>(data);
         for (u32 i = 0u; i < count; ++i)
         {
