@@ -1,5 +1,5 @@
-#include <auik/auik.hpp>
 #include <acul/assert.hpp>
+#include <auik/auik.hpp>
 #include <auik/detail/depth.hpp>
 #include <auik/pipelines.hpp>
 #include <auik/sound.hpp>
@@ -10,6 +10,7 @@
 #include <auik/widgets/text.hpp>
 #include <auik/widgets/text_button.hpp>
 #include "../core/session_stream_utils.hpp"
+
 
 #define MODAL_INTERNAL_WIDGET_FLAGS          (WidgetFlagBits::visible)
 #define MODAL_INTERNAL_HITTABLE_WIDGET_FLAGS (WidgetFlagBits::visible | WidgetFlagBits::hittable)
@@ -112,7 +113,7 @@ namespace auik
             if (!_checkbox)
             {
                 row.size.x = amal::min(row.size.x, required_size().x - controls_margin.x - controls_margin.z -
-                                                   controls_padding.x - controls_padding.z);
+                                                       controls_padding.x - controls_padding.z);
                 row.offset.x += (content_size.x - row.size.x) * 0.5f;
             }
             detail::layout_child_widgets(this, _children, _child_layouts, row, gap);
@@ -715,8 +716,8 @@ namespace auik
         f32 modal_width = _modal_width;
 
         auto *modal = acul::alloc<ModalWindow>(AUIK_TAG_MODAL_WINDOW, message.header,
-                                               amal::rect{AUIK_POS_IGNORE, {modal_width, AUIK_SIZE_Y_FIT}}, WindowFlagBits::movable,
-                                               WidgetFlagBits::visible);
+                                               amal::rect{AUIK_POS_IGNORE, {modal_width, AUIK_SIZE_Y_FIT}},
+                                               WindowFlagBits::movable, WidgetFlagBits::visible);
         auto *theme = get_theme();
         const auto &modal_style =
             theme->get_style(theme->get_resolved_style(AUIK_STYLE_TAG_MODAL_WINDOW, AUIK_TAG_MODAL_WINDOW, id()));
@@ -784,7 +785,7 @@ namespace auik
         {
             const bool is_last_button = i + 1u == message.buttons.size();
             const u32 button_style =
-                is_last_button ? AUIK_STYLE_TAG_MODAL_PRIMARY_BUTTON : AUIK_STYLE_TAG_TEXT_BUTTON;
+                is_last_button ? AUIK_STYLE_TAG_MODAL_PRIMARY_BUTTON : AUIK_STYLE_TAG_TRANSPARENT_BUTTON;
             auto *button = acul::alloc<TextButton>(
                 AUIK_MODAL_BUTTON_ID, message.buttons[i].first, amal::vec2{AUIK_SIZE_X_INHERIT, AUIK_SIZE_Y_INHERIT},
                 MODAL_INTERNAL_HITTABLE_WIDGET_FLAGS, EventFlagBits::none, button_style);
