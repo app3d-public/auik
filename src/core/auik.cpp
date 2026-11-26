@@ -1411,9 +1411,11 @@ namespace auik
         detail::set_window_cursor(cursor, ctx.window_ctx);
     }
 
-    AUIK_EXPORT bool is_widget_focused(const Widget *widget)
+    AUIK_EXPORT bool is_widget_focused(const Widget *widget, bool include_descendants)
     {
-        return widget && detail::get_context().focus_id == widget->id();
+        auto &ctx = detail::get_context();
+        if (include_descendants) return detail::is_focus_chain_widget(ctx, widget);
+        return widget && ctx.focus_id == widget->id();
     }
 
     AUIK_EXPORT bool is_widget_hovered(const Widget *widget)

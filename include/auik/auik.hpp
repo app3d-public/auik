@@ -135,7 +135,7 @@ namespace auik
 
     // Input state and platform-facing helpers.
     AUIK_EXPORT void set_cursor(CursorID::enum_type cursor);
-    AUIK_EXPORT bool is_widget_focused(const Widget *widget);
+    AUIK_EXPORT bool is_widget_focused(const Widget *widget, bool include_descendants = false);
     AUIK_EXPORT bool is_widget_hovered(const Widget *widget);
     AUIK_EXPORT void set_widget_attach_callback(u32 id, acul::unique_function<void(Widget *)> callback);
     AUIK_EXPORT void set_widget_detach_callback(u32 id, acul::unique_function<void(Widget *)> callback);

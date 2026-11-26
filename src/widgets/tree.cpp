@@ -639,8 +639,7 @@ namespace auik
                 add_line({{line_x, amal::round(cursor_y)}, {line_thickness, amal::round(row_h)}});
             }
 
-            // The current level enters the row through the disclosure slot. The horizontal connector is independent
-            // of the label contents and is therefore emitted for both leaves and expandable nodes.
+            // The current level enters the row through the disclosure slot.
             const f32 own_axis = node_axis_centers[node];
             const f32 own_line_x = amal::round(own_axis - half_line);
             const f32 branch_y = amal::round(row_mid_y - half_line);
@@ -662,15 +661,13 @@ namespace auik
             {
                 add_line({{own_line_x, amal::round(cursor_y)},
                           {line_thickness, amal::max(own_bottom - amal::round(cursor_y), 0.0f)}});
+                const f32 branch_origin = amal::round(own_axis + line_margin.x);
+                const f32 branch_start = amal::max(branch_origin, own_line_x + line_thickness);
+                // Snap the connector length independently of its position for consistent widths at fractional DPI.
+                const f32 branch_width = amal::round(node_branch_ends[node] - own_axis - line_margin.x - line_margin.z);
+                add_line({{branch_start, branch_y},
+                          {amal::max(branch_width - (branch_start - branch_origin), 0.0f), line_thickness}});
             }
-
-            const f32 branch_origin = amal::round(own_axis + line_margin.x);
-            const f32 branch_start = amal::max(branch_origin, own_line_x + line_thickness);
-            // Snap the connector length independently of its position. Rounding both endpoints made an otherwise
-            // identical branch alternate by one pixel between hierarchy levels at fractional DPI scales.
-            const f32 branch_width = amal::round(node_branch_ends[node] - own_axis - line_margin.x - line_margin.z);
-            add_line({{branch_start, branch_y},
-                      {amal::max(branch_width - (branch_start - branch_origin), 0.0f), line_thickness}});
 
             cursor_y += row_h;
         }
@@ -780,11 +777,12 @@ namespace auik
     void Tree::invalidate_style()
     {
         Widget::invalidate_style();
-        for (auto &row : _cells)
-        {
+        // Collapsed rows still own styles from the previous theme.
+        for (const auto &node : _nodes)
+            if (node.label) node.label->invalidate_style();
+        for (const auto &row : _node_cells)
             for (auto *cell : row)
                 if (cell) cell->invalidate_style();
-        }
     }
 
     void Tree::add_state_flags_inherit(WidgetStateFlags flags)

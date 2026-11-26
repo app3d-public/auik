@@ -16,8 +16,14 @@ namespace
     struct Row : auik::DrawBlock
     {
         TextProbe text;
+        unsigned style_invalidations = 0;
         Row() : DrawBlock(9201, auik::WidgetFlagBits::visible, 0) { text.set_parent(this); }
         auik::StyleUpdateFlags update_style() override { return {}; }
+        void invalidate_style() override
+        {
+            ++style_invalidations;
+            DrawBlock::invalidate_style();
+        }
         void draw(auik::DrawCtx &ctx) override
         {
             // Exercise real Text invalidation; unchanged glyph IDs must survive.
@@ -79,6 +85,11 @@ void test_tree_refresh()
             root->text.check();
             sibling->text.check();
         }
+        tree.set_node_expanded(parent, false, false);
+        const auto child_invalidations = child->style_invalidations;
+        tree.invalidate_style();
+        assert(child->style_invalidations == child_invalidations + 1);
+        tree.set_node_expanded(parent, true, false);
         assert(!(ctx.dirty_flags & auik::DirtyFlagBits::layout));
         ctx.dirty_flags |= auik::DirtyFlagBits::destroying;
     }

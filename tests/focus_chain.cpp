@@ -60,7 +60,7 @@ void test_focus_chain()
         focus_widget(&item);
         assert(combo.losses == 0 && combo.gains == 1);
         assert(popup.gains == 1 && item.gains == 1);
-        assert(auik_test::is_in_focus_chain(&combo) && auik_test::is_in_focus_chain(&popup));
+        assert(is_widget_focused(&combo, true) && is_widget_focused(&popup, true));
         assert(is_widget_focused(&item) && !is_widget_focused(&combo));
         focus_widget(&thumb);
         assert(item.losses == 1 && popup.losses == 0 && combo.losses == 0);
